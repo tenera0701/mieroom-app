@@ -707,8 +707,8 @@ def current_ym():
 
 @app.route("/")
 def index():
-    user = get_current_user()
-    return render_template("index.html", user=user)
+    # 管理ツールのログインページへリダイレクト
+    return redirect(url_for('app_login'))
 
 
 @app.route("/login")
