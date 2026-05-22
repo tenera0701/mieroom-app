@@ -2326,7 +2326,7 @@ def api_settings_staff_delete(staff_id):
 def api_settings_account_add():
     """アカウント追加"""
     data = request.get_json() or request.form
-    if AppUser.query.filter_by(username=data.get('username', '')).first():
+    if AppUser.query.filter_by(username=data.get('username', ''), is_active=True).first():
         return jsonify({'status': 'error', 'message': 'そのユーザー名は既に使用されています'}), 400
     user = AppUser(
         username=data.get('username', ''),
@@ -2361,7 +2361,7 @@ def api_settings_account_delete(account_id):
     user = AppUser.query.get_or_404(account_id)
     if user.username == 'owner':
         return jsonify({'status': 'error', 'message': 'オーナーアカウントは削除できません'}), 400
-    user.is_active = False
+    db.session.delete(user)   # 完全削除（ログなし）
     db.session.commit()
     return jsonify({'status': 'ok'})
 
