@@ -2258,18 +2258,22 @@ def api_payments_summary():
 # ── 設定ページ ───────────────────────────────────────────
 
 @app.route("/settings")
-@owner_required
+@login_required
 def settings():
-    """設定ページ（オーナーのみ）"""
+    """設定ページ（スタッフ以上）"""
     staff_list = Staff.query.filter_by(is_active=True).all()
-    accounts = AppUser.query.filter_by(is_active=True).all()
+    # アカウント一覧はオーナーのみ表示
+    user = AppUser.query.get(session['app_user_id'])
+    is_owner = user and user.role == 'owner'
+    accounts = AppUser.query.filter_by(is_active=True).all() if is_owner else []
     return render_template("settings.html",
                            staff_list=staff_list, accounts=accounts,
+                           is_owner=is_owner,
                            now=datetime.now())
 
 
 @app.route("/api/settings/staff/add", methods=["POST"])
-@owner_required
+@login_required
 def api_settings_staff_add():
     """スタッフ追加"""
     data = request.get_json() or request.form
@@ -2293,7 +2297,7 @@ def api_settings_staff_add():
 
 
 @app.route("/api/settings/staff/<int:staff_id>", methods=["PUT"])
-@owner_required
+@login_required
 def api_settings_staff_update(staff_id):
     """スタッフ更新"""
     staff = Staff.query.get_or_404(staff_id)
@@ -2312,7 +2316,7 @@ def api_settings_staff_update(staff_id):
 
 
 @app.route("/api/settings/staff/<int:staff_id>", methods=["DELETE"])
-@owner_required
+@login_required
 def api_settings_staff_delete(staff_id):
     """スタッフ削除（論理削除）"""
     staff = Staff.query.get_or_404(staff_id)

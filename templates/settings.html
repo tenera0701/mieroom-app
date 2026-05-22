@@ -130,7 +130,9 @@
 
   <div style="margin-bottom: 24px;">
     <h1 style="font-size: 22px; font-weight: 800; color: #111827; margin: 0;">設定</h1>
-    <p style="font-size: 13px; color: var(--text-muted); margin: 4px 0 0;">スタッフ・アカウント管理</p>
+    <p style="font-size: 13px; color: var(--text-muted); margin: 4px 0 0;">
+      スタッフ管理{% if is_owner %} / アカウント管理{% endif %}
+    </p>
   </div>
 
   <div id="alert-msg" class="alert"></div>
@@ -170,7 +172,8 @@
     </div>
   </div>
 
-  <!-- ===== セクション2: アカウント管理 ===== -->
+  <!-- ===== セクション2: アカウント管理（オーナーのみ） ===== -->
+  {% if is_owner %}
   <div class="section-card">
     <div class="section-header">
       <h2>ログインアカウント管理</h2>
@@ -216,6 +219,7 @@
       </table>
     </div>
   </div>
+  {% endif %}
 
   <!-- ===== セクション3: 自分のパスワード変更 ===== -->
   <div class="section-card">
