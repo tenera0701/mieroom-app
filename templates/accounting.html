@@ -1,0 +1,1002 @@
+{% extends 'mgmt_base.html' %}
+
+{% block title %}経理・PL管理 | ルームピック管理ツール{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --primary: #16a34a;
+    --primary-dark: #15803d;
+    --primary-light: #dcfce7;
+    --primary-mid: #86efac;
+    --danger: #ef4444;
+    --danger-light: #fee2e2;
+    --text-muted: #6b7280;
+  }
+
+  /* ===== 月ナビ ===== */
+  .month-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .month-nav-btn {
+    background: #fff;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .month-nav-btn:hover { background: #f3f4f6; }
+  .month-nav-current {
+    font-size: 18px;
+    font-weight: 800;
+    color: #111827;
+    min-width: 120px;
+    text-align: center;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-primary:hover { background: var(--primary-dark); }
+
+  /* ===== PLサマリーカード ===== */
+  .pl-cards {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 1100px) { .pl-cards { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 700px)  { .pl-cards { grid-template-columns: repeat(2, 1fr); } }
+  .pl-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .pl-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: var(--primary);
+  }
+  .pl-card.danger::before { background: var(--danger); }
+  .pl-card-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+  }
+  .pl-card-value {
+    font-size: 26px;
+    font-weight: 800;
+    color: #111827;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .pl-card-value.danger { color: #b91c1c; }
+  .pl-card-sub {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .pl-card-prev {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .trend-up   { color: var(--primary-dark); font-weight: 700; }
+  .trend-down { color: #b91c1c; font-weight: 700; }
+  .trend-flat { color: var(--text-muted); }
+
+  /* ===== PLテーブル ===== */
+  .pl-table-section {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .pl-table-section-header {
+    padding: 13px 18px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .pl-table-section-header h2 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pl-table-section-header h2::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 15px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+  .pl-table-wrap { overflow-x: auto; }
+  .pl-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .pl-table thead th {
+    background: #f9fafb;
+    padding: 10px 16px;
+    text-align: right;
+    font-weight: 700;
+    color: #374151;
+    border-bottom: 2px solid #e5e7eb;
+    white-space: nowrap;
+  }
+  .pl-table thead th:first-child { text-align: left; width: 200px; }
+  .pl-table tbody tr { border-bottom: 1px solid #f3f4f6; }
+  .pl-table tbody tr:nth-child(even) { background: #f9fafb; }
+  .pl-table tbody tr:hover { background: #f0fdf4; }
+  .pl-table tbody td {
+    padding: 9px 16px;
+    text-align: right;
+    color: #111827;
+    white-space: nowrap;
+  }
+  .pl-table tbody td:first-child { text-align: left; padding-left: 24px; }
+  /* カテゴリ行 */
+  .pl-table tr.category-row td {
+    background: #14532d;
+    color: #d1fae5;
+    font-weight: 700;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 8px 16px;
+  }
+  .pl-table tr.category-row td:first-child { padding-left: 16px; }
+  /* 合計行 */
+  .pl-table tr.total-row td {
+    background: #f0fdf4;
+    font-weight: 700;
+    border-top: 2px solid #bbf7d0;
+  }
+  .pl-table .val-danger { color: #b91c1c; font-weight: 700; }
+  .pl-table .val-good   { color: var(--primary-dark); font-weight: 700; }
+
+  /* ===== グラフセクション ===== */
+  .chart-section {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 24px;
+  }
+  .chart-section h2 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .chart-section h2::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 15px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+
+  /* ===== モーダル ===== */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: #fff;
+    border-radius: 12px;
+    width: 580px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  }
+  .modal-header {
+    padding: 16px 22px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .modal-header h3 { font-size: 16px; font-weight: 700; color: #111827; margin: 0; }
+  .modal-close { background: none; border: none; font-size: 22px; color: var(--text-muted); cursor: pointer; }
+  .modal-close:hover { color: #111827; }
+  .modal-body { padding: 18px 22px; }
+  .modal-footer {
+    padding: 13px 22px;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group.full-width { grid-column: 1 / -1; }
+  .form-group label { font-size: 12px; font-weight: 600; color: #374151; }
+  .form-group input,
+  .form-group select {
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 13px;
+    color: #111827;
+    background: #fff;
+  }
+  .form-group input:focus,
+  .form-group select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(22,163,74,0.18);
+  }
+  .btn-cancel {
+    background: #fff;
+    color: #374151;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-cancel:hover { background: #f3f4f6; }
+  .btn-submit {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-submit:hover { background: var(--primary-dark); }
+
+  /* ===== アラート ===== */
+  .alert {
+    padding: 11px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 14px;
+    display: none;
+  }
+  .alert.show { display: block; }
+  .alert-success { background: var(--primary-light); color: var(--primary-dark); border: 1px solid var(--primary-mid); }
+  .alert-error   { background: var(--danger-light);  color: #b91c1c;            border: 1px solid #fca5a5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1400px; margin:0 auto; padding:0 4px;">
+
+  <!-- ページタイトル & ヘッダー -->
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h1 style="font-size:22px; font-weight:800; color:#111827; margin:0;">経理・PL管理</h1>
+      <p style="font-size:13px; color:var(--text-muted); margin:4px 0 0;">月次損益計算・費用内訳・利益推移</p>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <!-- 月ナビゲーション -->
+      <div class="month-nav">
+        <button class="month-nav-btn" onclick="navigateMonth(-1)">&#8249; 前月</button>
+        <div class="month-nav-current" id="current-month-label">{{ year }}年{{ month }}月</div>
+        <button class="month-nav-btn" onclick="navigateMonth(1)">次月 &#8250;</button>
+        <button class="month-nav-btn" onclick="navigateToday()"
+          style="background:#f0fdf4; color:var(--primary); border-color:var(--primary-mid);">今月</button>
+      </div>
+      <button class="btn-primary" onclick="openPlModal()">&#43; 月次データ入力</button>
+    </div>
+  </div>
+
+  <!-- アラート -->
+  <div id="alert-msg" class="alert"></div>
+
+  <!-- PLサマリーカード -->
+  <div class="pl-cards">
+    <div class="pl-card">
+      <div class="pl-card-label">売上</div>
+      <div class="pl-card-value" id="card-revenue">-</div>
+      <div class="pl-card-sub">万円</div>
+      <div class="pl-card-prev" id="card-revenue-prev"></div>
+    </div>
+    <div class="pl-card">
+      <div class="pl-card-label">粗利</div>
+      <div class="pl-card-value" id="card-gross">-</div>
+      <div class="pl-card-sub" id="card-gross-rate">粗利率 -</div>
+      <div class="pl-card-prev" id="card-gross-prev"></div>
+    </div>
+    <div class="pl-card">
+      <div class="pl-card-label">広告費</div>
+      <div class="pl-card-value" id="card-ad">-</div>
+      <div class="pl-card-sub" id="card-ad-rate">売上比 -</div>
+      <div class="pl-card-prev" id="card-ad-prev"></div>
+    </div>
+    <div class="pl-card">
+      <div class="pl-card-label">人件費</div>
+      <div class="pl-card-value" id="card-labor">-</div>
+      <div class="pl-card-sub">万円</div>
+      <div class="pl-card-prev" id="card-labor-prev"></div>
+    </div>
+    <div class="pl-card" id="card-profit-wrap">
+      <div class="pl-card-label">営業利益</div>
+      <div class="pl-card-value" id="card-profit">-</div>
+      <div class="pl-card-sub" id="card-profit-rate">利益率 -</div>
+      <div class="pl-card-prev" id="card-profit-prev"></div>
+    </div>
+  </div>
+
+  <!-- 費用内訳テーブル -->
+  <div class="pl-table-section">
+    <div class="pl-table-section-header">
+      <h2>PL詳細（費用内訳）</h2>
+    </div>
+    <div class="pl-table-wrap">
+      <table class="pl-table">
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th>今月</th>
+            <th>前月</th>
+            <th>前年同月</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="pl-tbody">
+          <!-- JSで動的生成 -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 月次利益推移グラフ -->
+  <div class="chart-section">
+    <h2>月次利益推移</h2>
+    <div style="position:relative; height:320px;">
+      <canvas id="pl-chart"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== 月次データ入力モーダル ===== -->
+<div class="modal-overlay" id="pl-modal">
+  <div class="modal" style="width:680px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-header">
+      <h3>月次データ入力</h3>
+      <button class="modal-close" onclick="closePlModal()">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <form id="pl-form" onsubmit="return false;">
+        <input type="hidden" name="store_id" value="1">
+        <div class="form-group full-width" style="margin-bottom:16px;">
+          <label>対象月</label>
+          <input type="month" name="target_month" id="modal-target-month">
+        </div>
+
+        <!-- 売上・粗利 -->
+        <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;">売上</div>
+        <div class="form-grid" style="margin-bottom:16px;">
+          <div class="form-group">
+            <label>売上（円）</label>
+            <input type="number" name="revenue" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>粗利（円）</label>
+            <input type="number" name="gross_profit" min="0" placeholder="0">
+          </div>
+        </div>
+
+        <!-- 広告費 -->
+        <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;">広告費</div>
+        <div class="form-grid" style="margin-bottom:16px;">
+          <div class="form-group">
+            <label>広告費 合計（円）</label>
+            <input type="number" name="ad_cost" min="0" placeholder="0">
+          </div>
+        </div>
+
+        <!-- 人件費 -->
+        <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;">人件費</div>
+        <div class="form-grid" style="margin-bottom:16px;">
+          <div class="form-group">
+            <label>人件費 合計（円）</label>
+            <input type="number" name="labor_cost" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>正社員給与（円）</label>
+            <input type="number" name="regular_salary" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>アルバイト（円）</label>
+            <input type="number" name="parttime_salary" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>歩合給（円）</label>
+            <input type="number" name="commission_pay" min="0" placeholder="0">
+          </div>
+        </div>
+
+        <!-- 固定費（自由入力） -->
+        <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;display:flex;justify-content:space-between;align-items:center;">
+          固定費
+          <button type="button" onclick="addCostRow('fixed')" style="padding:3px 10px;font-size:12px;border:1.5px dashed #86efac;border-radius:6px;background:#f0fdf4;color:#16a34a;cursor:pointer;font-weight:600;">＋ 追加</button>
+        </div>
+        <div id="fixed-items-wrap" style="margin-bottom:16px;"></div>
+
+        <!-- 変動費（自由入力） -->
+        <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;display:flex;justify-content:space-between;align-items:center;">
+          変動費
+          <button type="button" onclick="addCostRow('variable')" style="padding:3px 10px;font-size:12px;border:1.5px dashed #86efac;border-radius:6px;background:#f0fdf4;color:#16a34a;cursor:pointer;font-weight:600;">＋ 追加</button>
+        </div>
+        <div id="variable-items-wrap" style="margin-bottom:16px;"></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-cancel" onclick="closePlModal()">キャンセル</button>
+      <button type="button" class="btn-submit" onclick="submitPl()">保存する</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+/* ===================================================
+   状態管理
+=================================================== */
+let currentYear  = {{ year }};
+let currentMonth = {{ month }};
+let plChart = null;
+
+/* ===================================================
+   ユーティリティ
+=================================================== */
+function yen(val) {
+  if (val === null || val === undefined) return '-';
+  return Math.round(Number(val)).toLocaleString('ja-JP') + '円';
+}
+
+function fmtMoney(v) {
+  if (v == null || isNaN(Number(v))) return '-';
+  return Math.round(Number(v)).toLocaleString('ja-JP') + '円';
+}
+
+function pct(a, b) {
+  if (!b) return null;
+  return (a / b * 100).toFixed(1);
+}
+
+function trendHtml(cur, prev) {
+  if (cur === null || cur === undefined || prev === null || !prev) return '';
+  const diff = ((cur - prev) / Math.abs(prev) * 100).toFixed(1);
+  if (cur > prev) return `<span class="trend-up">&#9650;${Math.abs(diff)}%</span> 前月比`;
+  if (cur < prev) return `<span class="trend-down">&#9660;${Math.abs(diff)}%</span> 前月比`;
+  return '<span class="trend-flat">&#8594; 0%</span> 前月比';
+}
+
+function showAlert(msg, type='success') {
+  const el = document.getElementById('alert-msg');
+  el.textContent = msg;
+  el.className = `alert alert-${type} show`;
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+/* ===================================================
+   月ナビゲーション
+=================================================== */
+function navigateMonth(delta) {
+  currentMonth += delta;
+  if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+  if (currentMonth < 1)  { currentMonth = 12; currentYear--; }
+  updateMonthLabel();
+  loadPlData();
+}
+
+function navigateToday() {
+  const now = new Date();
+  currentYear  = now.getFullYear();
+  currentMonth = now.getMonth() + 1;
+  updateMonthLabel();
+  loadPlData();
+}
+
+function updateMonthLabel() {
+  document.getElementById('current-month-label').textContent =
+    `${currentYear}年${currentMonth}月`;
+  const url = new URL(window.location);
+  url.searchParams.set('year',  currentYear);
+  url.searchParams.set('month', currentMonth);
+  window.history.pushState({}, '', url);
+}
+
+/* ===================================================
+   データ取得
+=================================================== */
+async function loadPlData() {
+  try {
+    const res = await fetch(`/api/pl/summary?year=${currentYear}&month=${currentMonth}`);
+    if (!res.ok) throw new Error('API error');
+    const json = await res.json();
+    // APIは stores[] を返す。先頭店舗を current として使用
+    const current = (json.current ?? (json.stores && json.stores[0])) ?? null;
+    const prevMonth = json.prev_month ?? null;
+    const prevYear  = json.prev_year  ?? null;
+    renderCards(current, prevMonth);
+    renderPlTable(current, prevMonth, prevYear);
+  } catch(e) {
+    console.warn('PL API unavailable, showing empty state:', e);
+    renderCards(null, null);
+    renderPlTable(null, null, null);
+  }
+
+  try {
+    const res = await fetch('/api/kpi/monthly');
+    if (!res.ok) throw new Error('API error');
+    const json = await res.json();
+    renderPlChart(json);
+  } catch(e) {
+    console.warn('Monthly KPI API unavailable:', e);
+    renderPlChart(null);
+  }
+}
+
+/* ===================================================
+   費用合計計算
+=================================================== */
+function calcTotalCost(d) {
+  if (!d) return null;
+  const keys = ['ad_cost','labor_cost','rent','parking','copier_lease',
+                'internet','advisory','insurance','cloud','other_variable'];
+  let total = 0, hasData = false;
+  keys.forEach(k => {
+    if (d[k] !== undefined && d[k] !== null) {
+      total += Number(d[k]);
+      hasData = true;
+    }
+  });
+  return hasData ? total : null;
+}
+
+/* ===================================================
+   PLカード描画
+=================================================== */
+function renderCards(cur, prev) {
+  const revenue  = cur?.revenue      ?? null;
+  const gross    = cur?.gross_profit ?? null;
+  const adCost   = cur?.ad_cost      ?? null;
+  const labor    = cur?.labor_cost   ?? null;
+  const totalCost = calcTotalCost(cur);
+  const profit   = (gross !== null && totalCost !== null) ? gross - totalCost : null;
+
+  const pRevenue = prev?.revenue      ?? null;
+  const pGross   = prev?.gross_profit ?? null;
+  const pAd      = prev?.ad_cost      ?? null;
+  const pLabor   = prev?.labor_cost   ?? null;
+  const pTotalCost = calcTotalCost(prev);
+  const pProfit  = (pGross !== null && pTotalCost !== null) ? pGross - pTotalCost : null;
+
+  // 売上
+  document.getElementById('card-revenue').textContent = revenue !== null ? yen(revenue) : '-';
+  document.getElementById('card-revenue-prev').innerHTML = trendHtml(revenue, pRevenue);
+
+  // 粗利
+  document.getElementById('card-gross').textContent = gross !== null ? yen(gross) : '-';
+  document.getElementById('card-gross-rate').textContent =
+    (gross !== null && revenue) ? `粗利率 ${pct(gross, revenue)}%` : '粗利率 -';
+  document.getElementById('card-gross-prev').innerHTML = trendHtml(gross, pGross);
+
+  // 広告費
+  document.getElementById('card-ad').textContent = adCost !== null ? yen(adCost) : '-';
+  document.getElementById('card-ad-rate').textContent =
+    (adCost !== null && revenue) ? `売上比 ${pct(adCost, revenue)}%` : '売上比 -';
+  document.getElementById('card-ad-prev').innerHTML = trendHtml(adCost, pAd);
+
+  // 人件費
+  document.getElementById('card-labor').textContent = labor !== null ? yen(labor) : '-';
+  document.getElementById('card-labor-prev').innerHTML = trendHtml(labor, pLabor);
+
+  // 営業利益
+  const profitEl = document.getElementById('card-profit');
+  profitEl.textContent = profit !== null ? yen(profit) : '-';
+  profitEl.className = 'pl-card-value' + (profit !== null && profit < 0 ? ' danger' : '');
+  document.getElementById('card-profit-rate').textContent =
+    (profit !== null && revenue) ? `利益率 ${pct(profit, revenue)}%` : '利益率 -';
+  document.getElementById('card-profit-prev').innerHTML = trendHtml(profit, pProfit);
+
+  const wrap = document.getElementById('card-profit-wrap');
+  wrap.className = 'pl-card' + (profit !== null && profit < 0 ? ' danger' : '');
+}
+
+/* ===================================================
+   PLテーブル定義
+=================================================== */
+const PL_ROWS = [
+  { type: 'category', label: '収益' },
+  { key: 'revenue',        label: '売上' },
+  { key: 'gross_profit',   label: '粗利' },
+  { key: '_gross_rate',    label: '粗利率', unit: '%' },
+  { type: 'category', label: '費用' },
+  { key: 'ad_cost',        label: '広告費' },
+  { key: 'labor_cost',     label: '人件費' },
+  { key: 'rent',           label: '家賃' },
+  { key: 'parking',        label: '駐車場代' },
+  { key: 'copier_lease',   label: '複合機リース' },
+  { key: 'internet',       label: 'ネット回線' },
+  { key: 'advisory',       label: '顧問料' },
+  { key: 'insurance',      label: '保険料' },
+  { key: 'cloud',          label: 'クラウド費' },
+  { key: 'other_variable', label: 'その他変動費' },
+  { type: 'category', label: '利益' },
+  { key: '_op_profit', label: '営業利益', total: true },
+  { key: '_op_rate',   label: '利益率', unit: '%', total: true },
+];
+
+function getVal(d, key) {
+  if (!d) return null;
+  if (key === '_gross_rate') {
+    return (d.gross_profit != null && d.revenue) ? parseFloat(pct(d.gross_profit, d.revenue)) : null;
+  }
+  if (key === '_op_profit') {
+    const cost = calcTotalCost(d);
+    return (cost !== null && d.gross_profit != null) ? d.gross_profit - cost : null;
+  }
+  if (key === '_op_rate') {
+    const cost = calcTotalCost(d);
+    if (cost === null || d.gross_profit == null || !d.revenue) return null;
+    return parseFloat(pct(d.gross_profit - cost, d.revenue));
+  }
+  return d[key] ?? null;
+}
+
+function fmtCell(v, unit) {
+  if (v === null || v === undefined) return '-';
+  if (unit === '%') return v.toFixed(1) + '%';
+  return '&#165;' + yen(v);
+}
+
+let currentPlId = null;
+
+function renderPlTable(cur, prev, prevYear) {
+  const tbody = document.getElementById('pl-tbody');
+  tbody.innerHTML = '';
+  currentPlId = cur ? (cur.pl_id || null) : null;
+
+  PL_ROWS.forEach(row => {
+    const tr = document.createElement('tr');
+    if (row.type === 'category') {
+      tr.className = 'category-row';
+      tr.innerHTML = `<td colspan="5">【${row.label}】</td>`;
+    } else {
+      const curVal  = getVal(cur, row.key);
+      const prevVal = getVal(prev, row.key);
+      const pyVal   = getVal(prevYear, row.key);
+
+      const isProfit  = row.key === '_op_profit' || row.key === '_op_rate';
+      const isDanger  = isProfit && curVal !== null && curVal < 0;
+      const isGood    = isProfit && curVal !== null && curVal >= 0;
+      const cls = isDanger ? 'val-danger' : isGood ? 'val-good' : '';
+
+      if (row.total) tr.className = 'total-row';
+
+      // 最初の収益行にのみ削除ボタンを表示（PLレコード単位）
+      const showDeleteBtn = row.key === 'revenue' && currentPlId;
+
+      tr.innerHTML = `
+        <td>${row.label}</td>
+        <td class="${cls}">${fmtCell(curVal, row.unit)}</td>
+        <td style="color:#6b7280;">${fmtCell(prevVal, row.unit)}</td>
+        <td style="color:#6b7280;">${fmtCell(pyVal, row.unit)}</td>
+        <td>${showDeleteBtn ? `<button class="btn-cancel" style="padding:3px 10px;font-size:12px;color:#b91c1c;border-color:#fca5a5;" onclick="deletePl(${currentPlId})">削除</button>` : ''}</td>
+      `;
+    }
+    tbody.appendChild(tr);
+  });
+}
+
+async function deletePl(plId) {
+  if (!confirm('このPLデータを削除してよろしいですか？')) return;
+  try {
+    const res = await fetch(`/api/pl/${plId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('API error');
+    showAlert('PLデータを削除しました。');
+    loadPlData();
+  } catch(e) {
+    showAlert('削除に失敗しました。再度お試しください。', 'error');
+  }
+}
+
+/* ===================================================
+   月次利益推移グラフ
+=================================================== */
+function renderPlChart(data) {
+  const ctx = document.getElementById('pl-chart').getContext('2d');
+  if (plChart) plChart.destroy();
+
+  const labels   = (data && data.labels)       || [];
+  const revenue  = (data && data.revenue)      || [];
+  const gross    = (data && data.gross_profit) || [];
+  const opProfit = (data && data.op_profit)    || [];
+
+  plChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels.length ? labels : ['データなし'],
+      datasets: [
+        {
+          label: '売上',
+          data: revenue,
+          borderColor: '#16a34a',
+          backgroundColor: 'rgba(22,163,74,0.1)',
+          tension: 0.3,
+          fill: true,
+          pointRadius: 4,
+          yAxisID: 'y',
+        },
+        {
+          label: '粗利',
+          data: gross,
+          borderColor: '#4ade80',
+          backgroundColor: 'transparent',
+          tension: 0.3,
+          fill: false,
+          pointRadius: 4,
+          yAxisID: 'y',
+        },
+        {
+          label: '営業利益',
+          data: opProfit,
+          borderColor: '#3b82f6',
+          backgroundColor: 'transparent',
+          tension: 0.3,
+          fill: false,
+          pointRadius: 4,
+          borderDash: [5, 3],
+          yAxisID: 'y',
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { font: { size: 12 }, boxWidth: 12 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const v = ctx.parsed.y;
+              return `${ctx.dataset.label}: ${v !== null && !isNaN(v) ? Math.round(v).toLocaleString('ja-JP') + '円' : '-'}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 11 } }
+        },
+        y: {
+          beginAtZero: false,
+          title: { display: true, text: '円', font: { size: 12 } },
+          ticks: { callback: v => Math.round(v).toLocaleString('ja-JP') + '円' }
+        }
+      }
+    }
+  });
+}
+
+/* ===================================================
+   モーダル
+=================================================== */
+/* 費用項目ヘルパー */
+let costTemplates = { fixed: [], variable: [] };
+
+async function loadCostTemplates() {
+  try {
+    const res = await fetch('/api/pl/custom-items');
+    if (res.ok) {
+      const data = await res.json();
+      costTemplates.fixed    = (data.fixed    || []).map(i => i.name);
+      costTemplates.variable = (data.variable || []).map(i => i.name);
+    }
+  } catch(e) { /* ignore */ }
+}
+
+function addCostRow(type, name='', amount='') {
+  const wrapId = type === 'fixed' ? 'fixed-items-wrap' : 'variable-items-wrap';
+  const wrap = document.getElementById(wrapId);
+  const templates = type === 'fixed' ? costTemplates.fixed : costTemplates.variable;
+  const idx = Date.now();
+  const dlId = `dl-${type}-${idx}`;
+
+  const row = document.createElement('div');
+  row.className = `cost-item-row cost-${type}`;
+  row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;';
+
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.placeholder = type === 'fixed' ? '例: 家賃, 保険料...' : '例: 消耗品, 交通費...';
+  nameInput.value = name;
+  nameInput.setAttribute('list', dlId);
+  nameInput.style.cssText = 'flex:1;border:1px solid #d1d5db;border-radius:6px;padding:7px 10px;font-size:13px;';
+
+  const dl = document.createElement('datalist');
+  dl.id = dlId;
+  templates.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t;
+    dl.appendChild(opt);
+  });
+
+  const amtInput = document.createElement('input');
+  amtInput.type = 'number';
+  amtInput.min = '0';
+  amtInput.placeholder = '';
+  amtInput.value = amount !== '' ? amount : '';
+  amtInput.style.cssText = 'width:140px;border:1px solid #d1d5db;border-radius:6px;padding:7px 10px;font-size:13px;text-align:right;';
+
+  const unit = document.createElement('span');
+  unit.textContent = '円';
+  unit.style.cssText = 'font-size:13px;color:#6b7280;white-space:nowrap;';
+
+  const delBtn = document.createElement('button');
+  delBtn.type = 'button';
+  delBtn.textContent = '✕';
+  delBtn.style.cssText = 'padding:6px 8px;border:1px solid #fca5a5;border-radius:6px;background:#fff;color:#ef4444;cursor:pointer;font-size:12px;';
+  delBtn.onclick = () => row.remove();
+
+  row.appendChild(nameInput);
+  row.appendChild(dl);
+  row.appendChild(amtInput);
+  row.appendChild(unit);
+  row.appendChild(delBtn);
+  wrap.appendChild(row);
+}
+
+function getCostItems(type) {
+  const rows = document.querySelectorAll(`.cost-${type}`);
+  const items = [];
+  rows.forEach(row => {
+    const inputs = row.querySelectorAll('input');
+    const name = inputs[0].value.trim();
+    const amount = parseFloat(inputs[1].value) || 0;
+    if (name) items.push({ name, amount });
+  });
+  return items;
+}
+
+function renderCostRows(type, existingItems) {
+  const wrapId = type === 'fixed' ? 'fixed-items-wrap' : 'variable-items-wrap';
+  document.getElementById(wrapId).innerHTML = '';
+  (existingItems || []).forEach(item => addCostRow(type, item.name, item.amount));
+}
+
+function getCustomItemsFromForm() { return []; } // 廃止（後方互換）
+
+async function openPlModal(existingData) {
+  await loadCostTemplates();
+  const ym = `${currentYear}-${String(currentMonth).padStart(2,'0')}`;
+  document.getElementById('modal-target-month').value = ym;
+
+  const form = document.getElementById('pl-form');
+  form.reset();
+  document.getElementById('modal-target-month').value = ym;
+
+  if (existingData) {
+    const fields = ['revenue','gross_profit','ad_cost','labor_cost','regular_salary','parttime_salary','commission_pay'];
+    fields.forEach(f => {
+      const el = form.querySelector(`[name="${f}"]`);
+      if (el && existingData[f] != null) el.value = existingData[f] || '';
+    });
+    renderCostRows('fixed',    existingData.fixed_items    || []);
+    renderCostRows('variable', existingData.variable_items || []);
+  } else {
+    // テンプレートを初期表示
+    renderCostRows('fixed',    costTemplates.fixed.map(n => ({ name: n, amount: '' })));
+    renderCostRows('variable', costTemplates.variable.map(n => ({ name: n, amount: '' })));
+    // テンプレートが空の場合はデフォルト固定費を表示
+    if (!costTemplates.fixed.length) {
+      ['家賃','駐車場代','複合機リース','ネット回線','顧問料','保険料','クラウド費'].forEach(n => addCostRow('fixed', n, ''));
+    }
+  }
+
+  document.getElementById('pl-modal').classList.add('active');
+}
+
+function closePlModal() {
+  document.getElementById('pl-modal').classList.remove('active');
+  document.getElementById('pl-form').reset();
+  document.getElementById('fixed-items-wrap').innerHTML    = '';
+  document.getElementById('variable-items-wrap').innerHTML = '';
+}
+
+async function submitPl() {
+  const form = document.getElementById('pl-form');
+  const formData = new FormData(form);
+  const targetMonth = formData.get('target_month');
+
+  if (!targetMonth) {
+    showAlert('対象月を選択してください。', 'error');
+    return;
+  }
+
+  const [year, month] = targetMonth.split('-').map(Number);
+  const payload = { store_id: 1, year, month };
+
+  formData.forEach((v, k) => {
+    if (k === 'target_month' || k === 'store_id') return;
+    if (v !== '') payload[k] = parseFloat(v) || 0;
+  });
+
+  // 固定費・変動費を追加
+  payload.fixed_items    = getCostItems('fixed');
+  payload.variable_items = getCostItems('variable');
+
+  try {
+    const res = await fetch('/api/pl/input', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    closePlModal();
+    showAlert('月次データを保存しました。');
+    loadPlData();
+  } catch(e) {
+    console.error('submitPl error:', e);
+    showAlert('保存に失敗しました。エラー: ' + e.message, 'error');
+  }
+}
+
+document.getElementById('pl-modal').addEventListener('click', function(e) {
+  if (e.target === this) closePlModal();
+});
+
+/* ===================================================
+   初期化
+=================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('year'))  currentYear  = parseInt(params.get('year'));
+  if (params.get('month')) currentMonth = parseInt(params.get('month'));
+  updateMonthLabel();
+  loadPlData();
+});
+</script>
+{% endblock %}

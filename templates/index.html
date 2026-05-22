@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}IeAI - 不動産業務をAIで自動化{% endblock %}
+{% block content %}
+
+<!-- ヒーロー -->
+<section class="text-center py-20">
+  <div class="inline-block bg-brand-50 text-brand-600 text-sm font-semibold px-4 py-1.5 rounded-full mb-6">
+    不動産業務に特化したAIツール
+  </div>
+  <h1 class="text-5xl font-extrabold text-gray-900 mb-6 leading-tight">
+    不動産の仕事を<br><span class="text-brand-600">AIでもっと楽に。</span>
+  </h1>
+  <p class="text-xl text-gray-500 mb-10 max-w-2xl mx-auto">
+    物件説明文の作成・問い合わせ返信・価格査定レポートをAIが自動生成。<br>
+    Googleアカウントですぐに使えます。
+  </p>
+  {% if user %}
+    <a href="/dashboard" class="gradient-bg text-white px-8 py-4 rounded-xl text-lg font-semibold hover:opacity-90 transition inline-block">
+      ダッシュボードへ →
+    </a>
+  {% else %}
+    <a href="/login" class="gradient-bg text-white px-8 py-4 rounded-xl text-lg font-semibold hover:opacity-90 transition inline-block">
+      Googleアカウントで無料ではじめる
+    </a>
+  {% endif %}
+</section>
+
+<!-- 機能カード -->
+<section class="py-16">
+  <h2 class="text-3xl font-bold text-center text-gray-800 mb-12">3つのAI機能</h2>
+  <div class="grid md:grid-cols-3 gap-8">
+
+    <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 card-hover">
+      <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-5">
+        <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+        </svg>
+      </div>
+      <h3 class="text-xl font-bold text-gray-800 mb-3">物件説明文 自動生成</h3>
+      <p class="text-gray-500 leading-relaxed">間取りや立地などの基本情報を入力するだけで、購買意欲を高めるキャッチコピーと紹介文をAIが作成します。</p>
+    </div>
+
+    <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 card-hover">
+      <div class="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center mb-5">
+        <svg class="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+      </div>
+      <h3 class="text-xl font-bold text-gray-800 mb-3">問い合わせ 自動返信</h3>
+      <p class="text-gray-500 leading-relaxed">お客様からの問い合わせ内容を貼り付けるだけで、丁寧でプロフェッショナルな返信メールをAIが作成します。</p>
+    </div>
+
+    <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 card-hover">
+      <div class="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center mb-5">
+        <svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+      </div>
+      <h3 class="text-xl font-bold text-gray-800 mb-3">AI 価格査定レポート</h3>
+      <p class="text-gray-500 leading-relaxed">物件情報を入力すると、査定価格レンジと根拠・売却戦略のレポートをAIが自動で作成します。</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- 料金プラン -->
+<section class="py-16">
+  <h2 class="text-3xl font-bold text-center text-gray-800 mb-12">料金プラン</h2>
+  <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+
+    <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+      <div class="text-sm font-semibold text-gray-400 mb-2">FREE</div>
+      <div class="text-4xl font-extrabold text-gray-900 mb-1">¥0</div>
+      <div class="text-gray-400 text-sm mb-6">/ 月</div>
+      <ul class="space-y-3 text-sm text-gray-600 mb-8">
+        <li class="flex gap-2"><span class="text-green-500">✓</span> 月10回まで利用</li>
+        <li class="flex gap-2"><span class="text-green-500">✓</span> 全3機能が使える</li>
+        <li class="flex gap-2"><span class="text-gray-300">✗</span> 履歴保存（5件まで）</li>
+      </ul>
+      <a href="/login" class="block text-center border border-gray-200 rounded-lg py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+        無料ではじめる
+      </a>
+    </div>
+
+    <div class="bg-brand-700 rounded-2xl p-8 shadow-lg text-white relative">
+      <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-orange-400 text-white text-xs font-bold px-4 py-1 rounded-full">人気No.1</div>
+      <div class="text-sm font-semibold text-blue-200 mb-2">STANDARD</div>
+      <div class="text-4xl font-extrabold mb-1">¥3,980</div>
+      <div class="text-blue-200 text-sm mb-6">/ 月</div>
+      <ul class="space-y-3 text-sm text-blue-100 mb-8">
+        <li class="flex gap-2"><span class="text-green-300">✓</span> 月200回まで利用</li>
+        <li class="flex gap-2"><span class="text-green-300">✓</span> 全3機能が使える</li>
+        <li class="flex gap-2"><span class="text-green-300">✓</span> 履歴保存（無制限）</li>
+      </ul>
+      <a href="/login" class="block text-center bg-white text-brand-700 rounded-lg py-2.5 text-sm font-bold hover:bg-blue-50 transition">
+        今すぐはじめる
+      </a>
+    </div>
+
+    <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+      <div class="text-sm font-semibold text-gray-400 mb-2">BUSINESS</div>
+      <div class="text-4xl font-extrabold text-gray-900 mb-1">¥9,800</div>
+      <div class="text-gray-400 text-sm mb-6">/ 月</div>
+      <ul class="space-y-3 text-sm text-gray-600 mb-8">
+        <li class="flex gap-2"><span class="text-green-500">✓</span> 無制限利用</li>
+        <li class="flex gap-2"><span class="text-green-500">✓</span> チームメンバー追加</li>
+        <li class="flex gap-2"><span class="text-green-500">✓</span> 優先サポート</li>
+      </ul>
+      <a href="/login" class="block text-center border border-gray-200 rounded-lg py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
+        お問い合わせ
+      </a>
+    </div>
+
+  </div>
+</section>
+
+{% endblock %}

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ログイン | ルームピック 管理ポータル</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #14532d 0%, #166534 40%, #15803d 100%);
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .login-card {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.3);
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 420px;
+    }
+    .input-field {
+      width: 100%;
+      border: 1.5px solid #d1d5db;
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 15px;
+      color: #111827;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      background: #f9fafb;
+    }
+    .input-field:focus {
+      border-color: #16a34a;
+      box-shadow: 0 0 0 3px rgba(22,163,74,0.15);
+      background: #fff;
+    }
+    .btn-login {
+      width: 100%;
+      background: #16a34a;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn-login:hover { background: #15803d; }
+    .btn-login:active { transform: scale(0.99); }
+    .logo-icon {
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, #16a34a, #15803d);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      box-shadow: 0 8px 24px rgba(22,163,74,0.35);
+    }
+  </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+  <div class="login-card">
+    <!-- ロゴ -->
+    <div class="text-center mb-8">
+      <div class="logo-icon">
+        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        </svg>
+      </div>
+      <h1 class="text-2xl font-bold text-gray-900">ルームピック</h1>
+      <p class="text-sm text-gray-500 mt-1">管理ポータル</p>
+    </div>
+
+    <!-- エラーメッセージ -->
+    {% if error %}
+    <div style="background:#fee2e2; border:1px solid #fca5a5; border-radius:8px; padding:12px 16px; margin-bottom:20px; color:#b91c1c; font-size:14px; text-align:center;">
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- ログインフォーム -->
+    <form method="POST" action="/app-login">
+      <div class="mb-4">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">ユーザー名</label>
+        <input
+          type="text"
+          name="username"
+          class="input-field"
+          placeholder="ユーザー名を入力"
+          autocomplete="username"
+          required
+        >
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">パスワード</label>
+        <input
+          type="password"
+          name="password"
+          class="input-field"
+          placeholder="パスワードを入力"
+          autocomplete="current-password"
+          required
+        >
+      </div>
+
+      <button type="submit" class="btn-login">
+        ログイン
+      </button>
+    </form>
+
+    <p class="text-center text-xs text-gray-400 mt-6">
+      © 2026 ルームピック 管理ポータル
+    </p>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,275 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}申込台帳 | ルームピック管理ポータル{% endblock %}
+{% block breadcrumb %}申込台帳{% endblock %}
+
+{% block extra_head %}
+<style>
+  .status-badge-contract  { background:#dcfce7; color:#15803d; border-radius:9999px; padding:2px 10px; font-size:0.72rem; font-weight:700; }
+  .status-badge-apply     { background:#fef9c3; color:#92400e; border-radius:9999px; padding:2px 10px; font-size:0.72rem; font-weight:700; }
+  .status-badge-cancel    { background:#fee2e2; color:#b91c1c; border-radius:9999px; padding:2px 10px; font-size:0.72rem; font-weight:700; }
+  .status-badge-other     { background:#f3f4f6; color:#6b7280; border-radius:9999px; padding:2px 10px; font-size:0.72rem; font-weight:700; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-green-900">申込台帳</h1>
+    <p class="text-green-700 text-sm mt-0.5">Excelインポートデータの申込・契約一覧</p>
+  </div>
+
+  <!-- 月ナビゲーション -->
+  <div class="flex items-center gap-2 bg-white border border-green-200 rounded-xl px-4 py-2 shadow-sm">
+    <button onclick="changeMonth(-1)" class="p-1 rounded hover:bg-green-100 text-green-700 transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+    </button>
+    <span id="month-label" class="font-bold text-green-800 text-base w-24 text-center"></span>
+    <button onclick="changeMonth(1)" class="p-1 rounded hover:bg-green-100 text-green-700 transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
+    </button>
+    <button onclick="goToday()" class="ml-2 text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 transition">今月</button>
+  </div>
+</div>
+
+<!-- フィルター -->
+<div class="bg-white rounded-xl border border-green-100 shadow-sm p-4 mb-4 flex flex-wrap items-end gap-3">
+  <div>
+    <label class="block text-xs font-medium text-gray-600 mb-1">担当者</label>
+    <select id="filter-staff" onchange="loadContracts()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+      <option value="">全員</option>
+      {% for s in staff_list %}
+        <option value="{{ s.id }}">{{ s.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="block text-xs font-medium text-gray-600 mb-1">状況</label>
+    <select id="filter-status" onchange="loadContracts()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+      <option value="">すべて</option>
+      <option value="契約">契約</option>
+      <option value="申込">申込</option>
+      <option value="キャンセル">キャンセル</option>
+      <option value="繰越">繰越</option>
+    </select>
+  </div>
+  <div class="ml-auto text-sm text-gray-500" id="summary-text"></div>
+</div>
+
+<!-- テーブル -->
+<div class="bg-white rounded-2xl shadow-sm border border-green-100 overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-xs">
+      <thead>
+        <tr class="bg-green-50 text-green-800 border-b border-green-100">
+          <th class="px-3 py-2.5 text-center font-semibold w-10">No</th>
+          <th class="px-3 py-2.5 text-center font-semibold w-20">状況</th>
+          <th class="px-3 py-2.5 text-left font-semibold">申込日</th>
+          <th class="px-3 py-2.5 text-left font-semibold">担当者</th>
+          <th class="px-3 py-2.5 text-left font-semibold">物件名/号室</th>
+          <th class="px-3 py-2.5 text-left font-semibold">お客様名</th>
+          <th class="px-3 py-2.5 text-right font-semibold">賃料</th>
+          <th class="px-3 py-2.5 text-left font-semibold">媒体</th>
+          <th class="px-3 py-2.5 text-left font-semibold">管理会社</th>
+          <th class="px-3 py-2.5 text-center font-semibold">AD%</th>
+          <th class="px-3 py-2.5 text-center font-semibold">AD</th>
+          <th class="px-3 py-2.5 text-center font-semibold">ライフ</th>
+          <th class="px-3 py-2.5 text-center font-semibold">引越</th>
+          <th class="px-3 py-2.5 text-center font-semibold">火災</th>
+          <th class="px-3 py-2.5 text-right font-semibold">契約金額</th>
+          <th class="px-3 py-2.5 text-center font-semibold w-10"></th>
+        </tr>
+      </thead>
+      <tbody id="contracts-tbody">
+        <tr>
+          <td colspan="16" class="py-12 text-center text-gray-400">
+            <div class="inline-block w-6 h-6 border-4 border-green-400 border-t-transparent rounded-full animate-spin mb-2"></div>
+            <div>読み込み中...</div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- サマリー -->
+<div id="summary-bar" class="mt-4 bg-white rounded-xl border border-green-100 shadow-sm p-4 hidden">
+  <div class="flex flex-wrap gap-6 text-sm">
+    <div class="flex items-center gap-2">
+      <span class="text-gray-600">合計件数:</span>
+      <span id="sum-total" class="font-bold text-green-800"></span>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-gray-600">契約:</span>
+      <span id="sum-contracts" class="font-bold text-green-700"></span>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-gray-600">申込:</span>
+      <span id="sum-applications" class="font-bold text-yellow-700"></span>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="text-gray-600">キャンセル:</span>
+      <span id="sum-cancellations" class="font-bold text-red-600"></span>
+    </div>
+    <div class="flex items-center gap-2 ml-auto">
+      <span class="text-gray-600">契約金額合計:</span>
+      <span id="sum-amount" class="font-bold text-green-800 text-base"></span>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentYear = {{ year }};
+let currentMonth = {{ month }};
+
+function updateMonthLabel() {
+  document.getElementById('month-label').textContent = `${currentYear}年${currentMonth}月`;
+}
+
+function changeMonth(delta) {
+  currentMonth += delta;
+  if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+  if (currentMonth < 1)  { currentMonth = 12; currentYear--; }
+  updateMonthLabel();
+  loadContracts();
+}
+
+function goToday() {
+  const now = new Date();
+  currentYear = now.getFullYear();
+  currentMonth = now.getMonth() + 1;
+  updateMonthLabel();
+  loadContracts();
+}
+
+function statusBadge(status) {
+  if (!status) return '<span class="status-badge-other">-</span>';
+  if (status === '契約')   return `<span class="status-badge-contract">契約</span>`;
+  if (status === '申込')   return `<span class="status-badge-apply">申込</span>`;
+  if (status.includes('キャンセル')) return `<span class="status-badge-cancel">ｷｬﾝｾﾙ</span>`;
+  return `<span class="status-badge-other">${status}</span>`;
+}
+
+function circleBadge(v) {
+  if (!v) return '<span class="text-gray-300">-</span>';
+  if (v.includes('○')) return '<span class="text-green-600 font-bold">○</span>';
+  if (v.includes('×') || v.includes('✖')) return '<span class="text-red-400">×</span>';
+  return `<span class="text-gray-500 text-xs">${v}</span>`;
+}
+
+function fmtDate(d) {
+  if (!d) return '-';
+  return d.replace(/-/g, '/').substring(2);  // YY/MM/DD
+}
+
+function fmtMoney(v) {
+  if (!v) return '-';
+  return Number(v).toLocaleString() + '円';
+}
+
+async function loadContracts() {
+  const staffId = document.getElementById('filter-staff').value;
+  const status  = document.getElementById('filter-status').value;
+
+  let url = `/api/contracts?year=${currentYear}&month=${currentMonth}`;
+  if (staffId) url += `&staff_id=${staffId}`;
+  if (status)  url += `&status=${encodeURIComponent(status)}`;
+
+  const tbody = document.getElementById('contracts-tbody');
+  tbody.innerHTML = `<tr><td colspan="16" class="py-10 text-center text-gray-400">
+    <div class="inline-block w-6 h-6 border-4 border-green-400 border-t-transparent rounded-full animate-spin mb-2"></div>
+    <div>読み込み中...</div></td></tr>`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (!data.records || data.records.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="16" class="py-12 text-center text-gray-400">
+        <div class="text-3xl mb-2">📋</div>
+        <div>データがありません</div>
+        <div class="text-xs mt-1">Excelをインポートしてください</div>
+      </td></tr>`;
+      document.getElementById('summary-bar').classList.add('hidden');
+      document.getElementById('summary-text').textContent = '';
+      return;
+    }
+
+    let rows = '';
+    for (const r of data.records) {
+      rows += `
+        <tr class="border-b border-gray-50 hover:bg-green-50 transition" id="row-${r.id}">
+          <td class="px-3 py-2 text-center text-gray-500">${r.seq_no || '-'}</td>
+          <td class="px-3 py-2 text-center">${statusBadge(r.status)}</td>
+          <td class="px-3 py-2 text-gray-600 whitespace-nowrap">${fmtDate(r.application_date)}</td>
+          <td class="px-3 py-2 font-medium text-gray-800">${r.staff_name || '-'}</td>
+          <td class="px-3 py-2">
+            <div class="text-gray-800 font-medium truncate max-w-xs">${r.property_name || '-'}</div>
+            <div class="text-gray-400 text-xs">${r.room_no || ''}</div>
+          </td>
+          <td class="px-3 py-2">
+            <div class="font-medium text-gray-800">${r.customer_name || '-'}</div>
+            <div class="text-gray-400 text-xs">${r.phone || ''}</div>
+          </td>
+          <td class="px-3 py-2 text-right text-gray-700 whitespace-nowrap">${r.rent ? Number(r.rent).toLocaleString() + '円' : '-'}</td>
+          <td class="px-3 py-2 text-gray-600 truncate max-w-20">${r.media || '-'}</td>
+          <td class="px-3 py-2 text-gray-600 truncate max-w-28">${r.management_company || '-'}</td>
+          <td class="px-3 py-2 text-center text-gray-600">${r.ad_pct != null ? r.ad_pct + '%' : '-'}</td>
+          <td class="px-3 py-2 text-center">${circleBadge(r.ad_received)}</td>
+          <td class="px-3 py-2 text-center">${circleBadge(r.lifeline)}</td>
+          <td class="px-3 py-2 text-center">${circleBadge(r.moving)}</td>
+          <td class="px-3 py-2 text-center">${circleBadge(r.fire_insurance)}</td>
+          <td class="px-3 py-2 text-right font-medium text-green-700 whitespace-nowrap">${r.contract_amount ? Number(r.contract_amount).toLocaleString() + '円' : '-'}</td>
+          <td class="px-3 py-2 text-center">
+            <button onclick="deleteContract(${r.id})"
+              class="p-1 rounded text-red-400 hover:bg-red-50 hover:text-red-600 transition" title="削除">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+            </button>
+          </td>
+        </tr>
+      `;
+    }
+    tbody.innerHTML = rows;
+
+    // サマリー更新
+    const bar = document.getElementById('summary-bar');
+    bar.classList.remove('hidden');
+    document.getElementById('sum-total').textContent = data.total + '件';
+    document.getElementById('sum-contracts').textContent = data.contracts + '件';
+    document.getElementById('sum-applications').textContent = data.applications + '件';
+    document.getElementById('sum-cancellations').textContent = data.cancellations + '件';
+    document.getElementById('sum-amount').textContent = Math.round(data.total_contract_amount).toLocaleString() + '円';
+    document.getElementById('summary-text').textContent = `${data.total}件`;
+
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="16" class="py-8 text-center text-red-500">データ取得エラー: ${err.message}</td></tr>`;
+  }
+}
+
+async function deleteContract(id) {
+  if (!confirm('このレコードを削除しますか？')) return;
+  try {
+    const res = await fetch(`/api/contracts/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      const row = document.getElementById(`row-${id}`);
+      if (row) row.remove();
+      loadContracts();  // サマリー再計算
+    }
+  } catch (err) {
+    alert('削除に失敗しました');
+  }
+}
+
+// 初期化
+updateMonthLabel();
+loadContracts();
+</script>
+{% endblock %}

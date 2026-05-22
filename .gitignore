@@ -1,0 +1,10 @@
+instance/
+*.db
+*.sqlite
+__pycache__/
+*.pyc
+.env
+.env.local
+*.log
+.DS_Store
+ngrok.exe

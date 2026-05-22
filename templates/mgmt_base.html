@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}ルームピック 管理ポータル{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              DEFAULT: '#16a34a',
+              dark:    '#15803d',
+              light:   '#dcfce7',
+              bg:      '#f0fdf4',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --sidebar-w: 240px;
+      --topbar-h: 56px;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; }
+
+    /* スクロールバー */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f0fdf4; }
+    ::-webkit-scrollbar-thumb { background: #86efac; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #16a34a; }
+
+    /* サイドバー */
+    #sidebar {
+      width: var(--sidebar-w);
+      min-height: 100vh;
+      position: fixed;
+      top: 0; left: 0;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      background: #14532d;
+      transition: width 0.2s ease;
+    }
+    #sidebar.collapsed { width: 64px; }
+    #sidebar.collapsed .nav-label,
+    #sidebar.collapsed .logo-text,
+    #sidebar.collapsed .user-info { display: none; }
+    #sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; }
+    #sidebar.collapsed .logo-wrap { justify-content: center; padding: 16px 0; }
+    #sidebar.collapsed .nav-section-label { display: none; }
+
+    /* メインコンテンツ */
+    #main-wrap {
+      margin-left: var(--sidebar-w);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #f0fdf4;
+      transition: margin-left 0.2s ease;
+    }
+    #main-wrap.expanded { margin-left: 64px; }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      border-radius: 8px;
+      margin: 2px 8px;
+      color: #bbf7d0;
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .nav-item:hover { background: #166534; color: #fff; }
+    .nav-item.active { background: #16a34a; color: #fff; }
+    .nav-item svg { flex-shrink: 0; width: 18px; height: 18px; }
+
+    .nav-section-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: #4ade80;
+      padding: 12px 24px 4px;
+      text-transform: uppercase;
+    }
+
+    /* トップバー */
+    #topbar {
+      height: var(--topbar-h);
+      background: #fff;
+      border-bottom: 1px solid #dcfce7;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      box-shadow: 0 1px 4px rgba(22,163,74,0.07);
+    }
+
+    /* カードアニメーション */
+    .card-hover {
+      transition: transform 0.18s, box-shadow 0.18s;
+    }
+    .card-hover:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(22,163,74,0.12);
+    }
+
+    /* バッジ */
+    .badge-green { background: #dcfce7; color: #15803d; border-radius: 9999px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; }
+    .badge-red   { background: #fee2e2; color: #b91c1c; border-radius: 9999px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; }
+    .badge-yellow{ background: #fef9c3; color: #92400e; border-radius: 9999px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; }
+
+    /* プログレスバー */
+    .progress-bar { height: 6px; border-radius: 3px; background: #dcfce7; overflow: hidden; }
+    .progress-bar-fill { height: 100%; border-radius: 3px; background: #16a34a; transition: width 0.5s; }
+    .progress-bar-fill.danger { background: #ef4444; }
+    .progress-bar-fill.warning { background: #f59e0b; }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-green-50 min-h-screen flex">
+
+  <!-- サイドバー -->
+  <aside id="sidebar">
+    <!-- ロゴ -->
+    <div class="logo-wrap flex items-center gap-3 px-4 py-5 border-b border-green-800">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background:#16a34a;">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <div class="text-white font-bold text-base leading-tight">ルームピック</div>
+        <div class="text-green-400 text-xs">管理ポータル</div>
+      </div>
+    </div>
+
+    <!-- ナビゲーション -->
+    <nav class="flex-1 overflow-y-auto py-3">
+      <div class="nav-section-label">メイン管理</div>
+
+      <a href="/executive"
+         class="nav-item {% if request.path == '/executive' %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span class="nav-label">売上管理</span>
+      </a>
+
+      <a href="/sales"
+         class="nav-item {% if request.path == '/sales' %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+        </svg>
+        <span class="nav-label">営業管理</span>
+      </a>
+
+      <a href="/leads"
+         class="nav-item {% if request.path == '/leads' %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        <span class="nav-label">反響管理</span>
+      </a>
+
+      <a href="/accounting"
+         class="nav-item {% if request.path == '/accounting' %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+        </svg>
+        <span class="nav-label">経理・PL管理</span>
+      </a>
+
+      <a href="/staff-ranking"
+         class="nav-item {% if request.path == '/staff-ranking' %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+        </svg>
+        <span class="nav-label">スタッフランキング</span>
+      </a>
+
+      <div class="nav-section-label">申込・入金管理</div>
+
+      <a href="/import-excel"
+         class="nav-item {% if request.path == '/import-excel' %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+        </svg>
+        <span class="nav-label">Excelインポート</span>
+      </a>
+
+      <a href="/contracts"
+         class="nav-item {% if request.path == '/contracts' %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+        </svg>
+        <span class="nav-label">申込台帳</span>
+      </a>
+
+      <a href="/payments"
+         class="nav-item {% if request.path == '/payments' %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+        </svg>
+        <span class="nav-label">入金管理</span>
+      </a>
+
+      <div class="nav-section-label">設定</div>
+
+      <a href="/settings"
+         class="nav-item {% if request.path == '/settings' %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        <span class="nav-label">設定</span>
+      </a>
+
+    </nav>
+
+    <!-- ユーザー情報 -->
+    <div class="px-3 py-4 border-t border-green-800">
+      <div class="nav-item" style="cursor:default; margin:0; padding:8px 8px;">
+        <div class="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+          {{ session.get('app_username', 'G')[0] | upper }}
+        </div>
+        <div class="user-info min-w-0">
+          <div class="text-white text-sm font-medium truncate">{{ session.get('app_username', 'ゲスト') }}</div>
+          <div class="text-green-400 text-xs truncate">{{ session.get('app_user_role', '--') }}</div>
+        </div>
+      </div>
+      <a href="/app-logout" class="nav-item text-green-400 hover:text-red-300 text-xs mt-1">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+        </svg>
+        <span class="nav-label">ログアウト</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- メインエリア -->
+  <div id="main-wrap" class="flex-1 flex flex-col">
+
+    <!-- トップバー -->
+    <header id="topbar">
+      <div class="flex items-center gap-3">
+        <button id="sidebar-toggle"
+          onclick="toggleSidebar()"
+          class="p-1.5 rounded-lg text-green-700 hover:bg-green-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <div class="text-sm text-green-700 font-medium" id="topbar-breadcrumb">
+          {% block breadcrumb %}管理ポータル{% endblock %}
+        </div>
+      </div>
+
+      <div class="flex items-center gap-4">
+        <div class="text-sm text-gray-500" id="topbar-datetime"></div>
+
+        <!-- 通知ベル -->
+        <button class="relative p-1.5 rounded-lg text-green-700 hover:bg-green-100 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+          </svg>
+          <span id="notif-badge" class="hidden absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center">!</span>
+        </button>
+
+        <!-- ユーザーアバター -->
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-sm font-bold">
+            {{ session.get('app_username', 'G')[0] | upper }}
+          </div>
+          <span class="text-sm text-gray-700 font-medium">{{ session.get('app_username', 'ゲスト') }}</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- コンテンツ -->
+    <main class="px-6 py-5 flex-1 max-w-screen-xl">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="px-6 py-3 text-xs text-green-600 border-t border-green-100 text-right">
+      © 2026 ルームピック &nbsp;|&nbsp; 管理ポータル
+    </footer>
+  </div>
+
+  <script>
+    // 日時表示
+    function updateDatetime() {
+      const el = document.getElementById('topbar-datetime');
+      if (!el) return;
+      const now = new Date();
+      el.textContent = now.toLocaleDateString('ja-JP', {year:'numeric',month:'long',day:'numeric',weekday:'short'})
+        + ' ' + now.toLocaleTimeString('ja-JP', {hour:'2-digit',minute:'2-digit'});
+    }
+    updateDatetime();
+    setInterval(updateDatetime, 30000);
+
+    // サイドバー折りたたみ
+    function toggleSidebar() {
+      const sb = document.getElementById('sidebar');
+      const mw = document.getElementById('main-wrap');
+      sb.classList.toggle('collapsed');
+      mw.classList.toggle('expanded');
+    }
+  </script>
+  {% block scripts %}{% endblock %}
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

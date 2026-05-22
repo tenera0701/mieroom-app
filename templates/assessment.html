@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}AI価格査定 - IeAI{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <a href="/dashboard" class="text-sm text-gray-400 hover:text-gray-600">← ダッシュボードに戻る</a>
+</div>
+
+<div class="max-w-4xl mx-auto">
+  <div class="mb-8">
+    <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-3">
+      <span class="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center">
+        <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+      </span>
+      AI 価格査定レポート
+    </h1>
+    <p class="text-gray-500 mt-2">物件情報を入力すると、査定価格レンジ・根拠・売却戦略をAIが自動でレポート作成します。</p>
+  </div>
+
+  <div class="grid md:grid-cols-2 gap-8">
+    <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+      <h2 class="font-semibold text-gray-700 mb-5">物件情報を入力</h2>
+      <form method="POST" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-1">物件種別</label>
+          <select name="type" class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+            <option>マンション（中古）</option>
+            <option>マンション（新築）</option>
+            <option>一戸建て（中古）</option>
+            <option>一戸建て（新築）</option>
+            <option>土地</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-1">所在地（市区町村まで）</label>
+          <input type="text" name="location" placeholder="例：東京都世田谷区三軒茶屋" class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-1">最寄り駅・徒歩分数</label>
+          <input type="text" name="station" placeholder="例：三軒茶屋駅 徒歩8分" class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">築年数</label>
+            <input type="number" name="age" placeholder="例：15" class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">間取り</label>
+            <input type="text" name="layout" placeholder="例：2LDK" class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">面積 (㎡)</label>
+            <input type="text" name="area" placeholder="例：65.0" class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1">建物構造</label>
+            <select name="structure" class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+              <option>RC（鉄筋コンクリート）</option>
+              <option>SRC（鉄骨鉄筋コンクリート）</option>
+              <option>木造</option>
+              <option>鉄骨造</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-1">リフォーム歴</label>
+          <input type="text" name="reform" placeholder="例：2020年キッチン・バスリフォーム済み" class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-1">売主希望価格 (万円・任意)</label>
+          <input type="text" name="hope_price" placeholder="例：3800" class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        </div>
+        <button type="submit" class="w-full gradient-bg text-white py-3 rounded-xl font-semibold hover:opacity-90 transition flex items-center justify-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+          査定レポートを生成する
+        </button>
+      </form>
+    </div>
+
+    <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+      <h2 class="font-semibold text-gray-700 mb-5">査定レポート</h2>
+      {% if result %}
+        <div class="result-box text-sm text-gray-700 bg-gray-50 rounded-xl p-5 border border-gray-100 max-h-[600px] overflow-y-auto">{{ result }}</div>
+        <button onclick="navigator.clipboard.writeText(document.querySelector('.result-box').innerText)" class="mt-4 w-full border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 transition">
+          コピーする
+        </button>
+      {% else %}
+        <div class="flex flex-col items-center justify-center h-64 text-gray-300">
+          <svg class="w-16 h-16 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+          <p class="text-sm">物件情報を入力して査定ボタンを押してください</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,809 @@
+{% extends 'mgmt_base.html' %}
+
+{% block title %}反響管理 | ルームピック管理ツール{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --primary: #16a34a;
+    --primary-dark: #15803d;
+    --primary-light: #dcfce7;
+    --primary-mid: #86efac;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --text-muted: #6b7280;
+  }
+
+  /* ===== 媒体カード ===== */
+  .media-cards-scroll { overflow-x: auto; padding-bottom: 6px; margin-bottom: 20px; }
+  .media-cards { display: flex; gap: 12px; min-width: max-content; }
+  .media-card {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 14px 18px; min-width: 150px; position: relative; overflow: hidden;
+    transition: box-shadow 0.15s, transform 0.1s; cursor: default;
+  }
+  .media-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.09); transform: translateY(-2px); }
+  .media-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .media-card[data-media="SUUMO"]::before      { background: #e8380d; }
+  .media-card[data-media="カナリー"]::before   { background: #f5a623; }
+  .media-card[data-media="ホームズ"]::before   { background: #0068b7; }
+  .media-card[data-media="アットホーム"]::before { background: #e4002b; }
+  .media-card[data-media="スモッカ"]::before   { background: #00a0e9; }
+  .media-card[data-media="HP"]::before         { background: #6366f1; }
+  .media-card[data-media="SNS"]::before        { background: linear-gradient(90deg,#f09433,#dc2743,#bc1888); }
+  .media-card[data-media="リピート"]::before   { background: #16a34a; }
+  .media-card[data-media="紹介"]::before       { background: #8b5cf6; }
+  .media-card[data-media="飛び込み"]::before   { background: #ec4899; }
+  .media-card[data-media="直電話問合せ"]::before { background: #0f9d58; }
+  .media-card::before                          { background: #9ca3af; }
+  .media-card-name { font-size: 12px; font-weight: 700; color: #374151; margin-bottom: 8px; }
+  .media-card-main { font-size: 28px; font-weight: 800; color: #111827; line-height: 1; margin-bottom: 4px; }
+  .media-card-sub  { font-size: 11px; color: var(--text-muted); line-height: 1.8; }
+  .media-card-sub span { display: block; }
+  .media-card-badge {
+    margin-top: 6px; font-size: 11px; font-weight: 700;
+    color: var(--primary-dark); background: var(--primary-light);
+    border-radius: 4px; padding: 2px 6px; display: inline-block;
+  }
+
+  /* ===== ヘッダーバー ===== */
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+  }
+  .page-header-left { display: flex; align-items: center; gap: 12px; }
+  .month-nav { display: flex; align-items: center; gap: 8px; }
+  .month-label { font-size: 18px; font-weight: 700; color: #111827; min-width: 100px; text-align: center; }
+  .btn-nav {
+    width: 32px; height: 32px; border: 1px solid #d1d5db; border-radius: 6px;
+    background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: #374151; transition: all 0.15s;
+  }
+  .btn-nav:hover { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+  .btn-today {
+    padding: 6px 12px; font-size: 13px; font-weight: 600;
+    background: var(--primary-light); color: var(--primary); border: 1px solid var(--primary-mid);
+    border-radius: 6px; cursor: pointer;
+  }
+  .btn-import {
+    padding: 8px 16px; font-size: 14px; font-weight: 600;
+    background: var(--primary); color: #fff; border: none; border-radius: 6px;
+    cursor: pointer; transition: background 0.15s; display: flex; align-items: center; gap: 6px;
+  }
+  .btn-import:hover { background: var(--primary-dark); }
+  .btn-manual {
+    padding: 7px 14px; font-size: 13px; font-weight: 600;
+    background: #fff; color: var(--primary); border: 2px solid var(--primary);
+    border-radius: 6px; cursor: pointer; transition: all 0.15s;
+  }
+  .btn-manual:hover { background: var(--primary); color: #fff; }
+
+  /* ===== KPIカード（上段） ===== */
+  .kpi-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 14px; margin-bottom: 20px; }
+  @media(max-width:900px){ .kpi-row{ grid-template-columns: repeat(3,1fr); } }
+  .kpi-card {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 16px; text-align: center;
+  }
+  .kpi-card-label { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .kpi-card-value { font-size: 26px; font-weight: 800; color: #111827; line-height: 1; }
+  .kpi-card-value.green { color: var(--primary); }
+  .kpi-card-sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+  /* ===== 統計テーブル ===== */
+  .stat-table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; margin-bottom: 24px; }
+  .stat-table-header { padding: 14px 18px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; justify-content: space-between; }
+  .stat-table-header h3 { font-size: 15px; font-weight: 700; color: #111827; margin: 0; }
+  .stat-table-scroll { overflow-x: auto; }
+  table.stat-table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
+  table.stat-table thead th {
+    padding: 10px 12px; text-align: right; background: #f9fafb;
+    border-bottom: 2px solid #e5e7eb; color: #6b7280; font-weight: 600; font-size: 11px;
+  }
+  table.stat-table thead th:first-child { text-align: left; position: sticky; left: 0; background: #f9fafb; z-index: 1; }
+  table.stat-table tbody td {
+    padding: 10px 12px; text-align: right; border-bottom: 1px solid #f3f4f6; color: #111827;
+  }
+  table.stat-table tbody td:first-child {
+    text-align: left; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 1;
+  }
+  table.stat-table tbody tr:hover td { background: #f0fdf4; }
+  table.stat-table tbody tr:hover td:first-child { background: #f0fdf4; }
+  table.stat-table tfoot td {
+    padding: 11px 12px; text-align: right; background: #f0fdf4;
+    border-top: 2px solid #86efac; font-weight: 700; color: #111827;
+  }
+  table.stat-table tfoot td:first-child { text-align: left; position: sticky; left: 0; background: #f0fdf4; }
+  .badge-cvr {
+    background: var(--primary-light); color: var(--primary-dark);
+    border-radius: 4px; padding: 2px 6px; font-size: 11px; font-weight: 700;
+  }
+  .btn-row-edit {
+    padding: 3px 8px; font-size: 11px; border: 1px solid #d1d5db; border-radius: 4px;
+    background: #fff; cursor: pointer; color: #374151; margin-right: 4px;
+  }
+  .btn-row-edit:hover { border-color: var(--primary); color: var(--primary); }
+  .btn-row-del { padding: 3px 8px; font-size: 11px; border: 1px solid #fca5a5; border-radius: 4px; background: #fff; cursor: pointer; color: #ef4444; }
+  .btn-row-del:hover { background: #fee2e2; }
+  .empty-state { padding: 48px; text-align: center; color: var(--text-muted); font-size: 14px; }
+  .empty-state p { margin: 8px 0 0; font-size: 12px; }
+
+  /* ===== トレンドチャート ===== */
+  .chart-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; margin-bottom: 24px; }
+  .chart-wrap h3 { font-size: 15px; font-weight: 700; color: #111827; margin: 0 0 16px; }
+
+  /* ===== モーダル ===== */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000; align-items: center; justify-content: center; }
+  .modal-overlay.active { display: flex; }
+  .modal { background: #fff; border-radius: 12px; width: 580px; max-width: 95vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+  .modal-header { padding: 18px 22px 14px; border-bottom: 1px solid #f3f4f6; display: flex; align-items: center; justify-content: space-between; }
+  .modal-header h3 { font-size: 16px; font-weight: 700; color: #111827; margin: 0; }
+  .modal-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #9ca3af; padding: 4px; }
+  .modal-close:hover { color: #374151; }
+  .modal-body { padding: 20px 22px; }
+  .modal-footer { padding: 14px 22px; border-top: 1px solid #f3f4f6; display: flex; justify-content: flex-end; gap: 10px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group.full-width { grid-column: 1 / -1; }
+  .form-group label { font-size: 12px; font-weight: 600; color: #374151; }
+  .form-group input, .form-group select, .form-group textarea {
+    border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 10px; font-size: 14px; color: #111827;
+  }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(22,163,74,0.2); }
+  .btn-cancel { padding: 8px 18px; background: #fff; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer; font-size: 14px; color: #374151; }
+  .btn-cancel:hover { background: #f3f4f6; }
+  .btn-submit { padding: 8px 22px; background: var(--primary); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; }
+  .btn-submit:hover { background: var(--primary-dark); }
+
+  /* ===== アップロードエリア ===== */
+  .upload-area {
+    border: 2px dashed #d1d5db; border-radius: 10px; padding: 32px; text-align: center;
+    cursor: pointer; transition: all 0.15s; margin-bottom: 16px;
+  }
+  .upload-area:hover, .upload-area.dragover { border-color: var(--primary); background: var(--primary-light); }
+  .upload-area .upload-icon { font-size: 36px; margin-bottom: 8px; }
+  .upload-area p { font-size: 14px; color: #374151; margin: 0; }
+  .upload-area small { font-size: 12px; color: var(--text-muted); }
+  .upload-filename { font-size: 13px; color: var(--primary); font-weight: 600; margin-top: 8px; }
+
+  /* アラート */
+  #alert-msg {
+    position: fixed; top: 72px; right: 24px; z-index: 9999;
+    padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: none;
+    animation: slideIn 0.2s ease;
+  }
+  #alert-msg.success { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+  #alert-msg.error   { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
+  @keyframes slideIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
+</style>
+{% endblock %}
+
+{% block breadcrumb %}反響管理{% endblock %}
+
+{% block content %}
+<div id="alert-msg"></div>
+
+<!-- ===== ページヘッダー ===== -->
+<div class="page-header">
+  <div class="page-header-left">
+    <div class="month-nav">
+      <button class="btn-nav" onclick="navigateMonth(-1)">&#8592;</button>
+      <span class="month-label" id="month-label">---</span>
+      <button class="btn-nav" onclick="navigateMonth(1)">&#8594;</button>
+    </div>
+    <button class="btn-today" onclick="goToday()">今月</button>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <button class="btn-manual" onclick="openManualModal()">&#43; 手動入力</button>
+    <button class="btn-import" onclick="openImportModal()">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      Excelインポート
+    </button>
+  </div>
+</div>
+
+<!-- ===== KPI上段カード ===== -->
+<div class="kpi-row" id="kpi-row">
+  <div class="kpi-card">
+    <div class="kpi-card-label">総反響数</div>
+    <div class="kpi-card-value" id="kpi-inquiries">-</div>
+    <div class="kpi-card-sub" id="kpi-inquiries-sub">-</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-card-label">来店数</div>
+    <div class="kpi-card-value" id="kpi-visits">-</div>
+    <div class="kpi-card-sub" id="kpi-visits-sub">-</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-card-label">申込数</div>
+    <div class="kpi-card-value green" id="kpi-applications">-</div>
+    <div class="kpi-card-sub" id="kpi-applications-sub">-</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-card-label">売上見込み合計</div>
+    <div class="kpi-card-value" id="kpi-estimated">-</div>
+    <div class="kpi-card-sub" id="kpi-estimated-sub">-</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-card-label">広告費合計</div>
+    <div class="kpi-card-value" id="kpi-adcost">-</div>
+    <div class="kpi-card-sub" id="kpi-adcost-sub">-</div>
+  </div>
+</div>
+
+<!-- ===== 媒体カード ===== -->
+<div class="media-cards-scroll">
+  <div class="media-cards" id="media-cards">
+    <div style="padding:24px;color:#9ca3af;font-size:13px;">データなし</div>
+  </div>
+</div>
+
+<!-- ===== 統計テーブル ===== -->
+<div class="stat-table-wrap">
+  <div class="stat-table-header">
+    <h3>媒体別詳細</h3>
+  </div>
+  <div id="table-loading" style="display:none;padding:32px;text-align:center;color:#9ca3af;font-size:14px;">読み込み中...</div>
+  <div id="table-wrap" style="display:none;">
+    <div class="stat-table-scroll">
+      <table class="stat-table">
+        <thead>
+          <tr>
+            <th style="text-align:left;min-width:110px;">媒体</th>
+            <th>反響</th>
+            <th>前月比</th>
+            <th>LINE追加</th>
+            <th>来店</th>
+            <th>申込</th>
+            <th>前月比</th>
+            <th>契約</th>
+            <th>前月比</th>
+            <th>CXL</th>
+            <th>売上見込み</th>
+            <th>前月比</th>
+            <th>広告費</th>
+            <th>CPA</th>
+            <th>CPO</th>
+            <th>ROAS</th>
+            <th>CVR</th>
+            <th style="text-align:center;">操作</th>
+          </tr>
+        </thead>
+        <tbody id="stat-tbody"></tbody>
+        <tfoot id="stat-tfoot"></tfoot>
+      </table>
+    </div>
+  </div>
+  <div id="table-empty" class="empty-state" style="display:none;">
+    <div style="font-size:36px;">📊</div>
+    <div style="font-size:15px;font-weight:600;margin-top:12px;">データがありません</div>
+    <p>「Excelインポート」または「手動入力」でデータを追加してください</p>
+  </div>
+</div>
+
+<!-- ===== 月次トレンドチャート ===== -->
+<div class="chart-wrap">
+  <h3>月次トレンド（過去6ヶ月）</h3>
+  <canvas id="trend-chart" height="80"></canvas>
+</div>
+
+<!-- ===== Excelインポートモーダル ===== -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>反響統計 Excelインポート</h3>
+      <button class="modal-close" onclick="closeImportModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:16px;">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>対象年</label>
+            <select id="import-year"></select>
+          </div>
+          <div class="form-group">
+            <label>対象月</label>
+            <select id="import-month">
+              <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+              <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+              <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+              <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="upload-area" id="upload-area" onclick="document.getElementById('excel-file').click()">
+        <div class="upload-icon">📂</div>
+        <p>クリックまたはドラッグ＆ドロップ</p>
+        <small>反響統計Excelファイル（.xlsx）</small>
+        <div class="upload-filename" id="upload-filename" style="display:none;"></div>
+      </div>
+      <input type="file" id="excel-file" accept=".xlsx,.xls" style="display:none;" onchange="onFileSelected(this)">
+      <div style="font-size:12px;color:#6b7280;background:#f9fafb;border-radius:6px;padding:10px;">
+        ※ 同じ月のデータが既にある場合は上書きされます<br>
+        ※ Excelの形式：1列目空白、2列目媒体名、3列目〜 反響・返信・LINE・来店・申込・契約・CXL・CXL金額・見込・入金・広告費
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeImportModal()">キャンセル</button>
+      <button class="btn-submit" onclick="submitImport()">インポート</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 手動入力モーダル ===== -->
+<div class="modal-overlay" id="manual-modal">
+  <div class="modal" style="width:640px;">
+    <div class="modal-header">
+      <h3 id="manual-modal-title">媒体データ入力</h3>
+      <button class="modal-close" onclick="closeManualModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="manual-form" onsubmit="return false;">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>対象年</label>
+            <select id="manual-year"></select>
+          </div>
+          <div class="form-group">
+            <label>対象月</label>
+            <select id="manual-month">
+              <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+              <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+              <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+              <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+            </select>
+          </div>
+          <div class="form-group full-width">
+            <label>媒体名 <span style="color:#ef4444;">*</span></label>
+            <input type="text" id="manual-media" placeholder="例: SUUMO, カナリー, SNS, 紹介...">
+          </div>
+          <div class="form-group">
+            <label>反響数</label>
+            <input type="number" id="manual-inquiries" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>LINE追加</label>
+            <input type="number" id="manual-line" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>来店数</label>
+            <input type="number" id="manual-visits" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>申込数</label>
+            <input type="number" id="manual-applications" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>契約数</label>
+            <input type="number" id="manual-contracts" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>キャンセル数</label>
+            <input type="number" id="manual-cancellations" min="0" placeholder="0">
+          </div>
+          <div class="form-group">
+            <label>売上見込み（円）</label>
+            <input type="number" id="manual-estimated" min="0" step="1" placeholder="">
+          </div>
+          <div class="form-group">
+            <label>広告費（円）</label>
+            <input type="number" id="manual-adcost" min="0" step="1" placeholder="">
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeManualModal()">キャンセル</button>
+      <button class="btn-submit" onclick="submitManual()">保存する</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+/* ===== 状態 ===== */
+let currentYear  = {{ year }};
+let currentMonth = {{ month }};
+let statsData    = [];
+let trendChart   = null;
+let editingStatId = null;
+
+/* ===== ユーティリティ ===== */
+function fmtNum(v)   { return Math.round(v || 0).toLocaleString('ja-JP'); }
+function fmtYen(v)   { return Math.round(v || 0).toLocaleString('ja-JP') + '円'; }
+function fmtPct(v)   { return (v || 0).toFixed(1) + '%'; }
+
+function showAlert(msg, type = 'success') {
+  const el = document.getElementById('alert-msg');
+  el.textContent = msg;
+  el.className = type;
+  el.style.display = 'block';
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.style.display = 'none', 3500);
+}
+
+/* ===== 月ナビゲーション ===== */
+function updateMonthLabel() {
+  document.getElementById('month-label').textContent = `${currentYear}年${currentMonth}月`;
+}
+
+function navigateMonth(delta) {
+  currentMonth += delta;
+  if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+  if (currentMonth < 1)  { currentMonth = 12; currentYear--; }
+  updateMonthLabel();
+  loadStats();
+}
+
+function goToday() {
+  const now = new Date();
+  currentYear  = now.getFullYear();
+  currentMonth = now.getMonth() + 1;
+  updateMonthLabel();
+  loadStats();
+}
+
+/* ===== データ取得 ===== */
+async function loadStats() {
+  document.getElementById('table-loading').style.display = 'block';
+  document.getElementById('table-wrap').style.display   = 'none';
+  document.getElementById('table-empty').style.display  = 'none';
+
+  try {
+    const params = new URLSearchParams({ year: currentYear, month: currentMonth });
+    const res = await fetch(`/api/leads/monthly-stats?${params}`);
+    if (!res.ok) throw new Error('API error');
+    const json = await res.json();
+    statsData = json.stats || [];
+
+    renderKpiCards(json.totals || {});
+    renderMediaCards(statsData);
+    renderTable(statsData, json.totals || {});
+    renderTrendChart(json.trend || []);
+  } catch(e) {
+    console.error(e);
+    showAlert('データ取得に失敗しました', 'error');
+  } finally {
+    document.getElementById('table-loading').style.display = 'none';
+    if (statsData.length > 0) {
+      document.getElementById('table-wrap').style.display = '';
+    } else {
+      document.getElementById('table-empty').style.display = '';
+    }
+  }
+}
+
+/* ===== 前月比バッジ ===== */
+function momBadge(pct) {
+  if (pct === null || pct === undefined) return '<span style="color:#9ca3af;font-size:10px;">-</span>';
+  const color = pct > 0 ? '#16a34a' : pct < 0 ? '#ef4444' : '#6b7280';
+  const sign  = pct > 0 ? '▲' : pct < 0 ? '▼' : '';
+  return `<span style="color:${color};font-size:11px;font-weight:700;">${sign}${Math.abs(pct)}%</span>`;
+}
+
+/* ===== KPIカード ===== */
+function renderKpiCards(t) {
+  document.getElementById('kpi-inquiries').textContent      = fmtNum(t.inquiries);
+  document.getElementById('kpi-visits').textContent         = fmtNum(t.visits);
+  document.getElementById('kpi-applications').textContent   = fmtNum(t.applications);
+  document.getElementById('kpi-estimated').textContent      = fmtYen(t.estimated_sales);
+  document.getElementById('kpi-adcost').textContent         = fmtYen(t.ad_cost);
+
+  document.getElementById('kpi-inquiries-sub').innerHTML    = `前月比 ${momBadge(t.mom_inq)}`;
+  document.getElementById('kpi-visits-sub').textContent     = `来店率 ${t.inquiries ? (t.visits/t.inquiries*100).toFixed(1) : 0}%`;
+  document.getElementById('kpi-applications-sub').innerHTML = `前月比 ${momBadge(t.mom_app)}`;
+  document.getElementById('kpi-estimated-sub').innerHTML    = `前月比 ${momBadge(t.mom_est)}`;
+  const roas = t.ad_cost ? (t.estimated_sales / t.ad_cost * 100).toFixed(1) : '0.0';
+  document.getElementById('kpi-adcost-sub').textContent     = `ROAS ${roas}%`;
+}
+
+/* ===== 媒体カード ===== */
+function renderMediaCards(stats) {
+  const wrap = document.getElementById('media-cards');
+  if (!stats.length) {
+    wrap.innerHTML = '<div style="padding:24px;color:#9ca3af;font-size:13px;">データなし</div>';
+    return;
+  }
+  wrap.innerHTML = stats.map(s => {
+    const cvr = s.inquiries ? (s.contracts / s.inquiries * 100).toFixed(1) : '0.0';
+    return `
+    <div class="media-card" data-media="${s.media}">
+      <div class="media-card-name">${s.media}</div>
+      <div class="media-card-main">${fmtNum(s.inquiries)}<span style="font-size:13px;font-weight:500;color:#6b7280;">件</span>
+        ${s.mom_inq !== null && s.mom_inq !== undefined ? `<span style="font-size:11px;margin-left:4px;color:${s.mom_inq>=0?'#16a34a':'#ef4444'}">${s.mom_inq>=0?'▲':'▼'}${Math.abs(s.mom_inq)}%</span>` : ''}
+      </div>
+      <div class="media-card-sub">
+        <span>来店 ${fmtNum(s.visits)}件</span>
+        <span>申込 ${fmtNum(s.applications)}件 ${s.mom_app!==null&&s.mom_app!==undefined?`<span style="color:${s.mom_app>=0?'#16a34a':'#ef4444'};font-size:10px;">${s.mom_app>=0?'▲':'▼'}${Math.abs(s.mom_app)}%</span>`:''}</span>
+        <span>見込 ${fmtYen(s.estimated_sales)} ${s.mom_est!==null&&s.mom_est!==undefined?`<span style="color:${s.mom_est>=0?'#16a34a':'#ef4444'};font-size:10px;">${s.mom_est>=0?'▲':'▼'}${Math.abs(s.mom_est)}%</span>`:''}</span>
+      </div>
+      <div class="media-card-badge">CVR ${cvr}%</div>
+    </div>`;
+  }).join('');
+}
+
+/* ===== 統計テーブル ===== */
+function renderTable(stats, totals) {
+  const tbody = document.getElementById('stat-tbody');
+  const tfoot = document.getElementById('stat-tfoot');
+
+  tbody.innerHTML = stats.map(s => {
+    const cvr = s.inquiries ? (s.contracts / s.inquiries * 100).toFixed(1) : '-';
+    const mb = (v) => v !== null && v !== undefined ? momBadge(v) : '<span style="color:#d1d5db;font-size:10px;">-</span>';
+    return `
+    <tr>
+      <td>${s.media}</td>
+      <td>${fmtNum(s.inquiries)}</td>
+      <td>${mb(s.mom_inq)}</td>
+      <td>${fmtNum(s.line_added)}</td>
+      <td>${fmtNum(s.visits)}</td>
+      <td>${fmtNum(s.applications)}</td>
+      <td>${mb(s.mom_app)}</td>
+      <td><strong>${fmtNum(s.contracts)}</strong></td>
+      <td>${mb(s.mom_con)}</td>
+      <td>${fmtNum(s.cancellations)}</td>
+      <td>${fmtYen(s.estimated_sales)}</td>
+      <td>${mb(s.mom_est)}</td>
+      <td>${fmtYen(s.ad_cost)}</td>
+      <td>${s.inquiries ? fmtYen(s.cpa) : '-'}</td>
+      <td>${s.contracts ? fmtYen(s.cpo) : '-'}</td>
+      <td>${s.ad_cost ? s.roas + '%' : '-'}</td>
+      <td><span class="badge-cvr">${cvr !== '-' ? cvr + '%' : '-'}</span></td>
+      <td style="text-align:center;white-space:nowrap;">
+        <button class="btn-row-edit" onclick="openEditModal(${s.id})">編集</button>
+        <button class="btn-row-del"  onclick="deleteStat(${s.id}, '${s.media}')">削除</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  if (totals && Object.keys(totals).length) {
+    const cvr = totals.inquiries ? (totals.contracts / totals.inquiries * 100).toFixed(1) : '-';
+    const mb = (v) => v !== null && v !== undefined ? momBadge(v) : '<span style="color:#d1d5db;font-size:10px;">-</span>';
+    tfoot.innerHTML = `
+    <tr>
+      <td>合　計</td>
+      <td>${fmtNum(totals.inquiries)}</td>
+      <td>${mb(totals.mom_inq)}</td>
+      <td>${fmtNum(totals.line_added)}</td>
+      <td>${fmtNum(totals.visits)}</td>
+      <td>${fmtNum(totals.applications)}</td>
+      <td>${mb(totals.mom_app)}</td>
+      <td><strong>${fmtNum(totals.contracts)}</strong></td>
+      <td>${mb(totals.mom_con)}</td>
+      <td>${fmtNum(totals.cancellations)}</td>
+      <td>${fmtYen(totals.estimated_sales)}</td>
+      <td>${mb(totals.mom_est)}</td>
+      <td>${fmtYen(totals.ad_cost)}</td>
+      <td>${totals.inquiries ? fmtYen(totals.cpa) : '-'}</td>
+      <td>${totals.contracts ? fmtYen(totals.cpo) : '-'}</td>
+      <td>${totals.ad_cost ? totals.roas + '%' : '-'}</td>
+      <td>${cvr !== '-' ? cvr + '%' : '-'}</td>
+      <td></td>
+    </tr>`;
+  }
+}
+
+/* ===== トレンドチャート ===== */
+function renderTrendChart(trend) {
+  const labels = trend.map(t => t.label);
+  const ctx = document.getElementById('trend-chart').getContext('2d');
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: '反響数',
+          data: trend.map(t => t.inquiries),
+          backgroundColor: 'rgba(22,163,74,0.2)',
+          borderColor: '#16a34a',
+          borderWidth: 2,
+          borderRadius: 4,
+          yAxisID: 'y',
+        },
+        {
+          label: '契約数',
+          data: trend.map(t => t.contracts),
+          backgroundColor: 'rgba(59,130,246,0.2)',
+          borderColor: '#3b82f6',
+          borderWidth: 2,
+          borderRadius: 4,
+          yAxisID: 'y',
+        },
+        {
+          label: '売上見込（万円）',
+          data: trend.map(t => Math.round(t.estimated_sales / 10000)),
+          type: 'line',
+          borderColor: '#f59e0b',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 4,
+          tension: 0.3,
+          yAxisID: 'y2',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        x: { grid: { display: false } },
+        y: { beginAtZero: true, title: { display: true, text: '件数' } },
+        y2: { beginAtZero: true, position: 'right', title: { display: true, text: '万円' }, grid: { drawOnChartArea: false } }
+      }
+    }
+  });
+}
+
+/* ===== セレクト初期化ヘルパー ===== */
+function initYearSelect(selId, selectedYear) {
+  const sel = document.getElementById(selId);
+  sel.innerHTML = '';
+  for (let y = selectedYear - 3; y <= selectedYear + 1; y++) {
+    const opt = document.createElement('option');
+    opt.value = y; opt.textContent = y + '年';
+    if (y === selectedYear) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+function initMonthSelect(selId, selectedMonth) {
+  document.getElementById(selId).value = selectedMonth;
+}
+
+/* ===== Excelインポートモーダル ===== */
+function openImportModal() {
+  initYearSelect('import-year', currentYear);
+  initMonthSelect('import-month', currentMonth);
+  document.getElementById('upload-filename').style.display = 'none';
+  document.getElementById('excel-file').value = '';
+  document.getElementById('import-modal').classList.add('active');
+
+  const ua = document.getElementById('upload-area');
+  ua.ondragover  = e => { e.preventDefault(); ua.classList.add('dragover'); };
+  ua.ondragleave = () => ua.classList.remove('dragover');
+  ua.ondrop = e => {
+    e.preventDefault();
+    ua.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f) { document.getElementById('excel-file').files = e.dataTransfer.files; onFileSelected({ files: [f] }); }
+  };
+}
+function closeImportModal() {
+  document.getElementById('import-modal').classList.remove('active');
+}
+function onFileSelected(input) {
+  const f = input.files[0];
+  if (f) {
+    const fn = document.getElementById('upload-filename');
+    fn.textContent = '📄 ' + f.name;
+    fn.style.display = 'block';
+  }
+}
+async function submitImport() {
+  const file = document.getElementById('excel-file').files[0];
+  if (!file) { showAlert('ファイルを選択してください', 'error'); return; }
+  const year  = parseInt(document.getElementById('import-year').value);
+  const month = parseInt(document.getElementById('import-month').value);
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('year', year);
+  fd.append('month', month);
+  fd.append('store_id', 1);
+
+  try {
+    const res = await fetch('/api/leads/import-excel-stats', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    closeImportModal();
+    showAlert(`インポート完了：${data.imported}媒体のデータを保存しました`);
+    currentYear = year; currentMonth = month;
+    updateMonthLabel();
+    loadStats();
+  } catch(e) {
+    showAlert('インポートに失敗しました: ' + e.message, 'error');
+  }
+}
+
+/* ===== 手動入力モーダル ===== */
+function openManualModal(stat) {
+  editingStatId = stat ? stat.id : null;
+  document.getElementById('manual-modal-title').textContent = stat ? '媒体データ編集' : '媒体データ手動入力';
+
+  initYearSelect('manual-year', stat ? stat.year || currentYear : currentYear);
+  initMonthSelect('manual-month', stat ? stat.month || currentMonth : currentMonth);
+
+  document.getElementById('manual-media').value            = stat ? stat.media : '';
+  document.getElementById('manual-inquiries').value        = stat ? (stat.inquiries || '') : '';
+  document.getElementById('manual-line').value             = stat ? (stat.line_added || '') : '';
+  document.getElementById('manual-visits').value           = stat ? (stat.visits || '') : '';
+  document.getElementById('manual-applications').value     = stat ? (stat.applications || '') : '';
+  document.getElementById('manual-contracts').value        = stat ? (stat.contracts || '') : '';
+  document.getElementById('manual-cancellations').value    = stat ? (stat.cancellations || '') : '';
+  document.getElementById('manual-estimated').value        = stat ? (stat.estimated_sales || '') : '';
+  document.getElementById('manual-adcost').value           = stat ? (stat.ad_cost || '') : '';
+
+  // 編集時は年月を固定
+  const yearSel  = document.getElementById('manual-year');
+  const monthSel = document.getElementById('manual-month');
+  yearSel.disabled  = !!stat;
+  monthSel.disabled = !!stat;
+
+  document.getElementById('manual-modal').classList.add('active');
+}
+function closeManualModal() {
+  document.getElementById('manual-modal').classList.remove('active');
+  editingStatId = null;
+}
+async function submitManual() {
+  const media = document.getElementById('manual-media').value.trim();
+  if (!media) { showAlert('媒体名を入力してください', 'error'); return; }
+
+  const payload = {
+    year:          parseInt(document.getElementById('manual-year').value),
+    month:         parseInt(document.getElementById('manual-month').value),
+    store_id:      1,
+    media,
+    inquiries:     parseInt(document.getElementById('manual-inquiries').value)     || 0,
+    line_added:    parseInt(document.getElementById('manual-line').value)           || 0,
+    visits:        parseInt(document.getElementById('manual-visits').value)         || 0,
+    applications:  parseInt(document.getElementById('manual-applications').value)   || 0,
+    contracts:     parseInt(document.getElementById('manual-contracts').value)      || 0,
+    cancellations:   parseInt(document.getElementById('manual-cancellations').value) || 0,
+    estimated_sales: parseFloat(document.getElementById('manual-estimated').value)  || 0,
+    ad_cost:         parseFloat(document.getElementById('manual-adcost').value)     || 0,
+  };
+
+  const url    = editingStatId ? `/api/leads/monthly-stats/${editingStatId}` : '/api/leads/monthly-stats';
+  const method = editingStatId ? 'PUT' : 'POST';
+
+  try {
+    const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    closeManualModal();
+    showAlert(editingStatId ? 'データを更新しました' : 'データを保存しました');
+    loadStats();
+  } catch(e) {
+    showAlert('保存に失敗しました: ' + e.message, 'error');
+  }
+}
+
+/* ===== 編集・削除 ===== */
+function openEditModal(id) {
+  const stat = statsData.find(s => s.id === id);
+  if (!stat) return;
+  // 年月を追加して渡す
+  stat.year  = currentYear;
+  stat.month = currentMonth;
+  openManualModal(stat);
+}
+async function deleteStat(id, media) {
+  if (!confirm(`「${media}」のデータを削除してよろしいですか？`)) return;
+  try {
+    const res = await fetch(`/api/leads/monthly-stats/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    showAlert('削除しました');
+    loadStats();
+  } catch(e) {
+    showAlert('削除に失敗しました', 'error');
+  }
+}
+
+/* ===== モーダル外クリック ===== */
+document.getElementById('import-modal').addEventListener('click', function(e) { if(e.target===this) closeImportModal(); });
+document.getElementById('manual-modal').addEventListener('click', function(e) { if(e.target===this) closeManualModal(); });
+
+/* ===== 初期化 ===== */
+document.addEventListener('DOMContentLoaded', () => {
+  updateMonthLabel();
+  loadStats();
+});
+</script>
+{% endblock %}

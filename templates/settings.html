@@ -1,0 +1,534 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}設定 | ルームピック管理ポータル{% endblock %}
+
+{% block extra_head %}
+<style>
+  :root {
+    --primary: #16a34a;
+    --primary-dark: #15803d;
+    --primary-light: #dcfce7;
+    --danger: #ef4444;
+    --danger-light: #fee2e2;
+    --text-muted: #6b7280;
+  }
+  .section-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    overflow: hidden;
+  }
+  .section-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .section-header h2 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #111827;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-header h2::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 16px;
+    background: var(--primary);
+    border-radius: 2px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: #f9fafb;
+    padding: 10px 16px;
+    text-align: left;
+    font-weight: 700;
+    color: #374151;
+    border-bottom: 2px solid #e5e7eb;
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid #f3f4f6; }
+  tbody tr:hover { background: #f0fdf4; }
+  tbody td { padding: 10px 16px; color: #111827; }
+
+  .btn-primary {
+    background: var(--primary); color: #fff; border: none;
+    border-radius: 6px; padding: 8px 18px; font-size: 13px;
+    font-weight: 700; cursor: pointer; transition: background 0.15s;
+  }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-sm {
+    background: #fff; border: 1px solid #d1d5db; border-radius: 5px;
+    padding: 4px 10px; font-size: 12px; color: #374151; cursor: pointer;
+    transition: all 0.12s;
+  }
+  .btn-sm:hover { background: #f3f4f6; }
+  .btn-danger { border-color: #fca5a5; color: #b91c1c; }
+  .btn-danger:hover { background: var(--danger-light); }
+
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    z-index: 1000; align-items: center; justify-content: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: #fff; border-radius: 12px; width: 480px;
+    max-width: 95vw; max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  }
+  .modal-header {
+    padding: 18px 24px; border-bottom: 1px solid #e5e7eb;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .modal-header h3 { font-size: 16px; font-weight: 700; color: #111827; margin: 0; }
+  .modal-close { background: none; border: none; font-size: 22px; color: #9ca3af; cursor: pointer; }
+  .modal-close:hover { color: #111827; }
+  .modal-body { padding: 20px 24px; }
+  .modal-footer {
+    padding: 14px 24px; border-top: 1px solid #e5e7eb;
+    display: flex; justify-content: flex-end; gap: 10px;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+  .form-group label { font-size: 12px; font-weight: 600; color: #374151; }
+  .form-group input, .form-group select {
+    border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 10px;
+    font-size: 14px; color: #111827;
+  }
+  .form-group input:focus, .form-group select:focus {
+    outline: none; border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(22,163,74,0.2);
+  }
+  .btn-cancel {
+    background: #fff; color: #374151; border: 1px solid #d1d5db;
+    border-radius: 6px; padding: 8px 18px; font-size: 13px;
+    font-weight: 600; cursor: pointer;
+  }
+  .btn-cancel:hover { background: #f3f4f6; }
+  .alert {
+    padding: 12px 16px; border-radius: 8px; font-size: 13px;
+    margin-bottom: 14px; display: none;
+  }
+  .alert.show { display: block; }
+  .alert-success { background: var(--primary-light); color: var(--primary-dark); border: 1px solid #86efac; }
+  .alert-error { background: var(--danger-light); color: #b91c1c; border: 1px solid #fca5a5; }
+  .badge-role {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 999px;
+  }
+  .badge-owner { background: #fef9c3; color: #92400e; }
+  .badge-staff { background: var(--primary-light); color: var(--primary-dark); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 960px; margin: 0 auto; padding: 0 4px;">
+
+  <div style="margin-bottom: 24px;">
+    <h1 style="font-size: 22px; font-weight: 800; color: #111827; margin: 0;">設定</h1>
+    <p style="font-size: 13px; color: var(--text-muted); margin: 4px 0 0;">スタッフ・アカウント管理</p>
+  </div>
+
+  <div id="alert-msg" class="alert"></div>
+
+  <!-- ===== セクション1: スタッフ管理 ===== -->
+  <div class="section-card">
+    <div class="section-header">
+      <h2>スタッフ管理</h2>
+      <button class="btn-primary" onclick="openStaffModal()">＋ スタッフ追加</button>
+    </div>
+    <div style="overflow-x: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>氏名</th>
+            <th>役職</th>
+            <th>入社日</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="staff-tbody">
+          {% for s in staff_list %}
+          <tr id="staff-row-{{ s.id }}">
+            <td style="font-weight: 600;">{{ s.name }}</td>
+            <td>{{ s.role or '-' }}</td>
+            <td>{{ s.hired_at.strftime('%Y-%m-%d') if s.hired_at else '-' }}</td>
+            <td>
+              <button class="btn-sm" onclick="openEditStaffModal({{ s.id }}, '{{ s.name }}', '{{ s.role or '' }}', '{{ s.hired_at.strftime('%Y-%m-%d') if s.hired_at else '' }}')">編集</button>
+              <button class="btn-sm btn-danger" onclick="deleteStaff({{ s.id }})" style="margin-left: 6px;">削除</button>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" style="text-align: center; padding: 30px; color: var(--text-muted);">スタッフがいません</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== セクション2: アカウント管理 ===== -->
+  <div class="section-card">
+    <div class="section-header">
+      <h2>ログインアカウント管理</h2>
+      <button class="btn-primary" onclick="openAccountModal()">＋ アカウント追加</button>
+    </div>
+    <div style="overflow-x: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>ユーザー名</th>
+            <th>役割</th>
+            <th>担当スタッフ</th>
+            <th>最終ログイン</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="account-tbody">
+          {% for acc in accounts %}
+          <tr id="account-row-{{ acc.id }}">
+            <td style="font-weight: 600;">{{ acc.username }}</td>
+            <td>
+              <span class="badge-role {% if acc.role == 'owner' %}badge-owner{% else %}badge-staff{% endif %}">
+                {{ 'オーナー' if acc.role == 'owner' else 'スタッフ' }}
+              </span>
+            </td>
+            <td>
+              {% if acc.staff_id %}
+                {% for s in staff_list %}{% if s.id == acc.staff_id %}{{ s.name }}{% endif %}{% endfor %}
+              {% else %}-{% endif %}
+            </td>
+            <td>{{ acc.last_login.strftime('%Y-%m-%d %H:%M') if acc.last_login else '-' }}</td>
+            <td>
+              <button class="btn-sm" onclick="openPasswordModal({{ acc.id }}, '{{ acc.username }}')">パスワード変更</button>
+              {% if acc.username != 'owner' %}
+              <button class="btn-sm btn-danger" onclick="deleteAccount({{ acc.id }})" style="margin-left: 6px;">削除</button>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" style="text-align: center; padding: 30px; color: var(--text-muted);">アカウントがありません</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== セクション3: 自分のパスワード変更 ===== -->
+  <div class="section-card">
+    <div class="section-header">
+      <h2>自分のパスワード変更</h2>
+    </div>
+    <div style="padding: 20px 24px; max-width: 400px;">
+      <div class="form-group">
+        <label>現在のパスワード</label>
+        <input type="password" id="my-current-pw" placeholder="現在のパスワード">
+      </div>
+      <div class="form-group">
+        <label>新パスワード</label>
+        <input type="password" id="my-new-pw" placeholder="新しいパスワード">
+      </div>
+      <div class="form-group">
+        <label>確認</label>
+        <input type="password" id="my-confirm-pw" placeholder="新しいパスワード（確認）">
+      </div>
+      <button class="btn-primary" onclick="changeMyPassword()">パスワードを変更する</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== スタッフ追加モーダル ===== -->
+<div class="modal-overlay" id="staff-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="staff-modal-title">スタッフ追加</h3>
+      <button class="modal-close" onclick="closeStaffModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-staff-id">
+      <div class="form-group">
+        <label>氏名 <span style="color:#ef4444;">*</span></label>
+        <input type="text" id="staff-name" placeholder="例：山田 太郎">
+      </div>
+      <div class="form-group">
+        <label>役職</label>
+        <select id="staff-role">
+          <option value="営業">営業</option>
+          <option value="店長">店長</option>
+          <option value="マネージャー">マネージャー</option>
+          <option value="アルバイト">アルバイト</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>入社日</label>
+        <input type="date" id="staff-hired">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeStaffModal()">キャンセル</button>
+      <button class="btn-primary" onclick="saveStaff()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== アカウント追加モーダル ===== -->
+<div class="modal-overlay" id="account-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>アカウント追加</h3>
+      <button class="modal-close" onclick="closeAccountModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>ユーザー名 <span style="color:#ef4444;">*</span></label>
+        <input type="text" id="acc-username" placeholder="例：tanaka">
+      </div>
+      <div class="form-group">
+        <label>パスワード <span style="color:#ef4444;">*</span></label>
+        <input type="password" id="acc-password" placeholder="パスワード">
+      </div>
+      <div class="form-group">
+        <label>役割</label>
+        <select id="acc-role">
+          <option value="staff">スタッフ</option>
+          <option value="owner">オーナー</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>担当スタッフ</label>
+        <select id="acc-staff-id">
+          <option value="">なし</option>
+          {% for s in staff_list %}
+          <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeAccountModal()">キャンセル</button>
+      <button class="btn-primary" onclick="saveAccount()">追加する</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== パスワード変更モーダル ===== -->
+<div class="modal-overlay" id="password-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>パスワード変更</h3>
+      <button class="modal-close" onclick="closePasswordModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px; color:#374151; margin-bottom:14px;">
+        ユーザー: <strong id="pw-username"></strong>
+      </p>
+      <input type="hidden" id="pw-account-id">
+      <div class="form-group">
+        <label>新パスワード <span style="color:#ef4444;">*</span></label>
+        <input type="password" id="pw-new" placeholder="新しいパスワード">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closePasswordModal()">キャンセル</button>
+      <button class="btn-primary" onclick="savePassword()">変更する</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showAlert(msg, type = 'success') {
+  const el = document.getElementById('alert-msg');
+  el.textContent = msg;
+  el.className = `alert alert-${type} show`;
+  setTimeout(() => el.classList.remove('show'), 4000);
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/* ===== スタッフモーダル ===== */
+function openStaffModal() {
+  document.getElementById('staff-modal-title').textContent = 'スタッフ追加';
+  document.getElementById('edit-staff-id').value = '';
+  document.getElementById('staff-name').value = '';
+  document.getElementById('staff-role').value = '営業';
+  document.getElementById('staff-hired').value = '';
+  document.getElementById('staff-modal').classList.add('active');
+}
+
+function openEditStaffModal(id, name, role, hired) {
+  document.getElementById('staff-modal-title').textContent = 'スタッフ編集';
+  document.getElementById('edit-staff-id').value = id;
+  document.getElementById('staff-name').value = name;
+  document.getElementById('staff-role').value = role;
+  document.getElementById('staff-hired').value = hired;
+  document.getElementById('staff-modal').classList.add('active');
+}
+
+function closeStaffModal() {
+  document.getElementById('staff-modal').classList.remove('active');
+}
+
+async function saveStaff() {
+  const editId = document.getElementById('edit-staff-id').value;
+  const name = document.getElementById('staff-name').value.trim();
+  if (!name) { showAlert('氏名を入力してください', 'error'); return; }
+  const payload = {
+    name,
+    role: document.getElementById('staff-role').value,
+    hired_at: document.getElementById('staff-hired').value || null,
+  };
+  const url = editId ? `/api/settings/staff/${editId}` : '/api/settings/staff/add';
+  const method = editId ? 'PUT' : 'POST';
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('error');
+    closeStaffModal();
+    showAlert(editId ? 'スタッフ情報を更新しました。' : 'スタッフを追加しました。');
+    setTimeout(() => location.reload(), 800);
+  } catch(e) {
+    showAlert('保存に失敗しました。', 'error');
+  }
+}
+
+async function deleteStaff(id) {
+  if (!confirm('このスタッフを削除してよろしいですか？')) return;
+  try {
+    const res = await fetch(`/api/settings/staff/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('error');
+    document.getElementById(`staff-row-${id}`)?.remove();
+    showAlert('スタッフを削除しました。');
+  } catch(e) {
+    showAlert('削除に失敗しました。', 'error');
+  }
+}
+
+/* ===== アカウントモーダル ===== */
+function openAccountModal() {
+  document.getElementById('acc-username').value = '';
+  document.getElementById('acc-password').value = '';
+  document.getElementById('acc-role').value = 'staff';
+  document.getElementById('acc-staff-id').value = '';
+  document.getElementById('account-modal').classList.add('active');
+}
+
+function closeAccountModal() {
+  document.getElementById('account-modal').classList.remove('active');
+}
+
+async function saveAccount() {
+  const username = document.getElementById('acc-username').value.trim();
+  const password = document.getElementById('acc-password').value;
+  if (!username || !password) { showAlert('ユーザー名とパスワードは必須です', 'error'); return; }
+  const payload = {
+    username,
+    password,
+    role: document.getElementById('acc-role').value,
+    staff_id: document.getElementById('acc-staff-id').value || null,
+  };
+  try {
+    const res = await fetch('/api/settings/account/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      showAlert(err.message || '保存に失敗しました。', 'error');
+      return;
+    }
+    closeAccountModal();
+    showAlert('アカウントを追加しました。');
+    setTimeout(() => location.reload(), 800);
+  } catch(e) {
+    showAlert('保存に失敗しました。', 'error');
+  }
+}
+
+async function deleteAccount(id) {
+  if (!confirm('このアカウントを削除してよろしいですか？')) return;
+  try {
+    const res = await fetch(`/api/settings/account/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const err = await res.json();
+      showAlert(err.message || '削除に失敗しました。', 'error');
+      return;
+    }
+    document.getElementById(`account-row-${id}`)?.remove();
+    showAlert('アカウントを削除しました。');
+  } catch(e) {
+    showAlert('削除に失敗しました。', 'error');
+  }
+}
+
+/* ===== パスワードモーダル ===== */
+function openPasswordModal(id, username) {
+  document.getElementById('pw-account-id').value = id;
+  document.getElementById('pw-username').textContent = username;
+  document.getElementById('pw-new').value = '';
+  document.getElementById('password-modal').classList.add('active');
+}
+
+function closePasswordModal() {
+  document.getElementById('password-modal').classList.remove('active');
+}
+
+async function savePassword() {
+  const id = document.getElementById('pw-account-id').value;
+  const password = document.getElementById('pw-new').value;
+  if (!password) { showAlert('新パスワードを入力してください', 'error'); return; }
+  try {
+    const res = await fetch(`/api/settings/account/${id}/password`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) throw new Error('error');
+    closePasswordModal();
+    showAlert('パスワードを変更しました。');
+  } catch(e) {
+    showAlert('変更に失敗しました。', 'error');
+  }
+}
+
+/* ===== 自分のパスワード変更 ===== */
+async function changeMyPassword() {
+  const current = document.getElementById('my-current-pw').value;
+  const newPw = document.getElementById('my-new-pw').value;
+  const confirm = document.getElementById('my-confirm-pw').value;
+  if (!current || !newPw) { showAlert('すべての項目を入力してください', 'error'); return; }
+  if (newPw !== confirm) { showAlert('新パスワードと確認が一致しません', 'error'); return; }
+  try {
+    const res = await fetch('/api/settings/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_password: current, new_password: newPw }),
+    });
+    const json = await res.json();
+    if (!res.ok) { showAlert(json.message || '変更に失敗しました。', 'error'); return; }
+    document.getElementById('my-current-pw').value = '';
+    document.getElementById('my-new-pw').value = '';
+    document.getElementById('my-confirm-pw').value = '';
+    showAlert('パスワードを変更しました。');
+  } catch(e) {
+    showAlert('変更に失敗しました。', 'error');
+  }
+}
+
+/* モーダル外クリックで閉じる */
+['staff-modal','account-modal','password-modal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+  });
+});
+</script>
+{% endblock %}

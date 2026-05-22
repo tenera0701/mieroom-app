@@ -1,0 +1,273 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}入金管理 | ルームピック管理ポータル{% endblock %}
+{% block breadcrumb %}入金管理{% endblock %}
+
+{% block content %}
+<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+  <div>
+    <h1 class="text-2xl font-bold text-green-900">入金管理</h1>
+    <p class="text-green-700 text-sm mt-0.5">AD収入・仲介手数料の受領状況を管理します</p>
+  </div>
+
+  <!-- 月ナビゲーション -->
+  <div class="flex items-center gap-2 bg-white border border-green-200 rounded-xl px-4 py-2 shadow-sm">
+    <button onclick="changeMonth(-1)" class="p-1 rounded hover:bg-green-100 text-green-700 transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+      </svg>
+    </button>
+    <span id="month-label" class="font-bold text-green-800 text-base w-24 text-center"></span>
+    <button onclick="changeMonth(1)" class="p-1 rounded hover:bg-green-100 text-green-700 transition">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+      </svg>
+    </button>
+    <button onclick="goToday()" class="ml-2 text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 transition">今月</button>
+  </div>
+</div>
+
+<!-- サマリーカード -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+  <div class="bg-white rounded-2xl border border-green-100 shadow-sm p-5 card-hover">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-sm text-gray-500 font-medium">仲介手数料（予定）</span>
+      <div class="w-9 h-9 rounded-xl bg-green-100 flex items-center justify-center">
+        <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/>
+        </svg>
+      </div>
+    </div>
+    <div id="card-commission" class="text-2xl font-bold text-green-800">-</div>
+    <div class="text-xs text-gray-400 mt-1">契約件数 × 賃料 × 手数料%</div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-blue-100 shadow-sm p-5 card-hover">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-sm text-gray-500 font-medium">AD収入（予定）</span>
+      <div class="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center">
+        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+    </div>
+    <div id="card-ad" class="text-2xl font-bold text-blue-700">-</div>
+    <div class="flex gap-3 mt-1 text-xs">
+      <span class="text-green-600">受領済: <span id="card-ad-received">-</span></span>
+      <span class="text-red-500">未収: <span id="card-ad-unreceived">-</span></span>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-purple-100 shadow-sm p-5 card-hover">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-sm text-gray-500 font-medium">オプション収入（概算）</span>
+      <div class="w-9 h-9 rounded-xl bg-purple-100 flex items-center justify-center">
+        <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+        </svg>
+      </div>
+    </div>
+    <div id="card-option" class="text-2xl font-bold text-purple-700">-</div>
+    <div class="text-xs text-gray-400 mt-1">ライフライン ×5,000 / 引越 ×3,000</div>
+  </div>
+</div>
+
+<!-- 入金状況グラフ + テーブル -->
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
+  <!-- グラフ -->
+  <div class="bg-white rounded-2xl border border-green-100 shadow-sm p-5">
+    <h3 class="font-bold text-green-800 mb-3 text-sm">月次AD入金推移（6ヶ月）</h3>
+    <div style="height: 220px;">
+      <canvas id="payment-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- 入金状況テーブル -->
+  <div class="xl:col-span-2 bg-white rounded-2xl border border-green-100 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-green-50 flex items-center justify-between">
+      <h3 class="font-bold text-green-800 text-sm">入金状況詳細</h3>
+      <span id="payments-count" class="text-xs text-gray-400"></span>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="bg-green-50 text-green-800">
+            <th class="px-3 py-2 text-left font-semibold">顧客名</th>
+            <th class="px-3 py-2 text-left font-semibold">物件</th>
+            <th class="px-3 py-2 text-left font-semibold">担当者</th>
+            <th class="px-3 py-2 text-right font-semibold">賃料</th>
+            <th class="px-3 py-2 text-center font-semibold">AD%</th>
+            <th class="px-3 py-2 text-right font-semibold">AD金額</th>
+            <th class="px-3 py-2 text-center font-semibold">AD受領</th>
+            <th class="px-3 py-2 text-center font-semibold">AD入金日</th>
+            <th class="px-3 py-2 text-right font-semibold">仲介手数料</th>
+            <th class="px-3 py-2 text-center font-semibold">決済受領日</th>
+          </tr>
+        </thead>
+        <tbody id="payments-tbody">
+          <tr>
+            <td colspan="10" class="py-10 text-center text-gray-400">
+              <div class="inline-block w-6 h-6 border-4 border-green-400 border-t-transparent rounded-full animate-spin mb-2"></div>
+              <div>読み込み中...</div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentYear = {{ year }};
+let currentMonth = {{ month }};
+let paymentChart = null;
+
+function updateMonthLabel() {
+  document.getElementById('month-label').textContent = `${currentYear}年${currentMonth}月`;
+}
+
+function changeMonth(delta) {
+  currentMonth += delta;
+  if (currentMonth > 12) { currentMonth = 1; currentYear++; }
+  if (currentMonth < 1)  { currentMonth = 12; currentYear--; }
+  updateMonthLabel();
+  loadPayments();
+}
+
+function goToday() {
+  const now = new Date();
+  currentYear = now.getFullYear();
+  currentMonth = now.getMonth() + 1;
+  updateMonthLabel();
+  loadPayments();
+}
+
+function fmtMoney(v) {
+  if (v == null || isNaN(Number(v))) return '-';
+  return Math.round(Number(v)).toLocaleString('ja-JP') + '円';
+}
+
+function fmtDate(d) {
+  if (!d) return '-';
+  return d.replace(/-/g, '/').substring(2);
+}
+
+function adBadge(v, dateRaw) {
+  if (dateRaw) return `<span class="badge-green">確認</span>`;
+  if (!v) return '<span class="text-gray-300">-</span>';
+  if (v.includes('○')) return '<span class="badge-green">受領済</span>';
+  return '<span class="badge-red">未収</span>';
+}
+
+async function loadPayments() {
+  const tbody = document.getElementById('payments-tbody');
+  tbody.innerHTML = `<tr><td colspan="10" class="py-10 text-center text-gray-400">
+    <div class="inline-block w-6 h-6 border-4 border-green-400 border-t-transparent rounded-full animate-spin mb-2"></div>
+    <div>読み込み中...</div></td></tr>`;
+
+  try {
+    const res = await fetch(`/api/payments/summary?year=${currentYear}&month=${currentMonth}`);
+    const data = await res.json();
+
+    // カード更新
+    document.getElementById('card-commission').textContent = fmtMoney(data.commission_total);
+    document.getElementById('card-ad').textContent = fmtMoney(data.ad_income_total);
+    document.getElementById('card-ad-received').textContent = fmtMoney(data.ad_received_total);
+    document.getElementById('card-ad-unreceived').textContent = fmtMoney(data.ad_unreceived_total);
+    document.getElementById('card-option').textContent = fmtMoney(data.option_total);
+
+    // テーブル更新
+    if (!data.details || data.details.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="10" class="py-12 text-center text-gray-400">
+        <div class="text-3xl mb-2">💴</div>
+        <div>契約データがありません</div>
+      </td></tr>`;
+      document.getElementById('payments-count').textContent = '';
+    } else {
+      let rows = '';
+      for (const d of data.details) {
+        rows += `
+          <tr class="border-b border-gray-50 hover:bg-green-50 transition">
+            <td class="px-3 py-2 font-medium text-gray-800">${d.customer_name || '-'}</td>
+            <td class="px-3 py-2">
+              <div class="text-gray-700 truncate max-w-28">${d.property_name || '-'}</div>
+              <div class="text-gray-400 text-xs">${d.room_no || ''}</div>
+            </td>
+            <td class="px-3 py-2 text-gray-600">${d.staff_name || '-'}</td>
+            <td class="px-3 py-2 text-right text-gray-700 whitespace-nowrap">${fmtMoney(d.rent)}</td>
+            <td class="px-3 py-2 text-center text-gray-600">${d.ad_pct != null ? d.ad_pct + '%' : '-'}</td>
+            <td class="px-3 py-2 text-right font-medium text-blue-700 whitespace-nowrap">${fmtMoney(d.ad_amount)}</td>
+            <td class="px-3 py-2 text-center">${adBadge(d.ad_received, d.ad_income_date)}</td>
+            <td class="px-3 py-2 text-center text-gray-500 whitespace-nowrap">
+              ${d.ad_income_date ? fmtDate(d.ad_income_date) : (d.ad_income_date_raw || '-')}
+            </td>
+            <td class="px-3 py-2 text-right text-green-700 whitespace-nowrap">${fmtMoney(d.commission)}</td>
+            <td class="px-3 py-2 text-center text-gray-500 whitespace-nowrap">${fmtDate(d.settlement_date)}</td>
+          </tr>
+        `;
+      }
+      tbody.innerHTML = rows;
+      document.getElementById('payments-count').textContent = `${data.contract_count}件の契約`;
+    }
+
+    // グラフ更新
+    if (data.monthly_trend) {
+      updateChart(data.monthly_trend);
+    }
+
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="10" class="py-8 text-center text-red-500">データ取得エラー: ${err.message}</td></tr>`;
+  }
+}
+
+function updateChart(trend) {
+  const ctx = document.getElementById('payment-chart').getContext('2d');
+  if (paymentChart) paymentChart.destroy();
+
+  paymentChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: trend.map(t => t.label),
+      datasets: [
+        {
+          label: '受領済み',
+          data: trend.map(t => t.received),
+          backgroundColor: 'rgba(22,163,74,0.75)',
+          borderRadius: 4,
+        },
+        {
+          label: '未受領',
+          data: trend.map(t => t.unreceived),
+          backgroundColor: 'rgba(239,68,68,0.6)',
+          borderRadius: 4,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 10 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${Math.round(ctx.raw).toLocaleString()}円`
+          }
+        }
+      },
+      scales: {
+        x: { stacked: true, ticks: { font: { size: 9 } } },
+        y: { stacked: true, ticks: { font: { size: 9 }, callback: v => (v/10000).toFixed(0) + '万' } }
+      }
+    }
+  });
+}
+
+// 初期化
+updateMonthLabel();
+loadPayments();
+</script>
+{% endblock %}

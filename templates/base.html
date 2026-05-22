@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}IeAI - 不動産AI自動化ツール{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50:'#f0f9ff', 100:'#e0f2fe', 500:'#0ea5e9', 600:'#0284c7', 700:'#0369a1' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .gradient-bg { background: linear-gradient(135deg, #0369a1 0%, #0ea5e9 100%); }
+    .card-hover { transition: transform 0.2s, box-shadow 0.2s; }
+    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    .result-box { white-space: pre-wrap; line-height: 1.8; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- ナビゲーション -->
+  <nav class="bg-white shadow-sm border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16 items-center">
+        <a href="/" class="flex items-center gap-2">
+          <div class="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+            </svg>
+          </div>
+          <span class="text-xl font-bold text-gray-800">IeAI</span>
+        </a>
+
+        <div class="flex items-center gap-4">
+          {% if user %}
+            <a href="/dashboard" class="text-gray-600 hover:text-brand-600 text-sm font-medium">ダッシュボード</a>
+            <div class="flex items-center gap-2">
+              {% if user.picture %}
+                <img src="{{ user.picture }}" class="w-8 h-8 rounded-full" alt="avatar">
+              {% endif %}
+              <span class="text-sm text-gray-700">{{ user.name }}</span>
+            </div>
+            <a href="/logout" class="text-sm text-gray-500 hover:text-red-500">ログアウト</a>
+          {% else %}
+            <a href="/login" class="gradient-bg text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition">
+              Googleでログイン
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="mt-16 border-t border-gray-200 py-8 text-center text-sm text-gray-400">
+    © 2026 IeAI - 不動産AI自動化ツール
+  </footer>
+
+</body>
+</html>
