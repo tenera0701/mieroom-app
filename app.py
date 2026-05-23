@@ -1252,6 +1252,23 @@ def api_kpi_monthly():
         if store_id:
             pls = pls.filter_by(store_id=store_id)
         pls = pls.all()
+
+        def _calc_gp(pl):
+            cv = PLCustomValue.query.filter_by(store_id=pl.store_id, year=y, month=m).all()
+            ad_cvs = [c for c in cv if c.item_type == '広告費']
+            fixed_cvs = [c for c in cv if c.item_type == '固定費']
+            var_cvs   = [c for c in cv if c.item_type == '変動費']
+            if ad_cvs:
+                ad_t = sum(c.amount for c in ad_cvs)
+            else:
+                ad_t = (pl.ad_cost or 0) or sum(getattr(pl, col, 0) or 0 for col in [
+                    'suumo_cost','homes_cost','athome_cost','instagram_cost','tiktok_cost',
+                    'google_ads_cost','line_cost','hp_cost','meo_cost','other_ad_cost'])
+            lb_t = (pl.labor_cost or 0) or ((pl.regular_salary or 0)+(pl.parttime_salary or 0)+(pl.commission_pay or 0))
+            ft = sum(c.amount for c in fixed_cvs)
+            vt = sum(c.amount for c in var_cvs)
+            return (pl.revenue or 0) - ad_t - lb_t - ft - vt
+
         months_data.append({
             'label':       f'{y}/{m:02d}',
             'year':        y,
@@ -1259,8 +1276,8 @@ def api_kpi_monthly():
             'inquiries':   sum(k.inquiries for k in kpis),
             'contracts':   sum(k.contracts for k in kpis),
             'sales':       sum(k.sales_amount for k in kpis),
-            'gross_profit':sum(p.gross_profit for p in pls),
-            'ad_cost':     sum(p.ad_cost for p in pls),
+            'gross_profit':sum(_calc_gp(p) for p in pls),
+            'ad_cost':     sum(p.ad_cost or 0 for p in pls),
         })
 
     return jsonify(months_data)
@@ -1637,6 +1654,20 @@ def api_leads_import_excel_stats():
 
 
 @app.route("/api/pl/summary")
+def _get_ad_items(store_id, y, m, pl=None):
+    """広告費カスタム行を取得。なければ固定列からフォールバック"""
+    ad_cvs = PLCustomValue.query.filter_by(store_id=store_id, year=y, month=m, item_type='広告費').all()
+    if ad_cvs:
+        return [{'name': v.item_name, 'amount': v.amount} for v in ad_cvs]
+    if not pl:
+        return []
+    _AD_COLS = [('suumo_cost','SUUMO'),('homes_cost',"HOME'S"),('athome_cost','at home'),
+                ('instagram_cost','Instagram'),('tiktok_cost','TikTok'),('google_ads_cost','Google広告'),
+                ('line_cost','LINE'),('hp_cost','HP'),('meo_cost','MEO'),('other_ad_cost','その他')]
+    return [{'name': n, 'amount': getattr(pl, col, 0) or 0}
+            for col, n in _AD_COLS if (getattr(pl, col, 0) or 0) > 0]
+
+
 def api_pl_summary():
     """PLサマリを返す（店舗別・月次）"""
     store_id = request.args.get('store_id', type=int)
@@ -1651,24 +1682,21 @@ def api_pl_summary():
     result = []
     for pl in pls:
         store = Store.query.get(pl.store_id)
-        # カスタム費用（固定費・変動費）を取得
+        # カスタム費用（固定費・変動費・広告費）を取得
         custom_vals = PLCustomValue.query.filter_by(
             store_id=pl.store_id, year=year, month=month
         ).all()
         fixed_items    = [{'name': v.item_name, 'amount': v.amount} for v in custom_vals if (v.item_type or '固定費') == '固定費']
         variable_items = [{'name': v.item_name, 'amount': v.amount} for v in custom_vals if (v.item_type or '固定費') == '変動費']
-        custom_items   = [{'name': v.item_name, 'amount': v.amount} for v in custom_vals if (v.item_type or '固定費') not in ('固定費','変動費')]
+        custom_items   = [{'name': v.item_name, 'amount': v.amount} for v in custom_vals if (v.item_type or '固定費') not in ('固定費','変動費','広告費')]
+        ad_items       = _get_ad_items(pl.store_id, year, month, pl)
 
-        # 広告費合計（媒体別の合計）
-        ad_total = (pl.suumo_cost or 0) + (pl.homes_cost or 0) + (pl.athome_cost or 0) + \
-                   (pl.instagram_cost or 0) + (pl.tiktok_cost or 0) + (pl.google_ads_cost or 0) + \
-                   (pl.line_cost or 0) + (pl.hp_cost or 0) + (pl.meo_cost or 0) + (pl.other_ad_cost or 0)
-        # ad_cost フィールドが合計として使われていればそちらを優先
-        ad_cost_val = pl.ad_cost if pl.ad_cost else ad_total
+        # 広告費合計
+        ad_cost_val = sum(i['amount'] for i in ad_items)
 
         # 人件費合計
         labor_total = (pl.regular_salary or 0) + (pl.parttime_salary or 0) + (pl.commission_pay or 0)
-        labor_cost_val = pl.labor_cost if pl.labor_cost else labor_total
+        labor_cost_val = pl.labor_cost if (pl.labor_cost and pl.labor_cost > 0) else labor_total
 
         # カスタム固定費・変動費合計
         fixed_total    = sum(item['amount'] for item in fixed_items)
@@ -1701,17 +1729,8 @@ def api_pl_summary():
             'moving_income':       pl.moving_income or 0,
             'fire_insurance_income': pl.fire_insurance_income or 0,
             'other_income':        pl.other_income or 0,
-            # 広告費詳細
-            'suumo_cost':     pl.suumo_cost or 0,
-            'homes_cost':     pl.homes_cost or 0,
-            'athome_cost':    pl.athome_cost or 0,
-            'instagram_cost': pl.instagram_cost or 0,
-            'tiktok_cost':    pl.tiktok_cost or 0,
-            'google_ads_cost':pl.google_ads_cost or 0,
-            'line_cost':      pl.line_cost or 0,
-            'hp_cost':        pl.hp_cost or 0,
-            'meo_cost':       pl.meo_cost or 0,
-            'other_ad_cost':  pl.other_ad_cost or 0,
+            # 広告費詳細（動的行）
+            'ad_items':       ad_items,
             # 人件費詳細
             'regular_salary':  pl.regular_salary or 0,
             'parttime_salary': pl.parttime_salary or 0,
@@ -1745,24 +1764,18 @@ def api_pl_summary():
         cv = PLCustomValue.query.filter_by(store_id=pl.store_id, year=y, month=m).all()
         fi = [{'name': v.item_name, 'amount': v.amount} for v in cv if (v.item_type or '固定費') == '固定費']
         vi = [{'name': v.item_name, 'amount': v.amount} for v in cv if (v.item_type or '固定費') == '変動費']
-        ad_t = (pl.suumo_cost or 0)+(pl.homes_cost or 0)+(pl.athome_cost or 0)+(pl.instagram_cost or 0)+\
-               (pl.tiktok_cost or 0)+(pl.google_ads_cost or 0)+(pl.line_cost or 0)+(pl.hp_cost or 0)+\
-               (pl.meo_cost or 0)+(pl.other_ad_cost or 0)
-        ad_v = pl.ad_cost if pl.ad_cost else ad_t
+        ai = _get_ad_items(pl.store_id, y, m, pl)
+        ad_v = sum(i['amount'] for i in ai) if ai else (pl.ad_cost or 0)
         lb_t = (pl.regular_salary or 0)+(pl.parttime_salary or 0)+(pl.commission_pay or 0)
-        lb_v = pl.labor_cost if pl.labor_cost else lb_t
+        lb_v = pl.labor_cost if (pl.labor_cost and pl.labor_cost > 0) else lb_t
         ft = sum(i['amount'] for i in fi)
         vt = sum(i['amount'] for i in vi)
-        gp = pl.revenue - ad_v - lb_v - ft - vt
+        gp = (pl.revenue or 0) - ad_v - lb_v - ft - vt
         return {
             'revenue': pl.revenue, 'gross_profit': gp, 'ad_cost': ad_v,
             'labor_cost': lb_v, 'other_fixed': ft, 'other_variable': vt,
             'operating_profit': gp,
-            'suumo_cost': pl.suumo_cost or 0, 'homes_cost': pl.homes_cost or 0,
-            'athome_cost': pl.athome_cost or 0, 'instagram_cost': pl.instagram_cost or 0,
-            'tiktok_cost': pl.tiktok_cost or 0, 'google_ads_cost': pl.google_ads_cost or 0,
-            'line_cost': pl.line_cost or 0, 'hp_cost': pl.hp_cost or 0,
-            'meo_cost': pl.meo_cost or 0, 'other_ad_cost': pl.other_ad_cost or 0,
+            'ad_items': ai,
             'regular_salary': pl.regular_salary or 0, 'parttime_salary': pl.parttime_salary or 0,
             'social_insurance': pl.commission_pay or 0,
             'fixed_items': fi, 'variable_items': vi,
@@ -1812,33 +1825,18 @@ def api_pl_prev_month_data():
 
     fixed_items    = [{'name': v.item_name, 'amount': v.amount} for v in custom_vals if (v.item_type or '固定費') == '固定費']
     variable_items = [{'name': v.item_name, 'amount': v.amount} for v in custom_vals if (v.item_type or '固定費') == '変動費']
+    ad_items       = _get_ad_items(store_id, py, pm, pl)
 
     result = {
         'fixed_items': fixed_items,
         'variable_items': variable_items,
+        'ad_items': ad_items,
     }
     if pl:
         result.update({
-            'pl_rent':       pl.pl_rent or 0,
-            'pl_parking':    pl.pl_parking or 0,
-            'pl_copier':     pl.pl_copier or 0,
-            'pl_internet':   pl.pl_internet or 0,
-            'pl_consultant': pl.pl_consultant or 0,
-            'pl_insurance':  pl.pl_insurance or 0,
-            'pl_cloud':      pl.pl_cloud or 0,
             'regular_salary':  pl.regular_salary or 0,
             'parttime_salary': pl.parttime_salary or 0,
             'social_insurance': pl.commission_pay or 0,
-            'suumo_cost':     pl.suumo_cost or 0,
-            'homes_cost':     pl.homes_cost or 0,
-            'athome_cost':    pl.athome_cost or 0,
-            'instagram_cost': pl.instagram_cost or 0,
-            'tiktok_cost':    pl.tiktok_cost or 0,
-            'google_ads_cost':pl.google_ads_cost or 0,
-            'line_cost':      pl.line_cost or 0,
-            'hp_cost':        pl.hp_cost or 0,
-            'meo_cost':       pl.meo_cost or 0,
-            'other_ad_cost':  pl.other_ad_cost or 0,
         })
     return jsonify(result)
 
@@ -1947,11 +1945,19 @@ def _apply_pl_fields(pl, data):
     # social_insurance → commission_payカラムにマッピング
     if 'social_insurance' in data:
         pl.commission_pay = float(data.get('social_insurance', 0) or 0)
-    # 広告費合計を自動計算して保存
-    ad_total = sum(float(data.get(k, 0) or 0) for k in [
-        'suumo_cost','homes_cost','athome_cost','instagram_cost','tiktok_cost',
-        'google_ads_cost','line_cost','hp_cost','meo_cost','other_ad_cost'
-    ])
+    # 広告費合計：ad_itemsがある場合はそちらで計算（api_pl_inputで保存後に再計算）
+    if 'ad_items' in data:
+        ad_items_list = data.get('ad_items') or []
+        if isinstance(ad_items_list, str):
+            import json as _j
+            try: ad_items_list = _j.loads(ad_items_list)
+            except: ad_items_list = []
+        ad_total = sum(float(i.get('amount', 0) or 0) for i in ad_items_list)
+    else:
+        ad_total = sum(float(data.get(k, 0) or 0) for k in [
+            'suumo_cost','homes_cost','athome_cost','instagram_cost','tiktok_cost',
+            'google_ads_cost','line_cost','hp_cost','meo_cost','other_ad_cost'
+        ])
     if ad_total > 0:
         pl.ad_cost = ad_total
     # 人件費合計を自動計算して保存
@@ -2008,6 +2014,25 @@ def api_pl_input():
     _save_typed_items('fixed_items', '固定費')
     _save_typed_items('variable_items', '変動費')
     _save_typed_items('custom_items', 'その他')
+
+    # 広告費カスタム行（送信されている場合は全置換）
+    body = request.get_json() if request.is_json else {}
+    if 'ad_items' in body:
+        PLCustomValue.query.filter_by(
+            store_id=store_id, year=year, month=month, item_type='広告費'
+        ).delete()
+        for item in (body['ad_items'] or []):
+            name   = str(item.get('name', '')).strip()
+            amount = float(item.get('amount', 0) or 0)
+            if not name: continue
+            cv = PLCustomValue(store_id=store_id, year=year, month=month,
+                               item_name=name, item_type='広告費', amount=amount)
+            db.session.add(cv)
+        # 固定列をゼロクリア（重複カウント防止）
+        for col in ['suumo_cost','homes_cost','athome_cost','instagram_cost','tiktok_cost',
+                    'google_ads_cost','line_cost','hp_cost','meo_cost','other_ad_cost']:
+            setattr(pl, col, 0)
+
     db.session.commit()
 
     return jsonify({'status': 'ok', 'id': pl.id})
