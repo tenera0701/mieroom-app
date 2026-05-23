@@ -1036,7 +1036,7 @@ async function openPlModal(existingData, isEdit=false) {
           ['家賃','駐車場代','複合機リース','ネット回線','顧問料','保険料','クラウド費'].forEach(n => addCostRow('fixed', n, ''));
         }
         if (prev.variable_items?.length) {
-          renderCostRows('variable', prev.variable_items);
+          renderCostRows('variable', prev.variable_items.map(i => ({name: i.name, amount: ''})));
         } else {
           renderCostRows('variable', costTemplates.variable.map(n => ({name: n, amount: ''})));
         }

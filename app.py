@@ -246,6 +246,24 @@ class PLCustomValue(db.Model):
     amount = db.Column(db.Float, default=0)
 
 
+class UncollectedPayment(db.Model):
+    """未入金（AD）管理"""
+    __tablename__ = 'uncollected_payment'
+    id = db.Column(db.Integer, primary_key=True)
+    store_id = db.Column(db.Integer, db.ForeignKey('store.id'), default=1)
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff.id'), nullable=True)
+    property_name = db.Column(db.String(200))     # 物件名
+    room_number   = db.Column(db.String(50))       # 合室
+    application_date    = db.Column(db.Date)        # 申込日
+    management_company  = db.Column(db.String(200)) # 管理会社名
+    customer_name       = db.Column(db.String(100)) # お客様名
+    expected_payment_date = db.Column(db.Date)      # 入金予定日
+    amount = db.Column(db.Float, default=0)
+    memo   = db.Column(db.Text)
+    is_paid = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class AppUser(db.Model):
     """管理ツールログインユーザー"""
     __tablename__ = 'app_user'
@@ -2602,6 +2620,173 @@ def api_settings_my_password():
     if not new_password:
         return jsonify({'status': 'error', 'message': '新パスワードを入力してください'}), 400
     user.password_hash = generate_password_hash(new_password)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/settings/profile", methods=["PUT"])
+@login_required
+def api_settings_profile():
+    """ログイン中ユーザーの表示名（username）変更"""
+    user = AppUser.query.get_or_404(session['user_id'])
+    data = request.get_json() or request.form
+    new_name = (data.get('display_name') or '').strip()
+    if not new_name:
+        return jsonify({'status': 'error', 'message': '名前を入力してください'}), 400
+    if AppUser.query.filter(AppUser.username == new_name, AppUser.id != user.id).first():
+        return jsonify({'status': 'error', 'message': 'その名前は既に使用されています'}), 400
+    user.username = new_name
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── スタッフ別6ヶ月推移 API ──────────────────────────────────────
+@app.route("/api/kpi/staff-history")
+def api_kpi_staff_history():
+    """スタッフ別の6ヶ月推移データを返す"""
+    staff_id = request.args.get('staff_id', type=int)
+    year  = request.args.get('year',  type=int) or current_ym()[0]
+    month = request.args.get('month', type=int) or current_ym()[1]
+
+    history = []
+    yoy_data = {}
+    for i in range(5, -1, -1):
+        m = month - i
+        y = year
+        while m < 1:
+            m += 12; y -= 1
+        query = SalesKPI.query.filter_by(year=y, month=m)
+        if staff_id:
+            query = query.filter_by(staff_id=staff_id)
+        kpis = query.all()
+        history.append({
+            'label':     f'{y}/{m:02d}',
+            'contracts': sum(k.contracts for k in kpis),
+            'revenue':   sum(k.sales_amount for k in kpis),
+            'inquiries': sum(k.inquiries for k in kpis),
+        })
+        # 現在月のみ前年比を計算
+        if i == 0:
+            prev_y_kpis = SalesKPI.query.filter_by(year=y-1, month=m)
+            if staff_id:
+                prev_y_kpis = prev_y_kpis.filter_by(staff_id=staff_id)
+            prev_y_kpis = prev_y_kpis.all()
+            yoy_data = {
+                'inquiries':  {'cur': sum(k.inquiries for k in kpis),   'yoy': sum(k.inquiries for k in prev_y_kpis)},
+                'contracts':  {'cur': sum(k.contracts for k in kpis),   'yoy': sum(k.contracts for k in prev_y_kpis)},
+                'revenue':    {'cur': sum(k.sales_amount for k in kpis),'yoy': sum(k.sales_amount for k in prev_y_kpis)},
+            }
+
+    return jsonify({'history': history, 'yoy': yoy_data})
+
+
+# ── 未入金（AD）管理 API ──────────────────────────────────────────
+@app.route("/api/uncollected")
+@login_required
+def api_uncollected_list():
+    store_id = request.args.get('store_id', type=int)
+    staff_id = request.args.get('staff_id', type=int)
+    include_paid = request.args.get('include_paid', 'false').lower() == 'true'
+
+    q = UncollectedPayment.query
+    if store_id:
+        q = q.filter_by(store_id=store_id)
+    if staff_id:
+        q = q.filter_by(staff_id=staff_id)
+    if not include_paid:
+        q = q.filter_by(is_paid=False)
+
+    items = q.order_by(UncollectedPayment.expected_payment_date.asc()).all()
+
+    def fmt_date(d): return d.strftime('%Y-%m-%d') if d else None
+
+    result = []
+    for p in items:
+        staff = Staff.query.get(p.staff_id) if p.staff_id else None
+        result.append({
+            'id':                   p.id,
+            'store_id':             p.store_id,
+            'staff_id':             p.staff_id,
+            'staff_name':           staff.name if staff else '',
+            'property_name':        p.property_name or '',
+            'room_number':          p.room_number or '',
+            'application_date':     fmt_date(p.application_date),
+            'management_company':   p.management_company or '',
+            'customer_name':        p.customer_name or '',
+            'expected_payment_date':fmt_date(p.expected_payment_date),
+            'amount':               p.amount or 0,
+            'memo':                 p.memo or '',
+            'is_paid':              p.is_paid,
+        })
+    return jsonify(result)
+
+
+@app.route("/api/uncollected", methods=["POST"])
+@login_required
+def api_uncollected_add():
+    data = request.get_json() or request.form
+    from datetime import datetime as _dt
+    def parse_date(s):
+        if not s: return None
+        try: return _dt.strptime(s, '%Y-%m-%d').date()
+        except: return None
+
+    p = UncollectedPayment(
+        store_id=int(data.get('store_id', 1) or 1),
+        staff_id=int(data.get('staff_id') or 0) or None,
+        property_name=data.get('property_name', ''),
+        room_number=data.get('room_number', ''),
+        application_date=parse_date(data.get('application_date')),
+        management_company=data.get('management_company', ''),
+        customer_name=data.get('customer_name', ''),
+        expected_payment_date=parse_date(data.get('expected_payment_date')),
+        amount=float(data.get('amount', 0) or 0),
+        memo=data.get('memo', ''),
+    )
+    db.session.add(p)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': p.id})
+
+
+@app.route("/api/uncollected/<int:pid>", methods=["PUT"])
+@login_required
+def api_uncollected_update(pid):
+    p = UncollectedPayment.query.get_or_404(pid)
+    data = request.get_json() or request.form
+    from datetime import datetime as _dt
+    def parse_date(s):
+        if not s: return None
+        try: return _dt.strptime(s, '%Y-%m-%d').date()
+        except: return None
+
+    if 'property_name'      in data: p.property_name      = data['property_name']
+    if 'room_number'        in data: p.room_number        = data['room_number']
+    if 'application_date'   in data: p.application_date   = parse_date(data['application_date'])
+    if 'management_company' in data: p.management_company = data['management_company']
+    if 'customer_name'      in data: p.customer_name      = data['customer_name']
+    if 'expected_payment_date' in data: p.expected_payment_date = parse_date(data['expected_payment_date'])
+    if 'amount'  in data: p.amount   = float(data['amount'] or 0)
+    if 'memo'    in data: p.memo     = data['memo']
+    if 'staff_id'in data: p.staff_id = int(data['staff_id'] or 0) or None
+    if 'is_paid' in data: p.is_paid  = bool(data['is_paid'])
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/uncollected/<int:pid>", methods=["DELETE"])
+@login_required
+def api_uncollected_delete(pid):
+    p = UncollectedPayment.query.get_or_404(pid)
+    db.session.delete(p)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/uncollected/<int:pid>/paid", methods=["POST"])
+@login_required
+def api_uncollected_paid(pid):
+    p = UncollectedPayment.query.get_or_404(pid)
+    p.is_paid = True
     db.session.commit()
     return jsonify({'status': 'ok'})
 

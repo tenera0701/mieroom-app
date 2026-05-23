@@ -221,7 +221,21 @@
   </div>
   {% endif %}
 
-  <!-- ===== セクション3: 自分のパスワード変更 ===== -->
+  <!-- ===== セクション3: プロフィール変更 ===== -->
+  <div class="section-card">
+    <div class="section-header">
+      <h2>プロフィール変更</h2>
+    </div>
+    <div style="padding: 20px 24px; max-width: 400px;">
+      <div class="form-group">
+        <label>表示名（ログイン名）</label>
+        <input type="text" id="my-display-name" placeholder="表示名" value="{{ current_user.username if current_user else '' }}">
+      </div>
+      <button class="btn-primary" onclick="changeMyProfile()" style="margin-bottom:24px;">名前を変更する</button>
+    </div>
+  </div>
+
+  <!-- ===== セクション4: 自分のパスワード変更 ===== -->
   <div class="section-card">
     <div class="section-header">
       <h2>自分のパスワード変更</h2>
@@ -499,6 +513,24 @@ async function savePassword() {
     if (!res.ok) throw new Error('error');
     closePasswordModal();
     showAlert('パスワードを変更しました。');
+  } catch(e) {
+    showAlert('変更に失敗しました。', 'error');
+  }
+}
+
+/* ===== プロフィール変更 ===== */
+async function changeMyProfile() {
+  const name = document.getElementById('my-display-name').value.trim();
+  if (!name) { showAlert('名前を入力してください', 'error'); return; }
+  try {
+    const res = await fetch('/api/settings/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ display_name: name }),
+    });
+    const json = await res.json();
+    if (!res.ok) { showAlert(json.message || '変更に失敗しました。', 'error'); return; }
+    showAlert('プロフィールを変更しました。再ログインに必要な場合はログインし直してください。');
   } catch(e) {
     showAlert('変更に失敗しました。', 'error');
   }
