@@ -313,6 +313,14 @@
   </div>
 
   <script>
+    // ブラウザを閉じたら再ログインが必要（sessionStorage利用）
+    (function() {
+      if (!sessionStorage.getItem('rp_auth')) {
+        // sessionStorageにフラグがなければログアウト
+        window.location.replace('/app-logout');
+      }
+    })();
+
     // 日時表示
     function updateDatetime() {
       const el = document.getElementById('topbar-datetime');

@@ -396,60 +396,60 @@
 
 <!-- ===== 月次データ入力モーダル ===== -->
 <div class="modal-overlay" id="pl-modal">
-  <div class="modal" style="width:680px;max-height:90vh;overflow-y:auto;">
+  <div class="modal" style="width:720px;max-height:90vh;overflow-y:auto;">
     <div class="modal-header">
-      <h3>月次データ入力</h3>
+      <h3 id="pl-modal-title">月次データ入力</h3>
       <button class="modal-close" onclick="closePlModal()">&#10005;</button>
     </div>
     <div class="modal-body">
       <form id="pl-form" onsubmit="return false;">
         <input type="hidden" name="store_id" value="1">
+        <input type="hidden" id="editing-pl-id" value="">
         <div class="form-group full-width" style="margin-bottom:16px;">
           <label>対象月</label>
-          <input type="month" name="target_month" id="modal-target-month">
+          <input type="month" name="target_month" id="modal-target-month" oninput="calcGrossProfit()">
         </div>
 
-        <!-- 売上・粗利 -->
+        <!-- 売上 -->
         <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;">売上</div>
         <div class="form-grid" style="margin-bottom:16px;">
           <div class="form-group">
             <label>売上（円）</label>
-            <input type="number" name="revenue" min="0" placeholder="0">
+            <input type="number" name="revenue" id="modal-revenue" min="0" placeholder="" oninput="calcGrossProfit()">
           </div>
           <div class="form-group">
-            <label>粗利（円）</label>
-            <input type="number" name="gross_profit" min="0" placeholder="0">
+            <label style="color:#16a34a;">粗利（自動計算）</label>
+            <div id="gross-profit-display" style="border:1px solid #86efac;border-radius:6px;padding:7px 10px;font-size:14px;font-weight:700;color:#15803d;background:#f0fdf4;min-height:36px;">－</div>
           </div>
         </div>
 
-        <!-- 広告費 -->
-        <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;">広告費</div>
+        <!-- 広告費（媒体別） -->
+        <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;display:flex;justify-content:space-between;align-items:center;">
+          広告費（媒体別）
+          <span id="ad-total-label" style="font-weight:800;font-size:13px;color:#15803d;">合計: ―</span>
+        </div>
         <div class="form-grid" style="margin-bottom:16px;">
-          <div class="form-group">
-            <label>広告費 合計（円）</label>
-            <input type="number" name="ad_cost" min="0" placeholder="0">
-          </div>
+          <div class="form-group"><label>SUUMO（円）</label><input type="number" name="suumo_cost" min="0" placeholder="" oninput="calcGrossProfit()"></div>
+          <div class="form-group"><label>HOME'S（円）</label><input type="number" name="homes_cost" min="0" placeholder="" oninput="calcGrossProfit()"></div>
+          <div class="form-group"><label>at home（円）</label><input type="number" name="athome_cost" min="0" placeholder="" oninput="calcGrossProfit()"></div>
+          <div class="form-group"><label>Instagram（円）</label><input type="number" name="instagram_cost" min="0" placeholder="" oninput="calcGrossProfit()"></div>
+          <div class="form-group"><label>TikTok（円）</label><input type="number" name="tiktok_cost" min="0" placeholder="" oninput="calcGrossProfit()"></div>
+          <div class="form-group"><label>Google広告（円）</label><input type="number" name="google_ads_cost" min="0" placeholder="" oninput="calcGrossProfit()"></div>
+          <div class="form-group"><label>LINE（円）</label><input type="number" name="line_cost" min="0" placeholder="" oninput="calcGrossProfit()"></div>
+          <div class="form-group"><label>HP（円）</label><input type="number" name="hp_cost" min="0" placeholder="" oninput="calcGrossProfit()"></div>
+          <div class="form-group"><label>MEO（円）</label><input type="number" name="meo_cost" min="0" placeholder="" oninput="calcGrossProfit()"></div>
+          <div class="form-group"><label>その他広告費（円）</label><input type="number" name="other_ad_cost" min="0" placeholder="" oninput="calcGrossProfit()"></div>
         </div>
 
         <!-- 人件費 -->
-        <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;">人件費</div>
+        <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;display:flex;justify-content:space-between;align-items:center;">
+          人件費
+          <span id="labor-total-label" style="font-weight:800;font-size:13px;color:#15803d;">合計: ―</span>
+        </div>
         <div class="form-grid" style="margin-bottom:16px;">
-          <div class="form-group">
-            <label>人件費 合計（円）</label>
-            <input type="number" name="labor_cost" min="0" placeholder="0">
-          </div>
-          <div class="form-group">
-            <label>正社員給与（円）</label>
-            <input type="number" name="regular_salary" min="0" placeholder="0">
-          </div>
-          <div class="form-group">
-            <label>アルバイト（円）</label>
-            <input type="number" name="parttime_salary" min="0" placeholder="0">
-          </div>
-          <div class="form-group">
-            <label>歩合給（円）</label>
-            <input type="number" name="commission_pay" min="0" placeholder="0">
-          </div>
+          <div class="form-group"><label>正社員人件費（円）</label><input type="number" name="regular_salary" min="0" placeholder="" oninput="calcGrossProfit()"></div>
+          <div class="form-group"><label>アルバイト人件費（円）</label><input type="number" name="parttime_salary" min="0" placeholder="" oninput="calcGrossProfit()"></div>
+          <div class="form-group"><label>社会保険料（円）</label><input type="number" name="social_insurance" min="0" placeholder="" oninput="calcGrossProfit()"></div>
         </div>
 
         <!-- 固定費（自由入力） -->
@@ -483,6 +483,7 @@
 let currentYear  = {{ year }};
 let currentMonth = {{ month }};
 let plChart = null;
+let currentPlData = null;  // 現在表示中のPLデータ（編集用）
 
 /* ===================================================
    ユーティリティ
@@ -553,14 +554,15 @@ async function loadPlData() {
     const res = await fetch(`/api/pl/summary?year=${currentYear}&month=${currentMonth}`);
     if (!res.ok) throw new Error('API error');
     const json = await res.json();
-    // APIは stores[] を返す。先頭店舗を current として使用
-    const current = (json.current ?? (json.stores && json.stores[0])) ?? null;
+    const current = json.current ?? (json.stores && json.stores[0]) ?? null;
     const prevMonth = json.prev_month ?? null;
     const prevYear  = json.prev_year  ?? null;
+    currentPlData = current;
     renderCards(current, prevMonth);
     renderPlTable(current, prevMonth, prevYear);
   } catch(e) {
-    console.warn('PL API unavailable, showing empty state:', e);
+    console.warn('PL API unavailable:', e);
+    currentPlData = null;
     renderCards(null, null);
     renderPlTable(null, null, null);
   }
@@ -577,61 +579,37 @@ async function loadPlData() {
 }
 
 /* ===================================================
-   費用合計計算
-=================================================== */
-function calcTotalCost(d) {
-  if (!d) return null;
-  const keys = ['ad_cost','labor_cost','rent','parking','copier_lease',
-                'internet','advisory','insurance','cloud','other_variable'];
-  let total = 0, hasData = false;
-  keys.forEach(k => {
-    if (d[k] !== undefined && d[k] !== null) {
-      total += Number(d[k]);
-      hasData = true;
-    }
-  });
-  return hasData ? total : null;
-}
-
-/* ===================================================
    PLカード描画
 =================================================== */
 function renderCards(cur, prev) {
-  const revenue  = cur?.revenue      ?? null;
-  const gross    = cur?.gross_profit ?? null;
-  const adCost   = cur?.ad_cost      ?? null;
-  const labor    = cur?.labor_cost   ?? null;
-  const totalCost = calcTotalCost(cur);
-  const profit   = (gross !== null && totalCost !== null) ? gross - totalCost : null;
+  const revenue  = cur?.revenue         ?? null;
+  const gross    = cur?.gross_profit    ?? null;  // 自動計算済み
+  const adCost   = cur?.ad_cost         ?? null;
+  const labor    = cur?.labor_cost      ?? null;
+  const profit   = cur?.operating_profit ?? null;
 
-  const pRevenue = prev?.revenue      ?? null;
-  const pGross   = prev?.gross_profit ?? null;
-  const pAd      = prev?.ad_cost      ?? null;
-  const pLabor   = prev?.labor_cost   ?? null;
-  const pTotalCost = calcTotalCost(prev);
-  const pProfit  = (pGross !== null && pTotalCost !== null) ? pGross - pTotalCost : null;
+  const pRevenue = prev?.revenue         ?? null;
+  const pGross   = prev?.gross_profit    ?? null;
+  const pAd      = prev?.ad_cost         ?? null;
+  const pLabor   = prev?.labor_cost      ?? null;
+  const pProfit  = prev?.operating_profit ?? null;
 
-  // 売上
   document.getElementById('card-revenue').textContent = revenue !== null ? yen(revenue) : '-';
   document.getElementById('card-revenue-prev').innerHTML = trendHtml(revenue, pRevenue);
 
-  // 粗利
   document.getElementById('card-gross').textContent = gross !== null ? yen(gross) : '-';
   document.getElementById('card-gross-rate').textContent =
     (gross !== null && revenue) ? `粗利率 ${pct(gross, revenue)}%` : '粗利率 -';
   document.getElementById('card-gross-prev').innerHTML = trendHtml(gross, pGross);
 
-  // 広告費
   document.getElementById('card-ad').textContent = adCost !== null ? yen(adCost) : '-';
   document.getElementById('card-ad-rate').textContent =
     (adCost !== null && revenue) ? `売上比 ${pct(adCost, revenue)}%` : '売上比 -';
   document.getElementById('card-ad-prev').innerHTML = trendHtml(adCost, pAd);
 
-  // 人件費
   document.getElementById('card-labor').textContent = labor !== null ? yen(labor) : '-';
   document.getElementById('card-labor-prev').innerHTML = trendHtml(labor, pLabor);
 
-  // 営業利益
   const profitEl = document.getElementById('card-profit');
   profitEl.textContent = profit !== null ? yen(profit) : '-';
   profitEl.className = 'pl-card-value' + (profit !== null && profit < 0 ? ' danger' : '');
@@ -644,89 +622,114 @@ function renderCards(cur, prev) {
 }
 
 /* ===================================================
-   PLテーブル定義
+   PLテーブル描画（全項目表示）
 =================================================== */
-const PL_ROWS = [
-  { type: 'category', label: '収益' },
-  { key: 'revenue',        label: '売上' },
-  { key: 'gross_profit',   label: '粗利' },
-  { key: '_gross_rate',    label: '粗利率', unit: '%' },
-  { type: 'category', label: '費用' },
-  { key: 'ad_cost',        label: '広告費' },
-  { key: 'labor_cost',     label: '人件費' },
-  { key: 'rent',           label: '家賃' },
-  { key: 'parking',        label: '駐車場代' },
-  { key: 'copier_lease',   label: '複合機リース' },
-  { key: 'internet',       label: 'ネット回線' },
-  { key: 'advisory',       label: '顧問料' },
-  { key: 'insurance',      label: '保険料' },
-  { key: 'cloud',          label: 'クラウド費' },
-  { key: 'other_variable', label: 'その他変動費' },
-  { type: 'category', label: '利益' },
-  { key: '_op_profit', label: '営業利益', total: true },
-  { key: '_op_rate',   label: '利益率', unit: '%', total: true },
-];
-
-function getVal(d, key) {
-  if (!d) return null;
-  if (key === '_gross_rate') {
-    return (d.gross_profit != null && d.revenue) ? parseFloat(pct(d.gross_profit, d.revenue)) : null;
-  }
-  if (key === '_op_profit') {
-    const cost = calcTotalCost(d);
-    return (cost !== null && d.gross_profit != null) ? d.gross_profit - cost : null;
-  }
-  if (key === '_op_rate') {
-    const cost = calcTotalCost(d);
-    if (cost === null || d.gross_profit == null || !d.revenue) return null;
-    return parseFloat(pct(d.gross_profit - cost, d.revenue));
-  }
-  return d[key] ?? null;
-}
-
-function fmtCell(v, unit) {
-  if (v === null || v === undefined) return '-';
-  if (unit === '%') return v.toFixed(1) + '%';
-  return '&#165;' + yen(v);
-}
-
 let currentPlId = null;
+
+function addTableRow(tbody, label, curVal, prevVal, pyVal, opts={}) {
+  const tr = document.createElement('tr');
+  if (opts.category) {
+    tr.className = 'category-row';
+    tr.innerHTML = `<td colspan="5">【${label}】</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+  if (opts.total) tr.className = 'total-row';
+
+  const fmtV = (v, unit) => {
+    if (v === null || v === undefined || v === 0 && opts.skipZero) return '-';
+    if (unit === '%') return (Number(v)).toFixed(1) + '%';
+    return '¥' + Math.round(Number(v)).toLocaleString('ja-JP');
+  };
+
+  const isDanger = opts.isProfit && curVal !== null && curVal < 0;
+  const isGood   = opts.isProfit && curVal !== null && curVal >= 0;
+  const cls = isDanger ? 'val-danger' : isGood ? 'val-good' : '';
+
+  tr.innerHTML = `
+    <td style="padding-left:${opts.indent ? '32px' : '16px'}">${label}</td>
+    <td class="${cls}">${fmtV(curVal, opts.unit)}</td>
+    <td style="color:#6b7280;">${fmtV(prevVal, opts.unit)}</td>
+    <td style="color:#6b7280;">${fmtV(pyVal, opts.unit)}</td>
+    <td>${opts.editBtn || ''}</td>
+  `;
+  tbody.appendChild(tr);
+}
 
 function renderPlTable(cur, prev, prevYear) {
   const tbody = document.getElementById('pl-tbody');
   tbody.innerHTML = '';
   currentPlId = cur ? (cur.pl_id || null) : null;
 
-  PL_ROWS.forEach(row => {
-    const tr = document.createElement('tr');
-    if (row.type === 'category') {
-      tr.className = 'category-row';
-      tr.innerHTML = `<td colspan="5">【${row.label}】</td>`;
-    } else {
-      const curVal  = getVal(cur, row.key);
-      const prevVal = getVal(prev, row.key);
-      const pyVal   = getVal(prevYear, row.key);
+  const g = (d, k) => d ? (d[k] ?? null) : null;
+  const rev = g(cur,'revenue'), pRev=g(prev,'revenue'), pyRev=g(prevYear,'revenue');
+  const gp  = g(cur,'gross_profit'), pGp=g(prev,'gross_profit'), pyGp=g(prevYear,'gross_profit');
+  const op  = g(cur,'operating_profit'), pOp=g(prev,'operating_profit'), pyOp=g(prevYear,'operating_profit');
+  const ad  = g(cur,'ad_cost'), pAd=g(prev,'ad_cost'), pyAd=g(prevYear,'ad_cost');
+  const lb  = g(cur,'labor_cost'), pLb=g(prev,'labor_cost'), pyLb=g(prevYear,'labor_cost');
 
-      const isProfit  = row.key === '_op_profit' || row.key === '_op_rate';
-      const isDanger  = isProfit && curVal !== null && curVal < 0;
-      const isGood    = isProfit && curVal !== null && curVal >= 0;
-      const cls = isDanger ? 'val-danger' : isGood ? 'val-good' : '';
+  const editBtn = currentPlId ? `
+    <button class="btn-cancel" style="padding:3px 10px;font-size:12px;color:#15803d;border-color:#86efac;margin-right:4px;" onclick="editPl()">編集</button>
+    <button class="btn-cancel" style="padding:3px 10px;font-size:12px;color:#b91c1c;border-color:#fca5a5;" onclick="deletePl(${currentPlId})">削除</button>
+  ` : '';
 
-      if (row.total) tr.className = 'total-row';
+  // 収益
+  addTableRow(tbody, '収益', null, null, null, {category: true});
+  addTableRow(tbody, '売上', rev, pRev, pyRev, {editBtn});
+  addTableRow(tbody, '粗利（自動計算）', gp, pGp, pyGp, {isProfit: gp < 0});
 
-      // 最初の収益行にのみ削除ボタンを表示（PLレコード単位）
-      const showDeleteBtn = row.key === 'revenue' && currentPlId;
-
-      tr.innerHTML = `
-        <td>${row.label}</td>
-        <td class="${cls}">${fmtCell(curVal, row.unit)}</td>
-        <td style="color:#6b7280;">${fmtCell(prevVal, row.unit)}</td>
-        <td style="color:#6b7280;">${fmtCell(pyVal, row.unit)}</td>
-        <td>${showDeleteBtn ? `<button class="btn-cancel" style="padding:3px 10px;font-size:12px;color:#b91c1c;border-color:#fca5a5;" onclick="deletePl(${currentPlId})">削除</button>` : ''}</td>
-      `;
-    }
-    tbody.appendChild(tr);
+  // 費用 - 広告費
+  addTableRow(tbody, '費用', null, null, null, {category: true});
+  addTableRow(tbody, '■ 広告費 合計', ad, pAd, pyAd, {});
+  const adMediaKeys = [
+    ['suumo_cost','SUUMO'],['homes_cost',"HOME'S"],['athome_cost','at home'],
+    ['instagram_cost','Instagram'],['tiktok_cost','TikTok'],['google_ads_cost','Google広告'],
+    ['line_cost','LINE'],['hp_cost','HP'],['meo_cost','MEO'],['other_ad_cost','その他'],
+  ];
+  adMediaKeys.forEach(([k, label]) => {
+    const v = g(cur, k);
+    if (v && v > 0) addTableRow(tbody, label, v, g(prev,k), g(prevYear,k), {indent:true, skipZero:true});
   });
+
+  // 費用 - 人件費
+  addTableRow(tbody, '■ 人件費 合計', lb, pLb, pyLb, {});
+  const laborKeys = [
+    ['regular_salary','正社員人件費'],['parttime_salary','アルバイト人件費'],
+    ['social_insurance','社会保険料'],
+  ];
+  laborKeys.forEach(([k, label]) => {
+    const v = g(cur, k);
+    if (v && v > 0) addTableRow(tbody, label, v, g(prev,k), g(prevYear,k), {indent:true, skipZero:true});
+  });
+
+  // 費用 - 固定費
+  if (cur?.fixed_items?.length) {
+    const fixedTotal = cur.fixed_items.reduce((s, i) => s + i.amount, 0);
+    const pFixedTotal = prev?.fixed_items?.reduce((s, i) => s + i.amount, 0) || null;
+    addTableRow(tbody, '■ 固定費 合計', fixedTotal, pFixedTotal, null, {});
+    cur.fixed_items.forEach(item => {
+      const pItem = prev?.fixed_items?.find(p => p.name === item.name);
+      addTableRow(tbody, item.name, item.amount, pItem?.amount || null, null, {indent:true});
+    });
+  }
+
+  // 費用 - 変動費
+  if (cur?.variable_items?.length) {
+    const varTotal = cur.variable_items.reduce((s, i) => s + i.amount, 0);
+    const pVarTotal = prev?.variable_items?.reduce((s, i) => s + i.amount, 0) || null;
+    addTableRow(tbody, '■ 変動費 合計', varTotal, pVarTotal, null, {});
+    cur.variable_items.forEach(item => {
+      const pItem = prev?.variable_items?.find(p => p.name === item.name);
+      addTableRow(tbody, item.name, item.amount, pItem?.amount || null, null, {indent:true});
+    });
+  }
+
+  // 利益
+  addTableRow(tbody, '利益', null, null, null, {category: true});
+  addTableRow(tbody, '営業利益（粗利）', op, pOp, pyOp, {total:true, isProfit:true});
+  const opRate  = (op !== null && rev) ? parseFloat(pct(op, rev)) : null;
+  const pOpRate = (pOp !== null && pRev) ? parseFloat(pct(pOp, pRev)) : null;
+  addTableRow(tbody, '利益率', opRate, pOpRate, null, {total:true, unit:'%'});
 }
 
 async function deletePl(plId) {
@@ -741,6 +744,12 @@ async function deletePl(plId) {
   }
 }
 
+async function editPl() {
+  // 既存データをモーダルに読み込む
+  if (!currentPlData) return;
+  await openPlModal(currentPlData, true);
+}
+
 /* ===================================================
    月次利益推移グラフ
 =================================================== */
@@ -748,10 +757,10 @@ function renderPlChart(data) {
   const ctx = document.getElementById('pl-chart').getContext('2d');
   if (plChart) plChart.destroy();
 
-  const labels   = (data && data.labels)       || [];
-  const revenue  = (data && data.revenue)      || [];
-  const gross    = (data && data.gross_profit) || [];
-  const opProfit = (data && data.op_profit)    || [];
+  const months12 = Array.isArray(data) ? data : [];
+  const labels   = months12.map(d => d.label);
+  const revenue  = months12.map(d => d.sales || 0);
+  const gross    = months12.map(d => d.gross_profit || 0);
 
   plChart = new Chart(ctx, {
     type: 'line',
@@ -776,17 +785,6 @@ function renderPlChart(data) {
           tension: 0.3,
           fill: false,
           pointRadius: 4,
-          yAxisID: 'y',
-        },
-        {
-          label: '営業利益',
-          data: opProfit,
-          borderColor: '#3b82f6',
-          backgroundColor: 'transparent',
-          tension: 0.3,
-          fill: false,
-          pointRadius: 4,
-          borderDash: [5, 3],
           yAxisID: 'y',
         },
       ]
@@ -875,11 +873,13 @@ function addCostRow(type, name='', amount='') {
   unit.textContent = '円';
   unit.style.cssText = 'font-size:13px;color:#6b7280;white-space:nowrap;';
 
+  amtInput.addEventListener('input', calcGrossProfit);
+
   const delBtn = document.createElement('button');
   delBtn.type = 'button';
   delBtn.textContent = '✕';
   delBtn.style.cssText = 'padding:6px 8px;border:1px solid #fca5a5;border-radius:6px;background:#fff;color:#ef4444;cursor:pointer;font-size:12px;';
-  delBtn.onclick = () => row.remove();
+  delBtn.onclick = () => { row.remove(); calcGrossProfit(); };
 
   row.appendChild(nameInput);
   row.appendChild(dl);
@@ -907,35 +907,108 @@ function renderCostRows(type, existingItems) {
   (existingItems || []).forEach(item => addCostRow(type, item.name, item.amount));
 }
 
-function getCustomItemsFromForm() { return []; } // 廃止（後方互換）
+/* ===================================================
+   粗利リアルタイム計算
+=================================================== */
+function calcGrossProfit() {
+  const form = document.getElementById('pl-form');
+  const getNum = name => parseFloat(form.querySelector(`[name="${name}"]`)?.value || 0) || 0;
 
-async function openPlModal(existingData) {
+  const revenue = getNum('revenue');
+  const adTotal = ['suumo_cost','homes_cost','athome_cost','instagram_cost','tiktok_cost',
+                   'google_ads_cost','line_cost','hp_cost','meo_cost','other_ad_cost']
+                  .reduce((s, k) => s + getNum(k), 0);
+  const laborTotal = getNum('regular_salary') + getNum('parttime_salary') + getNum('social_insurance');
+  const fixedTotal = getCostItems('fixed').reduce((s, i) => s + i.amount, 0);
+  const varTotal   = getCostItems('variable').reduce((s, i) => s + i.amount, 0);
+  const gross = revenue - adTotal - laborTotal - fixedTotal - varTotal;
+
+  const disp = document.getElementById('gross-profit-display');
+  if (disp) {
+    disp.textContent = revenue > 0 ? (Math.round(gross).toLocaleString('ja-JP') + '円') : '―';
+    disp.style.color = gross < 0 ? '#b91c1c' : '#15803d';
+  }
+  const adLabel = document.getElementById('ad-total-label');
+  if (adLabel) adLabel.textContent = '合計: ' + Math.round(adTotal).toLocaleString('ja-JP') + '円';
+  const laborLabel = document.getElementById('labor-total-label');
+  if (laborLabel) laborLabel.textContent = '合計: ' + Math.round(laborTotal).toLocaleString('ja-JP') + '円';
+}
+
+/* ===================================================
+   モーダル開閉
+=================================================== */
+async function openPlModal(existingData, isEdit=false) {
   await loadCostTemplates();
   const ym = `${currentYear}-${String(currentMonth).padStart(2,'0')}`;
-  document.getElementById('modal-target-month').value = ym;
-
   const form = document.getElementById('pl-form');
   form.reset();
   document.getElementById('modal-target-month').value = ym;
+  document.getElementById('editing-pl-id').value = '';
 
-  if (existingData) {
-    const fields = ['revenue','gross_profit','ad_cost','labor_cost','regular_salary','parttime_salary','commission_pay'];
-    fields.forEach(f => {
+  const title = document.getElementById('pl-modal-title');
+
+  if (isEdit && existingData) {
+    // 編集モード
+    title.textContent = '月次データ編集';
+    document.getElementById('editing-pl-id').value = existingData.pl_id || '';
+    const adFields = ['suumo_cost','homes_cost','athome_cost','instagram_cost','tiktok_cost',
+                      'google_ads_cost','line_cost','hp_cost','meo_cost','other_ad_cost'];
+    const laborFields = ['regular_salary','parttime_salary'];
+    [...adFields, ...laborFields, 'revenue'].forEach(f => {
       const el = form.querySelector(`[name="${f}"]`);
-      if (el && existingData[f] != null) el.value = existingData[f] || '';
+      if (el && existingData[f]) el.value = existingData[f];
     });
+    // 社会保険料
+    const siEl = form.querySelector('[name="social_insurance"]');
+    if (siEl && existingData.social_insurance) siEl.value = existingData.social_insurance;
     renderCostRows('fixed',    existingData.fixed_items    || []);
     renderCostRows('variable', existingData.variable_items || []);
   } else {
-    // テンプレートを初期表示
-    renderCostRows('fixed',    costTemplates.fixed.map(n => ({ name: n, amount: '' })));
-    renderCostRows('variable', costTemplates.variable.map(n => ({ name: n, amount: '' })));
-    // テンプレートが空の場合はデフォルト固定費を表示
-    if (!costTemplates.fixed.length) {
-      ['家賃','駐車場代','複合機リース','ネット回線','顧問料','保険料','クラウド費'].forEach(n => addCostRow('fixed', n, ''));
+    // 新規モード：前月データで自動入力
+    title.textContent = '月次データ入力';
+    try {
+      const res = await fetch(`/api/pl/prev-month-data?year=${currentYear}&month=${currentMonth}&store_id=1`);
+      if (res.ok) {
+        const prev = await res.json();
+        // 広告費
+        const adFields = ['suumo_cost','homes_cost','athome_cost','instagram_cost','tiktok_cost',
+                          'google_ads_cost','line_cost','hp_cost','meo_cost','other_ad_cost'];
+        adFields.forEach(f => {
+          const el = form.querySelector(`[name="${f}"]`);
+          if (el && prev[f]) el.value = prev[f];
+        });
+        // 人件費
+        ['regular_salary','parttime_salary'].forEach(f => {
+          const el = form.querySelector(`[name="${f}"]`);
+          if (el && prev[f]) el.value = prev[f];
+        });
+        const siEl = form.querySelector('[name="social_insurance"]');
+        if (siEl && prev.social_insurance) siEl.value = prev.social_insurance;
+        // 固定費・変動費（前月実績で入力）
+        if (prev.fixed_items?.length) {
+          renderCostRows('fixed', prev.fixed_items);
+        } else if (costTemplates.fixed.length) {
+          renderCostRows('fixed', costTemplates.fixed.map(n => ({name: n, amount: ''})));
+        } else {
+          ['家賃','駐車場代','複合機リース','ネット回線','顧問料','保険料','クラウド費'].forEach(n => addCostRow('fixed', n, ''));
+        }
+        if (prev.variable_items?.length) {
+          renderCostRows('variable', prev.variable_items);
+        } else {
+          renderCostRows('variable', costTemplates.variable.map(n => ({name: n, amount: ''})));
+        }
+      }
+    } catch(e) {
+      // 前月データ取得失敗時はテンプレートのみ
+      renderCostRows('fixed',    costTemplates.fixed.map(n => ({name: n, amount: ''})));
+      renderCostRows('variable', costTemplates.variable.map(n => ({name: n, amount: ''})));
+      if (!costTemplates.fixed.length) {
+        ['家賃','駐車場代','複合機リース','ネット回線','顧問料','保険料','クラウド費'].forEach(n => addCostRow('fixed', n, ''));
+      }
     }
   }
 
+  calcGrossProfit();
   document.getElementById('pl-modal').classList.add('active');
 }
 
@@ -944,12 +1017,15 @@ function closePlModal() {
   document.getElementById('pl-form').reset();
   document.getElementById('fixed-items-wrap').innerHTML    = '';
   document.getElementById('variable-items-wrap').innerHTML = '';
+  document.getElementById('gross-profit-display').textContent = '―';
+  document.getElementById('editing-pl-id').value = '';
 }
 
 async function submitPl() {
   const form = document.getElementById('pl-form');
   const formData = new FormData(form);
   const targetMonth = formData.get('target_month');
+  const editingId = document.getElementById('editing-pl-id').value;
 
   if (!targetMonth) {
     showAlert('対象月を選択してください。', 'error');
@@ -959,16 +1035,31 @@ async function submitPl() {
   const [year, month] = targetMonth.split('-').map(Number);
   const payload = { store_id: 1, year, month };
 
-  formData.forEach((v, k) => {
-    if (k === 'target_month' || k === 'store_id') return;
-    if (v !== '') payload[k] = parseFloat(v) || 0;
+  // フォームの数値フィールドを収集
+  const numFields = ['revenue','suumo_cost','homes_cost','athome_cost','instagram_cost','tiktok_cost',
+                     'google_ads_cost','line_cost','hp_cost','meo_cost','other_ad_cost',
+                     'regular_salary','parttime_salary','social_insurance'];
+  numFields.forEach(k => {
+    const el = form.querySelector(`[name="${k}"]`);
+    if (el && el.value !== '') payload[k] = parseFloat(el.value) || 0;
   });
 
-  // 固定費・変動費を追加
+  // 固定費・変動費
   payload.fixed_items    = getCostItems('fixed');
   payload.variable_items = getCostItems('variable');
 
+  // 粗利を自動計算
+  const adTotal = ['suumo_cost','homes_cost','athome_cost','instagram_cost','tiktok_cost',
+                   'google_ads_cost','line_cost','hp_cost','meo_cost','other_ad_cost']
+                  .reduce((s, k) => s + (payload[k] || 0), 0);
+  const laborTotal = (payload.regular_salary || 0) + (payload.parttime_salary || 0) + (payload.social_insurance || 0);
+  const fixedTotal = payload.fixed_items.reduce((s, i) => s + i.amount, 0);
+  const varTotal   = payload.variable_items.reduce((s, i) => s + i.amount, 0);
+  payload.gross_profit = (payload.revenue || 0) - adTotal - laborTotal - fixedTotal - varTotal;
+
   try {
+    // 新規・編集ともに /api/pl/input (POST) を使用
+    // （同年月のレコードがあれば更新、なければ作成）
     const res = await fetch('/api/pl/input', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -976,7 +1067,7 @@ async function submitPl() {
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     closePlModal();
-    showAlert('月次データを保存しました。');
+    showAlert(editingId ? '月次データを更新しました。' : '月次データを保存しました。');
     loadPlData();
   } catch(e) {
     console.error('submitPl error:', e);
@@ -987,6 +1078,10 @@ async function submitPl() {
 document.getElementById('pl-modal').addEventListener('click', function(e) {
   if (e.target === this) closePlModal();
 });
+
+// 固定費・変動費行が変更された時にも粗利を再計算
+document.getElementById('fixed-items-wrap').addEventListener('input', calcGrossProfit);
+document.getElementById('variable-items-wrap').addEventListener('input', calcGrossProfit);
 
 /* ===================================================
    初期化

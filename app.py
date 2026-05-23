@@ -125,6 +125,10 @@ class SalesKPI(db.Model):
     cancellations = db.Column(db.Integer, default=0)  # キャンセル数
     sales_amount = db.Column(db.Float, default=0)     # 売上（円）
     option_sales = db.Column(db.Float, default=0)     # オプション売上（円）
+    estimated_sales = db.Column(db.Float, default=0)     # 売上見込み（円）
+    fire_insurance_count = db.Column(db.Integer, default=0)  # 火災保険件数
+    lifeline_count = db.Column(db.Integer, default=0)        # ライフライン件数
+    moving_count = db.Column(db.Integer, default=0)          # 引越し件数
 
 
 class Lead(db.Model):
@@ -206,10 +210,10 @@ class PLRecord(db.Model):
     hp_cost = db.Column(db.Float, default=0)
     meo_cost = db.Column(db.Float, default=0)
     other_ad_cost = db.Column(db.Float, default=0)
-    # 人件費詳細
-    regular_salary = db.Column(db.Float, default=0)    # 正社員給与
-    parttime_salary = db.Column(db.Float, default=0)   # アルバイト
-    commission_pay = db.Column(db.Float, default=0)    # 歩合給
+    # 人件費詳細（commission_payカラムを社会保険料として再利用）
+    regular_salary = db.Column(db.Float, default=0)    # 正社員人件費
+    parttime_salary = db.Column(db.Float, default=0)   # アルバイト人件費
+    commission_pay = db.Column(db.Float, default=0)    # 社会保険料（旧:歩合給）
     # 固定費詳細
     pl_rent = db.Column(db.Float, default=0)           # 家賃
     pl_parking = db.Column(db.Float, default=0)        # 駐車場
@@ -654,14 +658,56 @@ def migrate_db():
         except Exception as e:
             print(f"  Skip {tbl}.item_type: {e}")
 
+    # sales_kpi テーブルの新カラムを追加
+    sales_kpi_new_cols = [
+        ('estimated_sales',      'FLOAT DEFAULT 0'),
+        ('fire_insurance_count', 'INTEGER DEFAULT 0'),
+        ('lifeline_count',       'INTEGER DEFAULT 0'),
+        ('moving_count',         'INTEGER DEFAULT 0'),
+    ]
+    cursor.execute("PRAGMA table_info(sales_kpi)")
+    sk_existing = {row[1] for row in cursor.fetchall()}
+    for col_name, col_def in sales_kpi_new_cols:
+        if col_name not in sk_existing:
+            try:
+                cursor.execute(f"ALTER TABLE sales_kpi ADD COLUMN {col_name} {col_def}")
+                print(f"  Added column sales_kpi.{col_name}")
+            except Exception as e:
+                print(f"  Skip sales_kpi.{col_name}: {e}")
+
     conn.commit()
     conn.close()
 
 
+def migrate_postgres():
+    """PostgreSQL用: 新カラムが存在しない場合のみALTER TABLEで追加"""
+    try:
+        with db.engine.connect() as conn:
+            # sales_kpi 新カラム
+            new_cols = [
+                ("sales_kpi", "estimated_sales",      "FLOAT DEFAULT 0"),
+                ("sales_kpi", "fire_insurance_count", "INTEGER DEFAULT 0"),
+                ("sales_kpi", "lifeline_count",       "INTEGER DEFAULT 0"),
+                ("sales_kpi", "moving_count",         "INTEGER DEFAULT 0"),
+            ]
+            for tbl, col, typedef in new_cols:
+                try:
+                    conn.execute(db.text(
+                        f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {typedef}"
+                    ))
+                    conn.commit()
+                except Exception as e:
+                    print(f"PG migrate skip {tbl}.{col}: {e}")
+    except Exception as e:
+        print(f"migrate_postgres error: {e}")
+
+
 with app.app_context():
     db.create_all()
-    if not _IS_POSTGRES:   # SQLite（ローカル）のみマイグレーション
+    if not _IS_POSTGRES:   # SQLite（ローカル）のみ
         migrate_db()
+    else:
+        migrate_postgres()
     init_store()
     ensure_owner_account()
 
@@ -754,12 +800,21 @@ def app_login():
         password = request.form.get("password", "")
         user = AppUser.query.filter_by(username=username, is_active=True).first()
         if user and check_password_hash(user.password_hash, password):
+            session.permanent = False  # ブラウザ閉じでセッション切れ
             session['app_user_id'] = user.id
             session['app_user_role'] = user.role
             session['app_username'] = user.username
             user.last_login = datetime.utcnow()
             db.session.commit()
-            return redirect(url_for('executive_dashboard'))
+            # sessionStorageにフラグを立ててリダイレクト（ブラウザ閉じ検出用）
+            dashboard_url = url_for('executive_dashboard')
+            return make_response(f'''<!DOCTYPE html><html><head>
+<meta charset="utf-8"><title>ログイン中...</title></head><body>
+<script>
+  sessionStorage.setItem("rp_auth","1");
+  window.location.replace("{dashboard_url}");
+</script>
+</body></html>''')
         else:
             error = "ユーザー名またはパスワードが正しくありません。"
     return render_template("app_login.html", error=error)
@@ -1238,8 +1293,13 @@ def api_kpi_staff():
             'viewings':    kpi.viewings,
             'applications':kpi.applications,
             'contracts':   kpi.contracts,
+            'cancellations': kpi.cancellations,
             'sales_amount':kpi.sales_amount,
             'option_sales':kpi.option_sales,
+            'estimated_sales':     kpi.estimated_sales or 0,
+            'fire_insurance_count':kpi.fire_insurance_count or 0,
+            'lifeline_count':      kpi.lifeline_count or 0,
+            'moving_count':        kpi.moving_count or 0,
         })
 
     # 売上降順でソート
@@ -1591,22 +1651,47 @@ def api_pl_summary():
     result = []
     for pl in pls:
         store = Store.query.get(pl.store_id)
-        operating_profit = (pl.gross_profit
-                            - pl.ad_cost
-                            - pl.labor_cost
-                            - pl.other_fixed
-                            - pl.other_variable)
+        # カスタム費用（固定費・変動費）を取得
+        custom_vals = PLCustomValue.query.filter_by(
+            store_id=pl.store_id, year=year, month=month
+        ).all()
+        fixed_items    = [{'name': v.item_name, 'amount': v.amount} for v in custom_vals if (v.item_type or '固定費') == '固定費']
+        variable_items = [{'name': v.item_name, 'amount': v.amount} for v in custom_vals if (v.item_type or '固定費') == '変動費']
+        custom_items   = [{'name': v.item_name, 'amount': v.amount} for v in custom_vals if (v.item_type or '固定費') not in ('固定費','変動費')]
+
+        # 広告費合計（媒体別の合計）
+        ad_total = (pl.suumo_cost or 0) + (pl.homes_cost or 0) + (pl.athome_cost or 0) + \
+                   (pl.instagram_cost or 0) + (pl.tiktok_cost or 0) + (pl.google_ads_cost or 0) + \
+                   (pl.line_cost or 0) + (pl.hp_cost or 0) + (pl.meo_cost or 0) + (pl.other_ad_cost or 0)
+        # ad_cost フィールドが合計として使われていればそちらを優先
+        ad_cost_val = pl.ad_cost if pl.ad_cost else ad_total
+
+        # 人件費合計
+        labor_total = (pl.regular_salary or 0) + (pl.parttime_salary or 0) + (pl.commission_pay or 0)
+        labor_cost_val = pl.labor_cost if pl.labor_cost else labor_total
+
+        # カスタム固定費・変動費合計
+        fixed_total    = sum(item['amount'] for item in fixed_items)
+        variable_total = sum(item['amount'] for item in variable_items)
+
+        # 粗利・営業利益 = 売上 - 全経費
+        total_cost = ad_cost_val + labor_cost_val + fixed_total + variable_total
+        gross_profit_calc = pl.revenue - total_cost
+        # DBに保存された gross_profit があればそちらを使用（0の場合は計算値）
+        gross_profit_val = pl.gross_profit if pl.gross_profit != 0 else gross_profit_calc
+        operating_profit = gross_profit_calc  # 営業利益 = 粗利（全経費控除後）
+
         result.append({
             'pl_id':          pl.id,
             'store_id':       pl.store_id,
             'store_name':     store.name if store else '不明',
             'revenue':        pl.revenue,
-            'gross_profit':   pl.gross_profit,
-            'gross_margin':   round(pl.gross_profit / pl.revenue * 100, 1) if pl.revenue else 0,
-            'ad_cost':        pl.ad_cost,
-            'labor_cost':     pl.labor_cost,
-            'other_fixed':    pl.other_fixed,
-            'other_variable': pl.other_variable,
+            'gross_profit':   gross_profit_calc,   # 自動計算値
+            'gross_margin':   round(gross_profit_calc / pl.revenue * 100, 1) if pl.revenue else 0,
+            'ad_cost':        ad_cost_val,
+            'labor_cost':     labor_cost_val,
+            'other_fixed':    fixed_total,
+            'other_variable': variable_total,
             'operating_profit': operating_profit,
             'op_margin':      round(operating_profit / pl.revenue * 100, 1) if pl.revenue else 0,
             # 収入詳細
@@ -1630,7 +1715,7 @@ def api_pl_summary():
             # 人件費詳細
             'regular_salary':  pl.regular_salary or 0,
             'parttime_salary': pl.parttime_salary or 0,
-            'commission_pay':  pl.commission_pay or 0,
+            'social_insurance': pl.commission_pay or 0,  # commission_payを社会保険料として使用
             # 固定費詳細
             'pl_rent':       pl.pl_rent or 0,
             'pl_parking':    pl.pl_parking or 0,
@@ -1639,16 +1724,11 @@ def api_pl_summary():
             'pl_consultant': pl.pl_consultant or 0,
             'pl_insurance':  pl.pl_insurance or 0,
             'pl_cloud':      pl.pl_cloud or 0,
+            # カスタム費用
+            'fixed_items':    fixed_items,
+            'variable_items': variable_items,
+            'custom_items':   custom_items,
         })
-
-    # カスタム費用項目の値を type 別に追加
-    for r in result:
-        custom_vals = PLCustomValue.query.filter_by(
-            store_id=r['store_id'], year=year, month=month
-        ).all()
-        r['fixed_items']    = [{'name': v.item_name, 'amount': v.amount} for v in custom_vals if (v.item_type or '固定費') == '固定費']
-        r['variable_items'] = [{'name': v.item_name, 'amount': v.amount} for v in custom_vals if (v.item_type or '固定費') == '変動費']
-        r['custom_items']   = [{'name': v.item_name, 'amount': v.amount} for v in custom_vals if (v.item_type or '固定費') not in ('固定費','変動費')]
 
     # テンプレート一覧（type別）
     all_items = PLCustomItem.query.filter_by(store_id=1).order_by(PLCustomItem.sort_order).all()
@@ -1656,8 +1736,49 @@ def api_pl_summary():
     template_variable = [i.name for i in all_items if (i.item_type or '固定費') == '変動費']
     template_items    = [i.name for i in all_items if (i.item_type or '固定費') not in ('固定費','変動費')]
 
+    # prev_month / prev_year サポート
+    def get_prev_summary(y, m):
+        prev_pls = PLRecord.query.filter_by(year=y, month=m).all()
+        if not prev_pls:
+            return None
+        pl = prev_pls[0]
+        cv = PLCustomValue.query.filter_by(store_id=pl.store_id, year=y, month=m).all()
+        fi = [{'name': v.item_name, 'amount': v.amount} for v in cv if (v.item_type or '固定費') == '固定費']
+        vi = [{'name': v.item_name, 'amount': v.amount} for v in cv if (v.item_type or '固定費') == '変動費']
+        ad_t = (pl.suumo_cost or 0)+(pl.homes_cost or 0)+(pl.athome_cost or 0)+(pl.instagram_cost or 0)+\
+               (pl.tiktok_cost or 0)+(pl.google_ads_cost or 0)+(pl.line_cost or 0)+(pl.hp_cost or 0)+\
+               (pl.meo_cost or 0)+(pl.other_ad_cost or 0)
+        ad_v = pl.ad_cost if pl.ad_cost else ad_t
+        lb_t = (pl.regular_salary or 0)+(pl.parttime_salary or 0)+(pl.commission_pay or 0)
+        lb_v = pl.labor_cost if pl.labor_cost else lb_t
+        ft = sum(i['amount'] for i in fi)
+        vt = sum(i['amount'] for i in vi)
+        gp = pl.revenue - ad_v - lb_v - ft - vt
+        return {
+            'revenue': pl.revenue, 'gross_profit': gp, 'ad_cost': ad_v,
+            'labor_cost': lb_v, 'other_fixed': ft, 'other_variable': vt,
+            'operating_profit': gp,
+            'suumo_cost': pl.suumo_cost or 0, 'homes_cost': pl.homes_cost or 0,
+            'athome_cost': pl.athome_cost or 0, 'instagram_cost': pl.instagram_cost or 0,
+            'tiktok_cost': pl.tiktok_cost or 0, 'google_ads_cost': pl.google_ads_cost or 0,
+            'line_cost': pl.line_cost or 0, 'hp_cost': pl.hp_cost or 0,
+            'meo_cost': pl.meo_cost or 0, 'other_ad_cost': pl.other_ad_cost or 0,
+            'regular_salary': pl.regular_salary or 0, 'parttime_salary': pl.parttime_salary or 0,
+            'social_insurance': pl.commission_pay or 0,
+            'fixed_items': fi, 'variable_items': vi,
+        }
+
+    pm = month - 1 if month > 1 else 12
+    py_m = year if month > 1 else year - 1
+    prev_month = get_prev_summary(py_m, pm)
+    prev_year  = get_prev_summary(year - 1, month)
+
     return jsonify({
-        'year': year, 'month': month, 'stores': result,
+        'year': year, 'month': month,
+        'stores': result,
+        'current': result[0] if result else None,
+        'prev_month': prev_month,
+        'prev_year':  prev_year,
         'template_fixed': template_fixed,
         'template_variable': template_variable,
         'template_items': template_items,
@@ -1673,6 +1794,53 @@ def api_pl_custom_items():
         'variable': [{'id': i.id, 'name': i.name} for i in items if (i.item_type or '固定費') == '変動費'],
         'other':    [{'id': i.id, 'name': i.name} for i in items if (i.item_type or '固定費') not in ('固定費','変動費')],
     })
+
+
+@app.route("/api/pl/prev-month-data")
+def api_pl_prev_month_data():
+    """前月の固定費・PLデータを返す（新規入力時の自動入力用）"""
+    year  = request.args.get('year',  type=int) or current_ym()[0]
+    month = request.args.get('month', type=int) or current_ym()[1]
+    store_id = request.args.get('store_id', type=int) or 1
+
+    # 前月
+    pm = month - 1 if month > 1 else 12
+    py = year if month > 1 else year - 1
+
+    pl = PLRecord.query.filter_by(store_id=store_id, year=py, month=pm).first()
+    custom_vals = PLCustomValue.query.filter_by(store_id=store_id, year=py, month=pm).all()
+
+    fixed_items    = [{'name': v.item_name, 'amount': v.amount} for v in custom_vals if (v.item_type or '固定費') == '固定費']
+    variable_items = [{'name': v.item_name, 'amount': v.amount} for v in custom_vals if (v.item_type or '固定費') == '変動費']
+
+    result = {
+        'fixed_items': fixed_items,
+        'variable_items': variable_items,
+    }
+    if pl:
+        result.update({
+            'pl_rent':       pl.pl_rent or 0,
+            'pl_parking':    pl.pl_parking or 0,
+            'pl_copier':     pl.pl_copier or 0,
+            'pl_internet':   pl.pl_internet or 0,
+            'pl_consultant': pl.pl_consultant or 0,
+            'pl_insurance':  pl.pl_insurance or 0,
+            'pl_cloud':      pl.pl_cloud or 0,
+            'regular_salary':  pl.regular_salary or 0,
+            'parttime_salary': pl.parttime_salary or 0,
+            'social_insurance': pl.commission_pay or 0,
+            'suumo_cost':     pl.suumo_cost or 0,
+            'homes_cost':     pl.homes_cost or 0,
+            'athome_cost':    pl.athome_cost or 0,
+            'instagram_cost': pl.instagram_cost or 0,
+            'tiktok_cost':    pl.tiktok_cost or 0,
+            'google_ads_cost':pl.google_ads_cost or 0,
+            'line_cost':      pl.line_cost or 0,
+            'hp_cost':        pl.hp_cost or 0,
+            'meo_cost':       pl.meo_cost or 0,
+            'other_ad_cost':  pl.other_ad_cost or 0,
+        })
+    return jsonify(result)
 
 
 @app.route("/api/staff/ranking")
@@ -1755,6 +1923,10 @@ def api_kpi_input():
     kpi.cancellations= int(data.get('cancellations', kpi.cancellations))
     kpi.sales_amount = float(data.get('sales_amount', kpi.sales_amount))
     kpi.option_sales = float(data.get('option_sales', kpi.option_sales))
+    kpi.estimated_sales     = float(data.get('estimated_sales', kpi.estimated_sales or 0))
+    kpi.fire_insurance_count= int(data.get('fire_insurance_count', kpi.fire_insurance_count or 0))
+    kpi.lifeline_count      = int(data.get('lifeline_count', kpi.lifeline_count or 0))
+    kpi.moving_count        = int(data.get('moving_count', kpi.moving_count or 0))
     db.session.commit()
 
     return jsonify({'status': 'ok', 'id': kpi.id})
@@ -1772,6 +1944,22 @@ def _apply_pl_fields(pl, data):
                   'pl_consultant', 'pl_insurance', 'pl_cloud']:
         if field in data:
             setattr(pl, field, float(data.get(field, 0) or 0))
+    # social_insurance → commission_payカラムにマッピング
+    if 'social_insurance' in data:
+        pl.commission_pay = float(data.get('social_insurance', 0) or 0)
+    # 広告費合計を自動計算して保存
+    ad_total = sum(float(data.get(k, 0) or 0) for k in [
+        'suumo_cost','homes_cost','athome_cost','instagram_cost','tiktok_cost',
+        'google_ads_cost','line_cost','hp_cost','meo_cost','other_ad_cost'
+    ])
+    if ad_total > 0:
+        pl.ad_cost = ad_total
+    # 人件費合計を自動計算して保存
+    labor_total = (float(data.get('regular_salary', 0) or 0) +
+                   float(data.get('parttime_salary', 0) or 0) +
+                   float(data.get('social_insurance', data.get('commission_pay', 0)) or 0))
+    if labor_total > 0:
+        pl.labor_cost = labor_total
 
 
 @app.route("/api/pl/input", methods=["POST"])
@@ -1895,6 +2083,10 @@ def api_kpi_update(kpi_id):
     kpi.cancellations = int(data.get('cancellations', kpi.cancellations))
     kpi.sales_amount  = float(data.get('sales_amount', kpi.sales_amount))
     kpi.option_sales  = float(data.get('option_sales', kpi.option_sales))
+    kpi.estimated_sales     = float(data.get('estimated_sales', kpi.estimated_sales or 0))
+    kpi.fire_insurance_count= int(data.get('fire_insurance_count', kpi.fire_insurance_count or 0))
+    kpi.lifeline_count      = int(data.get('lifeline_count', kpi.lifeline_count or 0))
+    kpi.moving_count        = int(data.get('moving_count', kpi.moving_count or 0))
     db.session.commit()
     return jsonify({'status': 'ok'})
 

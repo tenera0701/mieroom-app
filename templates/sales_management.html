@@ -498,10 +498,10 @@
       <span class="kpi-card-badge badge-up" id="card-contracts-trend"></span>
     </div>
     <div class="kpi-card">
-      <div class="kpi-card-label">平均客単価</div>
-      <div class="kpi-card-value" id="card-unit-price">-</div>
-      <div class="kpi-card-sub">万円/件</div>
-      <span class="kpi-card-badge" id="card-unit-trend"></span>
+      <div class="kpi-card-label">申込件数</div>
+      <div class="kpi-card-value" id="card-applications">-</div>
+      <div class="kpi-card-sub">件</div>
+      <span class="kpi-card-badge" id="card-applications-trend"></span>
     </div>
   </div>
 
@@ -618,6 +618,22 @@
           <div class="form-group">
             <label>オプション売上（円）</label>
             <input type="number" name="option_revenue" min="0" step="1" placeholder="0" value="0">
+          </div>
+          <div class="form-group">
+            <label>売上見込み（円）</label>
+            <input type="number" name="estimated_sales" min="0" step="1" placeholder="0" value="0">
+          </div>
+          <div class="form-group">
+            <label>火災保険 件数</label>
+            <input type="number" name="fire_insurance_count" min="0" placeholder="0" value="0">
+          </div>
+          <div class="form-group">
+            <label>ライフライン 件数</label>
+            <input type="number" name="lifeline_count" min="0" placeholder="0" value="0">
+          </div>
+          <div class="form-group">
+            <label>引越し 件数</label>
+            <input type="number" name="moving_count" min="0" placeholder="0" value="0">
           </div>
         </div>
       </form>
@@ -780,16 +796,16 @@ function updateKpiCards(data) {
   if (!data.length) return;
   const totalRevenue = data.reduce((s, d) => s + (d.revenue || 0), 0);
   const totalContracts = data.reduce((s, d) => s + (d.contracts || 0), 0);
+  const totalApplications = data.reduce((s, d) => s + (d.applications || 0), 0);
   const totalVisits = data.reduce((s, d) => s + (d.visits || 0), 0);
   const avgCloseRate = totalVisits ? pct(totalContracts, totalVisits) : 0;
-  const unitPrice = totalContracts ? (totalRevenue / totalContracts).toFixed(1) : 0;
   const prevRevenue = data.reduce((s, d) => s + (d.prev_revenue || 0), 0);
   const revTrend = prevRevenue ? ((totalRevenue - prevRevenue) / prevRevenue * 100).toFixed(1) : null;
 
   document.getElementById('card-revenue').textContent = totalRevenue.toLocaleString();
   document.getElementById('card-close-rate').textContent = avgCloseRate + '%';
   document.getElementById('card-contracts').textContent = totalContracts;
-  document.getElementById('card-unit-price').textContent = unitPrice;
+  document.getElementById('card-applications').textContent = totalApplications;
 
   if (revTrend !== null) {
     const el = document.getElementById('card-revenue-trend');
@@ -1105,14 +1121,18 @@ function editKpi(kpiId, staffObj) {
 
   // 数値を埋める
   const form = document.getElementById('kpi-form');
-  form.querySelector('[name="responses"]').value       = staffObj.responses    || 0;
-  form.querySelector('[name="visits"]').value          = staffObj.visits       || 0;
-  form.querySelector('[name="tours"]').value           = staffObj.tours        || 0;
-  form.querySelector('[name="applications"]').value    = staffObj.applications || 0;
-  form.querySelector('[name="contracts"]').value       = staffObj.contracts    || 0;
-  form.querySelector('[name="cancels"]').value         = staffObj.cancellations|| 0;
-  form.querySelector('[name="revenue"]').value         = staffObj.revenue      || 0;
-  form.querySelector('[name="option_revenue"]').value  = staffObj.option       || 0;
+  form.querySelector('[name="responses"]').value            = staffObj.responses    || staffObj.inquiries || 0;
+  form.querySelector('[name="visits"]').value               = staffObj.visits       || staffObj.store_visits || 0;
+  form.querySelector('[name="tours"]').value                = staffObj.tours        || staffObj.viewings || 0;
+  form.querySelector('[name="applications"]').value         = staffObj.applications || 0;
+  form.querySelector('[name="contracts"]').value            = staffObj.contracts    || 0;
+  form.querySelector('[name="cancels"]').value              = staffObj.cancellations|| 0;
+  form.querySelector('[name="revenue"]').value              = staffObj.revenue      || staffObj.sales_amount || 0;
+  form.querySelector('[name="option_revenue"]').value       = staffObj.option       || staffObj.option_sales || 0;
+  form.querySelector('[name="estimated_sales"]').value      = staffObj.estimated_sales     || 0;
+  form.querySelector('[name="fire_insurance_count"]').value = staffObj.fire_insurance_count|| 0;
+  form.querySelector('[name="lifeline_count"]').value       = staffObj.lifeline_count      || 0;
+  form.querySelector('[name="moving_count"]').value         = staffObj.moving_count        || 0;
 
   document.getElementById('kpi-modal').classList.add('active');
 }
@@ -1145,6 +1165,10 @@ async function submitKpi() {
     cancellations:parseInt(data.cancels) || 0,
     sales_amount: parseFloat(data.revenue) || 0,
     option_sales: parseFloat(data.option_revenue) || 0,
+    estimated_sales:      parseFloat(data.estimated_sales) || 0,
+    fire_insurance_count: parseInt(data.fire_insurance_count) || 0,
+    lifeline_count:       parseInt(data.lifeline_count) || 0,
+    moving_count:         parseInt(data.moving_count) || 0,
   };
 
   let url, method;
