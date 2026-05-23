@@ -728,6 +728,20 @@ with app.app_context():
         migrate_postgres()
     init_store()
     ensure_owner_account()
+    # 無効なPLCustomItemテンプレートをクリーンアップ（数字のみの名前など）
+    try:
+        invalid_items = PLCustomItem.query.filter(
+            db.or_(
+                PLCustomItem.name.in_(['11', '1331', '13']),
+                PLCustomItem.name == ''
+            )
+        ).all()
+        for item in invalid_items:
+            db.session.delete(item)
+        if invalid_items:
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 # ── 認証デコレータ ────────────────────────────────────────
@@ -1671,7 +1685,6 @@ def api_leads_import_excel_stats():
     return jsonify({'status': 'ok', 'imported': imported, 'year': year, 'month': month})
 
 
-@app.route("/api/pl/summary")
 def _get_ad_items(store_id, y, m, pl=None):
     """広告費カスタム行を取得。なければ固定列からフォールバック"""
     ad_cvs = PLCustomValue.query.filter_by(store_id=store_id, year=y, month=m, item_type='広告費').all()
@@ -1686,6 +1699,7 @@ def _get_ad_items(store_id, y, m, pl=None):
             for col, n in _AD_COLS if (getattr(pl, col, 0) or 0) > 0]
 
 
+@app.route("/api/pl/summary")
 def api_pl_summary():
     """PLサマリを返す（店舗別・月次）"""
     store_id = request.args.get('store_id', type=int)
@@ -2009,20 +2023,19 @@ def api_pl_input():
             raw = request.get_json().get(items_json_key)
         if raw is None:
             raw = data.get(items_json_key)
-        if not raw: return
+        if raw is None: return
         if isinstance(raw, str):
             import json as _json
             try: raw = _json.loads(raw)
             except: return
+        # 既存エントリを全削除してから再挿入（ゴースト行防止）
+        PLCustomValue.query.filter_by(store_id=store_id, year=year, month=month, item_type=item_type).delete()
         for item in raw:
             name   = str(item.get('name', '')).strip()
             amount = float(item.get('amount', 0) or 0)
             if not name: continue
-            cv = PLCustomValue.query.filter_by(store_id=store_id, year=year, month=month, item_name=name, item_type=item_type).first()
-            if not cv:
-                cv = PLCustomValue(store_id=store_id, year=year, month=month, item_name=name, item_type=item_type)
-                db.session.add(cv)
-            cv.amount = amount
+            cv = PLCustomValue(store_id=store_id, year=year, month=month, item_name=name, item_type=item_type, amount=amount)
+            db.session.add(cv)
             # テンプレート登録
             existing = PLCustomItem.query.filter_by(store_id=store_id, name=name, item_type=item_type).first()
             if not existing:
@@ -2168,6 +2181,7 @@ def api_lead_update(lead_id):
 def api_pl_delete(pl_id):
     """PL削除"""
     pl = PLRecord.query.get_or_404(pl_id)
+    PLCustomValue.query.filter_by(store_id=pl.store_id, year=pl.year, month=pl.month).delete()
     db.session.delete(pl)
     db.session.commit()
     return jsonify({'status': 'ok'})
