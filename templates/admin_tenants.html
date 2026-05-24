@@ -18,6 +18,18 @@
     </button>
   </div>
 
+  <!-- 検索バー -->
+  <div class="mb-4">
+    <div class="relative">
+      <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
+      </svg>
+      <input id="search-input" type="text" placeholder="会社名で検索..."
+        oninput="renderTenants()"
+        class="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+    </div>
+  </div>
+
   <!-- テナント一覧カード -->
   <div id="tenant-list" class="grid gap-4">
     <div class="text-center py-10 text-gray-400">読み込み中...</div>
@@ -181,12 +193,14 @@ async function loadTenants() {
 
 function renderTenants() {
   const el = document.getElementById('tenant-list');
-  if (!tenants.length) {
-    el.innerHTML = '<div class="text-center py-10 text-gray-400">テナントがありません</div>';
+  const q = (document.getElementById('search-input')?.value || '').trim().toLowerCase();
+  const filtered = q ? tenants.filter(t => t.name.toLowerCase().includes(q)) : tenants;
+  if (!filtered.length) {
+    el.innerHTML = `<div class="text-center py-10 text-gray-400">${q ? '「' + escHtml(q) + '」に一致するクライアントが見つかりません' : 'テナントがありません'}</div>`;
     return;
   }
 
-  el.innerHTML = tenants.map(t => `
+  el.innerHTML = filtered.map(t => `
     <div class="bg-white rounded-xl shadow-sm border ${t.is_active ? '' : 'opacity-60'} overflow-hidden">
       <div class="p-5 flex items-start justify-between gap-4">
         <div class="flex items-start gap-4">
@@ -235,6 +249,10 @@ function renderTenants() {
             class="text-xs px-3 py-1.5 border border-green-300 text-green-600 rounded-lg hover:bg-green-50">
             有効化
           </button>`}
+          <button onclick="deleteTenant(${t.id}, '${escHtml(t.name)}')"
+            class="text-xs px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg">
+            削除
+          </button>
         </div>
       </div>
     </div>
@@ -335,6 +353,17 @@ async function updateTenant() {
   });
   if (!res.ok) { const j = await res.json(); errEl.textContent = j.error || 'エラー'; errEl.classList.remove('hidden'); return; }
   closeEditModal();
+  loadTenants();
+}
+
+async function deleteTenant(tid, tname) {
+  if (!confirm(`⚠️ 削除の確認\n\n「${tname}」とその関連データ（店舗・スタッフ・KPI・日報など）を完全に削除します。\nこの操作は取り消せません。\n\n本当に削除しますか？`)) return;
+  const res = await fetch(`/api/tenants/${tid}`, { method: 'DELETE' });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    alert('削除に失敗しました: ' + (j.error || res.status));
+    return;
+  }
   loadTenants();
 }
 

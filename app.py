@@ -4253,9 +4253,68 @@ def api_tenant_update(tid):
 @app.route("/api/tenants/<int:tid>", methods=["DELETE"])
 @super_admin_required
 def api_tenant_delete(tid):
-    """テナント論理削除（無効化）"""
+    """テナント物理削除（関連データを全てカスケード削除）"""
     tenant = Tenant.query.get_or_404(tid)
-    tenant.is_active = False
+
+    # 対象の店舗・スタッフIDを収集
+    store_ids = [s.id for s in Store.query.filter_by(tenant_id=tid).all()]
+
+    if store_ids:
+        # 日報の子テーブルを先に削除
+        report_ids = [r.id for r in DailyReport.query.filter(
+            DailyReport.store_id.in_(store_ids)).all()]
+        if report_ids:
+            DailyTaskCheck.query.filter(
+                DailyTaskCheck.report_id.in_(report_ids)).delete(synchronize_session=False)
+            DailyReportCustomer.query.filter(
+                DailyReportCustomer.report_id.in_(report_ids)).delete(synchronize_session=False)
+            DailyReport.query.filter(
+                DailyReport.id.in_(report_ids)).delete(synchronize_session=False)
+
+        DailyTaskTemplate.query.filter(
+            DailyTaskTemplate.store_id.in_(store_ids)).delete(synchronize_session=False)
+        LeaveBalance.query.filter(
+            LeaveBalance.store_id.in_(store_ids)).delete(synchronize_session=False)
+        LeaveRecord.query.filter(
+            LeaveRecord.store_id.in_(store_ids)).delete(synchronize_session=False)
+        SalesKPI.query.filter(
+            SalesKPI.store_id.in_(store_ids)).delete(synchronize_session=False)
+        UncollectedPayment.query.filter(
+            UncollectedPayment.store_id.in_(store_ids)).delete(synchronize_session=False)
+        Lead.query.filter(
+            Lead.store_id.in_(store_ids)).delete(synchronize_session=False)
+        ApplicationRecord.query.filter(
+            ApplicationRecord.store_id.in_(store_ids)).delete(synchronize_session=False)
+        ContractRecord.query.filter(
+            ContractRecord.store_id.in_(store_ids)).delete(synchronize_session=False)
+        LeadMediaStat.query.filter(
+            LeadMediaStat.store_id.in_(store_ids)).delete(synchronize_session=False)
+        AdCost.query.filter(
+            AdCost.store_id.in_(store_ids)).delete(synchronize_session=False)
+        PLCustomValue.query.filter(
+            PLCustomValue.store_id.in_(store_ids)).delete(synchronize_session=False)
+        PLCustomItem.query.filter(
+            PLCustomItem.store_id.in_(store_ids)).delete(synchronize_session=False)
+        PLRecord.query.filter(
+            PLRecord.store_id.in_(store_ids)).delete(synchronize_session=False)
+        MediaType.query.filter(
+            MediaType.store_id.in_(store_ids)).delete(synchronize_session=False)
+        StatusColor.query.filter(
+            StatusColor.store_id.in_(store_ids)).delete(synchronize_session=False)
+        Staff.query.filter(
+            Staff.store_id.in_(store_ids)).delete(synchronize_session=False)
+        Store.query.filter(
+            Store.id.in_(store_ids)).delete(synchronize_session=False)
+
+    # AppUser とそのリセットトークンを削除
+    user_ids = [u.id for u in AppUser.query.filter_by(tenant_id=tid).all()]
+    if user_ids:
+        PasswordResetToken.query.filter(
+            PasswordResetToken.user_id.in_(user_ids)).delete(synchronize_session=False)
+        AppUser.query.filter(
+            AppUser.id.in_(user_ids)).delete(synchronize_session=False)
+
+    db.session.delete(tenant)
     db.session.commit()
     return jsonify({'status': 'ok'})
 
