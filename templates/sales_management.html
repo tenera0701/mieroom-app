@@ -1690,7 +1690,10 @@ async function submitKpi() {
       method, headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error('API error');
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`HTTP ${res.status}: ${errText.slice(0,100)}`);
+    }
 
     // 目標売上を別APIで保存
     if (staffId && payload.target_sales >= 0) {
@@ -1704,7 +1707,7 @@ async function submitKpi() {
     showAlert(editingKpiId ? 'KPIを更新しました。' : 'KPIを保存しました。');
     loadData();
   } catch(e) {
-    showAlert('保存に失敗しました。再度お試しください。', 'error');
+    showAlert('保存に失敗しました: ' + e.message, 'error');
   }
 }
 

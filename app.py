@@ -4213,6 +4213,37 @@ def api_tenant_store_add(tid):
     return jsonify({'status': 'ok', 'id': store.id})
 
 
+@app.route("/api/me")
+@login_required
+def api_me():
+    """ログインユーザーの診断情報を返す（テナント・店舗・権限）"""
+    uid = session.get('app_user_id')
+    user = AppUser.query.get(uid)
+    if not user:
+        return jsonify({'error': 'user not found'}), 404
+    allowed_ids = get_allowed_store_ids()
+    allowed_ids_ignore = get_allowed_store_ids(ignore_active=True)
+    stores_info = []
+    for sid in allowed_ids_ignore:
+        s = Store.query.get(sid)
+        stores_info.append({'id': sid, 'name': s.name if s else '?', 'is_active_selected': sid in allowed_ids})
+    tenant = Tenant.query.get(user.tenant_id) if user.tenant_id else None
+    return jsonify({
+        'user_id':    user.id,
+        'username':   user.username,
+        'role':       user.role,
+        'tenant_id':  user.tenant_id,
+        'tenant_name': tenant.name if tenant else None,
+        'tenant_plan': tenant.plan if tenant else None,
+        'store_id':   user.store_id,
+        'active_store_id': session.get('active_store_id'),
+        'allowed_store_ids': allowed_ids,
+        'all_store_ids': allowed_ids_ignore,
+        'stores': stores_info,
+        'STORE_ID_template': allowed_ids[0] if allowed_ids else None,
+    })
+
+
 @app.route("/api/admin/data-audit")
 @super_admin_required
 def api_admin_data_audit():
