@@ -71,9 +71,28 @@ def inject_ui_context():
             return False
         t = Tenant.query.get(u.tenant_id)
         return bool(t and t.plan == 'premium')
+
+    def _sidebar_stores():
+        """サイドバー用店舗リスト（店舗切替セレクト・本部リンク判定に使用）
+        ignore_active=True で全店舗を返す（切替中の店舗に関わらず全店表示）"""
+        uid = session.get('app_user_id')
+        if not uid:
+            return []
+        u = AppUser.query.get(uid)
+        if not u or u.role == 'super_admin':
+            return []
+        if u.role == 'owner':
+            return Store.query.filter_by(tenant_id=u.tenant_id, is_active=True).all()
+        # store_manager / staff: 自分の店舗のみ
+        if u.store_id:
+            s = Store.query.get(u.store_id)
+            return [s] if s and s.is_active else []
+        return []
+
     return {
         'is_premium': _is_premium(),
         'current_role': session.get('app_user_role', ''),
+        'sidebar_stores': _sidebar_stores(),
     }
 
 
@@ -1624,8 +1643,11 @@ def api_kpi_summary():
     roi_now  = round(rev_now  / ad_now  * 100, 1) if ad_now  > 0 else 0
     roi_prev = round(rev_prev / ad_prev * 100, 1) if ad_prev > 0 else 0
 
-    # 未対応反響
-    unhandled = Lead.query.filter_by(status='未対応').count()
+    # 未対応反響（テナント分離：自分の店舗のみカウント）
+    unhandled = Lead.query.filter(
+        Lead.store_id.in_(allowed_ids),
+        Lead.status == '未対応'
+    ).count()
 
     # 着地予測（今月日割り）
     today_day = date.today().day
@@ -1815,11 +1837,13 @@ def api_kpi_staff():
     """スタッフ別KPIデータを返す"""
     year  = request.args.get('year',  type=int) or current_ym()[0]
     month = request.args.get('month', type=int) or current_ym()[1]
-    store_id = request.args.get('store_id', type=int)
+    store_id    = request.args.get('store_id', type=int)
+    allowed_ids = get_allowed_store_ids()
 
-    query = SalesKPI.query.filter_by(year=year, month=month)
-    if store_id:
-        query = query.filter_by(store_id=store_id)
+    # テナント分離: 許可されたstore_idのみ
+    query = SalesKPI.query.filter_by(year=year, month=month).filter(SalesKPI.store_id.in_(allowed_ids))
+    if store_id and store_id in allowed_ids:
+        query = query.filter(SalesKPI.store_id == store_id)
     kpis = query.all()
 
     result = []
@@ -1855,13 +1879,15 @@ def api_kpi_staff():
 @app.route("/api/leads/summary")
 def api_leads_summary():
     """反響サマリを返す（媒体別・ステータス別）"""
-    store_id = request.args.get('store_id', type=int)
-    year     = request.args.get('year',  type=int)
-    month    = request.args.get('month', type=int)
+    store_id  = request.args.get('store_id', type=int)
+    year      = request.args.get('year',  type=int)
+    month     = request.args.get('month', type=int)
+    allowed_ids = get_allowed_store_ids()
 
-    query = Lead.query
-    if store_id:
-        query = query.filter_by(store_id=store_id)
+    # テナント分離: 許可されたstore_idのみ
+    query = Lead.query.filter(Lead.store_id.in_(allowed_ids))
+    if store_id and store_id in allowed_ids:
+        query = query.filter(Lead.store_id == store_id)
     if year and month:
         start = datetime(year, month, 1)
         if month == 12:
@@ -2234,13 +2260,15 @@ def _get_ad_items(store_id, y, m, pl=None):
 @app.route("/api/pl/summary")
 def api_pl_summary():
     """PLサマリを返す（店舗別・月次）"""
-    store_id = request.args.get('store_id', type=int)
-    year     = request.args.get('year',  type=int) or current_ym()[0]
-    month    = request.args.get('month', type=int) or current_ym()[1]
+    store_id    = request.args.get('store_id', type=int)
+    year        = request.args.get('year',  type=int) or current_ym()[0]
+    month       = request.args.get('month', type=int) or current_ym()[1]
+    allowed_ids = get_allowed_store_ids()
 
-    query = PLRecord.query.filter_by(year=year, month=month)
-    if store_id:
-        query = query.filter_by(store_id=store_id)
+    # テナント分離: 許可されたstore_idのみ
+    query = PLRecord.query.filter_by(year=year, month=month).filter(PLRecord.store_id.in_(allowed_ids))
+    if store_id and store_id in allowed_ids:
+        query = query.filter(PLRecord.store_id == store_id)
     pls = query.all()
 
     result = []
@@ -2378,7 +2406,13 @@ def api_pl_prev_month_data():
     """前月の固定費・PLデータを返す（新規入力時の自動入力用）"""
     year  = request.args.get('year',  type=int) or current_ym()[0]
     month = request.args.get('month', type=int) or current_ym()[1]
-    store_id = request.args.get('store_id', type=int) or 1
+    allowed_ids = get_allowed_store_ids()
+    store_id = request.args.get('store_id', type=int)
+    # テナント分離: store_idが未指定または許可外なら先頭の許可店舗を使用
+    if not store_id or store_id not in allowed_ids:
+        store_id = allowed_ids[0] if allowed_ids else None
+    if not store_id:
+        return jsonify({})
 
     # 前月
     pm = month - 1 if month > 1 else 12
@@ -4478,9 +4512,8 @@ def headquarters_dashboard():
         return redirect(url_for('app_login'))
     if cur_user.role == 'staff':
         return redirect(url_for('sales_management'))
-    if not is_premium_user():
-        return redirect(url_for('executive_dashboard'))
-    stores = get_allowed_stores(ignore_active=True)   # HQは全店舗
+    # プレミアム限定を解除: owner / store_manager 全員が本部ダッシュボードを利用可能
+    stores = get_allowed_stores(ignore_active=True)   # HQは全店舗（active_store_id無視）
     year, month = current_ym()
     return render_template("headquarters_dashboard.html",
                            stores=stores, year=year, month=month,
@@ -4489,10 +4522,9 @@ def headquarters_dashboard():
 
 @app.route("/api/hq/summary")
 @login_required
+@block_super_admin
 def api_hq_summary():
     """全店舗KPIサマリー（本部ダッシュボード用）"""
-    if not is_premium_user():
-        return jsonify({'error': 'premium required'}), 403
     year  = request.args.get('year',  type=int) or date.today().year
     month = request.args.get('month', type=int) or date.today().month
     store_ids = get_allowed_store_ids(ignore_active=True)
@@ -4568,10 +4600,9 @@ def api_hq_summary():
 
 @app.route("/api/hq/rankings")
 @login_required
+@block_super_admin
 def api_hq_rankings():
     """店舗別ランキング（metric: sales / apps / close_rate）"""
-    if not is_premium_user():
-        return jsonify({'error': 'premium required'}), 403
     year   = request.args.get('year',   type=int) or date.today().year
     month  = request.args.get('month',  type=int) or date.today().month
     metric = request.args.get('metric', 'sales')
@@ -4600,10 +4631,9 @@ def api_hq_rankings():
 
 @app.route("/api/hq/store-comparison")
 @login_required
+@block_super_admin
 def api_hq_store_comparison():
     """店舗別月次推移（グラフ用）"""
-    if not is_premium_user():
-        return jsonify({'error': 'premium required'}), 403
     from_param = request.args.get('from')
     to_param   = request.args.get('to')
     metric     = request.args.get('metric', 'sales')

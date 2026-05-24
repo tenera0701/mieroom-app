@@ -183,15 +183,15 @@
          ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ #}
       {% else %}
 
-        {# プレミアム owner: 店舗切替セレクト（2店舗以上） #}
-        {% if is_premium and role == 'owner' and stores is defined and stores|length > 1 %}
+        {# owner: 店舗切替セレクト（2店舗以上ある場合） #}
+        {% if role == 'owner' and sidebar_stores|length > 1 %}
         <div style="padding:6px 12px 4px;">
           <div style="font-size:10px;color:#86efac;font-weight:600;letter-spacing:0.05em;margin-bottom:4px;">店舗切替</div>
           <select id="store-switcher"
             onchange="switchStore(this.value)"
             style="width:100%;background:#166534;color:#dcfce7;border:1px solid #166534;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer;">
             <option value="">全店舗</option>
-            {% for s in stores %}
+            {% for s in sidebar_stores %}
             <option value="{{ s.id }}"
               {% if session.get('active_store_id') == s.id %}selected{% endif %}>
               {{ s.name }}
@@ -203,8 +203,8 @@
 
         <div class="nav-section-label">メイン管理</div>
 
-        {# プレミアム owner: 本部ダッシュボード #}
-        {% if is_premium and role == 'owner' %}
+        {# owner: 本部ダッシュボード（全owner対象） #}
+        {% if role == 'owner' %}
         <a href="/headquarters"
            class="nav-item {% if request.path == '/headquarters' %}active{% endif %}">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -212,7 +212,6 @@
               d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
           </svg>
           <span class="nav-label">本部ダッシュボード</span>
-          <span style="margin-left:auto;font-size:9px;background:#f59e0b;color:#fff;border-radius:3px;padding:1px 4px;font-weight:700;">PRO</span>
         </a>
         {% endif %}
 
