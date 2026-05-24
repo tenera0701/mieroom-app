@@ -1175,6 +1175,23 @@ def get_allowed_stores(ignore_active=False):
         return []
 
 
+def safe_store_id(requested_id=None):
+    """テナント分離ヘルパー: リクエストの store_id を検証し安全な値を返す。
+    - requested_id が許可範囲内なら そのまま返す
+    - 無効 / 未指定なら active_store_id → 許可店舗の先頭 の順でフォールバック
+    - 許可店舗がゼロなら None を返す（呼び出し側で 403 を返すこと）
+    """
+    allowed = get_allowed_store_ids()
+    if not allowed:
+        return None
+    if requested_id and int(requested_id) in allowed:
+        return int(requested_id)
+    active = session.get('active_store_id')
+    if active and active in allowed:
+        return active
+    return allowed[0]
+
+
 # ── 既存ルーティング ──────────────────────────────────────
 
 @app.route("/")
@@ -1505,12 +1522,15 @@ def leads_add():
 def api_leads_add():
     """反響追加API（JSON/フォーム両対応）"""
     data = request.get_json() or request.form
+    sid = safe_store_id(data.get('store_id'))
+    if not sid:
+        return jsonify({'error': 'unauthorized'}), 403
     lead = Lead(
         source=data.get('source') or data.get('media', ''),
         received_at=datetime.now(),
         status=data.get('status', '未対応'),
         assigned_staff_id=data.get('assigned_staff_id') or data.get('assignee_id') or None,
-        store_id=data.get('store_id') or 1,
+        store_id=sid,
         customer_name=data.get('customer_name', ''),
         note=data.get('note') or data.get('memo', ''),
         line_added=str(data.get('line_added', '0')) in ('1', 'true', 'True', 'on'),
@@ -1983,7 +2003,9 @@ def api_leads_monthly_stats():
     cy, cm = current_ym()
     year  = request.args.get('year',  type=int) or cy
     month = request.args.get('month', type=int) or cm
-    store_id = request.args.get('store_id', type=int) or 1
+    store_id = safe_store_id(request.args.get('store_id', type=int))
+    if not store_id:
+        return jsonify({'stats': [], 'totals': {}, 'trend': []}), 200
 
     stats = LeadMediaStat.query.filter_by(store_id=store_id, year=year, month=month).all()
 
@@ -2095,7 +2117,7 @@ def api_leads_monthly_stats():
 @app.route("/api/leads/trend")
 def api_leads_trend():
     """反響月次トレンドを返す（from/toパラメータで期間指定可、デフォルト直近6ヶ月）"""
-    store_id   = request.args.get('store_id', type=int) or 1
+    store_id   = safe_store_id(request.args.get('store_id', type=int))
     from_param = request.args.get('from')
     to_param   = request.args.get('to')
     today = date.today()
@@ -2134,7 +2156,9 @@ def api_leads_monthly_stats_input():
     data = request.get_json() or request.form
     year  = int(data.get('year', current_ym()[0]))
     month = int(data.get('month', current_ym()[1]))
-    store_id = int(data.get('store_id', 1))
+    store_id = safe_store_id(data.get('store_id'))
+    if not store_id:
+        return jsonify({'error': 'unauthorized'}), 403
     media = data.get('media', '').strip()
     if not media:
         return jsonify({'error': '媒体名は必須です'}), 400
@@ -2500,7 +2524,9 @@ def api_kpi_input():
     """KPIデータを入力・更新する"""
     data = request.get_json() or request.form
     staff_id = int(data.get('staff_id', 0))
-    store_id = int(data.get('store_id', 0))
+    store_id = safe_store_id(data.get('store_id'))
+    if not store_id:
+        return jsonify({'error': 'unauthorized'}), 403
     year     = int(data.get('year', current_ym()[0]))
     month    = int(data.get('month', current_ym()[1]))
 
@@ -2570,7 +2596,9 @@ def _apply_pl_fields(pl, data):
 def api_pl_input():
     """PLデータを入力・更新する"""
     data = request.get_json() or request.form
-    store_id = int(data.get('store_id', 0) or 1)
+    store_id = safe_store_id(data.get('store_id'))
+    if not store_id:
+        return jsonify({'error': 'unauthorized'}), 403
     year     = int(data.get('year', current_ym()[0]))
     month    = int(data.get('month', current_ym()[1]))
 
@@ -2639,7 +2667,9 @@ def api_pl_input():
 def api_ad_input():
     """広告費を入力・更新する"""
     data = request.get_json() or request.form
-    store_id = int(data.get('store_id', 0))
+    store_id = safe_store_id(data.get('store_id'))
+    if not store_id:
+        return jsonify({'error': 'unauthorized'}), 403
     source   = data.get('source', '')
     year     = int(data.get('year', current_ym()[0]))
     month    = int(data.get('month', current_ym()[1]))
