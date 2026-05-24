@@ -575,18 +575,17 @@
           <tr>
             <th onclick="sortTable(0)">氏名</th>
             <th onclick="sortTable(1)">反響数</th>
-            <th onclick="sortTable(2)">来店数</th>
-            <th onclick="sortTable(3)">内見数</th>
-            <th onclick="sortTable(4)">申込数</th>
-            <th onclick="sortTable(5)">契約数</th>
-            <th onclick="sortTable(6)">来店率</th>
-            <th onclick="sortTable(7)">申込率</th>
-            <th onclick="sortTable(8)">契約率</th>
-            <th onclick="sortTable(9)">売上(万円)</th>
-            <th onclick="sortTable(10)">目標(万円)</th>
-            <th onclick="sortTable(11)">達成率</th>
-            <th onclick="sortTable(12)">オプション(万円)</th>
-            <th onclick="sortTable(13)">前月比</th>
+            <th onclick="sortTable(2)">接客数</th>
+            <th onclick="sortTable(3)">申込数</th>
+            <th onclick="sortTable(4)">契約数</th>
+            <th onclick="sortTable(5)">接客率</th>
+            <th onclick="sortTable(6)">申込率</th>
+            <th onclick="sortTable(7)">契約率</th>
+            <th onclick="sortTable(8)">売上(万円)</th>
+            <th onclick="sortTable(9)">目標(万円)</th>
+            <th onclick="sortTable(10)">達成率</th>
+            <th onclick="sortTable(11)">オプション(万円)</th>
+            <th onclick="sortTable(12)">前月比</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -795,35 +794,31 @@
           </div>
           <div class="form-group">
             <label>反響数</label>
-            <input type="number" name="responses" min="0" placeholder="0" value="0">
+            <input type="number" name="responses" min="0" placeholder="例: 10">
           </div>
           <div class="form-group">
-            <label>来店数</label>
-            <input type="number" name="visits" min="0" placeholder="0" value="0">
-          </div>
-          <div class="form-group">
-            <label>内見数</label>
-            <input type="number" name="tours" min="0" placeholder="0" value="0">
+            <label>接客数</label>
+            <input type="number" name="visits" min="0" placeholder="例: 5">
           </div>
           <div class="form-group">
             <label>申込数</label>
-            <input type="number" name="applications" min="0" placeholder="0" value="0">
+            <input type="number" name="applications" min="0" placeholder="例: 3">
           </div>
           <div class="form-group">
             <label>契約数</label>
-            <input type="number" name="contracts" min="0" placeholder="0" value="0">
+            <input type="number" name="contracts" min="0" placeholder="例: 2">
           </div>
           <div class="form-group">
             <label>キャンセル数</label>
-            <input type="number" name="cancels" min="0" placeholder="0" value="0">
+            <input type="number" name="cancels" min="0" placeholder="例: 1">
           </div>
           <div class="form-group">
             <label>オプション売上（円）</label>
-            <input type="number" name="option_revenue" min="0" step="1" placeholder="0" value="0">
+            <input type="number" name="option_revenue" min="0" step="1" placeholder="例: 50000">
           </div>
           <div class="form-group">
             <label>売上見込み（円）</label>
-            <input type="number" name="estimated_sales" min="0" step="1" placeholder="0" value="0">
+            <input type="number" name="estimated_sales" min="0" step="1" placeholder="例: 300000">
           </div>
         </div>
         <p style="font-size:12px;color:#9ca3af;margin-top:10px;">※売上・火災保険・ライフライン・引越しは申込一覧から自動反映されます</p>
@@ -1065,7 +1060,7 @@
 =================================================== */
 const IS_MANAGER   = {{ 'true' if is_manager else 'false' }};
 const CUR_STAFF_ID = {{ cur_staff_id if cur_staff_id else 'null' }};
-const STORE_ID     = {{ store_id }};
+const STORE_ID     = {{ store_id or 0 }};
 let appData = [];
 let statusColors = {};
 let staffData = [];
@@ -1170,7 +1165,7 @@ async function loadStaffKpi(year, month) {
   document.getElementById('staff-table-wrap').style.display = 'none';
 
   try {
-    const params = new URLSearchParams({ year, month });
+    const params = new URLSearchParams({ year, month, store_id: STORE_ID });
     const res = await fetch(`/api/kpi/staff?${params}`);
     if (!res.ok) throw new Error('API error');
     const json = await res.json();
@@ -1179,8 +1174,8 @@ async function loadStaffKpi(year, month) {
       ...d,
       name:         d.staff_name || d.name || '',
       responses:    d.inquiries || 0,
-      visits:       d.store_visits || 0,
-      tours:        d.viewings || 0,
+      visits:       (d.store_visits || 0) + (d.viewings || 0),  // 接客数 = 来店数 + 内見数
+      tours:        0,
       applications: d.applications || 0,
       contracts:    d.contracts || 0,
       revenue:      d.sales_amount || 0,
@@ -1225,11 +1220,11 @@ function resetSalesChartRange() {
 async function loadMonthlyKpi(from, to) {
   try {
     const staffId = document.getElementById('filter-staff')?.value;
-    const params  = new URLSearchParams();
+    const params  = new URLSearchParams({ store_id: STORE_ID });
     if (from)    params.set('from',     from);
     if (to)      params.set('to',       to);
     if (staffId) params.set('staff_id', staffId);
-    const url = '/api/kpi/monthly' + (params.toString() ? '?' + params.toString() : '');
+    const url = '/api/kpi/monthly?' + params.toString();
     const res = await fetch(url);
     if (!res.ok) throw new Error('API error');
     const rawData = await res.json();
@@ -1285,14 +1280,14 @@ function renderStaffTable(data) {
   expandedRow = null;
 
   if (!data || !data.length) {
-    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center; padding:40px; color:var(--text-muted); font-size:14px;">データがありません</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:40px; color:var(--text-muted); font-size:14px;">データがありません</td></tr>';
     return;
   }
 
   data.forEach((s, idx) => {
-    const visitRate = pct(s.visits, s.responses);
-    const appRate   = pct(s.applications, s.visits);
-    const closeRate = pct(s.contracts, s.applications);
+    const visitRate = pct(s.visits, s.responses);   // 接客率
+    const appRate   = pct(s.applications, s.visits); // 申込率
+    const closeRate = pct(s.contracts, s.applications); // 契約率
     const unitPrice = s.contracts ? (s.revenue / s.contracts).toFixed(1) : '-';
 
     const target = s.target_sales || 0;
@@ -1309,7 +1304,6 @@ function renderStaffTable(data) {
       <td>${s.name}</td>
       <td>${s.responses}</td>
       <td>${s.visits}</td>
-      <td>${s.tours}</td>
       <td>${s.applications}</td>
       <td>${s.contracts}</td>
       <td class="${colorClass(visitRate, 70, 50)}">${visitRate}%</td>
@@ -1627,14 +1621,15 @@ function editKpi(kpiId, staffObj) {
   // 数値を埋める
   const form = document.getElementById('kpi-form');
   form.querySelector('[name="target_sales"]').value    = staffObj.target_sales || 0;
-  form.querySelector('[name="responses"]').value       = staffObj.responses    || staffObj.inquiries || 0;
-  form.querySelector('[name="visits"]').value          = staffObj.visits       || staffObj.store_visits || 0;
-  form.querySelector('[name="tours"]').value           = staffObj.tours        || staffObj.viewings || 0;
-  form.querySelector('[name="applications"]').value    = staffObj.applications || 0;
-  form.querySelector('[name="contracts"]').value       = staffObj.contracts    || 0;
-  form.querySelector('[name="cancels"]').value         = staffObj.cancellations|| 0;
-  form.querySelector('[name="option_revenue"]').value  = staffObj.option       || staffObj.option_sales || 0;
-  form.querySelector('[name="estimated_sales"]').value = staffObj.estimated_sales || 0;
+  form.querySelector('[name="responses"]').value       = staffObj.responses    || staffObj.inquiries || '';
+  // 接客数 = 来店数 + 内見数
+  const editVisits = (staffObj.visits || staffObj.store_visits || 0) + (staffObj.tours || staffObj.viewings || 0);
+  form.querySelector('[name="visits"]').value          = editVisits || '';
+  form.querySelector('[name="applications"]').value    = staffObj.applications || '';
+  form.querySelector('[name="contracts"]').value       = staffObj.contracts    || '';
+  form.querySelector('[name="cancels"]').value         = staffObj.cancellations|| '';
+  form.querySelector('[name="option_revenue"]').value  = staffObj.option       || staffObj.option_sales || '';
+  form.querySelector('[name="estimated_sales"]').value = staffObj.estimated_sales || '';
 
   document.getElementById('kpi-modal').classList.add('active');
 }
@@ -1660,8 +1655,8 @@ async function submitKpi() {
   const payload = {
     store_id:     STORE_ID,
     inquiries:    parseInt(data.responses) || 0,
-    store_visits: parseInt(data.visits) || 0,
-    viewings:     parseInt(data.tours) || 0,
+    store_visits: parseInt(data.visits) || 0,  // 接客数
+    viewings:     0,                            // 内見数廃止（接客数に統合）
     applications: parseInt(data.applications) || 0,
     contracts:    parseInt(data.contracts) || 0,
     cancellations:parseInt(data.cancels) || 0,
