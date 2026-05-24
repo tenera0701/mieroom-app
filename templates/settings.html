@@ -272,6 +272,18 @@
         <label>氏名 <span style="color:#ef4444;">*</span></label>
         <input type="text" id="staff-name" placeholder="例：山田 太郎">
       </div>
+      {% if stores|length > 1 %}
+      <div class="form-group">
+        <label>所属店舗</label>
+        <select id="staff-store-id">
+          {% for s in stores %}
+          <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% else %}
+      <input type="hidden" id="staff-store-id" value="{{ stores[0].id if stores else '' }}">
+      {% endif %}
       <div class="form-group">
         <label>役職</label>
         <select id="staff-role">
@@ -316,6 +328,18 @@
           <option value="owner">オーナー</option>
         </select>
       </div>
+      {% if stores|length > 1 %}
+      <div class="form-group">
+        <label>所属店舗</label>
+        <select id="acc-store-id">
+          {% for s in stores %}
+          <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% else %}
+      <input type="hidden" id="acc-store-id" value="{{ stores[0].id if stores else '' }}">
+      {% endif %}
       <div class="form-group">
         <label>担当スタッフ</label>
         <select id="acc-staff-id">
@@ -396,10 +420,12 @@ async function saveStaff() {
   const editId = document.getElementById('edit-staff-id').value;
   const name = document.getElementById('staff-name').value.trim();
   if (!name) { showAlert('氏名を入力してください', 'error'); return; }
+  const storeEl = document.getElementById('staff-store-id');
   const payload = {
     name,
     role: document.getElementById('staff-role').value,
     hired_at: document.getElementById('staff-hired').value || null,
+    store_id: storeEl ? parseInt(storeEl.value) || null : null,
   };
   const url = editId ? `/api/settings/staff/${editId}` : '/api/settings/staff/add';
   const method = editId ? 'PUT' : 'POST';
@@ -447,11 +473,13 @@ async function saveAccount() {
   const username = document.getElementById('acc-username').value.trim();
   const password = document.getElementById('acc-password').value;
   if (!username || !password) { showAlert('ユーザー名とパスワードは必須です', 'error'); return; }
+  const accStoreEl = document.getElementById('acc-store-id');
   const payload = {
     username,
     password,
     role: document.getElementById('acc-role').value,
     staff_id: document.getElementById('acc-staff-id').value || null,
+    store_id: accStoreEl ? parseInt(accStoreEl.value) || null : null,
   };
   try {
     const res = await fetch('/api/settings/account/add', {

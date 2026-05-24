@@ -1473,8 +1473,8 @@ def sales_management():
     cur_role = cur_user.role if cur_user else 'staff'
     cur_staff_id = cur_user.staff_id if cur_user else None
     is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
-    store_id = allowed_ids[0] if allowed_ids else 1
-    media_types = MediaType.query.filter_by(store_id=store_id, is_active=True).order_by(MediaType.sort_order, MediaType.name).all()
+    store_id = allowed_ids[0] if allowed_ids else None
+    media_types = MediaType.query.filter_by(store_id=store_id, is_active=True).order_by(MediaType.sort_order, MediaType.name).all() if store_id else []
     return render_template("sales_management.html", stores=stores, staff_list=staff_list,
                            year=year, month=month, now=datetime.now(),
                            cur_role=cur_role, cur_staff_id=cur_staff_id,
@@ -3122,10 +3122,13 @@ def settings():
     stores     = get_allowed_stores(ignore_active=True)
     allowed_ids = [s.id for s in stores]
     staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all() if allowed_ids else Staff.query.filter_by(is_active=True).all()
-    # アカウント一覧はオーナーのみ表示
+    # アカウント一覧はオーナーのみ表示（自テナントのみ）
     user = AppUser.query.get(session['app_user_id'])
     is_owner = user and user.role == 'owner'
-    accounts = AppUser.query.filter_by(is_active=True).all() if is_owner else []
+    if is_owner and user.tenant_id:
+        accounts = AppUser.query.filter_by(is_active=True, tenant_id=user.tenant_id).all()
+    else:
+        accounts = []
     return render_template("settings.html",
                            stores=stores, staff_list=staff_list, accounts=accounts,
                            is_owner=is_owner,
@@ -3191,15 +3194,22 @@ def api_settings_staff_delete(staff_id):
 @app.route("/api/settings/account/add", methods=["POST"])
 @owner_required
 def api_settings_account_add():
-    """アカウント追加"""
+    """アカウント追加（オーナーの自テナントに所属させる）"""
     data = request.get_json() or request.form
+    cur = AppUser.query.get(session['app_user_id'])
+    if not cur or not cur.tenant_id:
+        return jsonify({'status': 'error', 'message': 'テナント情報が取得できません'}), 403
     if AppUser.query.filter_by(username=data.get('username', ''), is_active=True).first():
         return jsonify({'status': 'error', 'message': 'そのユーザー名は既に使用されています'}), 400
+    # store_id: リクエストで指定されていればそれを使い、なければオーナーの最初の店舗
+    sid = safe_store_id(data.get('store_id'))
     user = AppUser(
+        tenant_id=cur.tenant_id,
         username=data.get('username', ''),
         password_hash=generate_password_hash(data.get('password', '')),
         role=data.get('role', 'staff'),
         staff_id=int(data.get('staff_id')) if data.get('staff_id') else None,
+        store_id=sid,
         is_active=True,
     )
     db.session.add(user)
