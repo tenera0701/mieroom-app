@@ -1,0 +1,310 @@
+{% extends "mgmt_base.html" %}
+{% block title %}テナント管理{% endblock %}
+{% block content %}
+<div class="p-6 max-w-6xl mx-auto">
+
+  <!-- ヘッダー -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-800">テナント管理</h1>
+      <p class="text-sm text-gray-500 mt-1">契約会社の追加・編集・状態管理</p>
+    </div>
+    <button onclick="openCreateModal()"
+      class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+      </svg>
+      新規テナント追加
+    </button>
+  </div>
+
+  <!-- テナント一覧カード -->
+  <div id="tenant-list" class="grid gap-4">
+    <div class="text-center py-10 text-gray-400">読み込み中...</div>
+  </div>
+</div>
+
+<!-- 新規テナント作成モーダル -->
+<div id="create-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-lg">
+    <div class="p-6 border-b">
+      <h2 class="text-lg font-bold text-gray-800">新規テナント追加</h2>
+    </div>
+    <div class="p-6 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">会社名 <span class="text-red-500">*</span></label>
+        <input id="c-name" type="text" placeholder="例：株式会社サンプル不動産"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">プラン</label>
+        <select id="c-plan" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+          <option value="standard">スタンダード</option>
+          <option value="premium">プレミアム</option>
+        </select>
+      </div>
+      <hr>
+      <p class="text-xs text-gray-500">オーナー（CEO）アカウントを同時に作成します</p>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">オーナーユーザー名 <span class="text-red-500">*</span></label>
+        <input id="c-owner-username" type="text" placeholder="例：sample_owner"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">オーナーメールアドレス</label>
+        <input id="c-owner-email" type="email" placeholder="例：owner@sample.co.jp"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">初期パスワード <span class="text-red-500">*</span></label>
+        <input id="c-owner-password" type="password" placeholder="8文字以上推奨"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+      </div>
+      <div id="c-error" class="text-red-500 text-sm hidden"></div>
+    </div>
+    <div class="p-6 border-t flex gap-3 justify-end">
+      <button onclick="closeCreateModal()"
+        class="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">キャンセル</button>
+      <button onclick="createTenant()"
+        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium">作成</button>
+    </div>
+  </div>
+</div>
+
+<!-- 店舗追加モーダル -->
+<div id="store-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-md">
+    <div class="p-6 border-b">
+      <h2 class="text-lg font-bold text-gray-800">店舗追加</h2>
+      <p id="store-modal-tenant-name" class="text-sm text-gray-500 mt-1"></p>
+    </div>
+    <div class="p-6 space-y-4">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">店舗名 <span class="text-red-500">*</span></label>
+        <input id="s-name" type="text" placeholder="例：渋谷店"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+      </div>
+      <div id="s-error" class="text-red-500 text-sm hidden"></div>
+    </div>
+    <div class="p-6 border-t flex gap-3 justify-end">
+      <button onclick="closeStoreModal()"
+        class="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">キャンセル</button>
+      <button onclick="addStore()"
+        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- テナント編集モーダル -->
+<div id="edit-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-md">
+    <div class="p-6 border-b">
+      <h2 class="text-lg font-bold text-gray-800">テナント編集</h2>
+    </div>
+    <div class="p-6 space-y-4">
+      <input id="e-id" type="hidden">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">会社名</label>
+        <input id="e-name" type="text"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">プラン</label>
+        <select id="e-plan" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+          <option value="standard">スタンダード</option>
+          <option value="premium">プレミアム</option>
+        </select>
+      </div>
+      <div class="flex items-center gap-2">
+        <input id="e-active" type="checkbox" class="w-4 h-4 accent-green-600">
+        <label class="text-sm text-gray-700">有効</label>
+      </div>
+      <div id="e-error" class="text-red-500 text-sm hidden"></div>
+    </div>
+    <div class="p-6 border-t flex gap-3 justify-end">
+      <button onclick="closeEditModal()"
+        class="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">キャンセル</button>
+      <button onclick="updateTenant()"
+        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let tenants = [];
+let currentStoreTenantId = null;
+
+async function loadTenants() {
+  const res = await fetch('/api/tenants');
+  tenants = await res.json();
+  renderTenants();
+}
+
+function renderTenants() {
+  const el = document.getElementById('tenant-list');
+  if (!tenants.length) {
+    el.innerHTML = '<div class="text-center py-10 text-gray-400">テナントがありません</div>';
+    return;
+  }
+
+  el.innerHTML = tenants.map(t => `
+    <div class="bg-white rounded-xl shadow-sm border ${t.is_active ? '' : 'opacity-60'} overflow-hidden">
+      <div class="p-5 flex items-start justify-between gap-4">
+        <div class="flex items-start gap-4">
+          <div class="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
+            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-gray-800 text-lg">${escHtml(t.name)}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full ${t.plan === 'premium' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}">
+                ${t.plan === 'premium' ? 'プレミアム' : 'スタンダード'}
+              </span>
+              <span class="text-xs px-2 py-0.5 rounded-full ${t.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}">
+                ${t.is_active ? '有効' : '無効'}
+              </span>
+            </div>
+            <div class="text-sm text-gray-500 mt-1 flex flex-wrap gap-4">
+              <span>店舗数：<strong class="text-gray-700">${t.store_count}</strong></span>
+              <span>オーナー：<strong class="text-gray-700">${escHtml(t.owner_username || '未設定')}</strong>${t.owner_email ? ` (${escHtml(t.owner_email)})` : ''}</span>
+              <span>登録日：<strong class="text-gray-700">${t.created_at || '—'}</strong></span>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <button onclick="openStoreModal(${t.id}, '${escHtml(t.name)}')"
+            class="text-xs px-3 py-1.5 border border-green-500 text-green-700 rounded-lg hover:bg-green-50">
+            店舗追加
+          </button>
+          <button onclick="openEditModal(${t.id})"
+            class="text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50 text-gray-700">
+            編集
+          </button>
+          ${t.is_active ? `
+          <button onclick="deactivateTenant(${t.id})"
+            class="text-xs px-3 py-1.5 border border-red-300 text-red-600 rounded-lg hover:bg-red-50">
+            無効化
+          </button>` : `
+          <button onclick="activateTenant(${t.id})"
+            class="text-xs px-3 py-1.5 border border-green-300 text-green-600 rounded-lg hover:bg-green-50">
+            有効化
+          </button>`}
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// 新規作成
+function openCreateModal() {
+  document.getElementById('c-name').value = '';
+  document.getElementById('c-plan').value = 'standard';
+  document.getElementById('c-owner-username').value = '';
+  document.getElementById('c-owner-email').value = '';
+  document.getElementById('c-owner-password').value = '';
+  document.getElementById('c-error').classList.add('hidden');
+  document.getElementById('create-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('c-name').focus(), 100);
+}
+function closeCreateModal() {
+  document.getElementById('create-modal').classList.add('hidden');
+}
+
+async function createTenant() {
+  const errEl = document.getElementById('c-error');
+  errEl.classList.add('hidden');
+  const body = {
+    name: document.getElementById('c-name').value.trim(),
+    plan: document.getElementById('c-plan').value,
+    owner_username: document.getElementById('c-owner-username').value.trim(),
+    owner_email:    document.getElementById('c-owner-email').value.trim(),
+    owner_password: document.getElementById('c-owner-password').value,
+  };
+  if (!body.name) { errEl.textContent = '会社名を入力してください'; errEl.classList.remove('hidden'); return; }
+  if (!body.owner_username || !body.owner_password) {
+    errEl.textContent = 'オーナーのユーザー名とパスワードは必須です';
+    errEl.classList.remove('hidden'); return;
+  }
+  const res = await fetch('/api/tenants', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const json = await res.json();
+  if (!res.ok) { errEl.textContent = json.error || 'エラーが発生しました'; errEl.classList.remove('hidden'); return; }
+  closeCreateModal();
+  loadTenants();
+}
+
+// 店舗追加
+function openStoreModal(tid, tname) {
+  currentStoreTenantId = tid;
+  document.getElementById('s-name').value = '';
+  document.getElementById('s-error').classList.add('hidden');
+  document.getElementById('store-modal-tenant-name').textContent = tname;
+  document.getElementById('store-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('s-name').focus(), 100);
+}
+function closeStoreModal() { document.getElementById('store-modal').classList.add('hidden'); }
+
+async function addStore() {
+  const errEl = document.getElementById('s-error');
+  errEl.classList.add('hidden');
+  const name = document.getElementById('s-name').value.trim();
+  if (!name) { errEl.textContent = '店舗名を入力してください'; errEl.classList.remove('hidden'); return; }
+  const res = await fetch(`/api/tenants/${currentStoreTenantId}/stores`, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name})
+  });
+  const json = await res.json();
+  if (!res.ok) { errEl.textContent = json.error || 'エラーが発生しました'; errEl.classList.remove('hidden'); return; }
+  closeStoreModal();
+  loadTenants();
+}
+
+// テナント編集
+function openEditModal(tid) {
+  const t = tenants.find(x => x.id === tid);
+  if (!t) return;
+  document.getElementById('e-id').value = tid;
+  document.getElementById('e-name').value = t.name;
+  document.getElementById('e-plan').value = t.plan;
+  document.getElementById('e-active').checked = t.is_active;
+  document.getElementById('e-error').classList.add('hidden');
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+function closeEditModal() { document.getElementById('edit-modal').classList.add('hidden'); }
+
+async function updateTenant() {
+  const errEl = document.getElementById('e-error');
+  errEl.classList.add('hidden');
+  const tid = document.getElementById('e-id').value;
+  const body = {
+    name: document.getElementById('e-name').value.trim(),
+    plan: document.getElementById('e-plan').value,
+    is_active: document.getElementById('e-active').checked,
+  };
+  if (!body.name) { errEl.textContent = '会社名を入力してください'; errEl.classList.remove('hidden'); return; }
+  const res = await fetch(`/api/tenants/${tid}`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  if (!res.ok) { const j = await res.json(); errEl.textContent = j.error || 'エラー'; errEl.classList.remove('hidden'); return; }
+  closeEditModal();
+  loadTenants();
+}
+
+async function deactivateTenant(tid) {
+  if (!confirm('このテナントを無効化しますか？')) return;
+  await fetch(`/api/tenants/${tid}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({is_active: false}) });
+  loadTenants();
+}
+async function activateTenant(tid) {
+  await fetch(`/api/tenants/${tid}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({is_active: true}) });
+  loadTenants();
+}
+
+document.addEventListener('DOMContentLoaded', loadTenants);
+</script>
+{% endblock %}

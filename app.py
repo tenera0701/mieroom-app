@@ -37,6 +37,18 @@ _IS_POSTGRES = bool(_db_url)
 db = SQLAlchemy(app)
 
 
+@app.before_request
+def sync_session_role():
+    """セッションのロールをDBと同期（再ログイン不要でロール変更を反映）"""
+    uid = session.get('app_user_id')
+    if uid:
+        user = AppUser.query.get(uid)
+        if user and user.is_active:
+            session['app_user_role'] = user.role
+        elif user and not user.is_active:
+            session.clear()
+
+
 @app.after_request
 def add_no_cache(response):
     """HTMLページのブラウザキャッシュを無効化"""
@@ -82,10 +94,21 @@ class AiHistory(db.Model):
 
 # ── 幹部向け管理ツール：追加モデル ────────────────────────
 
+class Tenant(db.Model):
+    """テナント（契約会社）マスタ — マルチSaaS用"""
+    __tablename__ = 'tenant'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)       # 会社名
+    plan = db.Column(db.String(20), default='standard')   # standard / premium
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class Store(db.Model):
     """店舗マスタ"""
     __tablename__ = 'store'
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)
     name = db.Column(db.String(100), nullable=False)
     # 月次固定費（円）
     rent = db.Column(db.Float, default=0)           # 家賃
@@ -126,6 +149,7 @@ class SalesKPI(db.Model):
     sales_amount = db.Column(db.Float, default=0)     # 売上（円）
     option_sales = db.Column(db.Float, default=0)     # オプション売上（円）
     estimated_sales = db.Column(db.Float, default=0)     # 売上見込み（円）
+    target_sales = db.Column(db.Float, default=0)        # 月次目標売上（円）
     fire_insurance_count = db.Column(db.Integer, default=0)  # 火災保険件数
     lifeline_count = db.Column(db.Integer, default=0)        # ライフライン件数
     moving_count = db.Column(db.Integer, default=0)          # 引越し件数
@@ -268,13 +292,111 @@ class AppUser(db.Model):
     """管理ツールログインユーザー"""
     __tablename__ = 'app_user'
     id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=True)  # super_admin=None
     username = db.Column(db.String(100), unique=True, nullable=False)
+    email = db.Column(db.String(200), nullable=True)
     password_hash = db.Column(db.String(256))
-    role = db.Column(db.String(20), default='staff')  # 'owner' or 'staff'
+    role = db.Column(db.String(20), default='staff')  # 'super_admin'/'owner'/'store_manager'/'staff'
     staff_id = db.Column(db.Integer, db.ForeignKey('staff.id'), nullable=True)
+    store_id = db.Column(db.Integer, db.ForeignKey('store.id'), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
+    # 権限フラグ（store_manager/staff向け）
+    can_view_accounting = db.Column(db.Boolean, default=True)
+    can_view_all_staff = db.Column(db.Boolean, default=True)
+    can_edit_kpi = db.Column(db.Boolean, default=True)
+    can_manage_uncollected = db.Column(db.Boolean, default=True)
+
+
+class PasswordResetToken(db.Model):
+    """パスワードリセットトークン"""
+    __tablename__ = 'password_reset_token'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('app_user.id'), nullable=False)
+    token = db.Column(db.String(256), unique=True, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class LeaveRecord(db.Model):
+    """有給・休暇管理"""
+    __tablename__ = 'leave_record'
+    id = db.Column(db.Integer, primary_key=True)
+    store_id  = db.Column(db.Integer, db.ForeignKey('store.id'), default=1)
+    staff_id  = db.Column(db.Integer, db.ForeignKey('staff.id'), nullable=False)
+    leave_date = db.Column(db.Date, nullable=False)
+    leave_type = db.Column(db.String(20), default='有給')  # 有給/半休/欠勤/遅刻/早退/その他
+    days       = db.Column(db.Float, default=1.0)          # 日数（0.5=半日）
+    memo       = db.Column(db.Text)
+    status     = db.Column(db.String(20), default='承認済')  # 申請中/承認済/却下
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class LeaveBalance(db.Model):
+    """年次有給日数管理"""
+    __tablename__ = 'leave_balance'
+    id = db.Column(db.Integer, primary_key=True)
+    store_id      = db.Column(db.Integer, db.ForeignKey('store.id'), default=1)
+    staff_id      = db.Column(db.Integer, db.ForeignKey('staff.id'), nullable=False)
+    year          = db.Column(db.Integer, nullable=False)
+    total_days    = db.Column(db.Float, default=10.0)    # 付与日数（法定またはカスタム）
+    carryover_days= db.Column(db.Float, default=0.0)     # 前年繰越日数
+    is_custom     = db.Column(db.Boolean, default=False) # True=手動設定 / False=法定自動計算
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class DailyTaskTemplate(db.Model):
+    """日報タスクテンプレート（店舗ごとにカスタム可能）"""
+    __tablename__ = 'daily_task_template'
+    id = db.Column(db.Integer, primary_key=True)
+    store_id = db.Column(db.Integer, db.ForeignKey('store.id'), default=1)
+    task_name = db.Column(db.String(200), nullable=False)
+    is_default = db.Column(db.Boolean, default=False)  # デフォルトタスク
+    is_active = db.Column(db.Boolean, default=True)
+    sort_order = db.Column(db.Integer, default=0)
+
+
+class DailyReport(db.Model):
+    """日報"""
+    __tablename__ = 'daily_report'
+    id = db.Column(db.Integer, primary_key=True)
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff.id'), nullable=False)
+    store_id = db.Column(db.Integer, db.ForeignKey('store.id'), default=1)
+    report_date = db.Column(db.Date, nullable=False)
+    # タスクチェック（固定）
+    prev_day_contact_done = db.Column(db.Boolean, default=False)   # 来店前日連絡
+    same_day_contact_done = db.Column(db.Boolean, default=False)   # 来店当日連絡
+    application_input_done = db.Column(db.Boolean, default=False)  # 申込管理入力
+    # 申込数
+    application_count = db.Column(db.Integer, default=0)
+    # 明日の接客予定
+    tomorrow_appointments = db.Column(db.Text)
+    # メモ
+    memo = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class DailyReportCustomer(db.Model):
+    """日報の接客記録"""
+    __tablename__ = 'daily_report_customer'
+    id = db.Column(db.Integer, primary_key=True)
+    report_id = db.Column(db.Integer, db.ForeignKey('daily_report.id'), nullable=False)
+    customer_name = db.Column(db.String(100), nullable=False)
+    applied = db.Column(db.Boolean, default=False)          # 申込になったか
+    no_apply_reason = db.Column(db.Text)                    # 申込にならなかった理由
+    improvement = db.Column(db.Text)                        # 改善案
+
+
+class DailyTaskCheck(db.Model):
+    """日報のカスタムタスクチェック"""
+    __tablename__ = 'daily_task_check'
+    id = db.Column(db.Integer, primary_key=True)
+    report_id = db.Column(db.Integer, db.ForeignKey('daily_report.id'), nullable=False)
+    task_id = db.Column(db.Integer, db.ForeignKey('daily_task_template.id'), nullable=False)
+    checked = db.Column(db.Boolean, default=False)
 
 
 class ContractRecord(db.Model):
@@ -316,6 +438,57 @@ class ContractRecord(db.Model):
     cancel_type = db.Column(db.String(50))
     source_file = db.Column(db.String(500))
     imported_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class MediaType(db.Model):
+    """媒体マスター（申込一覧のプルダウン用）"""
+    __tablename__ = 'media_type'
+    id = db.Column(db.Integer, primary_key=True)
+    store_id = db.Column(db.Integer, db.ForeignKey('store.id'), default=1)
+    name = db.Column(db.String(100), nullable=False)
+    sort_order = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+
+
+class StatusColor(db.Model):
+    """申込ステータス別行カラー設定"""
+    __tablename__ = 'status_color'
+    id = db.Column(db.Integer, primary_key=True)
+    store_id = db.Column(db.Integer, db.ForeignKey('store.id'), default=1)
+    status_key = db.Column(db.String(50), nullable=False)
+    bg_color = db.Column(db.String(20), default='#ffffff')
+    text_color = db.Column(db.String(20), default='#111827')
+
+
+class ApplicationRecord(db.Model):
+    """申込一覧表"""
+    __tablename__ = 'application_record'
+    id = db.Column(db.Integer, primary_key=True)
+    store_id = db.Column(db.Integer, db.ForeignKey('store.id'), nullable=False)
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff.id'), nullable=True)
+    application_date = db.Column(db.Date, nullable=False)
+    media = db.Column(db.String(100))
+    property_name = db.Column(db.String(200))
+    room_number = db.Column(db.String(50))
+    customer_name = db.Column(db.String(100))
+    rent = db.Column(db.Float, default=0)
+    contract_start_date = db.Column(db.Date)
+    ad_payment_date = db.Column(db.Date)
+    brokerage_fee = db.Column(db.Float, default=0)
+    ancillary_services = db.Column(db.Text)
+    ad_type = db.Column(db.String(10), default='amount')  # 'amount' or 'percent'
+    ad_amount = db.Column(db.Float, default=0)
+    lifeline = db.Column(db.Boolean, default=False)
+    moving = db.Column(db.Boolean, default=False)
+    fire_insurance = db.Column(db.Boolean, default=False)
+    status = db.Column(db.String(50), default='申込')   # 申込/契約/キャンセル/キャンセル振替
+    # 入金承認ワークフロー
+    ad_settled = db.Column(db.Boolean, default=False)          # 営業がAD入金報告
+    ad_approved = db.Column(db.Boolean, default=False)         # 店長がAD承認
+    brokerage_settled = db.Column(db.Boolean, default=False)   # 営業が仲介入金報告
+    brokerage_approved = db.Column(db.Boolean, default=False)  # 店長が仲介承認
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 # ── Excel関連ヘルパー ─────────────────────────────────────
@@ -554,40 +727,39 @@ def import_excel_file(file_path_or_stream, year, month, store_id=1):
 
 def init_store():
     """
-    Storeテーブルが空のときだけ「ルームピック」を1店舗、
-    スタッフ3名（スタッフ1〜3、役職：営業）を作成する。
-    KPI/Lead/PL等のダミーデータは作成しない。
+    Storeテーブルが空のときだけデフォルトテナント・店舗・スタッフを作成する。
     """
     if Store.query.count() > 0:
         return
 
-    print("初期店舗・スタッフを作成しています...")
+    print("初期テナント・店舗・スタッフを作成しています...")
 
-    store = Store(
-        name='ルームピック',
-        is_active=True,
-    )
+    # デフォルトテナント
+    tenant = Tenant.query.first()
+    if not tenant:
+        tenant = Tenant(name='ルームピック', plan='standard', is_active=True)
+        db.session.add(tenant)
+        db.session.flush()
+
+    store = Store(name='ルームピック', is_active=True, tenant_id=tenant.id)
     db.session.add(store)
-    db.session.flush()  # IDを確定させる
+    db.session.flush()
 
     for i in range(1, 4):
-        staff = Staff(
-            name=f'スタッフ{i}',
-            store_id=store.id,
-            role='営業',
-            is_active=True,
-        )
+        staff = Staff(name=f'スタッフ{i}', store_id=store.id, role='営業', is_active=True)
         db.session.add(staff)
 
     db.session.commit()
-    print("初期店舗・スタッフの作成が完了しました。")
+    init_default_media_types(store.id)
+    print("初期テナント・店舗・スタッフの作成が完了しました。")
 
     # 初期オーナーアカウント作成
     if AppUser.query.count() == 0:
         owner = AppUser(
             username='owner',
             password_hash=generate_password_hash('roompick2024'),
-            role='owner'
+            role='owner',
+            tenant_id=tenant.id,
         )
         db.session.add(owner)
         db.session.commit()
@@ -595,13 +767,47 @@ def init_store():
     return
 
 
+def ensure_super_admin():
+    """super_adminアカウントを確実に作成・維持する"""
+    sa = AppUser.query.filter_by(username='super_admin').first()
+    if not sa:
+        sa = AppUser(
+            username='super_admin',
+            email='teneramente0701@gmail.com',
+            password_hash=generate_password_hash('SuperAdmin2024!'),
+            role='super_admin',
+            tenant_id=None,
+            is_active=True,
+        )
+        db.session.add(sa)
+        db.session.commit()
+        print("super_adminアカウントを作成しました (username: super_admin)")
+    elif sa.role != 'super_admin':
+        sa.role = 'super_admin'
+        sa.tenant_id = None
+        sa.is_active = True
+        db.session.commit()
+        print("super_adminのロールを修正しました")
+
+
+def init_default_media_types(store_id):
+    """デフォルト媒体マスターを初期化（新規店舗時）"""
+    defaults = ['SUUMO', "HOME'S", 'at home', 'カナリー', 'スモッカ', 'HP', 'SNS', 'リピート', '紹介', '飛び込み', '直電話問合せ']
+    for i, name in enumerate(defaults):
+        if not MediaType.query.filter_by(store_id=store_id, name=name).first():
+            db.session.add(MediaType(store_id=store_id, name=name, sort_order=i, is_active=True))
+    db.session.commit()
+
+
 def ensure_owner_account():
     """AppUserが存在しない場合にオーナーアカウントを作成する"""
     if AppUser.query.count() == 0:
+        tenant = Tenant.query.first()
         owner = AppUser(
             username='owner',
             password_hash=generate_password_hash('roompick2024'),
-            role='owner'
+            role='owner',
+            tenant_id=tenant.id if tenant else None,
         )
         db.session.add(owner)
         db.session.commit()
@@ -679,6 +885,7 @@ def migrate_db():
     # sales_kpi テーブルの新カラムを追加
     sales_kpi_new_cols = [
         ('estimated_sales',      'FLOAT DEFAULT 0'),
+        ('target_sales',         'FLOAT DEFAULT 0'),
         ('fire_insurance_count', 'INTEGER DEFAULT 0'),
         ('lifeline_count',       'INTEGER DEFAULT 0'),
         ('moving_count',         'INTEGER DEFAULT 0'),
@@ -693,6 +900,17 @@ def migrate_db():
             except Exception as e:
                 print(f"  Skip sales_kpi.{col_name}: {e}")
 
+    # app_user / store へ tenant_id カラムを追加
+    for tbl in ['store', 'app_user']:
+        cursor.execute(f"PRAGMA table_info({tbl})")
+        cols = {r[1] for r in cursor.fetchall()}
+        if 'tenant_id' not in cols:
+            try:
+                cursor.execute(f"ALTER TABLE {tbl} ADD COLUMN tenant_id INTEGER")
+                print(f"  Added column {tbl}.tenant_id")
+            except Exception as e:
+                print(f"  Skip {tbl}.tenant_id: {e}")
+
     conn.commit()
     conn.close()
 
@@ -701,12 +919,14 @@ def migrate_postgres():
     """PostgreSQL用: 新カラムが存在しない場合のみALTER TABLEで追加"""
     try:
         with db.engine.connect() as conn:
-            # sales_kpi 新カラム
             new_cols = [
                 ("sales_kpi", "estimated_sales",      "FLOAT DEFAULT 0"),
+                ("sales_kpi", "target_sales",         "FLOAT DEFAULT 0"),
                 ("sales_kpi", "fire_insurance_count", "INTEGER DEFAULT 0"),
                 ("sales_kpi", "lifeline_count",       "INTEGER DEFAULT 0"),
                 ("sales_kpi", "moving_count",         "INTEGER DEFAULT 0"),
+                ("store",     "tenant_id",            "INTEGER"),
+                ("app_user",  "tenant_id",            "INTEGER"),
             ]
             for tbl, col, typedef in new_cols:
                 try:
@@ -720,6 +940,38 @@ def migrate_postgres():
         print(f"migrate_postgres error: {e}")
 
 
+def migrate_tenant_data():
+    """既存データをデフォルトテナントに割り当てる（初回マイグレーション用）"""
+    try:
+        # テナントがなければ作成
+        if Tenant.query.count() == 0:
+            t = Tenant(name='ルームピック', plan='standard', is_active=True)
+            db.session.add(t)
+            db.session.commit()
+
+        default_tenant = Tenant.query.first()
+
+        # tenant_idのないstoreを割り当て
+        for s in Store.query.filter_by(tenant_id=None).all():
+            s.tenant_id = default_tenant.id
+
+        # super_admin以外でtenant_idのないユーザーを割り当て
+        for u in AppUser.query.filter_by(tenant_id=None).all():
+            if u.role != 'super_admin':
+                u.tenant_id = default_tenant.id
+
+        db.session.commit()
+        print("テナントデータのマイグレーション完了")
+
+        # 既存店舗に媒体マスターがなければ初期化
+        for s in Store.query.all():
+            if MediaType.query.filter_by(store_id=s.id).count() == 0:
+                init_default_media_types(s.id)
+    except Exception as e:
+        db.session.rollback()
+        print(f"migrate_tenant_data error: {e}")
+
+
 with app.app_context():
     db.create_all()
     if not _IS_POSTGRES:   # SQLite（ローカル）のみ
@@ -728,6 +980,8 @@ with app.app_context():
         migrate_postgres()
     init_store()
     ensure_owner_account()
+    ensure_super_admin()
+    migrate_tenant_data()
     # 無効なPLCustomItemテンプレートをクリーンアップ（数字のみの名前など）
     try:
         invalid_items = PLCustomItem.query.filter(
@@ -761,7 +1015,18 @@ def owner_required(f):
         if 'app_user_id' not in session:
             return redirect(url_for('app_login'))
         user = AppUser.query.get(session['app_user_id'])
-        if not user or user.role != 'owner':
+        if not user or user.role not in ('owner', 'super_admin'):
+            return redirect(url_for('executive_dashboard'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def super_admin_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'app_user_id' not in session:
+            return redirect(url_for('app_login'))
+        if session.get('app_user_role') != 'super_admin':
             return redirect(url_for('executive_dashboard'))
         return f(*args, **kwargs)
     return decorated
@@ -779,6 +1044,41 @@ def current_ym():
     """現在の年・月をタプルで返す"""
     now = datetime.now()
     return now.year, now.month
+
+
+def get_allowed_store_ids():
+    """ログインユーザーが参照できる店舗IDリストを返す（テナント分離）"""
+    uid = session.get('app_user_id')
+    if not uid:
+        return []
+    user = AppUser.query.get(uid)
+    if not user:
+        return []
+    if user.role == 'super_admin':
+        return [s.id for s in Store.query.filter_by(is_active=True).all()]
+    elif user.role == 'owner':
+        return [s.id for s in Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()]
+    else:
+        return [user.store_id] if user.store_id else []
+
+
+def get_allowed_stores():
+    """ログインユーザーが参照できるStoreオブジェクトリストを返す"""
+    uid = session.get('app_user_id')
+    if not uid:
+        return []
+    user = AppUser.query.get(uid)
+    if not user:
+        return []
+    if user.role == 'super_admin':
+        return Store.query.filter_by(is_active=True).all()
+    elif user.role == 'owner':
+        return Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()
+    else:
+        if user.store_id:
+            s = Store.query.get(user.store_id)
+            return [s] if s and s.is_active else []
+        return []
 
 
 # ── 既存ルーティング ──────────────────────────────────────
@@ -830,12 +1130,19 @@ def app_login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        user = AppUser.query.filter_by(username=username, is_active=True).first()
+        user = AppUser.query.filter(
+            db.or_(
+                AppUser.username == username,
+                db.func.lower(AppUser.email) == username.lower()
+            ),
+            AppUser.is_active == True
+        ).first()
         if user and check_password_hash(user.password_hash, password):
             session.permanent = False  # ブラウザ閉じでセッション切れ
             session['app_user_id'] = user.id
             session['app_user_role'] = user.role
             session['app_username'] = user.username
+            session['tenant_id'] = user.tenant_id
             user.last_login = datetime.utcnow()
             db.session.commit()
             # sessionStorageにフラグを立ててリダイレクト（ブラウザ閉じ検出用）
@@ -1026,7 +1333,8 @@ def assessment():
 @login_required
 def executive_dashboard():
     """売上管理ダッシュボード"""
-    staff_list = Staff.query.filter_by(is_active=True).all()
+    allowed_ids = get_allowed_store_ids()
+    staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all()
     year, month = current_ym()
     return render_template("executive_dashboard.html",
                            staff_list=staff_list, year=year, month=month,
@@ -1037,21 +1345,32 @@ def executive_dashboard():
 @login_required
 def sales_management():
     """営業管理ページ：KPI入力・閲覧"""
-    stores = Store.query.filter_by(is_active=True).all()
-    staff_list = Staff.query.filter_by(is_active=True).all()
+    stores = get_allowed_stores()
+    allowed_ids = [s.id for s in stores]
+    staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all()
     year, month = current_ym()
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    cur_role = cur_user.role if cur_user else 'staff'
+    cur_staff_id = cur_user.staff_id if cur_user else None
+    is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
+    store_id = allowed_ids[0] if allowed_ids else 1
+    media_types = MediaType.query.filter_by(store_id=store_id, is_active=True).order_by(MediaType.sort_order, MediaType.name).all()
     return render_template("sales_management.html", stores=stores, staff_list=staff_list,
-                           year=year, month=month, now=datetime.now())
+                           year=year, month=month, now=datetime.now(),
+                           cur_role=cur_role, cur_staff_id=cur_staff_id,
+                           is_manager=is_manager, media_types=media_types,
+                           store_id=store_id)
 
 
 @app.route("/leads")
 @login_required
 def leads_management():
     """反響管理ページ：リード一覧・追加"""
-    stores = Store.query.filter_by(is_active=True).all()
-    staff_list = Staff.query.filter_by(is_active=True).all()
-    # 最新100件を表示
+    stores = get_allowed_stores()
+    allowed_ids = [s.id for s in stores]
+    staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all()
     leads = (Lead.query
+             .filter(Lead.store_id.in_(allowed_ids))
              .order_by(Lead.received_at.desc())
              .limit(100)
              .all())
@@ -1112,7 +1431,7 @@ def leads_status_update(lead_id):
 @login_required
 def accounting():
     """会計・PL管理ページ"""
-    stores = Store.query.filter_by(is_active=True).all()
+    stores = get_allowed_stores()
     year, month = current_ym()
     return render_template("accounting.html", stores=stores, year=year, month=month,
                            now=datetime.now())
@@ -1122,14 +1441,51 @@ def accounting():
 @login_required
 def staff_ranking():
     """スタッフランキングページ"""
-    stores = Store.query.filter_by(is_active=True).all()
-    staff_list = Staff.query.filter_by(is_active=True).all()
+    stores = get_allowed_stores()
+    allowed_ids = [s.id for s in stores]
+    staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all()
     year, month = current_ym()
     return render_template("staff_ranking.html", stores=stores, staff_list=staff_list,
                            year=year, month=month, now=datetime.now())
 
 
 # ── 幹部向け管理ツール：データAPI（JSON） ────────────────
+
+def _pl_profit_for(pls, y, m):
+    """PLレコード群から利益合計を計算（PLCustomValue優先）"""
+    total = 0
+    for p in pls:
+        cv = PLCustomValue.query.filter_by(store_id=p.store_id, year=y, month=m).all()
+        ad_cvs    = [c for c in cv if c.item_type == '広告費']
+        fixed_cvs = [c for c in cv if c.item_type == '固定費']
+        var_cvs   = [c for c in cv if c.item_type == '変動費']
+        if ad_cvs:
+            ad_t = sum(c.amount for c in ad_cvs)
+        else:
+            ad_t = (p.ad_cost or 0) or sum(getattr(p, col, 0) or 0 for col in [
+                'suumo_cost','homes_cost','athome_cost','instagram_cost','tiktok_cost',
+                'google_ads_cost','line_cost','hp_cost','meo_cost','other_ad_cost'])
+        lb_t = (p.labor_cost or 0) or ((p.regular_salary or 0) + (p.parttime_salary or 0) + (p.commission_pay or 0))
+        ft = sum(c.amount for c in fixed_cvs)
+        vt = sum(c.amount for c in var_cvs)
+        total += (p.revenue or 0) - ad_t - lb_t - ft - vt
+    return total
+
+
+def _pl_ad_for(pls, y, m):
+    """PLレコード群から広告費合計を計算（PLCustomValue優先）"""
+    total = 0
+    for p in pls:
+        cv = PLCustomValue.query.filter_by(store_id=p.store_id, year=y, month=m).all()
+        ad_cvs = [c for c in cv if c.item_type == '広告費']
+        if ad_cvs:
+            total += sum(c.amount for c in ad_cvs)
+        else:
+            total += (p.ad_cost or 0) or sum(getattr(p, col, 0) or 0 for col in [
+                'suumo_cost','homes_cost','athome_cost','instagram_cost','tiktok_cost',
+                'google_ads_cost','line_cost','hp_cost','meo_cost','other_ad_cost'])
+    return total
+
 
 @app.route("/api/kpi/summary")
 def api_kpi_summary():
@@ -1138,11 +1494,19 @@ def api_kpi_summary():
     year  = request.args.get('year',  type=int) or cy
     month = request.args.get('month', type=int) or cm
 
+    allowed_ids = get_allowed_store_ids()
+
     def get_kpis(y, m):
-        return SalesKPI.query.filter_by(year=y, month=m).all()
+        q = SalesKPI.query.filter_by(year=y, month=m)
+        if allowed_ids:
+            q = q.filter(SalesKPI.store_id.in_(allowed_ids))
+        return q.all()
 
     def get_pl(y, m):
-        return PLRecord.query.filter_by(year=y, month=m).all()
+        q = PLRecord.query.filter_by(year=y, month=m)
+        if allowed_ids:
+            q = q.filter(PLRecord.store_id.in_(allowed_ids))
+        return q.all()
 
     # 今月・前月
     kpis_now  = get_kpis(year, month)
@@ -1152,27 +1516,23 @@ def api_kpi_summary():
     pls_now   = get_pl(year, month)
     pls_prev  = get_pl(prev_y, prev_m)
 
-    sales_now  = sum(k.sales_amount for k in kpis_now)
-    sales_prev = sum(k.sales_amount for k in kpis_prev)
+    kpi_sales_now  = sum(k.sales_amount for k in kpis_now)
+    kpi_sales_prev = sum(k.sales_amount for k in kpis_prev)
     contracts_now  = sum(k.contracts for k in kpis_now)
     contracts_prev = sum(k.contracts for k in kpis_prev)
 
-    # 今月PL
-    rev_now    = sum(p.revenue for p in pls_now)
-    gp_now     = sum(p.gross_profit for p in pls_now)
-    ad_now     = sum(p.ad_cost for p in pls_now)
-    labor_now  = sum(p.labor_cost for p in pls_now)
-    fixed_now  = sum(p.other_fixed for p in pls_now)
-    var_now    = sum(p.other_variable for p in pls_now)
-    profit_now = gp_now - ad_now - labor_now - fixed_now - var_now
+    # 今月PL（経理データ優先）
+    rev_now     = sum(p.revenue for p in pls_now)
+    profit_now  = _pl_profit_for(pls_now, year, month)
+    ad_now      = _pl_ad_for(pls_now, year, month)
 
-    rev_prev   = sum(p.revenue for p in pls_prev)
-    gp_prev    = sum(p.gross_profit for p in pls_prev)
-    ad_prev    = sum(p.ad_cost for p in pls_prev)
-    labor_prev = sum(p.labor_cost for p in pls_prev)
-    fixed_prev = sum(p.other_fixed for p in pls_prev)
-    var_prev   = sum(p.other_variable for p in pls_prev)
-    profit_prev = gp_prev - ad_prev - labor_prev - fixed_prev - var_prev
+    rev_prev    = sum(p.revenue for p in pls_prev)
+    profit_prev = _pl_profit_for(pls_prev, prev_y, prev_m)
+    ad_prev     = _pl_ad_for(pls_prev, prev_y, prev_m)
+
+    # 経理データ優先で売上を決定（PLRecordなければKPIから取得）
+    sales_now  = rev_now  if rev_now  > 0 else kpi_sales_now
+    sales_prev = rev_prev if rev_prev > 0 else kpi_sales_prev
 
     # 広告ROI（今月）
     roi_now  = round(rev_now  / ad_now  * 100, 1) if ad_now  > 0 else 0
@@ -1189,15 +1549,12 @@ def api_kpi_summary():
     # 前年同月
     kpis_yoy  = get_kpis(year - 1, month)
     pls_yoy   = get_pl(year - 1, month)
-    sales_yoy     = sum(k.sales_amount for k in kpis_yoy)
+    kpi_sales_yoy = sum(k.sales_amount for k in kpis_yoy)
     contracts_yoy = sum(k.contracts for k in kpis_yoy)
-    rev_yoy   = sum(p.revenue for p in pls_yoy)
-    gp_yoy    = sum(p.gross_profit for p in pls_yoy)
-    ad_yoy    = sum(p.ad_cost for p in pls_yoy)
-    labor_yoy = sum(p.labor_cost for p in pls_yoy)
-    fixed_yoy = sum(p.other_fixed for p in pls_yoy)
-    var_yoy   = sum(p.other_variable for p in pls_yoy)
-    profit_yoy = gp_yoy - ad_yoy - labor_yoy - fixed_yoy - var_yoy
+    rev_yoy    = sum(p.revenue for p in pls_yoy)
+    sales_yoy  = rev_yoy if rev_yoy > 0 else kpi_sales_yoy
+    profit_yoy = _pl_profit_for(pls_yoy, year - 1, month)
+    ad_yoy     = _pl_ad_for(pls_yoy, year - 1, month)
     roi_yoy    = round(rev_yoy / ad_yoy * 100, 1) if ad_yoy > 0 else 0
 
     def diff_pct(now, prev):
@@ -1206,8 +1563,8 @@ def api_kpi_summary():
         return round((now - prev) / prev * 100, 1)
 
     # 反響管理データがあればそちらを優先（自動連携）
-    lead_stats_now  = LeadMediaStat.query.filter_by(store_id=1, year=year, month=month).all()
-    lead_stats_prev = LeadMediaStat.query.filter_by(store_id=1, year=prev_y, month=prev_m).all()
+    lead_stats_now  = LeadMediaStat.query.filter(LeadMediaStat.store_id.in_(allowed_ids), LeadMediaStat.year==year,  LeadMediaStat.month==month).all()
+    lead_stats_prev = LeadMediaStat.query.filter(LeadMediaStat.store_id.in_(allowed_ids), LeadMediaStat.year==prev_y, LeadMediaStat.month==prev_m).all()
     if lead_stats_now:
         total_inquiries   = sum(s.inquiries    for s in lead_stats_now)
         total_visits      = sum(s.visits       for s in lead_stats_now)
@@ -1264,25 +1621,75 @@ def api_kpi_summary():
 
 @app.route("/api/kpi/monthly")
 def api_kpi_monthly():
-    """過去12ヶ月のKPIデータをグラフ用に返す"""
-    store_id = request.args.get('store_id', type=int)
+    """月次KPIデータをグラフ用に返す（from/toパラメータで期間指定可）"""
+    store_id   = request.args.get('store_id', type=int)
+    staff_id   = request.args.get('staff_id', type=int)   # スタッフ別フィルタ
+    from_param = request.args.get('from')   # YYYY-MM
+    to_param   = request.args.get('to')     # YYYY-MM
     months_data = []
 
     today = date.today()
-    for i in range(11, -1, -1):
-        target = today.replace(day=1) - timedelta(days=1)
-        for _ in range(i):
-            target = target.replace(day=1) - timedelta(days=1)
-        y, m = target.year, target.month
+
+    # 期間リストを生成
+    def ym_range(fy, fm, ty, tm):
+        base = fy * 12 + fm - 1
+        end  = ty  * 12 + tm  - 1
+        result = []
+        for t in range(base, end + 1):
+            result.append((t // 12, t % 12 + 1))
+        return result
+
+    if from_param and to_param:
+        try:
+            fy, fm = int(from_param[:4]), int(from_param[5:7])
+            ty, tm = int(to_param[:4]),   int(to_param[5:7])
+            periods = ym_range(fy, fm, ty, tm)
+        except Exception:
+            periods = None
+    else:
+        periods = None
+
+    if not periods:
+        # デフォルト：直近12ヶ月（当月含む）
+        base_total = today.year * 12 + today.month - 1
+        periods = [(t // 12, t % 12 + 1) for t in range(base_total - 11, base_total + 1)]
+
+    allowed_ids = get_allowed_store_ids()
+    # store_idパラメータ指定時はさらに絞り込み
+    if store_id and store_id in allowed_ids:
+        filter_ids = [store_id]
+    elif store_id:
+        filter_ids = []
+    else:
+        filter_ids = allowed_ids
+
+    for y, m in periods:
 
         query = SalesKPI.query.filter_by(year=y, month=m)
-        if store_id:
-            query = query.filter_by(store_id=store_id)
+        if filter_ids:
+            query = query.filter(SalesKPI.store_id.in_(filter_ids))
+        if staff_id:
+            query = query.filter(SalesKPI.staff_id == staff_id)
         kpis = query.all()
 
+        # スタッフ別フィルタ時はSalesKPIのみ使用（PLRecordは店舗単位のため）
+        if staff_id:
+            kpi_sales = sum(k.sales_amount for k in kpis)
+            months_data.append({
+                'label':       f'{y}/{m:02d}',
+                'year':        y,
+                'month':       m,
+                'inquiries':   sum(k.inquiries for k in kpis),
+                'contracts':   sum(k.contracts for k in kpis),
+                'sales':       kpi_sales,
+                'gross_profit': 0,
+                'ad_cost':     0,
+            })
+            continue
+
         pls = PLRecord.query.filter_by(year=y, month=m)
-        if store_id:
-            pls = pls.filter_by(store_id=store_id)
+        if filter_ids:
+            pls = pls.filter(PLRecord.store_id.in_(filter_ids))
         pls = pls.all()
 
         def _calc_gp(pl):
@@ -1301,13 +1708,15 @@ def api_kpi_monthly():
             vt = sum(c.amount for c in var_cvs)
             return (pl.revenue or 0) - ad_t - lb_t - ft - vt
 
+        pl_revenue = sum(p.revenue or 0 for p in pls)
+        kpi_sales  = sum(k.sales_amount for k in kpis)
         months_data.append({
             'label':       f'{y}/{m:02d}',
             'year':        y,
             'month':       m,
             'inquiries':   sum(k.inquiries for k in kpis),
             'contracts':   sum(k.contracts for k in kpis),
-            'sales':       sum(k.sales_amount for k in kpis),
+            'sales':       pl_revenue if pl_revenue > 0 else kpi_sales,
             'gross_profit':sum(_calc_gp(p) for p in pls),
             'ad_cost':     sum(p.ad_cost or 0 for p in pls),
         })
@@ -1346,6 +1755,7 @@ def api_kpi_staff():
             'sales_amount':kpi.sales_amount,
             'option_sales':kpi.option_sales,
             'estimated_sales':     kpi.estimated_sales or 0,
+            'target_sales':        kpi.target_sales or 0,
             'fire_insurance_count':kpi.fire_insurance_count or 0,
             'lifeline_count':      kpi.lifeline_count or 0,
             'moving_count':        kpi.moving_count or 0,
@@ -1568,6 +1978,42 @@ def api_leads_monthly_stats():
         })
 
     return jsonify({'stats': result, 'totals': totals, 'trend': trend, 'year': year, 'month': month})
+
+
+@app.route("/api/leads/trend")
+def api_leads_trend():
+    """反響月次トレンドを返す（from/toパラメータで期間指定可、デフォルト直近6ヶ月）"""
+    store_id   = request.args.get('store_id', type=int) or 1
+    from_param = request.args.get('from')
+    to_param   = request.args.get('to')
+    today = date.today()
+
+    if from_param and to_param:
+        try:
+            fy, fm = int(from_param[:4]), int(from_param[5:7])
+            ty, tm_e = int(to_param[:4]), int(to_param[5:7])
+            base = fy * 12 + fm - 1
+            end  = ty * 12 + tm_e - 1
+            periods = [(t // 12, t % 12 + 1) for t in range(base, end + 1)]
+        except Exception:
+            periods = None
+    else:
+        periods = None
+
+    if not periods:
+        base_total = today.year * 12 + today.month - 1
+        periods = [(t // 12, t % 12 + 1) for t in range(base_total - 5, base_total + 1)]
+
+    trend = []
+    for y, m in periods:
+        ms = LeadMediaStat.query.filter_by(store_id=store_id, year=y, month=m).all()
+        trend.append({
+            'label':           f'{y}/{m:02d}',
+            'inquiries':       sum(s.inquiries for s in ms),
+            'contracts':       sum(s.contracts for s in ms),
+            'estimated_sales': sum(s.estimated_sales for s in ms),
+        })
+    return jsonify(trend)
 
 
 @app.route("/api/leads/monthly-stats", methods=["POST"])
@@ -2090,11 +2536,15 @@ def api_ad_input():
 
 
 @app.route("/api/store/add", methods=["POST"])
+@login_required
 def api_store_add():
-    """店舗を追加する"""
+    """店舗を追加する（ログインユーザーのテナントに所属）"""
+    uid = session.get('app_user_id')
+    cur_user = AppUser.query.get(uid) if uid else None
     data = request.get_json() or request.form
     store = Store(
         name=data.get('name', ''),
+        tenant_id=cur_user.tenant_id if cur_user else None,
         rent=float(data.get('rent', 0)),
         parking_fee=float(data.get('parking_fee', 0)),
         copier_fee=float(data.get('copier_fee', 0)),
@@ -2111,8 +2561,9 @@ def api_store_add():
 
 @app.route("/api/staff", methods=["GET"])
 def api_staff_list():
-    """スタッフ一覧（KPIデータに関係なく全スタッフを返す）"""
-    staff_list = Staff.query.filter_by(is_active=True).all()
+    """スタッフ一覧（テナント分離）"""
+    allowed_ids = get_allowed_store_ids()
+    staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all()
     result = [{'id': s.id, 'name': s.name, 'role': s.role} for s in staff_list]
     return jsonify(result)
 
@@ -2800,7 +3251,1108 @@ def api_uncollected_delete(pid):
 @login_required
 def api_uncollected_paid(pid):
     p = UncollectedPayment.query.get_or_404(pid)
-    p.is_paid = True
+    if not p.is_paid:
+        p.is_paid = True
+        # 対応スタッフのSalesKPIに売上を加算
+        if p.staff_id and p.amount:
+            data = request.get_json() or {}
+            req_year  = data.get('year')
+            req_month = data.get('month')
+            if req_year and req_month:
+                ref_year, ref_month = int(req_year), int(req_month)
+            else:
+                ref_date = p.application_date or p.expected_payment_date or date.today()
+                ref_year, ref_month = ref_date.year, ref_date.month
+            kpi = SalesKPI.query.filter_by(
+                staff_id=p.staff_id, store_id=p.store_id,
+                year=ref_year, month=ref_month
+            ).first()
+            if not kpi:
+                kpi = SalesKPI(staff_id=p.staff_id, store_id=p.store_id,
+                               year=ref_year, month=ref_month)
+                db.session.add(kpi)
+            kpi.sales_amount = (kpi.sales_amount or 0) + float(p.amount)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/uncollected/sync-from-applications", methods=["POST"])
+@login_required
+def api_uncollected_sync_from_applications():
+    """前月の申込一覧で未承認の案件を未入金一覧に自動転記（重複スキップ）"""
+    data = request.get_json() or {}
+    year  = data.get('year')
+    month = data.get('month')
+    store_id_param = data.get('store_id')
+
+    if not year or not month:
+        return jsonify({'added': 0})
+
+    year, month = int(year), int(month)
+    allowed_ids = get_allowed_store_ids()
+
+    if store_id_param and int(store_id_param) in allowed_ids:
+        filter_ids = [int(store_id_param)]
+    else:
+        filter_ids = allowed_ids
+
+    if not filter_ids:
+        return jsonify({'added': 0})
+
+    # 対象月の申込で未承認のもの（キャンセル除く）
+    from sqlalchemy import extract
+    apps = ApplicationRecord.query.filter(
+        ApplicationRecord.store_id.in_(filter_ids),
+        extract('year',  ApplicationRecord.application_date) == year,
+        extract('month', ApplicationRecord.application_date) == month,
+        ApplicationRecord.status != 'キャンセル',
+        db.or_(
+            db.and_(ApplicationRecord.ad_amount > 0,       ApplicationRecord.ad_approved == False),
+            db.and_(ApplicationRecord.brokerage_fee > 0,   ApplicationRecord.brokerage_approved == False),
+        )
+    ).all()
+
+    added = 0
+    for rec in apps:
+        pending_amount = 0
+        if (rec.ad_amount or 0) > 0 and not rec.ad_approved:
+            pending_amount += rec.ad_amount or 0
+        if (rec.brokerage_fee or 0) > 0 and not rec.brokerage_approved:
+            pending_amount += rec.brokerage_fee or 0
+        if pending_amount <= 0:
+            continue
+
+        # 同一案件の重複チェック（物件名＋顧客名＋申込日＋店舗）
+        exists = UncollectedPayment.query.filter_by(
+            store_id=rec.store_id,
+            property_name=rec.property_name,
+            customer_name=rec.customer_name,
+            application_date=rec.application_date,
+        ).first()
+        if exists:
+            continue
+
+        up = UncollectedPayment(
+            store_id=rec.store_id,
+            staff_id=rec.staff_id,
+            property_name=rec.property_name,
+            room_number=rec.room_number,
+            application_date=rec.application_date,
+            customer_name=rec.customer_name,
+            amount=pending_amount,
+            memo='申込一覧から自動転記',
+            is_paid=False,
+        )
+        db.session.add(up)
+        added += 1
+
+    db.session.commit()
+    return jsonify({'added': added})
+
+
+# ── 有給管理 ──────────────────────────────────────────────
+
+@app.route("/leave-management")
+@login_required
+def leave_management():
+    staff_list = Staff.query.filter_by(is_active=True).order_by(Staff.name).all()
+    year = request.args.get('year', type=int) or date.today().year
+    return render_template("leave_management.html", staff_list=staff_list, year=year)
+
+
+@app.route("/api/leave", methods=["GET"])
+@login_required
+def api_leave_list():
+    year     = request.args.get('year',     type=int) or date.today().year
+    staff_id = request.args.get('staff_id', type=int)
+    q = LeaveRecord.query.filter(
+        db.extract('year', LeaveRecord.leave_date) == year
+    )
+    if staff_id:
+        q = q.filter_by(staff_id=staff_id)
+    records = q.order_by(LeaveRecord.leave_date.desc()).all()
+    staff_map = {s.id: s.name for s in Staff.query.all()}
+    return jsonify([{
+        'id':         r.id,
+        'staff_id':   r.staff_id,
+        'staff_name': staff_map.get(r.staff_id, '?'),
+        'leave_date': r.leave_date.strftime('%Y-%m-%d'),
+        'leave_type': r.leave_type,
+        'days':       r.days,
+        'memo':       r.memo or '',
+        'status':     r.status,
+    } for r in records])
+
+
+@app.route("/api/leave", methods=["POST"])
+@login_required
+def api_leave_create():
+    data = request.get_json() or {}
+    try:
+        ld = datetime.strptime(data['leave_date'], '%Y-%m-%d').date()
+    except Exception:
+        return jsonify({'error': '日付が不正です'}), 400
+    r = LeaveRecord(
+        staff_id   = data.get('staff_id'),
+        leave_date = ld,
+        leave_type = data.get('leave_type', '有給'),
+        days       = float(data.get('days', 1.0)),
+        memo       = data.get('memo', ''),
+        status     = data.get('status', '承認済'),
+    )
+    db.session.add(r)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': r.id})
+
+
+@app.route("/api/leave/<int:lid>", methods=["PUT"])
+@login_required
+def api_leave_update(lid):
+    r = LeaveRecord.query.get_or_404(lid)
+    data = request.get_json() or {}
+    if 'leave_date' in data:
+        r.leave_date = datetime.strptime(data['leave_date'], '%Y-%m-%d').date()
+    if 'leave_type' in data: r.leave_type = data['leave_type']
+    if 'days'       in data: r.days       = float(data['days'])
+    if 'memo'       in data: r.memo       = data['memo']
+    if 'status'     in data: r.status     = data['status']
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/leave/<int:lid>", methods=["DELETE"])
+@login_required
+def api_leave_delete(lid):
+    r = LeaveRecord.query.get_or_404(lid)
+    db.session.delete(r)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/leave/balance", methods=["GET"])
+@login_required
+def api_leave_balance():
+    """スタッフ別有給残日数サマリー"""
+    year = request.args.get('year', type=int) or date.today().year
+    staff_list = Staff.query.filter_by(is_active=True).all()
+    result = []
+    for s in staff_list:
+        bal = LeaveBalance.query.filter_by(staff_id=s.id, year=year).first()
+        total = bal.total_days if bal else 10.0
+        used = db.session.query(db.func.sum(LeaveRecord.days)).filter(
+            LeaveRecord.staff_id == s.id,
+            db.extract('year', LeaveRecord.leave_date) == year,
+            LeaveRecord.leave_type == '有給',
+            LeaveRecord.status != '却下'
+        ).scalar() or 0
+        result.append({
+            'staff_id':   s.id,
+            'staff_name': s.name,
+            'total_days': total,
+            'used_days':  used,
+            'remain_days': total - used,
+        })
+    return jsonify(result)
+
+
+@app.route("/api/leave/balance", methods=["POST"])
+@login_required
+def api_leave_balance_update():
+    """有給付与日数更新"""
+    data = request.get_json() or {}
+    staff_id = data.get('staff_id')
+    year     = data.get('year') or date.today().year
+    total    = float(data.get('total_days', 10))
+    bal = LeaveBalance.query.filter_by(staff_id=staff_id, year=year).first()
+    if bal:
+        bal.total_days = total
+    else:
+        bal = LeaveBalance(staff_id=staff_id, year=year, total_days=total)
+        db.session.add(bal)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── 日報 ──────────────────────────────────────────────────
+
+@app.route("/daily-report")
+@login_required
+def daily_report():
+    """日報ページ"""
+    stores = Store.query.filter_by(is_active=True).all()
+    staff_list = Staff.query.filter_by(is_active=True).all()
+    year, month = current_ym()
+    today = date.today()
+    # デフォルトタスクが未作成なら初期化
+    store_id = 1
+    default_tasks = [
+        ("来店前日連絡", True, 1),
+        ("来店当日連絡", True, 2),
+        ("申込管理入力", True, 3),
+    ]
+    for task_name, is_def, order in default_tasks:
+        exists = DailyTaskTemplate.query.filter_by(store_id=store_id, task_name=task_name).first()
+        if not exists:
+            db.session.add(DailyTaskTemplate(
+                store_id=store_id, task_name=task_name,
+                is_default=is_def, is_active=True, sort_order=order
+            ))
+    db.session.commit()
+    tasks = DailyTaskTemplate.query.filter_by(store_id=store_id, is_active=True).order_by(
+        DailyTaskTemplate.sort_order).all()
+    return render_template("daily_report.html",
+                           stores=stores, staff_list=staff_list,
+                           tasks=tasks, year=year, month=month,
+                           today=today, now=datetime.now())
+
+
+@app.route("/api/daily-report")
+@login_required
+def api_daily_report_list():
+    """日報一覧取得"""
+    year  = request.args.get('year',  type=int) or current_ym()[0]
+    month = request.args.get('month', type=int) or current_ym()[1]
+    staff_id = request.args.get('staff_id', type=int)
+    report_date_str = request.args.get('date')
+
+    q = DailyReport.query
+    if report_date_str:
+        try:
+            rd = datetime.strptime(report_date_str, '%Y-%m-%d').date()
+            q = q.filter_by(report_date=rd)
+        except Exception:
+            pass
+    else:
+        from calendar import monthrange
+        first = date(year, month, 1)
+        last  = date(year, month, monthrange(year, month)[1])
+        q = q.filter(DailyReport.report_date >= first, DailyReport.report_date <= last)
+    if staff_id:
+        q = q.filter_by(staff_id=staff_id)
+    reports = q.order_by(DailyReport.report_date.desc()).all()
+
+    result = []
+    for r in reports:
+        staff = Staff.query.get(r.staff_id)
+        customers = DailyReportCustomer.query.filter_by(report_id=r.id).all()
+        task_checks = DailyTaskCheck.query.filter_by(report_id=r.id).all()
+        result.append({
+            'id': r.id,
+            'staff_id': r.staff_id,
+            'staff_name': staff.name if staff else '不明',
+            'report_date': r.report_date.isoformat(),
+            'prev_day_contact_done': r.prev_day_contact_done,
+            'same_day_contact_done': r.same_day_contact_done,
+            'application_input_done': r.application_input_done,
+            'application_count': r.application_count or 0,
+            'tomorrow_appointments': r.tomorrow_appointments or '',
+            'memo': r.memo or '',
+            'customers': [
+                {
+                    'id': c.id,
+                    'customer_name': c.customer_name,
+                    'applied': c.applied,
+                    'no_apply_reason': c.no_apply_reason or '',
+                    'improvement': c.improvement or '',
+                } for c in customers
+            ],
+            'task_checks': {tc.task_id: tc.checked for tc in task_checks},
+        })
+    return jsonify(result)
+
+
+@app.route("/api/daily-report", methods=["POST"])
+@login_required
+def api_daily_report_save():
+    """日報保存（新規 or 更新）"""
+    data = request.get_json() or {}
+    staff_id = int(data.get('staff_id') or 1)
+    store_id = int(data.get('store_id') or 1)
+    report_date_str = data.get('report_date') or date.today().isoformat()
+    try:
+        report_date = datetime.strptime(report_date_str, '%Y-%m-%d').date()
+    except Exception:
+        report_date = date.today()
+
+    # 同日・同スタッフの日報があれば更新、なければ作成
+    report = DailyReport.query.filter_by(staff_id=staff_id, report_date=report_date).first()
+    if not report:
+        report = DailyReport(staff_id=staff_id, store_id=store_id, report_date=report_date)
+        db.session.add(report)
+
+    report.prev_day_contact_done  = bool(data.get('prev_day_contact_done'))
+    report.same_day_contact_done  = bool(data.get('same_day_contact_done'))
+    report.application_input_done = bool(data.get('application_input_done'))
+    report.application_count      = int(data.get('application_count') or 0)
+    report.tomorrow_appointments  = data.get('tomorrow_appointments', '')
+    report.memo                   = data.get('memo', '')
+    report.updated_at             = datetime.utcnow()
+    db.session.flush()
+
+    # 接客記録: 全削除 → 再登録
+    DailyReportCustomer.query.filter_by(report_id=report.id).delete()
+    for c in (data.get('customers') or []):
+        if c.get('customer_name', '').strip():
+            db.session.add(DailyReportCustomer(
+                report_id=report.id,
+                customer_name=c['customer_name'].strip(),
+                applied=bool(c.get('applied')),
+                no_apply_reason=c.get('no_apply_reason', ''),
+                improvement=c.get('improvement', ''),
+            ))
+
+    # カスタムタスクチェック
+    DailyTaskCheck.query.filter_by(report_id=report.id).delete()
+    for task_id_str, checked in (data.get('task_checks') or {}).items():
+        try:
+            db.session.add(DailyTaskCheck(
+                report_id=report.id,
+                task_id=int(task_id_str),
+                checked=bool(checked),
+            ))
+        except Exception:
+            pass
+
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': report.id})
+
+
+@app.route("/api/daily-report/<int:rid>", methods=["DELETE"])
+@login_required
+def api_daily_report_delete(rid):
+    r = DailyReport.query.get_or_404(rid)
+    DailyReportCustomer.query.filter_by(report_id=rid).delete()
+    DailyTaskCheck.query.filter_by(report_id=rid).delete()
+    db.session.delete(r)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/daily-task-template")
+@login_required
+def api_task_template_list():
+    """タスクテンプレート一覧"""
+    store_id = request.args.get('store_id', type=int) or 1
+    tasks = DailyTaskTemplate.query.filter_by(store_id=store_id, is_active=True).order_by(
+        DailyTaskTemplate.sort_order).all()
+    return jsonify([{'id': t.id, 'task_name': t.task_name, 'is_default': t.is_default} for t in tasks])
+
+
+@app.route("/api/daily-task-template", methods=["POST"])
+@login_required
+def api_task_template_add():
+    """タスクテンプレート追加"""
+    data = request.get_json() or {}
+    task_name = (data.get('task_name') or '').strip()
+    if not task_name:
+        return jsonify({'error': 'task_name required'}), 400
+    store_id = int(data.get('store_id') or 1)
+    max_order = db.session.query(db.func.max(DailyTaskTemplate.sort_order)).filter_by(
+        store_id=store_id).scalar() or 0
+    t = DailyTaskTemplate(store_id=store_id, task_name=task_name, sort_order=max_order + 1)
+    db.session.add(t)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': t.id})
+
+
+@app.route("/api/daily-task-template/<int:tid>", methods=["DELETE"])
+@login_required
+def api_task_template_delete(tid):
+    """タスクテンプレート削除（デフォルトは削除不可）"""
+    t = DailyTaskTemplate.query.get_or_404(tid)
+    if t.is_default:
+        return jsonify({'error': 'デフォルトタスクは削除できません'}), 400
+    t.is_active = False
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── パスワードリセット ──────────────────────────────────────
+
+import secrets
+from itsdangerous import URLSafeTimedSerializer
+
+def _reset_serializer():
+    return URLSafeTimedSerializer(app.secret_key)
+
+
+def _send_reset_email(to_email, reset_url):
+    """パスワードリセットメールを送信（SMTP設定がある場合のみ）"""
+    smtp_host = os.getenv('SMTP_HOST', '')
+    smtp_port = int(os.getenv('SMTP_PORT', 587))
+    smtp_user = os.getenv('SMTP_USER', '')
+    smtp_pass = os.getenv('SMTP_PASS', '')
+    from_email = os.getenv('FROM_EMAIL', smtp_user)
+
+    if not smtp_host or not smtp_user:
+        return False
+
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = 'パスワードリセットのご案内'
+        msg['From'] = from_email
+        msg['To'] = to_email
+
+        body = f"""パスワードリセットのリクエストを受け付けました。
+
+以下のURLからパスワードをリセットしてください（有効期限: 1時間）:
+
+{reset_url}
+
+このメールに心当たりがない場合は、無視してください。
+"""
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(from_email, to_email, msg.as_string())
+        return True
+    except Exception as e:
+        app.logger.error(f'メール送信エラー: {e}')
+        return False
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    """パスワードリセット要求"""
+    message = None
+    error = None
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        user = AppUser.query.filter(
+            db.func.lower(AppUser.email) == email, AppUser.is_active == True
+        ).first()
+        # セキュリティのため、ユーザーが存在しなくても同じメッセージを返す
+        if user and user.email:
+            token = secrets.token_urlsafe(32)
+            expires = datetime.utcnow() + timedelta(hours=1)
+            rt = PasswordResetToken(user_id=user.id, token=token, expires_at=expires)
+            db.session.add(rt)
+            db.session.commit()
+            reset_url = url_for('reset_password', token=token, _external=True)
+            sent = _send_reset_email(user.email, reset_url)
+            if not sent:
+                # メール送信不可の場合はURLを画面に表示（開発用）
+                message = f"（開発環境）リセットURL: {reset_url}"
+            else:
+                message = "パスワードリセット用のメールを送信しました。"
+        else:
+            message = "入力されたメールアドレスに一致するアカウントが見つかりませんでした。"
+    return render_template("forgot_password.html", message=message, error=error)
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    """パスワードリセット実行"""
+    rt = PasswordResetToken.query.filter_by(token=token, used=False).first()
+    error = None
+    if not rt or rt.expires_at < datetime.utcnow():
+        return render_template("reset_password.html", error="リセットリンクが無効または期限切れです。", token=token, expired=True)
+
+    if request.method == "POST":
+        new_password = request.form.get("password", "")
+        confirm = request.form.get("confirm_password", "")
+        if len(new_password) < 8:
+            error = "パスワードは8文字以上にしてください。"
+        elif new_password != confirm:
+            error = "パスワードが一致しません。"
+        else:
+            user = AppUser.query.get(rt.user_id)
+            user.password_hash = generate_password_hash(new_password)
+            rt.used = True
+            db.session.commit()
+            return redirect(url_for('app_login') + '?reset=1')
+
+    return render_template("reset_password.html", token=token, error=error, expired=False)
+
+
+# ── ユーザー管理（オーナー専用） ──────────────────────────────
+
+@app.route("/settings/users")
+@login_required
+def settings_users():
+    """ユーザー管理ページ"""
+    app_user = AppUser.query.get(session.get('app_user_id'))
+    if not app_user or app_user.role not in ('owner', 'super_admin'):
+        return redirect(url_for('executive_dashboard'))
+    allowed_ids = get_allowed_store_ids()
+    q = AppUser.query.filter_by(is_active=True)
+    if app_user.role == 'owner':
+        q = q.filter_by(tenant_id=app_user.tenant_id)
+    users = q.order_by(AppUser.created_at).all()
+    staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all()
+    return render_template("settings_users.html", users=users, staff_list=staff_list)
+
+
+@app.route("/api/users", methods=["POST"])
+@login_required
+def api_user_create():
+    """ユーザー作成（オーナーのみ）"""
+    app_user = AppUser.query.get(session.get('app_user_id'))
+    if not app_user or app_user.role not in ('owner', 'super_admin'):
+        return jsonify({'error': '権限がありません'}), 403
+    data = request.get_json() or {}
+    username = (data.get('username') or '').strip()
+    email    = (data.get('email') or '').strip().lower()
+    password = data.get('password', '')
+    role     = data.get('role', 'staff')
+    staff_id = data.get('staff_id') or None
+    if not username or not password:
+        return jsonify({'error': 'ユーザー名とパスワードは必須です'}), 400
+    if AppUser.query.filter_by(username=username).first():
+        return jsonify({'error': 'そのユーザー名は既に使用されています'}), 400
+    u = AppUser(
+        username=username, email=email or None,
+        password_hash=generate_password_hash(password),
+        role=role, staff_id=staff_id,
+        tenant_id=app_user.tenant_id,  # 作成者と同じテナントに所属
+        can_view_accounting=bool(data.get('can_view_accounting', True)),
+        can_view_all_staff=bool(data.get('can_view_all_staff', True)),
+        can_edit_kpi=bool(data.get('can_edit_kpi', True)),
+        can_manage_uncollected=bool(data.get('can_manage_uncollected', True)),
+    )
+    db.session.add(u)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': u.id})
+
+
+@app.route("/api/users/<int:uid>", methods=["PUT"])
+@login_required
+def api_user_update(uid):
+    """ユーザー更新（オーナーのみ）"""
+    app_user = AppUser.query.get(session.get('app_user_id'))
+    if not app_user or app_user.role not in ('owner', 'super_admin'):
+        return jsonify({'error': '権限がありません'}), 403
+    u = AppUser.query.get_or_404(uid)
+    data = request.get_json() or {}
+    if 'email'    in data: u.email    = (data['email'] or '').strip().lower() or None
+    if 'role'     in data: u.role     = data['role']
+    if 'staff_id' in data: u.staff_id = data['staff_id'] or None
+    if 'password' in data and data['password']:
+        u.password_hash = generate_password_hash(data['password'])
+    if 'can_view_accounting'    in data: u.can_view_accounting    = bool(data['can_view_accounting'])
+    if 'can_view_all_staff'     in data: u.can_view_all_staff     = bool(data['can_view_all_staff'])
+    if 'can_edit_kpi'           in data: u.can_edit_kpi           = bool(data['can_edit_kpi'])
+    if 'can_manage_uncollected' in data: u.can_manage_uncollected = bool(data['can_manage_uncollected'])
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/users/<int:uid>", methods=["DELETE"])
+@login_required
+def api_user_delete(uid):
+    """ユーザー無効化（オーナーのみ）"""
+    app_user = AppUser.query.get(session.get('app_user_id'))
+    if not app_user or app_user.role not in ('owner', 'super_admin'):
+        return jsonify({'error': '権限がありません'}), 403
+    if uid == app_user.id:
+        return jsonify({'error': '自分自身は削除できません'}), 400
+    u = AppUser.query.get_or_404(uid)
+    u.is_active = False
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/users")
+@login_required
+def api_user_list():
+    """ユーザー一覧（オーナー：自テナントのみ / super_admin：全体）"""
+    app_user = AppUser.query.get(session.get('app_user_id'))
+    if not app_user or app_user.role not in ('owner', 'super_admin'):
+        return jsonify({'error': '権限がありません'}), 403
+    q = AppUser.query.filter_by(is_active=True)
+    if app_user.role == 'owner':
+        q = q.filter_by(tenant_id=app_user.tenant_id)
+    users = q.order_by(AppUser.created_at).all()
+    return jsonify([{
+        'id': u.id,
+        'username': u.username,
+        'email': u.email or '',
+        'role': u.role,
+        'staff_id': u.staff_id,
+        'tenant_id': u.tenant_id,
+        'can_view_accounting': u.can_view_accounting,
+        'can_view_all_staff': u.can_view_all_staff,
+        'can_edit_kpi': u.can_edit_kpi,
+        'can_manage_uncollected': u.can_manage_uncollected,
+        'last_login': u.last_login.isoformat() if u.last_login else None,
+    } for u in users])
+
+
+# ── テナント管理（super_admin専用） ────────────────────────
+
+@app.route("/admin/tenants")
+@super_admin_required
+def admin_tenants():
+    """テナント管理ページ（super_adminのみ）"""
+    tenants = Tenant.query.order_by(Tenant.created_at.desc()).all()
+    return render_template("admin_tenants.html", tenants=tenants, now=datetime.now())
+
+
+@app.route("/api/tenants", methods=["GET"])
+@super_admin_required
+def api_tenants_get():
+    """テナント一覧"""
+    tenants = Tenant.query.order_by(Tenant.created_at.desc()).all()
+    result = []
+    for t in tenants:
+        stores = Store.query.filter_by(tenant_id=t.id, is_active=True).all()
+        owner = AppUser.query.filter_by(tenant_id=t.id, role='owner', is_active=True).first()
+        result.append({
+            'id': t.id,
+            'name': t.name,
+            'plan': t.plan,
+            'is_active': t.is_active,
+            'store_count': len(stores),
+            'owner_username': owner.username if owner else None,
+            'owner_email': owner.email if owner else None,
+            'created_at': t.created_at.strftime('%Y-%m-%d') if t.created_at else None,
+        })
+    return jsonify(result)
+
+
+@app.route("/api/tenants", methods=["POST"])
+@super_admin_required
+def api_tenants_post():
+    """テナント新規作成（デフォルト店舗+オーナーアカウントも作成）"""
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': '会社名は必須です'}), 400
+
+    owner_username = (data.get('owner_username') or '').strip()
+    owner_password = (data.get('owner_password') or '').strip()
+    owner_email    = (data.get('owner_email') or '').strip()
+
+    if not owner_username or not owner_password:
+        return jsonify({'error': 'オーナーのユーザー名とパスワードは必須です'}), 400
+
+    if AppUser.query.filter_by(username=owner_username).first():
+        return jsonify({'error': 'そのユーザー名は既に使われています'}), 400
+
+    tenant = Tenant(name=name, plan=data.get('plan', 'standard'), is_active=True)
+    db.session.add(tenant)
+    db.session.flush()
+
+    store = Store(name=name, is_active=True, tenant_id=tenant.id)
+    db.session.add(store)
+    db.session.flush()
+
+    owner = AppUser(
+        username=owner_username,
+        email=owner_email or None,
+        password_hash=generate_password_hash(owner_password),
+        role='owner',
+        tenant_id=tenant.id,
+        is_active=True,
+    )
+    db.session.add(owner)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': tenant.id})
+
+
+@app.route("/api/tenants/<int:tid>", methods=["PUT"])
+@super_admin_required
+def api_tenant_update(tid):
+    """テナント更新"""
+    tenant = Tenant.query.get_or_404(tid)
+    data = request.get_json() or {}
+    if 'name' in data and data['name'].strip():
+        tenant.name = data['name'].strip()
+    if 'plan' in data:
+        tenant.plan = data['plan']
+    if 'is_active' in data:
+        tenant.is_active = bool(data['is_active'])
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/tenants/<int:tid>", methods=["DELETE"])
+@super_admin_required
+def api_tenant_delete(tid):
+    """テナント論理削除（無効化）"""
+    tenant = Tenant.query.get_or_404(tid)
+    tenant.is_active = False
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/tenants/<int:tid>/stores", methods=["GET"])
+@super_admin_required
+def api_tenant_stores(tid):
+    """テナント内の店舗一覧"""
+    stores = Store.query.filter_by(tenant_id=tid, is_active=True).all()
+    return jsonify([{'id': s.id, 'name': s.name} for s in stores])
+
+
+@app.route("/api/tenants/<int:tid>/stores", methods=["POST"])
+@super_admin_required
+def api_tenant_store_add(tid):
+    """テナントに店舗を追加"""
+    Tenant.query.get_or_404(tid)
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': '店舗名は必須です'}), 400
+    store = Store(name=name, is_active=True, tenant_id=tid)
+    db.session.add(store)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': store.id})
+
+
+# ── 申込一覧 API ──────────────────────────────────────────
+
+def _parse_date(s):
+    if not s: return None
+    try: return datetime.strptime(s, '%Y-%m-%d').date()
+    except: return None
+
+
+def _app_record_to_dict(r, staff_map):
+    return {
+        'id': r.id,
+        'staff_id': r.staff_id,
+        'staff_name': staff_map.get(r.staff_id, '-') if r.staff_id else '-',
+        'application_date': r.application_date.isoformat() if r.application_date else None,
+        'media': r.media or '',
+        'property_name': r.property_name or '',
+        'room_number': r.room_number or '',
+        'customer_name': r.customer_name or '',
+        'rent': r.rent or 0,
+        'contract_start_date': r.contract_start_date.isoformat() if r.contract_start_date else None,
+        'ad_payment_date': r.ad_payment_date.isoformat() if r.ad_payment_date else None,
+        'brokerage_fee': r.brokerage_fee or 0,
+        'ancillary_services': r.ancillary_services or '',
+        'ad_type': r.ad_type or 'amount',
+        'ad_amount': r.ad_amount or 0,
+        'lifeline': bool(r.lifeline),
+        'moving': bool(r.moving),
+        'fire_insurance': bool(r.fire_insurance),
+        'status': r.status or '申込',
+        'ad_settled': bool(r.ad_settled),
+        'ad_approved': bool(r.ad_approved),
+        'brokerage_settled': bool(r.brokerage_settled),
+        'brokerage_approved': bool(r.brokerage_approved),
+        'created_at': r.created_at.isoformat() if r.created_at else None,
+    }
+
+
+@app.route("/api/applications", methods=["GET"])
+@login_required
+def api_applications_list():
+    allowed_ids = get_allowed_store_ids()
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    year = request.args.get('year', type=int)
+    month = request.args.get('month', type=int)
+    staff_id_filter = request.args.get('staff_id', type=int)
+    status_filter = request.args.get('status')
+
+    q = ApplicationRecord.query.filter(ApplicationRecord.store_id.in_(allowed_ids))
+
+    if cur_user and cur_user.role == 'staff' and cur_user.staff_id:
+        q = q.filter(ApplicationRecord.staff_id == cur_user.staff_id)
+    elif staff_id_filter:
+        q = q.filter(ApplicationRecord.staff_id == staff_id_filter)
+
+    if year and month:
+        from sqlalchemy import extract
+        q = q.filter(
+            extract('year', ApplicationRecord.application_date) == year,
+            extract('month', ApplicationRecord.application_date) == month
+        )
+
+    if status_filter:
+        q = q.filter(ApplicationRecord.status == status_filter)
+
+    records = q.order_by(ApplicationRecord.application_date.desc()).all()
+    staff_map = {s.id: s.name for s in Staff.query.all()}
+    return jsonify([_app_record_to_dict(r, staff_map) for r in records])
+
+
+@app.route("/api/applications", methods=["POST"])
+@login_required
+def api_applications_create():
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    allowed_ids = get_allowed_store_ids()
+    data = request.get_json() or {}
+
+    store_id = int(data.get('store_id') or (allowed_ids[0] if allowed_ids else 1))
+    if store_id not in allowed_ids:
+        return jsonify({'error': '権限がありません'}), 403
+
+    staff_id = data.get('staff_id') or None
+    if cur_user and cur_user.role == 'staff':
+        staff_id = cur_user.staff_id  # staff は自分のレコードのみ
+
+    rec = ApplicationRecord(
+        store_id=store_id, staff_id=staff_id,
+        application_date=_parse_date(data.get('application_date')) or date.today(),
+        media=data.get('media') or None,
+        property_name=data.get('property_name') or None,
+        room_number=data.get('room_number') or None,
+        customer_name=data.get('customer_name') or None,
+        rent=float(data.get('rent') or 0),
+        contract_start_date=_parse_date(data.get('contract_start_date')),
+        ad_payment_date=_parse_date(data.get('ad_payment_date')),
+        brokerage_fee=float(data.get('brokerage_fee') or 0),
+        ancillary_services=data.get('ancillary_services') or None,
+        ad_type=data.get('ad_type') or 'amount',
+        ad_amount=float(data.get('ad_amount') or 0),
+        lifeline=bool(data.get('lifeline')),
+        moving=bool(data.get('moving')),
+        fire_insurance=bool(data.get('fire_insurance')),
+        status=data.get('status') or '申込',
+    )
+    db.session.add(rec)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': rec.id})
+
+
+@app.route("/api/applications/<int:rid>", methods=["GET"])
+@login_required
+def api_applications_get(rid):
+    allowed_ids = get_allowed_store_ids()
+    rec = ApplicationRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed_ids:
+        return jsonify({'error': '権限がありません'}), 403
+    staff_map = {s.id: s.name for s in Staff.query.all()}
+    return jsonify(_app_record_to_dict(rec, staff_map))
+
+
+@app.route("/api/applications/<int:rid>", methods=["PUT"])
+@login_required
+def api_applications_update(rid):
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    allowed_ids = get_allowed_store_ids()
+    rec = ApplicationRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed_ids:
+        return jsonify({'error': '権限がありません'}), 403
+    if cur_user and cur_user.role == 'staff' and rec.staff_id != cur_user.staff_id:
+        return jsonify({'error': '権限がありません'}), 403
+
+    data = request.get_json() or {}
+    is_manager = cur_user and cur_user.role in ('owner', 'store_manager', 'super_admin')
+
+    for fld in ['media', 'property_name', 'room_number', 'customer_name', 'ancillary_services', 'status', 'ad_type']:
+        if fld in data: setattr(rec, fld, data[fld] or None)
+    if 'staff_id' in data and is_manager:
+        rec.staff_id = data['staff_id'] or None
+    for fld in ['rent', 'brokerage_fee', 'ad_amount']:
+        if fld in data: setattr(rec, fld, float(data[fld] or 0))
+    for fld in ['lifeline', 'moving', 'fire_insurance']:
+        if fld in data: setattr(rec, fld, bool(data[fld]))
+    for fld in ['application_date', 'contract_start_date', 'ad_payment_date']:
+        if fld in data: setattr(rec, fld, _parse_date(data[fld]))
+
+    rec.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/applications/<int:rid>", methods=["DELETE"])
+@login_required
+def api_applications_delete(rid):
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    allowed_ids = get_allowed_store_ids()
+    rec = ApplicationRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed_ids:
+        return jsonify({'error': '権限がありません'}), 403
+    if cur_user and cur_user.role == 'staff':
+        return jsonify({'error': '削除権限がありません'}), 403
+    db.session.delete(rec)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/applications/<int:rid>/settle", methods=["POST"])
+@login_required
+def api_applications_settle(rid):
+    """営業マンが入金報告（決済フラグ）"""
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    allowed_ids = get_allowed_store_ids()
+    rec = ApplicationRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed_ids:
+        return jsonify({'error': '権限がありません'}), 403
+    if cur_user and cur_user.role == 'staff' and rec.staff_id != cur_user.staff_id:
+        return jsonify({'error': '権限がありません'}), 403
+
+    data = request.get_json() or {}
+    field = data.get('field')  # 'ad' or 'brokerage'
+    if field == 'ad':
+        rec.ad_settled = True
+    elif field == 'brokerage':
+        rec.brokerage_settled = True
+    else:
+        return jsonify({'error': 'invalid field'}), 400
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/applications/<int:rid>/approve", methods=["POST"])
+@login_required
+def api_applications_approve(rid):
+    """店長が入金を承認 → SalesKPIの売上に反映"""
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    if not cur_user or cur_user.role not in ('owner', 'store_manager', 'super_admin'):
+        return jsonify({'error': '権限がありません'}), 403
+
+    allowed_ids = get_allowed_store_ids()
+    rec = ApplicationRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed_ids:
+        return jsonify({'error': '権限がありません'}), 403
+
+    data = request.get_json() or {}
+    field = data.get('field')  # 'ad' or 'brokerage'
+
+    if field == 'ad' and not rec.ad_approved:
+        rec.ad_approved = True
+    elif field == 'brokerage' and not rec.brokerage_approved:
+        rec.brokerage_approved = True
+    else:
+        return jsonify({'error': 'invalid field or already approved'}), 400
+
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/pending-approvals")
+@login_required
+def api_pending_approvals():
+    """店長向け：承認待ち件数"""
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    if not cur_user or cur_user.role not in ('owner', 'store_manager', 'super_admin'):
+        return jsonify({'count': 0})
+    allowed_ids = get_allowed_store_ids()
+    count = ApplicationRecord.query.filter(
+        ApplicationRecord.store_id.in_(allowed_ids),
+        db.or_(
+            db.and_(ApplicationRecord.ad_settled == True, ApplicationRecord.ad_approved == False),
+            db.and_(ApplicationRecord.brokerage_settled == True, ApplicationRecord.brokerage_approved == False)
+        )
+    ).count()
+    return jsonify({'count': count})
+
+
+# ── 媒体マスター API ──────────────────────────────────────
+
+@app.route("/api/media-types", methods=["GET"])
+@login_required
+def api_media_types_list():
+    allowed_ids = get_allowed_store_ids()
+    store_id = allowed_ids[0] if allowed_ids else 1
+    items = MediaType.query.filter_by(store_id=store_id, is_active=True)\
+        .order_by(MediaType.sort_order, MediaType.name).all()
+    return jsonify([{'id': m.id, 'name': m.name} for m in items])
+
+
+@app.route("/api/media-types", methods=["POST"])
+@login_required
+def api_media_types_create():
+    allowed_ids = get_allowed_store_ids()
+    store_id = allowed_ids[0] if allowed_ids else 1
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': '媒体名を入力してください'}), 400
+    if MediaType.query.filter_by(store_id=store_id, name=name, is_active=True).first():
+        return jsonify({'error': 'すでに存在します'}), 400
+    m = MediaType(store_id=store_id, name=name)
+    db.session.add(m)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': m.id, 'name': m.name})
+
+
+@app.route("/api/media-types/<int:mid>", methods=["DELETE"])
+@login_required
+def api_media_types_delete(mid):
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    if not cur_user or cur_user.role not in ('owner', 'store_manager', 'super_admin'):
+        return jsonify({'error': '権限がありません'}), 403
+    m = MediaType.query.get_or_404(mid)
+    m.is_active = False
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── ステータスカラー API ──────────────────────────────────
+
+STATUS_COLOR_DEFAULTS = {
+    '申込':          {'bg': '#ffffff', 'text': '#111827'},
+    '契約':          {'bg': '#fef9c3', 'text': '#92400e'},
+    'キャンセル':     {'bg': '#fee2e2', 'text': '#b91c1c'},
+    'キャンセル振替': {'bg': '#dcfce7', 'text': '#15803d'},
+}
+
+
+@app.route("/api/status-colors", methods=["GET"])
+@login_required
+def api_status_colors_get():
+    allowed_ids = get_allowed_store_ids()
+    store_id = allowed_ids[0] if allowed_ids else 1
+    result = {}
+    for key, default in STATUS_COLOR_DEFAULTS.items():
+        sc = StatusColor.query.filter_by(store_id=store_id, status_key=key).first()
+        result[key] = {'bg': sc.bg_color if sc else default['bg'],
+                       'text': sc.text_color if sc else default['text']}
+    return jsonify(result)
+
+
+@app.route("/api/status-colors", methods=["PUT"])
+@login_required
+def api_status_colors_update():
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    if not cur_user or cur_user.role not in ('owner', 'store_manager', 'super_admin'):
+        return jsonify({'error': '権限がありません'}), 403
+    allowed_ids = get_allowed_store_ids()
+    store_id = allowed_ids[0] if allowed_ids else 1
+    data = request.get_json() or {}
+    for status_key, colors in data.items():
+        sc = StatusColor.query.filter_by(store_id=store_id, status_key=status_key).first()
+        if not sc:
+            sc = StatusColor(store_id=store_id, status_key=status_key)
+            db.session.add(sc)
+        sc.bg_color = colors.get('bg', '#ffffff')
+        sc.text_color = colors.get('text', '#111827')
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── 目標売上 API ─────────────────────────────────────────
+
+@app.route("/api/sales-kpi/target", methods=["POST"])
+@login_required
+def api_sales_kpi_target():
+    """目標売上を設定（staff は自分のみ、manager は全員）"""
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    allowed_ids = get_allowed_store_ids()
+    data = request.get_json() or {}
+
+    staff_id = data.get('staff_id')
+    if cur_user and cur_user.role == 'staff':
+        staff_id = cur_user.staff_id
+
+    year = data.get('year')
+    month = data.get('month')
+    target = float(data.get('target_sales') or 0)
+
+    if not staff_id or not year or not month:
+        return jsonify({'error': 'パラメータ不足'}), 400
+
+    staff = Staff.query.get(staff_id)
+    if not staff or staff.store_id not in allowed_ids:
+        return jsonify({'error': '権限がありません'}), 403
+
+    kpi = SalesKPI.query.filter_by(staff_id=staff_id, year=year, month=month,
+                                    store_id=staff.store_id).first()
+    if not kpi:
+        kpi = SalesKPI(staff_id=staff_id, store_id=staff.store_id, year=year, month=month)
+        db.session.add(kpi)
+    kpi.target_sales = target
     db.session.commit()
     return jsonify({'status': 'ok'})
 

@@ -189,13 +189,23 @@
         <span class="nav-label">経理・PL管理</span>
       </a>
 
-      <a href="/staff-ranking"
-         class="nav-item {% if request.path == '/staff-ranking' %}active{% endif %}">
+
+<a href="/daily-report"
+         class="nav-item {% if request.path == '/daily-report' %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
         </svg>
-        <span class="nav-label">スタッフランキング</span>
+        <span class="nav-label">日報</span>
+      </a>
+
+      <a href="/leave-management"
+         class="nav-item {% if request.path == '/leave-management' %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span class="nav-label">有給管理</span>
       </a>
 
       <div class="nav-section-label">設定</div>
@@ -209,6 +219,28 @@
         </svg>
         <span class="nav-label">設定</span>
       </a>
+
+      {% if session.get('app_user_role') in ('owner', 'super_admin') %}
+      <a href="/settings/users"
+         class="nav-item {% if request.path == '/settings/users' %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+        <span class="nav-label">ユーザー管理</span>
+      </a>
+      {% endif %}
+
+      {% if session.get('app_user_role') == 'super_admin' %}
+      <a href="/admin/tenants"
+         class="nav-item {% if request.path.startswith('/admin/tenants') %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+        </svg>
+        <span class="nav-label">テナント管理</span>
+      </a>
+      {% endif %}
 
     </nav>
 
@@ -274,7 +306,7 @@
     </header>
 
     <!-- コンテンツ -->
-    <main class="px-6 py-5 flex-1 max-w-screen-xl">
+    <main class="px-6 py-5 flex-1 w-full min-w-0">
       {% block content %}{% endblock %}
     </main>
 

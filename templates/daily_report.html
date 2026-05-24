@@ -1,0 +1,409 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}日報 | ルームピック管理ポータル{% endblock %}
+{% block breadcrumb %}日報{% endblock %}
+
+{% block extra_head %}
+<style>
+  .section-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:20px; margin-bottom:16px; }
+  .section-title { font-size:15px; font-weight:700; color:#111827; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+  .task-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #f3f4f6; }
+  .task-row:last-child { border-bottom:none; }
+  .task-check { width:20px; height:20px; accent-color:#16a34a; cursor:pointer; }
+  .task-label { font-size:14px; color:#374151; flex:1; }
+  .task-sub { font-size:11px; color:#9ca3af; margin-top:2px; }
+  .badge-applied { background:#dcfce7; color:#15803d; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; }
+  .badge-not-applied { background:#fee2e2; color:#b91c1c; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; }
+  .customer-card { border:1px solid #e5e7eb; border-radius:8px; padding:12px; margin-bottom:10px; background:#fafafa; }
+  .btn-add { background:#f0fdf4; border:1px solid #86efac; color:#15803d; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; cursor:pointer; }
+  .btn-add:hover { background:#dcfce7; }
+  .btn-remove { background:#fff; border:1px solid #fca5a5; color:#ef4444; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; }
+  .btn-save { background:#16a34a; color:#fff; border:none; border-radius:8px; padding:12px 32px; font-size:15px; font-weight:700; cursor:pointer; width:100%; }
+  .btn-save:hover { background:#15803d; }
+  .report-row { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:12px 16px; margin-bottom:8px; }
+  .report-row .report-meta { font-size:12px; color:#9ca3af; margin-bottom:4px; }
+  .tag-ok { display:inline-block; background:#dcfce7; color:#15803d; border-radius:4px; padding:2px 6px; font-size:11px; font-weight:600; margin-right:4px; }
+  .tag-no { display:inline-block; background:#fee2e2; color:#b91c1c; border-radius:4px; padding:2px 6px; font-size:11px; font-weight:600; margin-right:4px; }
+  .tab-btn { padding:8px 18px; border-radius:8px 8px 0 0; font-size:14px; font-weight:600; cursor:pointer; border:1px solid #e5e7eb; border-bottom:none; background:#f9fafb; color:#6b7280; }
+  .tab-btn.active { background:#fff; color:#16a34a; border-color:#d1fae5; }
+  textarea.rp-input { width:100%; border:1px solid #d1d5db; border-radius:8px; padding:10px 12px; font-size:14px; resize:vertical; outline:none; }
+  textarea.rp-input:focus { border-color:#16a34a; box-shadow:0 0 0 2px rgba(22,163,74,0.15); }
+  input.rp-input { width:100%; border:1px solid #d1d5db; border-radius:8px; padding:9px 12px; font-size:14px; outline:none; }
+  input.rp-input:focus { border-color:#16a34a; box-shadow:0 0 0 2px rgba(22,163,74,0.15); }
+  select.rp-select { border:1px solid #d1d5db; border-radius:8px; padding:8px 12px; font-size:14px; outline:none; }
+  select.rp-select:focus { border-color:#16a34a; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:860px; margin:0 auto;">
+
+  <!-- ヘッダー -->
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+    <div>
+      <h1 style="font-size:22px; font-weight:800; color:#111827; margin:0;">日報</h1>
+      <p style="font-size:13px; color:#6b7280; margin:4px 0 0;">営業日の活動を記録します</p>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <input type="date" id="report-date" class="rp-input" style="width:auto;"
+        value="{{ today.strftime('%Y-%m-%d') }}">
+      <select id="report-staff" class="rp-select">
+        {% for s in staff_list %}
+        <option value="{{ s.id }}">{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <!-- タブ -->
+  <div style="display:flex; gap:0; margin-bottom:-1px; position:relative; z-index:1;">
+    <button class="tab-btn active" id="tab-input-btn" onclick="switchReportTab('input')">入力</button>
+    <button class="tab-btn" id="tab-list-btn" onclick="switchReportTab('list')">日報一覧</button>
+    <button class="tab-btn" id="tab-task-btn" onclick="switchReportTab('task')">タスク管理</button>
+  </div>
+
+  <!-- 入力タブ -->
+  <div id="tab-input" style="border:1px solid #e5e7eb; border-radius:0 12px 12px 12px; padding:24px; background:#fff;">
+
+    <div id="alert-box" style="display:none; padding:12px 16px; border-radius:8px; margin-bottom:16px; font-size:14px;"></div>
+
+    <!-- 固定タスク -->
+    <div class="section-card">
+      <div class="section-title">📋 タスクチェック</div>
+      <div class="task-row">
+        <input type="checkbox" class="task-check" id="task-prev-day">
+        <div>
+          <div class="task-label">来店前日連絡</div>
+          <div class="task-sub">※ 明日来店予定のお客様への確認連絡</div>
+        </div>
+      </div>
+      <div class="task-row">
+        <input type="checkbox" class="task-check" id="task-same-day">
+        <div>
+          <div class="task-label">来店当日連絡</div>
+          <div class="task-sub">※ 来店されたお客様へのお礼連絡</div>
+        </div>
+      </div>
+      <div class="task-row">
+        <input type="checkbox" class="task-check" id="task-app-input">
+        <div>
+          <div class="task-label">申込管理機能入力</div>
+          <div class="task-sub">※ システムへの申込データ入力完了</div>
+        </div>
+      </div>
+      <!-- カスタムタスク -->
+      <div id="custom-task-list">
+        {% for t in tasks if not t.is_default %}
+        <div class="task-row" data-task-id="{{ t.id }}">
+          <input type="checkbox" class="task-check custom-task-check" data-task-id="{{ t.id }}">
+          <div class="task-label">{{ t.task_name }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- 接客記録 -->
+    <div class="section-card">
+      <div class="section-title" style="justify-content:space-between;">
+        <span>👥 接客記録</span>
+        <button class="btn-add" onclick="addCustomerRow()">＋ お客様追加</button>
+      </div>
+      <div id="customer-list"></div>
+      <div style="display:flex; align-items:center; gap:10px; margin-top:14px; padding-top:14px; border-top:1px solid #f3f4f6;">
+        <label style="font-size:14px; color:#374151; font-weight:600; white-space:nowrap;">今日の申込数：</label>
+        <input type="number" id="application-count" min="0" value="0"
+          class="rp-input" style="width:80px;">
+        <span style="font-size:14px; color:#6b7280;">件</span>
+      </div>
+    </div>
+
+    <!-- 明日の予定 -->
+    <div class="section-card">
+      <div class="section-title">📅 明日の接客予定</div>
+      <textarea id="tomorrow-appointments" class="rp-input" rows="3"
+        placeholder="明日の接客予定のお客様名を入力&#10;例: 山田様 10:00〜、鈴木様 14:00〜"></textarea>
+    </div>
+
+    <!-- その他メモ -->
+    <div class="section-card">
+      <div class="section-title">📝 その他メモ</div>
+      <textarea id="report-memo" class="rp-input" rows="3" placeholder="気づき・連絡事項など"></textarea>
+    </div>
+
+    <button class="btn-save" onclick="saveReport()">日報を保存する</button>
+  </div>
+
+  <!-- 一覧タブ -->
+  <div id="tab-list" style="display:none; border:1px solid #e5e7eb; border-radius:0 12px 12px 12px; padding:24px; background:#fff;">
+    <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
+      <select id="list-year" class="rp-select" onchange="loadReportList()">
+        {% for y in range(now.year, now.year-3, -1) %}<option value="{{ y }}" {% if y == now.year %}selected{% endif %}>{{ y }}年</option>{% endfor %}
+      </select>
+      <select id="list-month" class="rp-select" onchange="loadReportList()">
+        {% for m in range(1,13) %}<option value="{{ m }}" {% if m == now.month %}selected{% endif %}>{{ m }}月</option>{% endfor %}
+      </select>
+      <select id="list-staff" class="rp-select" onchange="loadReportList()">
+        <option value="">全スタッフ</option>
+        {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div id="report-list-body">
+      <p style="color:#9ca3af; text-align:center; padding:32px;">読み込み中...</p>
+    </div>
+  </div>
+
+  <!-- タスク管理タブ -->
+  <div id="tab-task" style="display:none; border:1px solid #e5e7eb; border-radius:0 12px 12px 12px; padding:24px; background:#fff;">
+    <p style="font-size:13px; color:#6b7280; margin-bottom:16px;">デフォルトのタスク以外に、独自のタスクを追加できます。</p>
+    <div id="task-template-list" style="margin-bottom:16px;"></div>
+    <div style="display:flex; gap:8px;">
+      <input type="text" id="new-task-name" class="rp-input" placeholder="新しいタスク名" style="flex:1;">
+      <button onclick="addTaskTemplate()" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;">追加</button>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let customerIndex = 0;
+
+function switchReportTab(tab) {
+  ['input','list','task'].forEach(t => {
+    document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
+    document.getElementById('tab-' + t + '-btn').classList.toggle('active', t === tab);
+  });
+  if (tab === 'list') loadReportList();
+  if (tab === 'task') loadTaskTemplates();
+}
+
+function showAlert(msg, type='success') {
+  const box = document.getElementById('alert-box');
+  box.style.display = 'block';
+  box.style.background = type === 'success' ? '#dcfce7' : '#fee2e2';
+  box.style.color = type === 'success' ? '#15803d' : '#b91c1c';
+  box.style.border = `1px solid ${type === 'success' ? '#86efac' : '#fca5a5'}`;
+  box.textContent = msg;
+  setTimeout(() => { box.style.display = 'none'; }, 3000);
+}
+
+function addCustomerRow(data) {
+  const idx = customerIndex++;
+  const div = document.createElement('div');
+  div.className = 'customer-card';
+  div.dataset.idx = idx;
+  div.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <input type="text" class="rp-input" placeholder="お客様名" style="flex:1; margin-right:8px;"
+        value="${data?.customer_name || ''}" data-field="customer_name">
+      <button class="btn-remove" onclick="this.closest('.customer-card').remove()">削除</button>
+    </div>
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+      <label style="font-size:13px; color:#374151; font-weight:600;">結果：</label>
+      <label style="font-size:13px; color:#374151; cursor:pointer;">
+        <input type="radio" name="applied_${idx}" value="1" ${data?.applied ? 'checked' : ''}> 申込あり
+      </label>
+      <label style="font-size:13px; color:#374151; cursor:pointer;">
+        <input type="radio" name="applied_${idx}" value="0" ${data && !data.applied ? 'checked' : ''}> 申込なし
+      </label>
+    </div>
+    <div class="no-apply-section" style="display:${(data && !data.applied && data.no_apply_reason) ? '' : 'none'};">
+      <div style="margin-bottom:6px;">
+        <label style="font-size:12px; color:#6b7280; font-weight:600;">申込にならなかった理由：</label>
+        <textarea class="rp-input" rows="2" data-field="no_apply_reason"
+          placeholder="なぜ申込にならなかったか">${data?.no_apply_reason || ''}</textarea>
+      </div>
+      <div>
+        <label style="font-size:12px; color:#6b7280; font-weight:600;">改善案：</label>
+        <textarea class="rp-input" rows="2" data-field="improvement"
+          placeholder="次回につながる改善点">${data?.improvement || ''}</textarea>
+      </div>
+    </div>
+  `;
+  // 申込あり/なし切り替え
+  div.querySelectorAll(`input[name="applied_${idx}"]`).forEach(r => {
+    r.addEventListener('change', () => {
+      div.querySelector('.no-apply-section').style.display =
+        r.value === '0' ? '' : 'none';
+    });
+  });
+  document.getElementById('customer-list').appendChild(div);
+}
+
+function collectCustomers() {
+  return [...document.querySelectorAll('#customer-list .customer-card')].map(div => {
+    const nameEl = div.querySelector('[data-field="customer_name"]');
+    const appliedEl = div.querySelector('input[type="radio"]:checked');
+    const reasonEl = div.querySelector('[data-field="no_apply_reason"]');
+    const improveEl = div.querySelector('[data-field="improvement"]');
+    return {
+      customer_name: nameEl?.value?.trim() || '',
+      applied: appliedEl?.value === '1',
+      no_apply_reason: reasonEl?.value?.trim() || '',
+      improvement: improveEl?.value?.trim() || '',
+    };
+  }).filter(c => c.customer_name);
+}
+
+async function loadExistingReport() {
+  const dateVal  = document.getElementById('report-date').value;
+  const staffId  = document.getElementById('report-staff').value;
+  if (!dateVal || !staffId) return;
+  try {
+    const res = await fetch(`/api/daily-report?date=${dateVal}&staff_id=${staffId}`);
+    const list = await res.json();
+    if (!list.length) {
+      // 空にリセット
+      document.getElementById('task-prev-day').checked = false;
+      document.getElementById('task-same-day').checked = false;
+      document.getElementById('task-app-input').checked = false;
+      document.querySelectorAll('.custom-task-check').forEach(c => c.checked = false);
+      document.getElementById('customer-list').innerHTML = '';
+      customerIndex = 0;
+      document.getElementById('application-count').value = 0;
+      document.getElementById('tomorrow-appointments').value = '';
+      document.getElementById('report-memo').value = '';
+      return;
+    }
+    const r = list[0];
+    document.getElementById('task-prev-day').checked  = r.prev_day_contact_done;
+    document.getElementById('task-same-day').checked  = r.same_day_contact_done;
+    document.getElementById('task-app-input').checked = r.application_input_done;
+    document.querySelectorAll('.custom-task-check').forEach(c => {
+      c.checked = !!r.task_checks[c.dataset.taskId];
+    });
+    document.getElementById('customer-list').innerHTML = '';
+    customerIndex = 0;
+    (r.customers || []).forEach(c => addCustomerRow(c));
+    document.getElementById('application-count').value = r.application_count;
+    document.getElementById('tomorrow-appointments').value = r.tomorrow_appointments;
+    document.getElementById('report-memo').value = r.memo;
+  } catch(e) { console.warn(e); }
+}
+
+async function saveReport() {
+  const dateVal  = document.getElementById('report-date').value;
+  const staffId  = document.getElementById('report-staff').value;
+  if (!dateVal || !staffId) { showAlert('日付とスタッフを選択してください', 'error'); return; }
+
+  const taskChecks = {};
+  document.querySelectorAll('.custom-task-check').forEach(c => {
+    taskChecks[c.dataset.taskId] = c.checked;
+  });
+
+  const payload = {
+    staff_id: staffId,
+    store_id: 1,
+    report_date: dateVal,
+    prev_day_contact_done:  document.getElementById('task-prev-day').checked,
+    same_day_contact_done:  document.getElementById('task-same-day').checked,
+    application_input_done: document.getElementById('task-app-input').checked,
+    application_count: parseInt(document.getElementById('application-count').value) || 0,
+    tomorrow_appointments: document.getElementById('tomorrow-appointments').value,
+    memo: document.getElementById('report-memo').value,
+    customers: collectCustomers(),
+    task_checks: taskChecks,
+  };
+
+  try {
+    const res = await fetch('/api/daily-report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error();
+    showAlert('日報を保存しました');
+  } catch(e) {
+    showAlert('保存に失敗しました', 'error');
+  }
+}
+
+async function loadReportList() {
+  const year    = document.getElementById('list-year').value;
+  const month   = document.getElementById('list-month').value;
+  const staffId = document.getElementById('list-staff').value;
+  let url = `/api/daily-report?year=${year}&month=${month}`;
+  if (staffId) url += `&staff_id=${staffId}`;
+  const body = document.getElementById('report-list-body');
+  body.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:24px;">読み込み中...</p>';
+  try {
+    const list = await fetch(url).then(r => r.json());
+    if (!list.length) {
+      body.innerHTML = '<p style="color:#9ca3af;text-align:center;padding:24px;">日報がありません</p>';
+      return;
+    }
+    body.innerHTML = list.map(r => {
+      const applied = r.customers.filter(c => c.applied).length;
+      const notApplied = r.customers.filter(c => !c.applied).length;
+      const tasks = [
+        r.prev_day_contact_done ? '<span class="tag-ok">前日連絡 ✓</span>' : '<span class="tag-no">前日連絡 ✗</span>',
+        r.same_day_contact_done ? '<span class="tag-ok">当日連絡 ✓</span>' : '<span class="tag-no">当日連絡 ✗</span>',
+        r.application_input_done ? '<span class="tag-ok">申込入力 ✓</span>' : '',
+      ].join('');
+      return `<div class="report-row">
+        <div class="report-meta">${r.report_date} ／ ${r.staff_name}</div>
+        <div style="margin-bottom:6px;">${tasks}</div>
+        <div style="font-size:13px; color:#374151; margin-bottom:4px;">
+          接客: ${r.customers.length}名（申込 <strong>${r.application_count}</strong>件）
+        </div>
+        ${r.customers.map(c => `<div style="font-size:12px; color:#6b7280; margin-left:8px;">
+          ・${c.customer_name} ${c.applied ? '<span class="badge-applied">申込</span>' : '<span class="badge-not-applied">未申込</span>'}
+          ${!c.applied && c.no_apply_reason ? `<br><span style="color:#9ca3af;margin-left:12px;">理由: ${c.no_apply_reason}</span>` : ''}
+        </div>`).join('')}
+        ${r.tomorrow_appointments ? `<div style="font-size:12px; color:#6b7280; margin-top:6px; padding-top:6px; border-top:1px solid #f3f4f6;">📅 明日: ${r.tomorrow_appointments.replace(/\n/g,'、')}</div>` : ''}
+        <button onclick="deleteReport(${r.id})"
+          style="margin-top:8px; background:none; border:none; color:#ef4444; font-size:12px; cursor:pointer; text-decoration:underline;">削除</button>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    body.innerHTML = '<p style="color:#ef4444;text-align:center;padding:24px;">読み込みエラー</p>';
+  }
+}
+
+async function deleteReport(id) {
+  if (!confirm('この日報を削除しますか？')) return;
+  await fetch(`/api/daily-report/${id}`, { method: 'DELETE' });
+  loadReportList();
+}
+
+async function loadTaskTemplates() {
+  const res = await fetch('/api/daily-task-template');
+  const tasks = await res.json();
+  const el = document.getElementById('task-template-list');
+  el.innerHTML = tasks.map(t => `
+    <div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #f3f4f6;">
+      <span style="flex:1; font-size:14px; color:#374151;">${t.task_name}</span>
+      ${t.is_default
+        ? '<span style="font-size:11px; color:#9ca3af; background:#f3f4f6; padding:2px 6px; border-radius:4px;">デフォルト</span>'
+        : `<button onclick="deleteTaskTemplate(${t.id})" style="background:none;border:none;color:#ef4444;font-size:12px;cursor:pointer;">削除</button>`}
+    </div>
+  `).join('');
+}
+
+async function addTaskTemplate() {
+  const name = document.getElementById('new-task-name').value.trim();
+  if (!name) return;
+  await fetch('/api/daily-task-template', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_name: name, store_id: 1 }),
+  });
+  document.getElementById('new-task-name').value = '';
+  loadTaskTemplates();
+}
+
+async function deleteTaskTemplate(id) {
+  if (!confirm('このタスクを削除しますか？')) return;
+  const res = await fetch(`/api/daily-task-template/${id}`, { method: 'DELETE' });
+  if (!res.ok) { const d = await res.json(); alert(d.error || '削除できません'); return; }
+  loadTaskTemplates();
+}
+
+// 日付・スタッフ変更で既存日報をロード
+document.getElementById('report-date').addEventListener('change', loadExistingReport);
+document.getElementById('report-staff').addEventListener('change', loadExistingReport);
+
+// 初期ロード
+loadExistingReport();
+</script>
+{% endblock %}

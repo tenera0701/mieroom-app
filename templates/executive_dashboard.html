@@ -215,18 +215,27 @@
 
 <!-- 月次推移グラフ（大） -->
 <div class="bg-white rounded-2xl shadow-sm border border-green-100 p-6 mb-6">
-  <div class="flex items-center justify-between mb-4">
+  <div class="flex items-center justify-between mb-3 flex-wrap gap-3">
     <h2 class="text-base font-bold text-gray-800">月次売上・利益・広告費 推移</h2>
-    <div class="flex gap-4 text-xs text-gray-500">
-      <span class="flex items-center gap-1.5">
-        <span class="inline-block w-3 h-3 rounded" style="background:#16a34a;"></span>売上
-      </span>
-      <span class="flex items-center gap-1.5">
-        <span class="inline-block w-3 h-3 rounded" style="background:#4ade80;"></span>粗利
-      </span>
-      <span class="flex items-center gap-1.5">
-        <span class="inline-block w-3 h-3 rounded" style="background:#d1d5db;"></span>広告費
-      </span>
+    <div class="flex items-center gap-2 flex-wrap">
+      <!-- 期間セレクター -->
+      <div class="flex items-center gap-1.5 text-sm text-gray-600">
+        <input type="month" id="chart-from"
+          class="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+        <span class="text-gray-400">〜</span>
+        <input type="month" id="chart-to"
+          class="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+        <button onclick="applyChartRange()"
+          class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition">適用</button>
+        <button onclick="resetChartRange()"
+          class="px-3 py-1.5 border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs font-medium rounded-lg transition">リセット</button>
+      </div>
+      <!-- 凡例 -->
+      <div class="flex gap-3 text-xs text-gray-500">
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background:#16a34a;"></span>売上</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background:#4ade80;"></span>利益</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background:#d1d5db;"></span>広告費</span>
+      </div>
     </div>
   </div>
   <div style="height:280px;"><canvas id="mainChart"></canvas></div>
@@ -249,11 +258,12 @@
             <th class="text-right py-2 px-2 text-xs text-gray-400 font-medium">成約率</th>
             <th class="text-right py-2 px-2 text-xs text-gray-400 font-medium">売上</th>
             <th class="text-right py-2 pl-2 text-xs text-gray-400 font-medium">前月比売上</th>
+            <th class="text-right py-2 pl-2 text-xs text-gray-400 font-medium">操作</th>
           </tr>
         </thead>
         <tbody id="staff-tbody">
           <tr>
-            <td colspan="7" class="py-8 text-center text-gray-400 text-sm">読み込み中...</td>
+            <td colspan="8" class="py-8 text-center text-gray-400 text-sm">読み込み中...</td>
           </tr>
         </tbody>
       </table>
@@ -278,7 +288,7 @@
     <div class="flex border-b border-gray-100 flex-shrink-0">
       <button onclick="switchTab('kpi')" id="tab-kpi"
         class="flex-1 py-3.5 text-sm font-semibold text-green-700 border-b-2 border-green-600 bg-green-50">
-        営業KPI入力
+        <span id="tab-kpi-label">営業KPI入力</span>
       </button>
       <button onclick="switchTab('pl')" id="tab-pl"
         class="flex-1 py-3.5 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:bg-gray-50">
@@ -614,15 +624,18 @@ function renderMainChart(monthly) {
 // ==============================
 // スタッフテーブル
 // ==============================
+const _kpiDataMap = {};
+
 function renderStaff(staff) {
   const tb = document.getElementById('staff-tbody');
   if (!staff || staff.length === 0) {
-    tb.innerHTML = `<tr><td colspan="7" class="py-10 text-center text-gray-400 text-sm">
+    tb.innerHTML = `<tr><td colspan="8" class="py-10 text-center text-gray-400 text-sm">
       まだデータがありません。右上から入力してください
     </td></tr>`;
     return;
   }
   const maxSales = Math.max(...staff.map(s => s.sales_amount || 0), 1);
+  staff.forEach(s => { if (s.kpi_id) _kpiDataMap[s.kpi_id] = s; });
   tb.innerHTML = staff.map((s, i) => {
     const visits = s.store_visits || 0;
     const ctrs   = s.contracts   || 0;
@@ -652,6 +665,14 @@ function renderStaff(staff) {
         </div>
       </td>
       <td class="text-right pl-2">${fmtDiff(momSales)}</td>
+      <td class="text-right pl-2 whitespace-nowrap">
+        ${s.kpi_id ? `
+          <button onclick="editKpiEntry(${s.kpi_id})"
+            class="text-xs px-2 py-1 rounded border border-green-300 text-green-700 hover:bg-green-50 transition mr-1">編集</button>
+          <button onclick="deleteKpiEntry(${s.kpi_id})"
+            class="text-xs px-2 py-1 rounded border border-red-200 text-red-500 hover:bg-red-50 transition">削除</button>
+        ` : '―'}
+      </td>
     </tr>`;
   }).join('');
 }
@@ -753,6 +774,49 @@ function renderKPI(sum, monthly) {
 }
 
 // ==============================
+// グラフ期間セレクター初期化
+// ==============================
+function initChartRange() {
+  const today = new Date();
+  const toYM  = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+  const from  = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+  const fromYM = from.getFullYear() + '-' + String(from.getMonth() + 1).padStart(2, '0');
+  const fromEl = document.getElementById('chart-from');
+  const toEl   = document.getElementById('chart-to');
+  if (fromEl && !fromEl.value) fromEl.value = fromYM;
+  if (toEl   && !toEl.value)   toEl.value   = toYM;
+}
+
+function applyChartRange() {
+  const from = document.getElementById('chart-from').value;
+  const to   = document.getElementById('chart-to').value;
+  if (!from || !to) return;
+  loadChart(from, to);
+}
+
+function resetChartRange() {
+  const fromEl = document.getElementById('chart-from');
+  const toEl   = document.getElementById('chart-to');
+  if (fromEl) fromEl.value = '';
+  if (toEl)   toEl.value   = '';
+  initChartRange();
+  loadChart();
+}
+
+async function loadChart(from, to) {
+  let url = '/api/kpi/monthly';
+  if (from && to) url += `?from=${from}&to=${to}`;
+  try {
+    const monthly = await fetch(url).then(r => r.ok ? r.json() : []);
+    renderMainChart(monthly || []);
+    // スパークラインは12ヶ月固定（loadKPI側で描画済み）
+  } catch(e) {
+    console.error('chart load error:', e);
+    renderMainChart([]);
+  }
+}
+
+// ==============================
 // メインロード
 // ==============================
 async function load() {
@@ -777,13 +841,21 @@ async function load() {
     ]);
 
     renderKPI(sum || {}, monthly || []);
-    renderMainChart(monthly || []);
+
+    // グラフ：選択中の範囲があればそちら、なければ12ヶ月デフォルト
+    const chartFrom = document.getElementById('chart-from')?.value;
+    const chartTo   = document.getElementById('chart-to')?.value;
+    if (chartFrom && chartTo) {
+      await loadChart(chartFrom, chartTo);
+    } else {
+      renderMainChart(monthly || []);
+    }
+
     renderStaff(staff || []);
     renderFunnel(sum || {});
 
   } catch(e) {
     console.error('load error:', e);
-    // エラー時は空状態を描画
     renderKPI({}, []);
     renderMainChart([]);
     renderStaff([]);
@@ -794,8 +866,63 @@ async function load() {
 // ==============================
 // モーダル
 // ==============================
-function openInputModal()  { document.getElementById('input-modal').classList.remove('hidden'); }
-function closeInputModal() { document.getElementById('input-modal').classList.add('hidden'); }
+let _editingKpiId = null;
+
+function openInputModal() {
+  _editingKpiId = null;
+  const staffEl = document.getElementById('kpi-staff');
+  const monthEl = document.getElementById('kpi-month');
+  if (staffEl) staffEl.disabled = false;
+  if (monthEl) monthEl.disabled = false;
+  const lbl = document.getElementById('tab-kpi-label');
+  if (lbl) lbl.textContent = '営業KPI入力';
+  document.getElementById('input-modal').classList.remove('hidden');
+  switchTab('kpi');
+}
+
+function closeInputModal() {
+  _editingKpiId = null;
+  const staffEl = document.getElementById('kpi-staff');
+  const monthEl = document.getElementById('kpi-month');
+  if (staffEl) staffEl.disabled = false;
+  if (monthEl) monthEl.disabled = false;
+  const lbl = document.getElementById('tab-kpi-label');
+  if (lbl) lbl.textContent = '営業KPI入力';
+  document.getElementById('input-modal').classList.add('hidden');
+}
+
+function editKpiEntry(kpiId) {
+  _editingKpiId = kpiId;
+  const s = _kpiDataMap[kpiId] || {};
+  const staffEl = document.getElementById('kpi-staff');
+  const monthEl = document.getElementById('kpi-month');
+  if (staffEl) { staffEl.value = s.staff_id || ''; staffEl.disabled = true; }
+  const y = window._curYear;
+  const m = String(window._curMonth).padStart(2, '0');
+  if (monthEl) { monthEl.value = `${y}-${m}`; monthEl.disabled = true; }
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || 0; };
+  set('kpi-inquiries', s.inquiries);
+  set('kpi-visits',    s.store_visits);
+  set('kpi-viewings',  s.viewings);
+  set('kpi-apps',      s.applications);
+  set('kpi-contracts', s.contracts);
+  set('kpi-cancel',    s.cancellations);
+  set('kpi-sales',     s.sales_amount);
+  set('kpi-options',   s.option_sales);
+  const lbl = document.getElementById('tab-kpi-label');
+  if (lbl) lbl.textContent = 'KPI編集';
+  document.getElementById('input-modal').classList.remove('hidden');
+  switchTab('kpi');
+}
+
+async function deleteKpiEntry(kpiId) {
+  if (!confirm('このKPIデータを削除しますか？')) return;
+  try {
+    const res = await fetch(`/api/kpi/${kpiId}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error();
+    await load();
+  } catch(e) { alert('削除に失敗しました'); }
+}
 
 function switchTab(t) {
   const activeClass   = 'flex-1 py-3.5 text-sm font-semibold text-green-700 border-b-2 border-green-600 bg-green-50';
@@ -807,16 +934,13 @@ function switchTab(t) {
 }
 
 // ==============================
-// KPI保存
+// KPI保存（新規・編集共用）
 // ==============================
 async function submitKPI() {
-  const ym     = document.getElementById('kpi-month').value.split('-');
+  const ym      = document.getElementById('kpi-month').value.split('-');
   const staffEl = document.getElementById('kpi-staff');
   const staffId = staffEl ? staffEl.value : 1;
   const body = {
-    staff_id:     staffId,
-    year:         ym[0],
-    month:        ym[1],
     inquiries:    parseInt(document.getElementById('kpi-inquiries').value) || 0,
     store_visits: parseInt(document.getElementById('kpi-visits').value)    || 0,
     viewings:     parseInt(document.getElementById('kpi-viewings').value)  || 0,
@@ -826,13 +950,27 @@ async function submitKPI() {
     sales_amount: parseInt(document.getElementById('kpi-sales').value)     || 0,
     option_sales: parseInt(document.getElementById('kpi-options').value)   || 0,
   };
+
+  let url, method;
+  if (_editingKpiId) {
+    url    = `/api/kpi/${_editingKpiId}`;
+    method = 'PUT';
+  } else {
+    body.staff_id = staffId;
+    body.year     = ym[0];
+    body.month    = ym[1];
+    body.store_id = 1;
+    url    = '/api/kpi/input';
+    method = 'POST';
+  }
+
   try {
-    const res = await fetch('/api/kpi/input', {
-      method: 'POST',
+    const res = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (res.ok) { closeInputModal(); await load(); alert('保存しました'); }
+    if (res.ok) { closeInputModal(); await load(); alert(_editingKpiId ? '更新しました' : '保存しました'); }
     else         alert('保存に失敗しました');
   } catch(e) { alert('通信エラーが発生しました'); }
 }
@@ -872,6 +1010,6 @@ async function submitPL() {
   } catch(e) { alert('通信エラーが発生しました'); }
 }
 
-document.addEventListener('DOMContentLoaded', load);
+document.addEventListener('DOMContentLoaded', () => { initChartRange(); load(); });
 </script>
 {% endblock %}

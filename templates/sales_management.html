@@ -412,6 +412,63 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* ===== 月ナビ（経理と統一） ===== */
+  .month-nav { display:flex; align-items:center; gap:6px; }
+  .month-nav-btn {
+    background:#fff; border:1px solid #d1d5db; border-radius:6px;
+    padding:7px 13px; font-size:13px; font-weight:600; color:#374151;
+    cursor:pointer; transition:all 0.12s;
+  }
+  .month-nav-btn:hover { background:#f3f4f6; }
+  .month-nav-current {
+    font-size:17px; font-weight:800; color:#111827;
+    min-width:110px; text-align:center;
+  }
+
+  /* ===== 申込一覧表 ===== */
+  .app-table th { cursor: default; }
+  .app-table td { white-space: nowrap; }
+  .app-status-badge {
+    display: inline-block; padding: 2px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; border: 1px solid rgba(0,0,0,0.1);
+  }
+  .app-bool { font-size: 16px; }
+  .app-action-btn {
+    padding: 3px 10px; font-size: 11px; font-weight: 600; border-radius: 5px;
+    cursor: pointer; border: 1px solid; transition: all 0.12s;
+  }
+  .btn-settle  { background:#fef9c3; color:#92400e; border-color:#fde68a; }
+  .btn-settle:hover { background:#fde68a; }
+  .btn-approve { background:#dcfce7; color:#15803d; border-color:#86efac; }
+  .btn-approve:hover { background:#86efac; }
+  .btn-settled-done { background:#f3f4f6; color:#9ca3af; border-color:#e5e7eb; cursor:default; }
+  .btn-edit-app { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+  .btn-edit-app:hover { background:#bfdbfe; }
+  .btn-delete-app { background:#fff; color:#ef4444; border-color:#fca5a5; }
+  .btn-delete-app:hover { background:#fee2e2; }
+
+  /* ===== 承認待ち通知バー ===== */
+  .approval-notice {
+    background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px;
+    padding: 12px 18px; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 10px; font-size: 13px; color: #92400e;
+    font-weight: 600;
+  }
+  .approval-notice svg { flex-shrink: 0; }
+
+  /* ===== 目標進捗 ===== */
+  .target-bar { background: #e5e7eb; border-radius: 3px; height: 6px; overflow: hidden; }
+  .target-bar-fill { height: 100%; border-radius: 3px; background: var(--primary); transition: width 0.4s; }
+  .target-bar-fill.over { background: #f59e0b; }
+
+  /* ===== btn-primary ===== */
+  .btn-primary {
+    background: var(--primary); color: #fff; border: none; border-radius: 6px;
+    padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-primary:hover { background: var(--primary-dark); }
+
   /* ===== アラートメッセージ ===== */
   .alert {
     padding: 12px 16px;
@@ -427,55 +484,53 @@
 {% endblock %}
 
 {% block content %}
-<div style="max-width: 1400px; margin: 0 auto; padding: 0 4px;">
+<div style="width:100%; padding:0 4px;">
 
-  <!-- ページタイトル -->
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
+  <!-- ページヘッダー（経理と統一スタイル） -->
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
     <div>
       <h1 style="font-size:22px; font-weight:800; color:#111827; margin:0;">営業管理</h1>
       <p style="font-size:13px; color:var(--text-muted); margin:4px 0 0;">スタッフ別KPI・月次推移・売上分析</p>
     </div>
-    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
       <!-- 月ナビゲーション -->
-      <div style="display:flex; align-items:center; gap:6px;">
-        <button class="btn-cancel" style="padding:7px 12px; font-size:13px; font-weight:600;" onclick="navigateSalesMonth(-1)">&#8249; 前月</button>
-        <div id="sales-month-label" style="font-size:16px; font-weight:800; color:#111827; min-width:100px; text-align:center;"></div>
-        <button class="btn-cancel" style="padding:7px 12px; font-size:13px; font-weight:600;" onclick="navigateSalesMonth(1)">次月 &#8250;</button>
-        <button class="btn-cancel" style="padding:7px 12px; font-size:13px; font-weight:600; background:#f0fdf4; color:var(--primary); border-color:#86efac;" onclick="navigateSalesToday()">今月</button>
+      <div class="month-nav">
+        <button class="month-nav-btn" onclick="navigateSalesMonth(-1)">&#8249; 前月</button>
+        <div class="month-nav-current" id="sales-month-label"></div>
+        <button class="month-nav-btn" onclick="navigateSalesMonth(1)">次月 &#8250;</button>
+        <button class="month-nav-btn" style="background:#f0fdf4;color:var(--primary);border-color:#86efac;" onclick="navigateSalesToday()">今月</button>
       </div>
-      <button class="btn-kpi-input" onclick="openKpiModal()">&#43; KPI入力</button>
+      <!-- 年月ジャンプ -->
+      <input type="month" id="sales-month-jump"
+        style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;outline:none;color:#111827;"
+        onchange="jumpSalesMonth(this.value)">
+      <!-- スタッフフィルター -->
+      <select id="filter-staff"
+        style="border:1px solid #d1d5db;border-radius:6px;padding:7px 10px;font-size:13px;color:#111827;outline:none;"
+        onchange="loadData()">
+        <option value="">全スタッフ</option>
+      </select>
+      <button onclick="openSalesImportModal()" style="padding:8px 16px;font-size:13px;font-weight:700;background:#84cc16;color:#fff;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background 0.15s;" onmouseover="this.style.background='#65a30d'" onmouseout="this.style.background='#84cc16'">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        Excelインポート
+      </button>
+      <button class="btn-kpi-input" onclick="openKpiModal()">&#43; 新規入力</button>
     </div>
   </div>
 
   <!-- アラート -->
   <div id="alert-msg" class="alert"></div>
 
-  <!-- フィルターバー -->
-  <div class="filter-bar">
-    <div class="filter-group">
-      <label>年</label>
-      <select id="filter-year">
-        <option value="2026">2026年</option>
-        <option value="2025">2025年</option>
-        <option value="2024">2024年</option>
-      </select>
-    </div>
-    <div class="filter-group">
-      <label>月</label>
-      <select id="filter-month">
-        {% for m in range(1, 13) %}
-        <option value="{{ m }}" {% if m == 5 %}selected{% endif %}>{{ m }}月</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="filter-group">
-      <label>スタッフ</label>
-      <select id="filter-staff">
-        <option value="">全スタッフ</option>
-      </select>
-    </div>
-    <button class="btn-filter" onclick="loadData()">絞り込み</button>
+  <!-- 承認待ち通知バー（店長以上に表示） -->
+  {% if is_manager %}
+  <div id="approval-notice" class="approval-notice" style="display:none;">
+    <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+      <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+    </svg>
+    <span id="approval-notice-text">承認待ちの入金報告があります</span>
+    <button onclick="scrollToApproval()" style="margin-left:auto;padding:4px 12px;background:#f97316;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;">確認する</button>
   </div>
+  {% endif %}
 
   <!-- KPIサマリーカード -->
   <div class="kpi-cards" id="kpi-cards">
@@ -528,9 +583,10 @@
             <th onclick="sortTable(7)">申込率</th>
             <th onclick="sortTable(8)">契約率</th>
             <th onclick="sortTable(9)">売上(万円)</th>
-            <th onclick="sortTable(10)">客単価(万円)</th>
-            <th onclick="sortTable(11)">オプション(万円)</th>
-            <th onclick="sortTable(12)">前月比</th>
+            <th onclick="sortTable(10)">目標(万円)</th>
+            <th onclick="sortTable(11)">達成率</th>
+            <th onclick="sortTable(12)">オプション(万円)</th>
+            <th onclick="sortTable(13)">前月比</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -541,17 +597,95 @@
 
   <!-- 月次推移グラフ -->
   <div class="chart-section">
-    <h2>月次売上推移（全体）</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+      <h2 style="margin:0;">月次売上推移（全体）</h2>
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;">
+        <input type="month" id="sales-chart-from" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;">
+        <span style="color:#9ca3af;">〜</span>
+        <input type="month" id="sales-chart-to" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;">
+        <button onclick="applySalesChartRange()" style="padding:4px 12px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">適用</button>
+        <button onclick="resetSalesChartRange()" style="padding:4px 10px;background:#fff;color:#6b7280;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;">リセット</button>
+      </div>
+    </div>
     <div style="position:relative; height:300px;">
       <canvas id="monthly-chart"></canvas>
     </div>
   </div>
 
+  <!-- ===== 申込一覧表 ===== -->
+  <div class="table-section" id="application-section" style="margin-top:24px;">
+    <div class="table-section-header" style="flex-wrap:wrap;gap:8px;">
+      <h2>申込一覧表</h2>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto;">
+        {% if is_manager %}
+        <select id="app-filter-staff" onchange="loadApplications()"
+          style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;color:#111827;background:#fff;">
+          <option value="">全スタッフ</option>
+          {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+        </select>
+        {% endif %}
+        <select id="app-filter-status" onchange="loadApplications()"
+          style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;color:#111827;background:#fff;">
+          <option value="">全ステータス</option>
+          <option value="申込">申込</option>
+          <option value="契約">契約</option>
+          <option value="キャンセル">キャンセル</option>
+          <option value="キャンセル振替">キャンセル振替</option>
+        </select>
+        {% if is_manager %}
+        <button onclick="openColorModal()" style="padding:5px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#374151;">🎨 色設定</button>
+        <button onclick="openMediaModal()" style="padding:5px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#374151;">📋 媒体管理</button>
+        {% endif %}
+        <button onclick="openAppModal()" style="padding:6px 14px;font-size:12px;font-weight:700;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;">＋ 申込追加</button>
+      </div>
+    </div>
+    <div class="table-wrapper">
+      <table class="app-table">
+        <thead>
+          <tr>
+            <th>申込日</th>
+            <th>担当</th>
+            <th>媒体</th>
+            <th>物件名</th>
+            <th>号室</th>
+            <th>お客様名</th>
+            <th>賃料</th>
+            <th>契約開始日</th>
+            <th>仲介手数料</th>
+            <th>AD</th>
+            <th>AD入金日</th>
+            <th>付帯サービス</th>
+            <th>LL</th>
+            <th>引越</th>
+            <th>火保</th>
+            <th>ステータス</th>
+            <th>仲介入金</th>
+            <th>AD入金</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="app-tbody">
+          <tr><td colspan="19" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- 未入金（AD）一覧 -->
-  <div class="table-section" style="margin-top:32px;">
-    <div class="table-section-header" style="display:flex;justify-content:space-between;align-items:center;">
+  <div class="table-section" id="uncollected-section" style="margin-top:24px;">
+    <div class="table-section-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
       <h2>未入金一覧（AD管理）</h2>
-      <div style="display:flex;gap:8px;align-items:center;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <label style="font-size:12px;color:#6b7280;font-weight:600;">スタッフ</label>
+          <select id="unc-filter-staff" onchange="loadUncollected()"
+            style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;color:#111827;background:#fff;min-width:110px;">
+            <option value="">全スタッフ</option>
+            {% for s in staff_list %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
         <label style="font-size:12px;color:#6b7280;"><input type="checkbox" id="show-paid" onchange="loadUncollected()"> 入金済みも表示</label>
         <button class="btn-primary" onclick="openUncollectedModal()">＋ 追加</button>
       </div>
@@ -624,6 +758,10 @@
             <input type="month" name="ym" id="modal-ym" required value="{{ now.strftime('%Y-%m') }}">
           </div>
           <div class="form-group">
+            <label>目標売上（円）</label>
+            <input type="number" name="target_sales" id="modal-target" min="0" step="1" placeholder="0" value="0">
+          </div>
+          <div class="form-group">
             <label>反響数</label>
             <input type="number" name="responses" min="0" placeholder="0" value="0">
           </div>
@@ -648,10 +786,6 @@
             <input type="number" name="cancels" min="0" placeholder="0" value="0">
           </div>
           <div class="form-group">
-            <label>売上（円）</label>
-            <input type="number" name="revenue" min="0" step="1" placeholder="1500000" value="0">
-          </div>
-          <div class="form-group">
             <label>オプション売上（円）</label>
             <input type="number" name="option_revenue" min="0" step="1" placeholder="0" value="0">
           </div>
@@ -659,24 +793,178 @@
             <label>売上見込み（円）</label>
             <input type="number" name="estimated_sales" min="0" step="1" placeholder="0" value="0">
           </div>
-          <div class="form-group">
-            <label>火災保険 件数</label>
-            <input type="number" name="fire_insurance_count" min="0" placeholder="0" value="0">
-          </div>
-          <div class="form-group">
-            <label>ライフライン 件数</label>
-            <input type="number" name="lifeline_count" min="0" placeholder="0" value="0">
-          </div>
-          <div class="form-group">
-            <label>引越し 件数</label>
-            <input type="number" name="moving_count" min="0" placeholder="0" value="0">
-          </div>
         </div>
+        <p style="font-size:12px;color:#9ca3af;margin-top:10px;">※売上・火災保険・ライフライン・引越しは申込一覧から自動反映されます</p>
       </form>
     </div>
     <div class="modal-footer">
       <button type="button" class="btn-cancel" onclick="closeKpiModal()">キャンセル</button>
       <button type="button" class="btn-submit" onclick="submitKpi()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 申込入力/編集モーダル ===== -->
+<div class="modal-overlay" id="app-modal">
+  <div class="modal" style="width:780px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-header">
+      <h3 id="app-modal-title">申込追加</h3>
+      <button class="modal-close" onclick="closeAppModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="app-editing-id">
+      <div class="form-grid" style="grid-template-columns:repeat(3,1fr);gap:12px;">
+        <div class="form-group">
+          <label>申込日 <span style="color:#ef4444;">*</span></label>
+          <input type="date" id="app-application_date" required>
+        </div>
+        <div class="form-group">
+          <label>担当スタッフ</label>
+          <select id="app-staff_id">
+            <option value="">― 選択 ―</option>
+            {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>媒体</label>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <select id="app-media" style="flex:1;">
+              <option value="">― 選択 ―</option>
+              {% for m in media_types %}<option value="{{ m.name }}">{{ m.name }}</option>{% endfor %}
+            </select>
+            <button type="button" onclick="toggleInlineMediaInput()"
+              title="新規媒体追加"
+              style="padding:6px 10px;font-size:15px;border:1px solid #d1d5db;border-radius:6px;background:#f9fafb;cursor:pointer;font-weight:700;color:#374151;line-height:1;">＋</button>
+          </div>
+          <div id="inline-media-input" style="display:none;margin-top:6px;">
+            <div style="display:flex;gap:6px;">
+              <input type="text" id="inline-media-name" placeholder="新しい媒体名"
+                style="flex:1;border:1px solid #86efac;border-radius:6px;padding:6px 10px;font-size:13px;outline:none;"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();confirmInlineMedia();}">
+              <button type="button" onclick="confirmInlineMedia()"
+                style="padding:6px 12px;font-size:12px;font-weight:700;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;">追加</button>
+              <button type="button" onclick="cancelInlineMedia()"
+                style="padding:6px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;">✕</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>物件名</label>
+          <input type="text" id="app-property_name" placeholder="例: グランドパレス新宿">
+        </div>
+        <div class="form-group">
+          <label>号室</label>
+          <input type="text" id="app-room_number" placeholder="例: 301">
+        </div>
+        <div class="form-group">
+          <label>お客様名</label>
+          <input type="text" id="app-customer_name" placeholder="例: 山田 太郎">
+        </div>
+        <div class="form-group">
+          <label>賃料（円）</label>
+          <input type="number" id="app-rent" min="0" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>契約開始日</label>
+          <input type="date" id="app-contract_start_date">
+        </div>
+        <div class="form-group">
+          <label>AD入金日</label>
+          <input type="date" id="app-ad_payment_date">
+        </div>
+        <div class="form-group">
+          <label>仲介手数料（円）</label>
+          <input type="number" id="app-brokerage_fee" min="0" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>AD種別</label>
+          <select id="app-ad_type" onchange="updateAdLabel()">
+            <option value="amount">金額（円）</option>
+            <option value="percent">割合（%）</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label id="app-ad-label">AD金額（円）</label>
+          <input type="number" id="app-ad_amount" min="0" placeholder="0">
+        </div>
+        <div class="form-group full-width" style="grid-column:1/-1;">
+          <label>付帯サービス</label>
+          <input type="text" id="app-ancillary_services" placeholder="例: 保証会社: 日本賃貸保証">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label>ステータス</label>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;cursor:pointer;"><input type="radio" name="app-status" value="申込" checked> 申込</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;cursor:pointer;"><input type="radio" name="app-status" value="契約"> 契約</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;cursor:pointer;"><input type="radio" name="app-status" value="キャンセル"> キャンセル</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;cursor:pointer;"><input type="radio" name="app-status" value="キャンセル振替"> キャンセル振替</label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>ライフライン</label>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;">
+            <input type="checkbox" id="app-lifeline" style="width:16px;height:16px;accent-color:#16a34a;">
+            <span style="font-size:13px;">対象（●）</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label>引越し</label>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;">
+            <input type="checkbox" id="app-moving" style="width:16px;height:16px;accent-color:#16a34a;">
+            <span style="font-size:13px;">対象（●）</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label>火災保険</label>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;">
+            <input type="checkbox" id="app-fire_insurance" style="width:16px;height:16px;accent-color:#16a34a;">
+            <span style="font-size:13px;">対象（●）</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn-cancel" onclick="closeAppModal()">キャンセル</button>
+      <button type="button" class="btn-submit" onclick="submitApp()">保存する</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 媒体管理モーダル ===== -->
+<div class="modal-overlay" id="media-modal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <h3>媒体マスター管理</h3>
+      <button class="modal-close" onclick="closeMediaModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <input type="text" id="new-media-name" placeholder="新しい媒体名"
+          style="flex:1;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:14px;outline:none;">
+        <button onclick="addMedia()" class="btn-submit" style="white-space:nowrap;">追加</button>
+      </div>
+      <div id="media-list" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeMediaModal()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ステータス色設定モーダル ===== -->
+<div class="modal-overlay" id="color-modal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <h3>ステータス行カラー設定</h3>
+      <button class="modal-close" onclick="closeColorModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:#6b7280;margin-bottom:16px;">各ステータスの行の背景色・文字色を設定します。</p>
+      <div id="color-settings" style="display:flex;flex-direction:column;gap:14px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeColorModal()">キャンセル</button>
+      <button class="btn-submit" onclick="saveColors()">保存する</button>
     </div>
   </div>
 </div>
@@ -743,7 +1031,13 @@
 /* ===================================================
    データ & 状態
 =================================================== */
+const IS_MANAGER   = {{ 'true' if is_manager else 'false' }};
+const CUR_STAFF_ID = {{ cur_staff_id if cur_staff_id else 'null' }};
+const STORE_ID     = {{ store_id }};
+let appData = [];
+let statusColors = {};
 let staffData = [];
+let useCustomChartRange = false;
 let monthlyData = {};
 let sortCol = -1;
 let sortDir = 1; // 1=昇順, -1=降順
@@ -817,10 +1111,26 @@ function showAlert(msg, type='success') {
 async function loadData() {
   const year  = salesYear;
   const month = salesMonth;
-  document.getElementById('filter-year').value  = year;
-  document.getElementById('filter-month').value = month;
 
-  await Promise.all([loadStaffKpi(year, month), loadMonthlyKpi()]);
+  let chartFrom, chartTo;
+  if (useCustomChartRange) {
+    // ユーザーが手動設定したレンジを使用
+    chartFrom = document.getElementById('sales-chart-from')?.value;
+    chartTo   = document.getElementById('sales-chart-to')?.value;
+  }
+  if (!chartFrom || !chartTo) {
+    // 選択月を中央にした12ヶ月（前5ヶ月・後6ヶ月）
+    const fd = new Date(year, month - 6, 1);
+    const td = new Date(year, month + 6, 1);
+    chartFrom = `${fd.getFullYear()}-${String(fd.getMonth()+1).padStart(2,'0')}`;
+    chartTo   = `${td.getFullYear()}-${String(td.getMonth()+1).padStart(2,'0')}`;
+    const fromEl = document.getElementById('sales-chart-from');
+    const toEl   = document.getElementById('sales-chart-to');
+    if (fromEl) fromEl.value = chartFrom;
+    if (toEl)   toEl.value   = chartTo;
+  }
+
+  await Promise.all([loadStaffKpi(year, month), loadMonthlyKpi(chartFrom, chartTo)]);
 }
 
 async function loadStaffKpi(year, month) {
@@ -843,6 +1153,7 @@ async function loadStaffKpi(year, month) {
       contracts:    d.contracts || 0,
       revenue:      d.sales_amount || 0,
       option:       d.option_sales || 0,
+      target_sales: d.target_sales || 0,
       prev_revenue: 0,
     }));
     await populateStaffSelect();
@@ -859,24 +1170,45 @@ async function loadStaffKpi(year, month) {
   }
 }
 
-async function loadMonthlyKpi() {
+function initSalesChartRange() {
+  // loadData()内で自動計算するため初期設定は不要（カスタムレンジ使用時のみ値が入る）
+}
+
+function applySalesChartRange() {
+  const from = document.getElementById('sales-chart-from').value;
+  const to   = document.getElementById('sales-chart-to').value;
+  if (from && to) {
+    useCustomChartRange = true;
+    loadMonthlyKpi(from, to);
+  }
+}
+
+function resetSalesChartRange() {
+  useCustomChartRange = false;
+  document.getElementById('sales-chart-from').value = '';
+  document.getElementById('sales-chart-to').value   = '';
+  loadData();
+}
+
+async function loadMonthlyKpi(from, to) {
   try {
-    const res = await fetch('/api/kpi/monthly');
+    const staffId = document.getElementById('filter-staff')?.value;
+    const params  = new URLSearchParams();
+    if (from)    params.set('from',     from);
+    if (to)      params.set('to',       to);
+    if (staffId) params.set('staff_id', staffId);
+    const url = '/api/kpi/monthly' + (params.toString() ? '?' + params.toString() : '');
+    const res = await fetch(url);
     if (!res.ok) throw new Error('API error');
     const rawData = await res.json();
-    if (Array.isArray(rawData) && rawData.length > 0) {
-      // APIはオブジェクトリストを返す: [{label, sales, ...}, ...]
-      monthlyData = {
-        labels:  rawData.map(d => d.label),
-        current: rawData.map(d => d.sales || 0),
-        previous: rawData.map(() => 0),
-      };
-    } else {
-      monthlyData = DUMMY_MONTHLY;
-    }
+    monthlyData = {
+      labels:   Array.isArray(rawData) ? rawData.map(d => d.label)         : [],
+      current:  Array.isArray(rawData) ? rawData.map(d => d.sales || 0)    : [],
+      previous: Array.isArray(rawData) ? rawData.map(() => 0)              : [],
+    };
   } catch(e) {
-    console.warn('monthlyKpi fallback to dummy', e);
-    monthlyData = DUMMY_MONTHLY;
+    console.warn('monthlyKpi error', e);
+    monthlyData = { labels: [], current: [], previous: [] };
   }
   renderMonthlyChart(monthlyData);
 }
@@ -885,7 +1217,13 @@ async function loadMonthlyKpi() {
    KPIカード更新
 =================================================== */
 function updateKpiCards(data) {
-  if (!data.length) return;
+  if (!data.length) {
+    document.getElementById('card-revenue').textContent = '0';
+    document.getElementById('card-close-rate').textContent = '0%';
+    document.getElementById('card-contracts').textContent = '0';
+    document.getElementById('card-applications').textContent = '0';
+    return;
+  }
   const totalRevenue = data.reduce((s, d) => s + (d.revenue || 0), 0);
   const totalContracts = data.reduce((s, d) => s + (d.contracts || 0), 0);
   const totalApplications = data.reduce((s, d) => s + (d.applications || 0), 0);
@@ -915,7 +1253,7 @@ function renderStaffTable(data) {
   expandedRow = null;
 
   if (!data || !data.length) {
-    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding:40px; color:var(--text-muted); font-size:14px;">データがありません</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center; padding:40px; color:var(--text-muted); font-size:14px;">データがありません</td></tr>';
     return;
   }
 
@@ -924,6 +1262,13 @@ function renderStaffTable(data) {
     const appRate   = pct(s.applications, s.visits);
     const closeRate = pct(s.contracts, s.applications);
     const unitPrice = s.contracts ? (s.revenue / s.contracts).toFixed(1) : '-';
+
+    const target = s.target_sales || 0;
+    const achvPct = target > 0 ? Math.round((s.revenue / target) * 100) : null;
+    const achvHtml = target > 0
+      ? `<div style="font-size:12px;font-weight:700;color:${achvPct >= 100 ? '#15803d' : '#f59e0b'};">${achvPct}%</div>
+         <div class="target-bar" style="width:80px;"><div class="target-bar-fill ${achvPct >= 100 ? 'over' : ''}" style="width:${Math.min(achvPct,100)}%;"></div></div>`
+      : '<span style="color:#9ca3af;font-size:12px;">未設定</span>';
 
     const tr = document.createElement('tr');
     tr.dataset.idx = idx;
@@ -939,7 +1284,8 @@ function renderStaffTable(data) {
       <td class="${colorClass(appRate, 40, 25)}">${appRate}%</td>
       <td class="${colorClass(closeRate, 70, 50)}">${closeRate}%</td>
       <td>${s.revenue.toLocaleString()}</td>
-      <td>${unitPrice}</td>
+      <td>${target > 0 ? (target/10000).toFixed(1)+'万' : '―'}</td>
+      <td>${achvHtml}</td>
       <td>${(s.option || 0).toLocaleString()}</td>
       <td>${trendArrow(s.revenue, s.prev_revenue)}</td>
       <td onclick="event.stopPropagation();" style="white-space:nowrap;">
@@ -1181,28 +1527,39 @@ async function populateStaffSelect() {
     if (!res.ok) throw new Error('API error');
     const staffList = await res.json();
 
-    const uncSel = document.getElementById('unc-staff');
-    [sel, modalSel, uncSel].filter(Boolean).forEach(el => {
-      const isModal = el !== sel;
-      el.innerHTML = `<option value="">${isModal ? '― 選択 ―' : '全スタッフ'}</option>`;
+    const uncSel    = document.getElementById('unc-staff');
+    const appSel    = document.getElementById('app-staff_id');
+    const uncFilter = document.getElementById('unc-filter-staff');
+    const appFilter = document.getElementById('app-filter-staff');
+
+    const listSels   = [sel, uncFilter, appFilter].filter(Boolean);
+    const modalSels  = [modalSel, uncSel, appSel].filter(Boolean);
+
+    listSels.forEach(el => {
+      const cur = el.value;
+      el.innerHTML = '<option value="">全スタッフ</option>';
       staffList.forEach(s => {
         const opt = document.createElement('option');
         opt.value = s.id;
         opt.textContent = `${s.name}（${s.role}）`;
         el.appendChild(opt);
       });
+      el.value = cur;
+    });
+
+    modalSels.forEach(el => {
+      const cur = el.value;
+      el.innerHTML = '<option value="">― 選択 ―</option>';
+      staffList.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.name}（${s.role}）`;
+        el.appendChild(opt);
+      });
+      el.value = cur;
     });
   } catch(e) {
     console.warn('staff API unavailable:', e);
-    [sel, modalSel].forEach(el => {
-      el.innerHTML = '<option value="">全スタッフ</option>';
-      staffData.forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = s.name;
-        el.appendChild(opt);
-      });
-    });
   }
   sel.value = currentVal;
 }
@@ -1237,18 +1594,15 @@ function editKpi(kpiId, staffObj) {
 
   // 数値を埋める
   const form = document.getElementById('kpi-form');
-  form.querySelector('[name="responses"]').value            = staffObj.responses    || staffObj.inquiries || 0;
-  form.querySelector('[name="visits"]').value               = staffObj.visits       || staffObj.store_visits || 0;
-  form.querySelector('[name="tours"]').value                = staffObj.tours        || staffObj.viewings || 0;
-  form.querySelector('[name="applications"]').value         = staffObj.applications || 0;
-  form.querySelector('[name="contracts"]').value            = staffObj.contracts    || 0;
-  form.querySelector('[name="cancels"]').value              = staffObj.cancellations|| 0;
-  form.querySelector('[name="revenue"]').value              = staffObj.revenue      || staffObj.sales_amount || 0;
-  form.querySelector('[name="option_revenue"]').value       = staffObj.option       || staffObj.option_sales || 0;
-  form.querySelector('[name="estimated_sales"]').value      = staffObj.estimated_sales     || 0;
-  form.querySelector('[name="fire_insurance_count"]').value = staffObj.fire_insurance_count|| 0;
-  form.querySelector('[name="lifeline_count"]').value       = staffObj.lifeline_count      || 0;
-  form.querySelector('[name="moving_count"]').value         = staffObj.moving_count        || 0;
+  form.querySelector('[name="target_sales"]').value    = staffObj.target_sales || 0;
+  form.querySelector('[name="responses"]').value       = staffObj.responses    || staffObj.inquiries || 0;
+  form.querySelector('[name="visits"]').value          = staffObj.visits       || staffObj.store_visits || 0;
+  form.querySelector('[name="tours"]').value           = staffObj.tours        || staffObj.viewings || 0;
+  form.querySelector('[name="applications"]').value    = staffObj.applications || 0;
+  form.querySelector('[name="contracts"]').value       = staffObj.contracts    || 0;
+  form.querySelector('[name="cancels"]').value         = staffObj.cancellations|| 0;
+  form.querySelector('[name="option_revenue"]').value  = staffObj.option       || staffObj.option_sales || 0;
+  form.querySelector('[name="estimated_sales"]').value = staffObj.estimated_sales || 0;
 
   document.getElementById('kpi-modal').classList.add('active');
 }
@@ -1272,41 +1626,53 @@ async function submitKpi() {
   }
 
   const payload = {
-    store_id:     1,
+    store_id:     STORE_ID,
     inquiries:    parseInt(data.responses) || 0,
     store_visits: parseInt(data.visits) || 0,
     viewings:     parseInt(data.tours) || 0,
     applications: parseInt(data.applications) || 0,
     contracts:    parseInt(data.contracts) || 0,
     cancellations:parseInt(data.cancels) || 0,
-    sales_amount: parseFloat(data.revenue) || 0,
     option_sales: parseFloat(data.option_revenue) || 0,
-    estimated_sales:      parseFloat(data.estimated_sales) || 0,
-    fire_insurance_count: parseInt(data.fire_insurance_count) || 0,
-    lifeline_count:       parseInt(data.lifeline_count) || 0,
-    moving_count:         parseInt(data.moving_count) || 0,
+    estimated_sales: parseFloat(data.estimated_sales) || 0,
+    target_sales: parseFloat(data.target_sales) || 0,
   };
 
   let url, method;
+  let staffId, kpiYear, kpiMonth;
   if (editingKpiId) {
     url    = `/api/kpi/${editingKpiId}`;
     method = 'PUT';
+    staffId  = document.getElementById('modal-staff').value;
+    kpiYear  = salesYear;
+    kpiMonth = salesMonth;
   } else {
     const [year, month] = data.ym.split('-');
     payload.staff_id = data.staff_id;
     payload.year     = year;
     payload.month    = month;
+    staffId  = data.staff_id;
+    kpiYear  = parseInt(year);
+    kpiMonth = parseInt(month);
     url    = '/api/kpi/input';
     method = 'POST';
   }
 
   try {
     const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
+      method, headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('API error');
+
+    // 目標売上を別APIで保存
+    if (staffId && payload.target_sales >= 0) {
+      await fetch('/api/sales-kpi/target', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staff_id: staffId, year: kpiYear, month: kpiMonth, target_sales: payload.target_sales }),
+      });
+    }
+
     closeKpiModal();
     showAlert(editingKpiId ? 'KPIを更新しました。' : 'KPIを保存しました。');
     loadData();
@@ -1342,10 +1708,53 @@ let salesMonth = new Date().getMonth() + 1;
 function updateSalesMonthLabel() {
   document.getElementById('sales-month-label').textContent =
     `${salesYear}年${salesMonth}月`;
+  const jumpEl = document.getElementById('sales-month-jump');
+  if (jumpEl) jumpEl.value = `${salesYear}-${String(salesMonth).padStart(2,'0')}`;
   const url = new URL(window.location);
   url.searchParams.set('year',  salesYear);
   url.searchParams.set('month', salesMonth);
   window.history.pushState({}, '', url);
+}
+
+function jumpSalesMonth(val) {
+  if (!val) return;
+  salesYear  = parseInt(val.slice(0,4));
+  salesMonth = parseInt(val.slice(5,7));
+  updateSalesMonthLabel();
+  loadData();
+  loadApplications();
+}
+
+/* ===== インポートモーダル ===== */
+function openSalesImportModal() {
+  document.getElementById('sales-import-result').innerHTML = '';
+  document.getElementById('sales-import-file').value = '';
+  document.getElementById('sales-import-ym').textContent = `${salesYear}年${salesMonth}月`;
+  document.getElementById('sales-import-modal').classList.add('active');
+}
+function closeSalesImportModal() {
+  document.getElementById('sales-import-modal').classList.remove('active');
+}
+
+async function submitSalesImport() {
+  const fileEl = document.getElementById('sales-import-file');
+  if (!fileEl.files.length) { alert('ファイルを選択してください'); return; }
+  const fd = new FormData();
+  fd.append('file', fileEl.files[0]);
+  fd.append('year', salesYear);
+  fd.append('month', salesMonth);
+  fd.append('store_id', STORE_ID);
+  const resEl = document.getElementById('sales-import-result');
+  resEl.innerHTML = '<p style="color:#6b7280;">インポート中...</p>';
+  try {
+    const res = await fetch('/api/import/excel', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.error) { resEl.innerHTML = `<p style="color:#b91c1c;">${data.error}</p>`; return; }
+    resEl.innerHTML = `<p style="color:#15803d;font-weight:700;">✓ インポート完了：${data.imported}件</p>
+      ${(data.staff_results||[]).map(s=>`<p style="font-size:12px;">${s.staff_name}：${s.imported}件</p>`).join('')}
+      ${(data.errors||[]).map(e=>`<p style="font-size:12px;color:#b91c1c;">${e}</p>`).join('')}`;
+    loadData();
+  } catch(e) { resEl.innerHTML = `<p style="color:#b91c1c;">インポート失敗: ${e.message}</p>`; }
 }
 
 function navigateSalesMonth(delta) {
@@ -1354,6 +1763,7 @@ function navigateSalesMonth(delta) {
   if (salesMonth < 1)  { salesMonth = 12; salesYear--; }
   updateSalesMonthLabel();
   loadData();
+  loadApplications();
 }
 
 function navigateSalesToday() {
@@ -1362,6 +1772,7 @@ function navigateSalesToday() {
   salesMonth = now.getMonth() + 1;
   updateSalesMonthLabel();
   loadData();
+  loadApplications();
 }
 
 /* ===================================================
@@ -1370,8 +1781,22 @@ function navigateSalesToday() {
 let editingUncollectedId = null;
 
 async function loadUncollected() {
+  // 前月の未承認申込を未入金一覧に自動転記
+  try {
+    const prevDate  = new Date(salesYear, salesMonth - 2, 1);
+    const prevYear  = prevDate.getFullYear();
+    const prevMonth = prevDate.getMonth() + 1;
+    await fetch('/api/uncollected/sync-from-applications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ year: prevYear, month: prevMonth, store_id: STORE_ID })
+    });
+  } catch(e) { /* 同期エラーは無視 */ }
+
   const includePaid = document.getElementById('show-paid')?.checked;
+  const staffId = document.getElementById('unc-filter-staff')?.value;
   const params = new URLSearchParams({ include_paid: includePaid ? 'true' : 'false' });
+  if (staffId) params.set('staff_id', staffId);
   try {
     const res = await fetch(`/api/uncollected?${params}`);
     if (!res.ok) return;
@@ -1435,7 +1860,7 @@ function closeUncollectedModal() {
 }
 
 async function submitUncollected() {
-  const payload = { store_id: 1 };
+  const payload = { store_id: STORE_ID };
   ['property_name','room_number','application_date','management_company','customer_name','expected_payment_date','amount','memo'].forEach(f => {
     const el = document.getElementById(`unc-${f}`);
     if (el) payload[f] = el.value;
@@ -1455,11 +1880,16 @@ async function submitUncollected() {
 }
 
 async function markPaid(id) {
-  if (!confirm('入金済みにしますか？')) return;
+  if (!confirm('入金済みにしますか？売上に反映されます。')) return;
   try {
-    await fetch(`/api/uncollected/${id}/paid`, { method: 'POST' });
-    showAlert('入金済みにしました。');
+    await fetch(`/api/uncollected/${id}/paid`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ year: salesYear, month: salesMonth })
+    });
+    showAlert('入金済みにしました。売上に反映されました。');
     loadUncollected();
+    loadData();
   } catch(e) { showAlert('処理に失敗しました。', 'error'); }
 }
 
@@ -1473,6 +1903,448 @@ async function deleteUncollected(id) {
 }
 
 /* ===================================================
+   申込一覧
+=================================================== */
+async function loadApplications() {
+  const params = new URLSearchParams({ year: salesYear, month: salesMonth });
+  const staffSel = document.getElementById('app-filter-staff');
+  const statusSel = document.getElementById('app-filter-status');
+  if (staffSel && staffSel.value) params.set('staff_id', staffSel.value);
+  if (statusSel && statusSel.value) params.set('status', statusSel.value);
+  if (!IS_MANAGER && CUR_STAFF_ID) params.set('staff_id', CUR_STAFF_ID);
+
+  try {
+    const [appsRes, colorsRes] = await Promise.all([
+      fetch(`/api/applications?${params}`),
+      fetch('/api/status-colors'),
+    ]);
+    appData = appsRes.ok ? await appsRes.json() : [];
+    statusColors = colorsRes.ok ? await colorsRes.json() : {};
+    renderApplications(appData, statusColors);
+  } catch(e) {
+    console.warn('loadApplications error', e);
+    appData = [];
+    renderApplications([], {});
+  }
+
+  if (IS_MANAGER) loadPendingApprovals();
+}
+
+function renderApplications(list, colors) {
+  const tbody = document.getElementById('app-tbody');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="19" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>';
+    return;
+  }
+  const DEFAULT_COLORS = {
+    '申込':        { bg: '#ffffff', text: '#111827' },
+    '契約':        { bg: '#fef9c3', text: '#92400e' },
+    'キャンセル':   { bg: '#fee2e2', text: '#b91c1c' },
+    'キャンセル振替': { bg: '#dcfce7', text: '#15803d' },
+  };
+  tbody.innerHTML = '';
+  list.forEach(r => {
+    const sc = colors[r.status] || DEFAULT_COLORS[r.status] || { bg: '#fff', text: '#111827' };
+    const tr = document.createElement('tr');
+    tr.style.cssText = `background:${sc.bg};color:${sc.text};`;
+
+    const adLabel = r.ad_type === 'percent'
+      ? `${r.ad_amount ?? 0}%`
+      : `¥${(r.ad_amount || 0).toLocaleString()}`;
+
+    const brokerageCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved, sc.text);
+    const adCell = buildSettleCell(r, 'ad', r.ad_settled, r.ad_approved, sc.text);
+
+    const canEdit = IS_MANAGER || r.staff_id === CUR_STAFF_ID;
+    const opBtns = canEdit
+      ? `<button onclick="editApp(${r.id})" style="padding:3px 8px;font-size:11px;border:1px solid #d1d5db;border-radius:4px;background:#fff;color:#374151;cursor:pointer;margin-right:3px;">編集</button>
+         <button onclick="deleteApp(${r.id})" style="padding:3px 8px;font-size:11px;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#ef4444;cursor:pointer;">削除</button>`
+      : '';
+
+    tr.innerHTML = `
+      <td style="white-space:nowrap;">${r.application_date || '―'}</td>
+      <td>${r.staff_name || '―'}</td>
+      <td>${r.media || '―'}</td>
+      <td>${r.property_name || '―'}</td>
+      <td>${r.room_number || '―'}</td>
+      <td>${r.customer_name || '―'}</td>
+      <td style="text-align:right;white-space:nowrap;">${r.rent ? '¥' + r.rent.toLocaleString() : '―'}</td>
+      <td style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
+      <td style="text-align:right;white-space:nowrap;">${r.brokerage_fee ? '¥' + r.brokerage_fee.toLocaleString() : '―'}</td>
+      <td style="text-align:right;white-space:nowrap;">${adLabel}</td>
+      <td style="white-space:nowrap;">${r.ad_payment_date || '―'}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.ancillary_services||''}">${r.ancillary_services || '―'}</td>
+      <td style="text-align:center;">${r.lifeline ? '●' : '×'}</td>
+      <td style="text-align:center;">${r.moving ? '●' : '×'}</td>
+      <td style="text-align:center;">${r.fire_insurance ? '●' : '×'}</td>
+      <td style="white-space:nowrap;"><span class="app-status-badge" style="background:${sc.bg};color:${sc.text};border:1px solid ${sc.text}30;">${r.status}</span></td>
+      <td style="text-align:center;white-space:nowrap;">${brokerageCell}</td>
+      <td style="text-align:center;white-space:nowrap;">${adCell}</td>
+      <td style="white-space:nowrap;">${opBtns}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function buildSettleCell(r, field, settled, approved, textColor) {
+  if (approved) {
+    return '<span style="color:#16a34a;font-weight:700;font-size:11px;">✓ 承認済</span>';
+  }
+  if (settled) {
+    if (IS_MANAGER) {
+      return `<button onclick="approvePayment(${r.id},'${field}')" style="padding:3px 8px;font-size:11px;border:none;border-radius:4px;background:#2563eb;color:#fff;cursor:pointer;font-weight:700;">承認</button>`;
+    }
+    return '<span style="color:#f59e0b;font-weight:700;font-size:11px;">承認待ち</span>';
+  }
+  const canReport = IS_MANAGER || r.staff_id === CUR_STAFF_ID;
+  if (canReport) {
+    return `<button onclick="settlePayment(${r.id},'${field}')" style="padding:3px 8px;font-size:11px;border:1px solid #d1d5db;border-radius:4px;background:#fff;color:#374151;cursor:pointer;">報告</button>`;
+  }
+  return '<span style="color:#9ca3af;font-size:11px;">未報告</span>';
+}
+
+let editingAppId = null;
+
+function openAppModal(existing) {
+  editingAppId = existing?.id || null;
+  document.getElementById('app-modal-title').textContent = existing ? '申込編集' : '申込追加';
+  document.getElementById('app-editing-id').value = existing?.id || '';
+
+  const fields = ['application_date','property_name','room_number','customer_name',
+    'rent','contract_start_date','ad_payment_date','brokerage_fee','ad_amount','ancillary_services'];
+  fields.forEach(f => {
+    const el = document.getElementById(`app-${f}`);
+    if (el) el.value = existing?.[f] ?? '';
+  });
+  const staffSel = document.getElementById('app-staff_id');
+  if (staffSel) {
+    staffSel.value = existing?.staff_id || (CUR_STAFF_ID || '');
+    staffSel.disabled = !IS_MANAGER;
+  }
+  const mediaSel = document.getElementById('app-media');
+  if (mediaSel) mediaSel.value = existing?.media || '';
+  const adTypeSel = document.getElementById('app-ad_type');
+  if (adTypeSel) { adTypeSel.value = existing?.ad_type || 'amount'; updateAdLabel(); }
+  ['lifeline','moving','fire_insurance'].forEach(f => {
+    const el = document.getElementById(`app-${f}`);
+    if (el) el.checked = !!existing?.[f];
+  });
+  const statusVal = existing?.status || '申込';
+  document.querySelectorAll('input[name="app-status"]').forEach(r => { r.checked = (r.value === statusVal); });
+
+  document.getElementById('app-modal').classList.add('active');
+  cancelInlineMedia();
+  refreshMediaSelect().then(() => {
+    if (existing?.media) document.getElementById('app-media').value = existing.media;
+  });
+}
+
+function closeAppModal() {
+  document.getElementById('app-modal').classList.remove('active');
+  cancelInlineMedia();
+  editingAppId = null;
+}
+
+async function submitApp() {
+  const dateEl = document.getElementById('app-application_date');
+  if (!dateEl.value) { showAlert('申込日は必須です。', 'error'); return; }
+
+  const statusEl = document.querySelector('input[name="app-status"]:checked');
+  const payload = {
+    store_id: STORE_ID,
+    application_date:   document.getElementById('app-application_date').value,
+    staff_id:           document.getElementById('app-staff_id')?.value || null,
+    media:              document.getElementById('app-media')?.value || '',
+    property_name:      document.getElementById('app-property_name').value,
+    room_number:        document.getElementById('app-room_number').value,
+    customer_name:      document.getElementById('app-customer_name').value,
+    rent:               parseFloat(document.getElementById('app-rent').value) || 0,
+    contract_start_date: document.getElementById('app-contract_start_date').value || null,
+    ad_payment_date:    document.getElementById('app-ad_payment_date').value || null,
+    brokerage_fee:      parseFloat(document.getElementById('app-brokerage_fee').value) || 0,
+    ad_type:            document.getElementById('app-ad_type').value,
+    ad_amount:          parseFloat(document.getElementById('app-ad_amount').value) || 0,
+    ancillary_services: document.getElementById('app-ancillary_services').value,
+    lifeline:           document.getElementById('app-lifeline').checked,
+    moving:             document.getElementById('app-moving').checked,
+    fire_insurance:     document.getElementById('app-fire_insurance').checked,
+    status:             statusEl?.value || '申込',
+  };
+
+  try {
+    const url = editingAppId ? `/api/applications/${editingAppId}` : '/api/applications';
+    const method = editingAppId ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if (!res.ok) throw new Error();
+    closeAppModal();
+    showAlert(editingAppId ? '申込を更新しました。' : '申込を追加しました。');
+    loadApplications();
+  } catch(e) { showAlert('保存に失敗しました。', 'error'); }
+}
+
+async function editApp(id) {
+  const record = appData.find(r => r.id === id);
+  if (record) { openAppModal(record); return; }
+  try {
+    const res = await fetch(`/api/applications/${id}`);
+    if (res.ok) openAppModal(await res.json());
+  } catch(e) { showAlert('データ取得に失敗しました。', 'error'); }
+}
+
+async function deleteApp(id) {
+  if (!confirm('この申込データを削除しますか？')) return;
+  try {
+    const res = await fetch(`/api/applications/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error();
+    showAlert('削除しました。');
+    loadApplications();
+  } catch(e) { showAlert('削除に失敗しました。', 'error'); }
+}
+
+async function settlePayment(rid, field) {
+  const label = field === 'brokerage' ? '仲介手数料' : 'AD';
+  if (!confirm(`${label}の入金を報告しますか？`)) return;
+  try {
+    const res = await fetch(`/api/applications/${rid}/settle`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ field }),
+    });
+    if (!res.ok) throw new Error();
+    showAlert('入金を報告しました。店長の承認をお待ちください。');
+    loadApplications();
+  } catch(e) { showAlert('処理に失敗しました。', 'error'); }
+}
+
+async function approvePayment(rid, field) {
+  const label = field === 'brokerage' ? '仲介手数料' : 'AD';
+  if (!confirm(`${label}の入金を承認しますか？承認すると売上に反映されます。`)) return;
+  try {
+    const res = await fetch(`/api/applications/${rid}/approve`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ field }),
+    });
+    if (!res.ok) throw new Error();
+    showAlert('承認しました。売上に反映されました。');
+    loadApplications();
+    loadData();
+  } catch(e) { showAlert('承認に失敗しました。', 'error'); }
+}
+
+async function loadPendingApprovals() {
+  const noticeEl = document.getElementById('approval-notice');
+  if (!noticeEl) return;
+  try {
+    const res = await fetch('/api/pending-approvals');
+    if (!res.ok) return;
+    const data = await res.json();
+    const count = data.count || 0;
+    if (count > 0) {
+      document.getElementById('approval-notice-text').textContent =
+        `承認待ちの入金報告が ${count} 件あります`;
+      noticeEl.style.display = 'flex';
+    } else {
+      noticeEl.style.display = 'none';
+    }
+  } catch(e) { console.warn('loadPendingApprovals error', e); }
+}
+
+function scrollToApproval() {
+  document.getElementById('application-section')?.scrollIntoView({ behavior: 'smooth' });
+}
+
+function updateAdLabel() {
+  const sel = document.getElementById('app-ad_type');
+  const lbl = document.getElementById('app-ad-label');
+  if (sel && lbl) lbl.textContent = sel.value === 'percent' ? 'AD割合（%）' : 'AD金額（円）';
+}
+
+function toggleInlineMediaInput() {
+  const el = document.getElementById('inline-media-input');
+  const isHidden = el.style.display === 'none' || el.style.display === '';
+  el.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) document.getElementById('inline-media-name').focus();
+}
+
+function cancelInlineMedia() {
+  document.getElementById('inline-media-input').style.display = 'none';
+  document.getElementById('inline-media-name').value = '';
+}
+
+async function confirmInlineMedia() {
+  const input = document.getElementById('inline-media-name');
+  const name = input.value.trim();
+  if (!name) { input.focus(); return; }
+  try {
+    const res = await fetch('/api/media-types', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name, store_id: STORE_ID }),
+    });
+    if (!res.ok) throw new Error();
+    cancelInlineMedia();
+    await refreshMediaSelect();
+    document.getElementById('app-media').value = name;
+    showAlert(`「${name}」を追加しました。`);
+  } catch(e) { showAlert('追加に失敗しました。', 'error'); }
+}
+
+/* ===================================================
+   媒体マスター管理
+=================================================== */
+async function openMediaModal() {
+  document.getElementById('media-modal').classList.add('active');
+  await loadMedia();
+}
+function closeMediaModal() {
+  document.getElementById('media-modal').classList.remove('active');
+}
+
+async function loadMedia() {
+  try {
+    const res = await fetch('/api/media-types');
+    if (!res.ok) return;
+    const list = await res.json();
+    const container = document.getElementById('media-list');
+    if (!list.length) {
+      container.innerHTML = '<p style="font-size:13px;color:#9ca3af;">媒体が登録されていません</p>';
+      return;
+    }
+    container.innerHTML = '';
+    list.forEach(m => {
+      const tag = document.createElement('div');
+      tag.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:#f3f4f6;border-radius:20px;font-size:13px;';
+      tag.innerHTML = `<span>${m.name}</span>
+        <button onclick="deleteMedia(${m.id})" style="border:none;background:none;cursor:pointer;color:#ef4444;font-size:14px;line-height:1;">×</button>`;
+      container.appendChild(tag);
+    });
+    await refreshMediaSelect();
+  } catch(e) { console.warn('loadMedia error', e); }
+}
+
+async function addMedia() {
+  const input = document.getElementById('new-media-name');
+  const name = input.value.trim();
+  if (!name) return;
+  try {
+    const res = await fetch('/api/media-types', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name, store_id: STORE_ID }),
+    });
+    if (!res.ok) throw new Error();
+    input.value = '';
+    await loadMedia();
+  } catch(e) { showAlert('追加に失敗しました。', 'error'); }
+}
+
+async function deleteMedia(id) {
+  if (!confirm('この媒体を削除しますか？')) return;
+  try {
+    await fetch(`/api/media-types/${id}`, { method: 'DELETE' });
+    await loadMedia();
+  } catch(e) { showAlert('削除に失敗しました。', 'error'); }
+}
+
+async function refreshMediaSelect() {
+  try {
+    const res = await fetch('/api/media-types');
+    if (!res.ok) return;
+    const list = await res.json();
+    const sel = document.getElementById('app-media');
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">― 選択 ―</option>';
+    list.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.name; opt.textContent = m.name;
+      sel.appendChild(opt);
+    });
+    sel.value = cur;
+  } catch(e) {}
+}
+
+/* ===================================================
+   ステータス色設定
+=================================================== */
+const STATUS_KEYS = ['申込','契約','キャンセル','キャンセル振替'];
+const STATUS_DEFAULTS = {
+  '申込':        { bg: '#ffffff', text: '#111827' },
+  '契約':        { bg: '#fef9c3', text: '#92400e' },
+  'キャンセル':   { bg: '#fee2e2', text: '#b91c1c' },
+  'キャンセル振替': { bg: '#dcfce7', text: '#15803d' },
+};
+
+async function openColorModal() {
+  document.getElementById('color-modal').classList.add('active');
+  await loadColors();
+}
+function closeColorModal() {
+  document.getElementById('color-modal').classList.remove('active');
+}
+
+async function loadColors() {
+  let colors = {};
+  try {
+    const res = await fetch('/api/status-colors');
+    if (res.ok) colors = await res.json();
+  } catch(e) {}
+
+  const container = document.getElementById('color-settings');
+  container.innerHTML = '';
+  STATUS_KEYS.forEach(key => {
+    const c = colors[key] || STATUS_DEFAULTS[key] || { bg: '#ffffff', text: '#111827' };
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f3f4f6;';
+    row.innerHTML = `
+      <span style="font-size:13px;font-weight:600;min-width:90px;">${key}</span>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;">
+        背景色
+        <input type="color" data-status="${key}" data-type="bg" value="${c.bg}"
+          style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;">
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;">
+        文字色
+        <input type="color" data-status="${key}" data-type="text" value="${c.text}"
+          style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;">
+      </label>
+      <span class="app-status-badge color-preview-${key.replace(/[^a-z]/gi,'')}"
+        style="background:${c.bg};color:${c.text};border:1px solid ${c.text}30;">${key}</span>`;
+    container.appendChild(row);
+    row.querySelectorAll('input[type="color"]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const s = inp.dataset.status;
+        const t = inp.dataset.type;
+        const bgEl = container.querySelector(`input[data-status="${s}"][data-type="bg"]`);
+        const txEl = container.querySelector(`input[data-status="${s}"][data-type="text"]`);
+        const preview = container.querySelector(`.color-preview-${s.replace(/[^a-z]/gi,'')}`);
+        if (preview) {
+          preview.style.background = bgEl.value;
+          preview.style.color = txEl.value;
+          preview.style.borderColor = txEl.value + '30';
+        }
+      });
+    });
+  });
+}
+
+async function saveColors() {
+  const container = document.getElementById('color-settings');
+  const colors = {};
+  STATUS_KEYS.forEach(key => {
+    const bgEl = container.querySelector(`input[data-status="${key}"][data-type="bg"]`);
+    const txEl = container.querySelector(`input[data-status="${key}"][data-type="text"]`);
+    if (bgEl && txEl) colors[key] = { bg: bgEl.value, text: txEl.value };
+  });
+  try {
+    const res = await fetch('/api/status-colors', {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ store_id: STORE_ID, colors }),
+    });
+    if (!res.ok) throw new Error();
+    closeColorModal();
+    showAlert('色設定を保存しました。');
+    loadApplications();
+  } catch(e) { showAlert('保存に失敗しました。', 'error'); }
+}
+
+/* ===================================================
    初期ロード
 =================================================== */
 document.addEventListener('DOMContentLoaded', () => {
@@ -1480,8 +2352,36 @@ document.addEventListener('DOMContentLoaded', () => {
   if (params.get('year'))  salesYear  = parseInt(params.get('year'));
   if (params.get('month')) salesMonth = parseInt(params.get('month'));
   updateSalesMonthLabel();
+  initSalesChartRange();
   loadData();
   loadUncollected();
+  loadApplications();
 });
 </script>
+
+<!-- ===== 営業管理 Excelインポートモーダル ===== -->
+<div class="modal-overlay" id="sales-import-modal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h3>営業KPI Excelインポート</h3>
+      <button class="modal-close" onclick="closeSalesImportModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:14px;">
+        スタッフ別KPI台帳（申込台帳）のExcelファイルを選択してください。<br>
+        対象月：<strong id="sales-import-ym"></strong>
+      </p>
+      <div class="form-group">
+        <label>Excelファイル (.xlsx)</label>
+        <input type="file" id="sales-import-file" accept=".xlsx,.xls"
+          style="border:1px solid #d1d5db;border-radius:6px;padding:8px;font-size:13px;width:100%;">
+      </div>
+      <div id="sales-import-result" style="margin-top:12px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeSalesImportModal()">閉じる</button>
+      <button class="btn-submit" onclick="submitSalesImport()">インポート実行</button>
+    </div>
+  </div>
+</div>
 {% endblock %}

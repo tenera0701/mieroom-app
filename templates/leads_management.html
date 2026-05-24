@@ -50,36 +50,29 @@
   }
 
   /* ===== ヘッダーバー ===== */
-  .page-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
-  }
-  .page-header-left { display: flex; align-items: center; gap: 12px; }
   .month-nav { display: flex; align-items: center; gap: 8px; }
-  .month-label { font-size: 18px; font-weight: 700; color: #111827; min-width: 100px; text-align: center; }
-  .btn-nav {
-    width: 32px; height: 32px; border: 1px solid #d1d5db; border-radius: 6px;
-    background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center;
-    font-size: 14px; color: #374151; transition: all 0.15s;
+  .month-nav-btn {
+    background: #fff; border: 1px solid #d1d5db; border-radius: 6px;
+    padding: 7px 14px; font-size: 13px; font-weight: 600; color: #374151;
+    cursor: pointer; transition: all 0.12s;
   }
-  .btn-nav:hover { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
-  .btn-today {
-    padding: 6px 12px; font-size: 13px; font-weight: 600;
-    background: var(--primary-light); color: var(--primary); border: 1px solid var(--primary-mid);
-    border-radius: 6px; cursor: pointer;
+  .month-nav-btn:hover { background: #f3f4f6; }
+  .month-nav-current {
+    font-size: 18px; font-weight: 800; color: #111827;
+    min-width: 120px; text-align: center;
   }
-  .btn-import {
-    padding: 8px 16px; font-size: 14px; font-weight: 600;
-    background: var(--primary); color: #fff; border: none; border-radius: 6px;
+  .btn-excel-import {
+    padding: 8px 16px; font-size: 13px; font-weight: 700;
+    background: #84cc16; color: #fff; border: none; border-radius: 6px;
     cursor: pointer; transition: background 0.15s; display: flex; align-items: center; gap: 6px;
   }
-  .btn-import:hover { background: var(--primary-dark); }
-  .btn-manual {
-    padding: 7px 14px; font-size: 13px; font-weight: 600;
-    background: #fff; color: var(--primary); border: 2px solid var(--primary);
-    border-radius: 6px; cursor: pointer; transition: all 0.15s;
+  .btn-excel-import:hover { background: #65a30d; }
+  .btn-new-input {
+    padding: 8px 16px; font-size: 13px; font-weight: 700;
+    background: var(--primary); color: #fff; border: none; border-radius: 6px;
+    cursor: pointer; transition: background 0.15s;
   }
-  .btn-manual:hover { background: var(--primary); color: #fff; }
+  .btn-new-input:hover { background: var(--primary-dark); }
 
   /* ===== KPIカード（上段） ===== */
   .kpi-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 14px; margin-bottom: 20px; }
@@ -188,21 +181,27 @@
 <div id="alert-msg"></div>
 
 <!-- ===== ページヘッダー ===== -->
-<div class="page-header">
-  <div class="page-header-left">
-    <div class="month-nav">
-      <button class="btn-nav" onclick="navigateMonth(-1)">&#8592;</button>
-      <span class="month-label" id="month-label">---</span>
-      <button class="btn-nav" onclick="navigateMonth(1)">&#8594;</button>
-    </div>
-    <button class="btn-today" onclick="goToday()">今月</button>
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px;">
+  <div>
+    <h1 style="font-size:22px; font-weight:800; color:#111827; margin:0;">反響管理</h1>
+    <p style="font-size:13px; color:var(--text-muted); margin:4px 0 0;">媒体別反響・来店・申込・成約分析</p>
   </div>
-  <div style="display:flex;gap:10px;align-items:center;">
-    <button class="btn-manual" onclick="openManualModal()">&#43; 手動入力</button>
-    <button class="btn-import" onclick="openImportModal()">
+  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+    <div class="month-nav">
+      <button class="month-nav-btn" onclick="navigateMonth(-1)">&#8249; 前月</button>
+      <span class="month-nav-current" id="month-label">---</span>
+      <button class="month-nav-btn" onclick="navigateMonth(1)">次月 &#8250;</button>
+      <button class="month-nav-btn" style="background:#f0fdf4;color:var(--primary);border-color:var(--primary-mid);" onclick="goToday()">今月</button>
+    </div>
+    <!-- 年月ジャンプ -->
+    <input type="month" id="leads-month-jump"
+      style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;outline:none;color:#111827;"
+      onchange="jumpLeadsMonth(this.value)">
+    <button class="btn-excel-import" onclick="openImportModal()">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
       Excelインポート
     </button>
+    <button class="btn-new-input" onclick="openManualModal()">&#43; 新規入力</button>
   </div>
 </div>
 
@@ -287,7 +286,16 @@
 
 <!-- ===== 月次トレンドチャート ===== -->
 <div class="chart-wrap">
-  <h3>月次トレンド（過去6ヶ月）</h3>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+    <h3 style="margin:0;">月次トレンド</h3>
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;">
+      <input type="month" id="trend-chart-from" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;">
+      <span style="color:#9ca3af;">〜</span>
+      <input type="month" id="trend-chart-to" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;">
+      <button onclick="applyTrendRange()" style="padding:4px 12px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">適用</button>
+      <button onclick="resetTrendRange()" style="padding:4px 10px;background:#fff;color:#6b7280;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;">リセット</button>
+    </div>
+  </div>
   <canvas id="trend-chart" height="80"></canvas>
 </div>
 
@@ -431,6 +439,20 @@ function showAlert(msg, type = 'success') {
 /* ===== 月ナビゲーション ===== */
 function updateMonthLabel() {
   document.getElementById('month-label').textContent = `${currentYear}年${currentMonth}月`;
+  const jumpEl = document.getElementById('leads-month-jump');
+  if (jumpEl) jumpEl.value = `${currentYear}-${String(currentMonth).padStart(2,'0')}`;
+}
+
+function jumpLeadsMonth(val) {
+  if (!val) return;
+  currentYear  = parseInt(val.slice(0,4));
+  currentMonth = parseInt(val.slice(5,7));
+  updateMonthLabel();
+  loadStats();
+  loadTrendChart(
+    document.getElementById('trend-chart-from')?.value,
+    document.getElementById('trend-chart-to')?.value
+  );
 }
 
 function navigateMonth(delta) {
@@ -439,6 +461,10 @@ function navigateMonth(delta) {
   if (currentMonth < 1)  { currentMonth = 12; currentYear--; }
   updateMonthLabel();
   loadStats();
+  loadTrendChart(
+    document.getElementById('trend-chart-from')?.value,
+    document.getElementById('trend-chart-to')?.value
+  );
 }
 
 function goToday() {
@@ -447,6 +473,10 @@ function goToday() {
   currentMonth = now.getMonth() + 1;
   updateMonthLabel();
   loadStats();
+  loadTrendChart(
+    document.getElementById('trend-chart-from')?.value,
+    document.getElementById('trend-chart-to')?.value
+  );
 }
 
 /* ===== データ取得 ===== */
@@ -587,6 +617,43 @@ function renderTable(stats, totals) {
       <td></td>
     </tr>`;
   }
+}
+
+/* ===== トレンドチャート 期間選択 ===== */
+function initTrendRange() {
+  const today = new Date();
+  const toYM  = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+  const from  = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+  const fromYM = from.getFullYear() + '-' + String(from.getMonth() + 1).padStart(2, '0');
+  const fe = document.getElementById('trend-chart-from');
+  const te = document.getElementById('trend-chart-to');
+  if (fe && !fe.value) fe.value = fromYM;
+  if (te && !te.value) te.value = toYM;
+}
+
+async function loadTrendChart(from, to) {
+  let url = '/api/leads/trend';
+  if (from && to) url += `?from=${from}&to=${to}`;
+  try {
+    const res = await fetch(url);
+    const trend = res.ok ? await res.json() : [];
+    renderTrendChart(trend);
+  } catch(e) {
+    console.error('trend load error:', e);
+  }
+}
+
+function applyTrendRange() {
+  const from = document.getElementById('trend-chart-from').value;
+  const to   = document.getElementById('trend-chart-to').value;
+  if (from && to) loadTrendChart(from, to);
+}
+
+function resetTrendRange() {
+  document.getElementById('trend-chart-from').value = '';
+  document.getElementById('trend-chart-to').value   = '';
+  initTrendRange();
+  loadTrendChart();
 }
 
 /* ===== トレンドチャート ===== */
@@ -803,7 +870,8 @@ document.getElementById('manual-modal').addEventListener('click', function(e) { 
 /* ===== 初期化 ===== */
 document.addEventListener('DOMContentLoaded', () => {
   updateMonthLabel();
-  loadStats();
+  initTrendRange();
+  loadStats(); // loadStats内でrenderTrendChartを呼ぶため、ここでは重複呼び出しなし
 });
 </script>
 {% endblock %}

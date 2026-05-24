@@ -303,7 +303,7 @@
 {% endblock %}
 
 {% block content %}
-<div style="max-width:1400px; margin:0 auto; padding:0 4px;">
+<div style="width:100%; padding:0 4px;">
 
   <!-- ページタイトル & ヘッダー -->
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px;">
@@ -320,7 +320,15 @@
         <button class="month-nav-btn" onclick="navigateToday()"
           style="background:#f0fdf4; color:var(--primary); border-color:var(--primary-mid);">今月</button>
       </div>
-      <button class="btn-primary" onclick="openPlModal()">&#43; 月次データ入力</button>
+      <!-- 年月ジャンプ -->
+      <input type="month" id="pl-month-jump"
+        style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;outline:none;color:#111827;"
+        onchange="jumpPlMonth(this.value)">
+      <button onclick="openPlImportModal()" style="padding:8px 16px;font-size:13px;font-weight:700;background:#84cc16;color:#fff;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background 0.15s;" onmouseover="this.style.background='#65a30d'" onmouseout="this.style.background='#84cc16'">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+        Excelインポート
+      </button>
+      <button class="btn-primary" onclick="openPlModal()">&#43; 新規入力</button>
     </div>
   </div>
 
@@ -386,7 +394,16 @@
 
   <!-- 月次利益推移グラフ -->
   <div class="chart-section">
-    <h2>月次利益推移</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+      <h2 style="margin:0;">月次利益推移</h2>
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;">
+        <input type="month" id="pl-chart-from" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;">
+        <span style="color:#9ca3af;">〜</span>
+        <input type="month" id="pl-chart-to" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;">
+        <button onclick="applyPlChartRange()" style="padding:4px 12px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">適用</button>
+        <button onclick="resetPlChartRange()" style="padding:4px 10px;background:#fff;color:#6b7280;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;">リセット</button>
+      </div>
+    </div>
     <div style="position:relative; height:320px;">
       <canvas id="pl-chart"></canvas>
     </div>
@@ -526,6 +543,44 @@ function navigateMonth(delta) {
   loadPlData();
 }
 
+function jumpPlMonth(val) {
+  if (!val) return;
+  currentYear  = parseInt(val.slice(0,4));
+  currentMonth = parseInt(val.slice(5,7));
+  updateMonthLabel();
+  loadPlData();
+}
+
+/* ===== インポートモーダル ===== */
+function openPlImportModal() {
+  document.getElementById('pl-import-result').innerHTML = '';
+  document.getElementById('pl-import-file').value = '';
+  document.getElementById('pl-import-ym').textContent = `${currentYear}年${currentMonth}月`;
+  document.getElementById('pl-import-modal').style.display = 'flex';
+}
+function closePlImportModal() {
+  document.getElementById('pl-import-modal').style.display = 'none';
+}
+
+async function submitPlImport() {
+  const fileEl = document.getElementById('pl-import-file');
+  if (!fileEl.files.length) { alert('ファイルを選択してください'); return; }
+  const fd = new FormData();
+  fd.append('file', fileEl.files[0]);
+  fd.append('year', currentYear);
+  fd.append('month', currentMonth);
+  fd.append('store_id', 1);
+  const resEl = document.getElementById('pl-import-result');
+  resEl.innerHTML = '<p style="color:#6b7280;">インポート中...</p>';
+  try {
+    const res = await fetch('/api/import/excel', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (data.error) { resEl.innerHTML = `<p style="color:#b91c1c;">${data.error}</p>`; return; }
+    resEl.innerHTML = `<p style="color:#15803d;font-weight:700;">✓ インポート完了：${data.imported}件</p>`;
+    loadPlData();
+  } catch(e) { resEl.innerHTML = `<p style="color:#b91c1c;">失敗: ${e.message}</p>`; }
+}
+
 function navigateToday() {
   const now = new Date();
   currentYear  = now.getFullYear();
@@ -537,6 +592,8 @@ function navigateToday() {
 function updateMonthLabel() {
   document.getElementById('current-month-label').textContent =
     `${currentYear}年${currentMonth}月`;
+  const jumpEl = document.getElementById('pl-month-jump');
+  if (jumpEl) jumpEl.value = `${currentYear}-${String(currentMonth).padStart(2,'0')}`;
   const url = new URL(window.location);
   url.searchParams.set('year',  currentYear);
   url.searchParams.set('month', currentMonth);
@@ -565,7 +622,11 @@ async function loadPlData() {
   }
 
   try {
-    const res = await fetch('/api/kpi/monthly');
+    const from = document.getElementById('pl-chart-from')?.value;
+    const to   = document.getElementById('pl-chart-to')?.value;
+    let url = '/api/kpi/monthly';
+    if (from && to) url += `?from=${from}&to=${to}`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error('API error');
     const json = await res.json();
     renderPlChart(json);
@@ -573,6 +634,35 @@ async function loadPlData() {
     console.warn('Monthly KPI API unavailable:', e);
     renderPlChart(null);
   }
+}
+
+function initPlChartRange() {
+  const today = new Date();
+  const toYM  = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
+  const from  = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+  const fromYM = from.getFullYear() + '-' + String(from.getMonth() + 1).padStart(2, '0');
+  const fe = document.getElementById('pl-chart-from');
+  const te = document.getElementById('pl-chart-to');
+  if (fe && !fe.value) fe.value = fromYM;
+  if (te && !te.value) te.value = toYM;
+}
+
+async function applyPlChartRange() {
+  const from = document.getElementById('pl-chart-from').value;
+  const to   = document.getElementById('pl-chart-to').value;
+  if (!from || !to) return;
+  try {
+    const res = await fetch(`/api/kpi/monthly?from=${from}&to=${to}`);
+    if (!res.ok) throw new Error();
+    renderPlChart(await res.json());
+  } catch(e) { renderPlChart(null); }
+}
+
+function resetPlChartRange() {
+  document.getElementById('pl-chart-from').value = '';
+  document.getElementById('pl-chart-to').value   = '';
+  initPlChartRange();
+  applyPlChartRange();
 }
 
 /* ===================================================
@@ -1133,7 +1223,34 @@ document.addEventListener('DOMContentLoaded', () => {
   if (params.get('year'))  currentYear  = parseInt(params.get('year'));
   if (params.get('month')) currentMonth = parseInt(params.get('month'));
   updateMonthLabel();
+  initPlChartRange();
   loadPlData();
 });
 </script>
+
+<!-- ===== 経理 Excelインポートモーダル ===== -->
+<div id="pl-import-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h3>申込台帳 Excelインポート</h3>
+      <button class="modal-close" onclick="closePlImportModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:14px;">
+        申込台帳のExcelファイルをインポートすると、売上データが自動連携されます。<br>
+        対象月：<strong id="pl-import-ym"></strong>
+      </p>
+      <div class="form-group">
+        <label>Excelファイル (.xlsx)</label>
+        <input type="file" id="pl-import-file" accept=".xlsx,.xls"
+          style="border:1px solid #d1d5db;border-radius:6px;padding:8px;font-size:13px;width:100%;">
+      </div>
+      <div id="pl-import-result" style="margin-top:12px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closePlImportModal()">閉じる</button>
+      <button class="btn-submit" onclick="submitPlImport()">インポート実行</button>
+    </div>
+  </div>
+</div>
 {% endblock %}

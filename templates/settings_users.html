@@ -1,0 +1,345 @@
+{% extends "mgmt_base.html" %}
+{% block title %}ユーザー管理 | 管理ポータル{% endblock %}
+{% block breadcrumb %}設定 / ユーザー管理{% endblock %}
+
+{% block content %}
+<div class="mb-6 flex items-center justify-between">
+  <div>
+    <h1 class="text-xl font-bold text-gray-900">ユーザー管理</h1>
+    <p class="text-sm text-gray-500 mt-0.5">ログインユーザーの作成・編集・権限設定</p>
+  </div>
+  <button onclick="openCreateModal()"
+    class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+    </svg>
+    新規ユーザー作成
+  </button>
+</div>
+
+<!-- ユーザー一覧 -->
+<div class="bg-white rounded-2xl shadow-sm border border-green-100 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="bg-green-50 border-b border-green-100 text-xs text-green-700 font-semibold uppercase tracking-wide">
+        <th class="px-4 py-3 text-left">ユーザー名</th>
+        <th class="px-4 py-3 text-left">メール</th>
+        <th class="px-4 py-3 text-left">ロール</th>
+        <th class="px-4 py-3 text-left">紐付けスタッフ</th>
+        <th class="px-4 py-3 text-center">経理閲覧</th>
+        <th class="px-4 py-3 text-center">全スタッフ閲覧</th>
+        <th class="px-4 py-3 text-center">KPI編集</th>
+        <th class="px-4 py-3 text-center">未入金管理</th>
+        <th class="px-4 py-3 text-left">最終ログイン</th>
+        <th class="px-4 py-3 text-center">操作</th>
+      </tr>
+    </thead>
+    <tbody id="user-tbody">
+      {% for u in users %}
+      <tr class="border-b border-gray-50 hover:bg-green-50/30 transition" id="row-{{ u.id }}">
+        <td class="px-4 py-3 font-medium text-gray-900">
+          {{ u.username }}
+          {% if u.id == session.get('app_user_id') %}
+          <span class="ml-1 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-semibold">あなた</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-gray-600">{{ u.email or '—' }}</td>
+        <td class="px-4 py-3">
+          {% if u.role == 'owner' %}
+          <span class="badge-green">オーナー</span>
+          {% elif u.role == 'super_admin' %}
+          <span class="badge-green">スーパー管理者</span>
+          {% elif u.role == 'store_manager' %}
+          <span class="badge-yellow">店長</span>
+          {% else %}
+          <span class="text-gray-500">スタッフ</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-gray-600">
+          {% if u.staff_id %}
+          {% for s in staff_list %}{% if s.id == u.staff_id %}{{ s.name }}{% endif %}{% endfor %}
+          {% else %}—{% endif %}
+        </td>
+        <td class="px-4 py-3 text-center">
+          {% if u.can_view_accounting %}<span class="text-green-600">✓</span>{% else %}<span class="text-gray-300">—</span>{% endif %}
+        </td>
+        <td class="px-4 py-3 text-center">
+          {% if u.can_view_all_staff %}<span class="text-green-600">✓</span>{% else %}<span class="text-gray-300">—</span>{% endif %}
+        </td>
+        <td class="px-4 py-3 text-center">
+          {% if u.can_edit_kpi %}<span class="text-green-600">✓</span>{% else %}<span class="text-gray-300">—</span>{% endif %}
+        </td>
+        <td class="px-4 py-3 text-center">
+          {% if u.can_manage_uncollected %}<span class="text-green-600">✓</span>{% else %}<span class="text-gray-300">—</span>{% endif %}
+        </td>
+        <td class="px-4 py-3 text-gray-500 text-xs">
+          {{ u.last_login.strftime('%Y/%m/%d %H:%M') if u.last_login else '未ログイン' }}
+        </td>
+        <td class="px-4 py-3 text-center">
+          <div class="flex items-center justify-center gap-1">
+            <button onclick="openEditModal({{ u.id }}, '{{ u.username }}', '{{ u.email or '' }}', '{{ u.role }}', {{ u.staff_id or 'null' }}, {{ u.can_view_accounting|lower }}, {{ u.can_view_all_staff|lower }}, {{ u.can_edit_kpi|lower }}, {{ u.can_manage_uncollected|lower }})"
+              class="p-1.5 text-green-600 hover:bg-green-100 rounded-lg transition" title="編集">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+              </svg>
+            </button>
+            {% if u.id != session.get('app_user_id') %}
+            <button onclick="deleteUser({{ u.id }}, '{{ u.username }}')"
+              class="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition" title="削除">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+              </svg>
+            </button>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- 新規作成モーダル -->
+<div id="create-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+  <div class="absolute inset-0 bg-black/40" onclick="closeCreateModal()"></div>
+  <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto">
+    <h2 class="text-lg font-bold text-gray-900 mb-5">新規ユーザー作成</h2>
+
+    <div id="create-error" class="hidden mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3"></div>
+
+    <div class="space-y-4">
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">ユーザー名 <span class="text-red-500">*</span></label>
+        <input id="c-username" type="text" placeholder="半角英数字" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">メールアドレス</label>
+        <input id="c-email" type="email" placeholder="example@company.com" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">パスワード <span class="text-red-500">*</span></label>
+        <input id="c-password" type="password" placeholder="8文字以上" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">ロール</label>
+        <select id="c-role" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+          <option value="staff">スタッフ（営業マン）</option>
+          <option value="store_manager">店長 / マネージャー</option>
+          <option value="owner">オーナー</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">紐付けスタッフ</label>
+        <select id="c-staff" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+          <option value="">なし</option>
+          {% for s in staff_list %}
+          <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="border-t pt-4">
+        <div class="text-sm font-semibold text-gray-700 mb-3">権限設定</div>
+        <div class="space-y-2">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="c-accounting" checked class="w-4 h-4 accent-green-600">
+            <span class="text-sm text-gray-700">経理・PL管理を閲覧できる</span>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="c-allstaff" checked class="w-4 h-4 accent-green-600">
+            <span class="text-sm text-gray-700">全スタッフのデータを閲覧できる</span>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="c-kpi" checked class="w-4 h-4 accent-green-600">
+            <span class="text-sm text-gray-700">KPI・売上データを編集できる</span>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="c-uncollected" checked class="w-4 h-4 accent-green-600">
+            <span class="text-sm text-gray-700">未入金管理を操作できる</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-3 mt-6">
+      <button onclick="closeCreateModal()" class="flex-1 border border-gray-300 text-gray-600 font-semibold text-sm py-2.5 rounded-xl hover:bg-gray-50 transition">キャンセル</button>
+      <button onclick="submitCreate()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold text-sm py-2.5 rounded-xl transition">作成する</button>
+    </div>
+  </div>
+</div>
+
+<!-- 編集モーダル -->
+<div id="edit-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+  <div class="absolute inset-0 bg-black/40" onclick="closeEditModal()"></div>
+  <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-6 max-h-[90vh] overflow-y-auto">
+    <h2 class="text-lg font-bold text-gray-900 mb-1">ユーザー編集</h2>
+    <p id="edit-username-label" class="text-sm text-gray-500 mb-5"></p>
+
+    <div id="edit-error" class="hidden mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3"></div>
+
+    <input type="hidden" id="e-uid">
+    <div class="space-y-4">
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">メールアドレス</label>
+        <input id="e-email" type="email" placeholder="example@company.com" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">新しいパスワード <span class="text-gray-400 font-normal text-xs">（変更する場合のみ）</span></label>
+        <input id="e-password" type="password" placeholder="空白のままで変更しない" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">ロール</label>
+        <select id="e-role" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+          <option value="staff">スタッフ（営業マン）</option>
+          <option value="store_manager">店長 / マネージャー</option>
+          <option value="owner">オーナー</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">紐付けスタッフ</label>
+        <select id="e-staff" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+          <option value="">なし</option>
+          {% for s in staff_list %}
+          <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="border-t pt-4">
+        <div class="text-sm font-semibold text-gray-700 mb-3">権限設定</div>
+        <div class="space-y-2">
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="e-accounting" class="w-4 h-4 accent-green-600">
+            <span class="text-sm text-gray-700">経理・PL管理を閲覧できる</span>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="e-allstaff" class="w-4 h-4 accent-green-600">
+            <span class="text-sm text-gray-700">全スタッフのデータを閲覧できる</span>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="e-kpi" class="w-4 h-4 accent-green-600">
+            <span class="text-sm text-gray-700">KPI・売上データを編集できる</span>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" id="e-uncollected" class="w-4 h-4 accent-green-600">
+            <span class="text-sm text-gray-700">未入金管理を操作できる</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-3 mt-6">
+      <button onclick="closeEditModal()" class="flex-1 border border-gray-300 text-gray-600 font-semibold text-sm py-2.5 rounded-xl hover:bg-gray-50 transition">キャンセル</button>
+      <button onclick="submitEdit()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold text-sm py-2.5 rounded-xl transition">保存する</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function openCreateModal() {
+    document.getElementById('c-username').value = '';
+    document.getElementById('c-email').value = '';
+    document.getElementById('c-password').value = '';
+    document.getElementById('c-role').value = 'staff';
+    document.getElementById('c-staff').value = '';
+    document.getElementById('c-accounting').checked = true;
+    document.getElementById('c-allstaff').checked = true;
+    document.getElementById('c-kpi').checked = true;
+    document.getElementById('c-uncollected').checked = true;
+    document.getElementById('create-error').classList.add('hidden');
+    document.getElementById('create-modal').classList.remove('hidden');
+  }
+
+  function closeCreateModal() {
+    document.getElementById('create-modal').classList.add('hidden');
+  }
+
+  async function submitCreate() {
+    const errEl = document.getElementById('create-error');
+    errEl.classList.add('hidden');
+    const data = {
+      username: document.getElementById('c-username').value.trim(),
+      email: document.getElementById('c-email').value.trim(),
+      password: document.getElementById('c-password').value,
+      role: document.getElementById('c-role').value,
+      staff_id: document.getElementById('c-staff').value || null,
+      can_view_accounting: document.getElementById('c-accounting').checked,
+      can_view_all_staff: document.getElementById('c-allstaff').checked,
+      can_edit_kpi: document.getElementById('c-kpi').checked,
+      can_manage_uncollected: document.getElementById('c-uncollected').checked,
+    };
+    if (!data.username) { showError(errEl, 'ユーザー名を入力してください'); return; }
+    if (!data.password) { showError(errEl, 'パスワードを入力してください'); return; }
+    const res = await fetch('/api/users', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    });
+    const json = await res.json();
+    if (!res.ok) { showError(errEl, json.error || '作成に失敗しました'); return; }
+    closeCreateModal();
+    location.reload();
+  }
+
+  function openEditModal(uid, username, email, role, staffId, accounting, allstaff, kpi, uncollected) {
+    document.getElementById('e-uid').value = uid;
+    document.getElementById('edit-username-label').textContent = '@' + username;
+    document.getElementById('e-email').value = email;
+    document.getElementById('e-password').value = '';
+    document.getElementById('e-role').value = role;
+    document.getElementById('e-staff').value = staffId || '';
+    document.getElementById('e-accounting').checked = accounting;
+    document.getElementById('e-allstaff').checked = allstaff;
+    document.getElementById('e-kpi').checked = kpi;
+    document.getElementById('e-uncollected').checked = uncollected;
+    document.getElementById('edit-error').classList.add('hidden');
+    document.getElementById('edit-modal').classList.remove('hidden');
+  }
+
+  function closeEditModal() {
+    document.getElementById('edit-modal').classList.add('hidden');
+  }
+
+  async function submitEdit() {
+    const errEl = document.getElementById('edit-error');
+    errEl.classList.add('hidden');
+    const uid = document.getElementById('e-uid').value;
+    const data = {
+      email: document.getElementById('e-email').value.trim(),
+      role: document.getElementById('e-role').value,
+      staff_id: document.getElementById('e-staff').value || null,
+      can_view_accounting: document.getElementById('e-accounting').checked,
+      can_view_all_staff: document.getElementById('e-allstaff').checked,
+      can_edit_kpi: document.getElementById('e-kpi').checked,
+      can_manage_uncollected: document.getElementById('e-uncollected').checked,
+    };
+    const pw = document.getElementById('e-password').value;
+    if (pw) data.password = pw;
+    const res = await fetch(`/api/users/${uid}`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    });
+    const json = await res.json();
+    if (!res.ok) { showError(errEl, json.error || '更新に失敗しました'); return; }
+    closeEditModal();
+    location.reload();
+  }
+
+  async function deleteUser(uid, username) {
+    if (!confirm(`「${username}」を削除しますか？\nこの操作は取り消せません。`)) return;
+    const res = await fetch(`/api/users/${uid}`, { method: 'DELETE' });
+    const json = await res.json();
+    if (!res.ok) { alert(json.error || '削除に失敗しました'); return; }
+    const row = document.getElementById(`row-${uid}`);
+    if (row) row.remove();
+  }
+
+  function showError(el, msg) {
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+</script>
+{% endblock %}
