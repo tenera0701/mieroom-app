@@ -1013,6 +1013,23 @@ def migrate_tenant_data():
                     db.session.commit()
                     print(f"オーナー(id={owner.id})のテナント店舗を修復しました")
 
+        # LeadMediaStat / Lead の store_id=NULL・0 を最初のアクティブ店舗に修復
+        default_store = Store.query.filter_by(is_active=True).order_by(Store.id).first()
+        if default_store:
+            broken_stats = LeadMediaStat.query.filter(
+                db.or_(LeadMediaStat.store_id == None, LeadMediaStat.store_id == 0)
+            ).all()
+            for s in broken_stats:
+                s.store_id = default_store.id
+            broken_leads = Lead.query.filter(
+                db.or_(Lead.store_id == None, Lead.store_id == 0)
+            ).all()
+            for l in broken_leads:
+                l.store_id = default_store.id
+            if broken_stats or broken_leads:
+                db.session.commit()
+                print(f"store_id修復: LeadMediaStat={len(broken_stats)}件, Lead={len(broken_leads)}件")
+
         print("テナントデータのマイグレーション完了")
 
         # 既存店舗に媒体マスターがなければ初期化
@@ -1156,21 +1173,12 @@ def get_allowed_store_ids(ignore_active=False):
         # フォールバック: tenant_idが一致する店舗がない場合（マイグレーション未完了の可能性）
         # tenant_id=NULLの店舗も含めて検索
         if not all_ids:
+            # フォールバック: tenant_id=NULLの店舗も候補にする（マイグレーション未完了時）
             null_stores = Store.query.filter(
                 Store.tenant_id == None, Store.is_active == True
             ).all()
             if null_stores:
-                # データを自動修復: NULLの店舗をこのオーナーのテナントに割り当て
-                for s in null_stores:
-                    s.tenant_id = user.tenant_id
-                try:
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
                 all_ids = [s.id for s in null_stores]
-        # それでも空の場合、テナントの全アクティブ店舗（再クエリ）
-        if not all_ids:
-            all_ids = [s.id for s in Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()]
         if not ignore_active:
             active = session.get('active_store_id')
             if active and active in all_ids:
@@ -1203,14 +1211,6 @@ def get_allowed_stores(ignore_active=False):
             all_stores = Store.query.filter(
                 Store.tenant_id == None, Store.is_active == True
             ).all()
-            if all_stores:
-                for s in all_stores:
-                    s.tenant_id = user.tenant_id
-                try:
-                    db.session.commit()
-                except Exception:
-                    db.session.rollback()
-                all_stores = Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()
         if not ignore_active:
             active = session.get('active_store_id')
             if active:
@@ -2610,18 +2610,18 @@ def api_kpi_input():
         kpi = SalesKPI(staff_id=staff_id, store_id=store_id, year=year, month=month)
         db.session.add(kpi)
 
-    kpi.inquiries    = int(data.get('inquiries', kpi.inquiries))
-    kpi.store_visits = int(data.get('store_visits', kpi.store_visits))
-    kpi.viewings     = int(data.get('viewings', kpi.viewings))
-    kpi.applications = int(data.get('applications', kpi.applications))
-    kpi.contracts    = int(data.get('contracts', kpi.contracts))
-    kpi.cancellations= int(data.get('cancellations', kpi.cancellations))
-    kpi.sales_amount = float(data.get('sales_amount', kpi.sales_amount))
-    kpi.option_sales = float(data.get('option_sales', kpi.option_sales))
-    kpi.estimated_sales     = float(data.get('estimated_sales', kpi.estimated_sales or 0))
-    kpi.fire_insurance_count= int(data.get('fire_insurance_count', kpi.fire_insurance_count or 0))
-    kpi.lifeline_count      = int(data.get('lifeline_count', kpi.lifeline_count or 0))
-    kpi.moving_count        = int(data.get('moving_count', kpi.moving_count or 0))
+    kpi.inquiries    = int(data.get('inquiries',     kpi.inquiries    or 0))
+    kpi.store_visits = int(data.get('store_visits', kpi.store_visits or 0))
+    kpi.viewings     = int(data.get('viewings',     kpi.viewings     or 0))
+    kpi.applications = int(data.get('applications', kpi.applications or 0))
+    kpi.contracts    = int(data.get('contracts',    kpi.contracts    or 0))
+    kpi.cancellations= int(data.get('cancellations',kpi.cancellations or 0))
+    kpi.sales_amount = float(data.get('sales_amount', kpi.sales_amount or 0))
+    kpi.option_sales = float(data.get('option_sales', kpi.option_sales or 0))
+    kpi.estimated_sales     = float(data.get('estimated_sales',      kpi.estimated_sales      or 0))
+    kpi.fire_insurance_count= int(data.get('fire_insurance_count',   kpi.fire_insurance_count or 0))
+    kpi.lifeline_count      = int(data.get('lifeline_count',         kpi.lifeline_count       or 0))
+    kpi.moving_count        = int(data.get('moving_count',           kpi.moving_count         or 0))
     db.session.commit()
 
     return jsonify({'status': 'ok', 'id': kpi.id})
