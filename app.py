@@ -4512,7 +4512,9 @@ def headquarters_dashboard():
         return redirect(url_for('app_login'))
     if cur_user.role == 'staff':
         return redirect(url_for('sales_management'))
-    # プレミアム限定を解除: owner / store_manager 全員が本部ダッシュボードを利用可能
+    # プレミアプランのみ許可
+    if not is_premium_user():
+        return redirect(url_for('executive_dashboard'))
     stores = get_allowed_stores(ignore_active=True)   # HQは全店舗（active_store_id無視）
     year, month = current_ym()
     return render_template("headquarters_dashboard.html",
@@ -4524,7 +4526,9 @@ def headquarters_dashboard():
 @login_required
 @block_super_admin
 def api_hq_summary():
-    """全店舗KPIサマリー（本部ダッシュボード用）"""
+    """全店舗KPIサマリー（本部ダッシュボード用・プレミアム限定）"""
+    if not is_premium_user():
+        return jsonify({'error': 'premium required'}), 403
     year  = request.args.get('year',  type=int) or date.today().year
     month = request.args.get('month', type=int) or date.today().month
     store_ids = get_allowed_store_ids(ignore_active=True)
@@ -4602,7 +4606,9 @@ def api_hq_summary():
 @login_required
 @block_super_admin
 def api_hq_rankings():
-    """店舗別ランキング（metric: sales / apps / close_rate）"""
+    """店舗別ランキング（metric: sales / apps / close_rate・プレミアム限定）"""
+    if not is_premium_user():
+        return jsonify({'error': 'premium required'}), 403
     year   = request.args.get('year',   type=int) or date.today().year
     month  = request.args.get('month',  type=int) or date.today().month
     metric = request.args.get('metric', 'sales')
@@ -4633,7 +4639,9 @@ def api_hq_rankings():
 @login_required
 @block_super_admin
 def api_hq_store_comparison():
-    """店舗別月次推移（グラフ用）"""
+    """店舗別月次推移（グラフ用・プレミアム限定）"""
+    if not is_premium_user():
+        return jsonify({'error': 'premium required'}), 403
     from_param = request.args.get('from')
     to_param   = request.args.get('to')
     metric     = request.args.get('metric', 'sales')
