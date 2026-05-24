@@ -1695,14 +1695,6 @@ async function submitKpi() {
       throw new Error(`HTTP ${res.status}: ${errText.slice(0,100)}`);
     }
 
-    // 目標売上を別APIで保存
-    if (staffId && payload.target_sales >= 0) {
-      await fetch('/api/sales-kpi/target', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staff_id: staffId, year: kpiYear, month: kpiMonth, target_sales: payload.target_sales }),
-      });
-    }
-
     closeKpiModal();
     showAlert(editingKpiId ? 'KPIを更新しました。' : 'KPIを保存しました。');
     loadData();

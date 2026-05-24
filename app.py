@@ -4283,6 +4283,27 @@ def api_tenant_store_add(tid):
     return jsonify({'status': 'ok', 'id': store.id})
 
 
+@app.route("/api/tenants/<int:tid>/staff", methods=["POST"])
+@super_admin_required
+def api_tenant_staff_add(tid):
+    """テナントにスタッフを追加"""
+    Tenant.query.get_or_404(tid)
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    store_id = int(data.get('store_id') or 0) or None
+    role = (data.get('role') or '営業').strip()
+    if not name:
+        return jsonify({'error': 'スタッフ名は必須です'}), 400
+    if store_id:
+        store = Store.query.filter_by(id=store_id, tenant_id=tid, is_active=True).first()
+        if not store:
+            return jsonify({'error': '指定した店舗が見つかりません'}), 400
+    staff = Staff(name=name, store_id=store_id, role=role, is_active=True)
+    db.session.add(staff)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': staff.id, 'name': staff.name})
+
+
 @app.route("/api/me")
 @login_required
 def api_me():

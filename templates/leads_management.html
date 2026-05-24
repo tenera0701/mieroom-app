@@ -839,6 +839,9 @@ async function submitManual() {
       throw new Error(`HTTP ${res.status}: ${errText.slice(0, 120)}`);
     }
     const savedResult = await res.json();
+    currentYear = payload.year;
+    currentMonth = payload.month;
+    updateMonthLabel();
     closeManualModal();
     showAlert('データを保存しました');
     await loadStats();
