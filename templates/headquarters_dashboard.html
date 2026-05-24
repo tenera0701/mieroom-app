@@ -1,0 +1,477 @@
+{% extends "mgmt_base.html" %}
+
+{% block title %}本部ダッシュボード | ルームピック{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --hq-primary: #1d4ed8;
+    --hq-accent:  #f59e0b;
+    --hq-danger:  #dc2626;
+    --hq-success: #16a34a;
+  }
+
+  /* ─── KPIカード ─── */
+  .hq-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+  @media(max-width:1000px){ .hq-cards{ grid-template-columns:repeat(2,1fr); } }
+  @media(max-width:600px) { .hq-cards{ grid-template-columns:1fr; } }
+  .hq-card {
+    background:#fff; border-radius:12px; padding:20px 24px;
+    box-shadow:0 1px 4px rgba(0,0,0,.08); border:1px solid #e5e7eb;
+  }
+  .hq-card-label { font-size:12px; color:#6b7280; font-weight:600; letter-spacing:.04em; }
+  .hq-card-value { font-size:28px; font-weight:800; color:#111827; margin:6px 0 2px; }
+  .hq-card-sub   { font-size:11px; color:#9ca3af; }
+
+  /* ─── アラートカード ─── */
+  .alert-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:24px; }
+  @media(max-width:700px){ .alert-grid{ grid-template-columns:1fr; } }
+  .alert-card {
+    background:#fff; border-radius:10px; padding:16px 20px;
+    border-left:4px solid var(--hq-danger); box-shadow:0 1px 3px rgba(0,0,0,.07);
+  }
+  .alert-card.warning { border-left-color:var(--hq-accent); }
+  .alert-card-title { font-size:13px; font-weight:700; color:#b91c1c; margin-bottom:8px; display:flex;align-items:center;gap:6px; }
+  .alert-card.warning .alert-card-title { color:#92400e; }
+  .alert-row { font-size:12px; color:#374151; padding:4px 0; border-bottom:1px solid #f3f4f6; display:flex;justify-content:space-between;align-items:center; }
+  .alert-row:last-child { border-bottom:none; }
+
+  /* ─── ランキング ─── */
+  .rank-tabs { display:flex; gap:6px; margin-bottom:14px; }
+  .rank-tab  { padding:6px 16px; border-radius:20px; font-size:12px; font-weight:600; cursor:pointer;
+               border:1px solid #d1d5db; background:#f9fafb; color:#6b7280; }
+  .rank-tab.active { background:var(--hq-primary); color:#fff; border-color:var(--hq-primary); }
+  .rank-bar-wrap { margin-bottom:10px; }
+  .rank-bar-label { display:flex; justify-content:space-between; font-size:12px; color:#374151; margin-bottom:3px; }
+  .rank-bar-track { background:#f3f4f6; border-radius:6px; height:14px; overflow:hidden; }
+  .rank-bar-fill  { background:var(--hq-primary); height:14px; border-radius:6px; transition:width .4s ease; }
+  .rank-bar-fill.gold   { background:#f59e0b; }
+  .rank-bar-fill.silver { background:#94a3b8; }
+  .rank-bar-fill.bronze { background:#b45309; }
+
+  /* ─── 比較チャート ─── */
+  .compare-toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+  .compare-toolbar select, .compare-toolbar input {
+    border:1px solid #d1d5db; border-radius:6px; padding:5px 10px; font-size:12px; background:#fff;
+  }
+
+  /* ─── 店長管理テーブル ─── */
+  .mgr-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .mgr-table th { background:#f8fafc; padding:8px 12px; text-align:left; font-size:11px; color:#6b7280;
+                  font-weight:700; border-bottom:2px solid #e5e7eb; white-space:nowrap; }
+  .mgr-table td { padding:9px 12px; border-bottom:1px solid #f3f4f6; }
+  .mgr-table tr:hover { background:#f9fafb; }
+  .status-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
+  .dot-ok     { background:var(--hq-success); }
+  .dot-warn   { background:var(--hq-accent); }
+  .dot-danger { background:var(--hq-danger); }
+
+  /* ─── AI サマリー ─── */
+  #ai-summary-box {
+    background:#f0f9ff; border:1px solid #bae6fd; border-radius:10px;
+    padding:18px 20px; font-size:13px; line-height:1.8; color:#1e3a5f; white-space:pre-wrap;
+    min-height:60px;
+  }
+
+  /* ─── セクション共通 ─── */
+  .hq-section {
+    background:#fff; border-radius:12px; border:1px solid #e5e7eb;
+    box-shadow:0 1px 4px rgba(0,0,0,.07); padding:20px 24px; margin-bottom:20px;
+  }
+  .hq-section-title {
+    font-size:16px; font-weight:700; color:#111827; margin:0 0 16px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .hq-section-title .badge-pro {
+    font-size:9px; background:var(--hq-accent); color:#fff;
+    border-radius:3px; padding:2px 5px; font-weight:700; letter-spacing:.05em;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="width:100%; padding:0 4px;">
+
+  <!-- ページヘッダー -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+    <div>
+      <h1 style="font-size:22px;font-weight:800;color:#111827;margin:0;">
+        本部ダッシュボード
+        <span style="font-size:12px;background:#f59e0b;color:#fff;border-radius:4px;padding:2px 7px;margin-left:8px;font-weight:700;vertical-align:middle;">PREMIUM</span>
+      </h1>
+      <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">全店舗一括管理・分析・アラート</p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <label style="font-size:12px;color:#6b7280;font-weight:600;">年月</label>
+        <input type="month" id="hq-ym"
+          style="border:1px solid #d1d5db;border-radius:6px;padding:5px 10px;font-size:12px;"
+          value="{{ year }}-{{ '%02d' % month }}"
+          onchange="loadAll()">
+      </div>
+      <button onclick="loadAll()" style="padding:7px 16px;background:#1d4ed8;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;">
+        ↻ 更新
+      </button>
+    </div>
+  </div>
+
+  <!-- ① KPIカード -->
+  <div class="hq-cards" id="hq-kpi-cards">
+    <div class="hq-card">
+      <div class="hq-card-label">今月の全店舗売上合計</div>
+      <div class="hq-card-value" id="kpi-total-sales">―</div>
+      <div class="hq-card-sub" id="kpi-total-sales-sub">読込中...</div>
+    </div>
+    <div class="hq-card">
+      <div class="hq-card-label">今月の着地予測</div>
+      <div class="hq-card-value" id="kpi-forecast">―</div>
+      <div class="hq-card-sub" id="kpi-forecast-sub">現在ペース × 残日数</div>
+    </div>
+    <div class="hq-card">
+      <div class="hq-card-label">全店舗 総申込数</div>
+      <div class="hq-card-value" id="kpi-total-apps">―</div>
+      <div class="hq-card-sub" id="kpi-total-apps-sub">申込件数</div>
+    </div>
+    <div class="hq-card">
+      <div class="hq-card-label">全店舗 総成約率</div>
+      <div class="hq-card-value" id="kpi-close-rate">―</div>
+      <div class="hq-card-sub" id="kpi-close-rate-sub">成約 / 申込</div>
+    </div>
+  </div>
+
+  <!-- ② 危険アラート -->
+  <div id="hq-alerts-section" class="hq-section" style="display:none;">
+    <div class="hq-section-title">⚠️ アラート</div>
+    <div class="alert-grid">
+      <div class="alert-card" id="danger-stores-card">
+        <div class="alert-card-title">🚨 危険店舗（目標50%未達）</div>
+        <div id="danger-stores-list"><span style="color:#9ca3af;font-size:12px;">なし</span></div>
+      </div>
+      <div class="alert-card warning" id="drop-stores-card">
+        <div class="alert-card-title" style="color:#92400e;">📉 売上急落アラート（前月比-20%以下）</div>
+        <div id="drop-stores-list"><span style="color:#9ca3af;font-size:12px;">なし</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ 店舗ランキング -->
+  <div class="hq-section">
+    <div class="hq-section-title">🏆 店舗ランキング <span class="badge-pro">PRO</span></div>
+    <div class="rank-tabs">
+      <div class="rank-tab active" onclick="switchRankTab('sales',this)">売上</div>
+      <div class="rank-tab" onclick="switchRankTab('apps',this)">申込数</div>
+      <div class="rank-tab" onclick="switchRankTab('close_rate',this)">成約率</div>
+    </div>
+    <div id="rank-list">
+      <p style="color:#9ca3af;font-size:13px;">読込中...</p>
+    </div>
+  </div>
+
+  <!-- ④ 店舗比較チャート -->
+  <div class="hq-section">
+    <div class="hq-section-title">📊 店舗別月次比較 <span class="badge-pro">PRO</span></div>
+    <div class="compare-toolbar">
+      <label style="font-size:12px;color:#6b7280;font-weight:600;">期間</label>
+      <input type="month" id="compare-from" style="">
+      <span style="color:#9ca3af;">〜</span>
+      <input type="month" id="compare-to" style="">
+      <select id="compare-metric" onchange="loadComparison()">
+        <option value="sales">売上</option>
+        <option value="apps">申込数</option>
+        <option value="close_rate">成約率（%）</option>
+      </select>
+      <button onclick="loadComparison()" style="padding:5px 14px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;">適用</button>
+    </div>
+    <canvas id="comparison-chart" style="max-height:320px;"></canvas>
+  </div>
+
+  <!-- ⑤ 店長管理 -->
+  <div class="hq-section">
+    <div class="hq-section-title">👔 店長・KPI入力状況 <span class="badge-pro">PRO</span></div>
+    <div style="overflow-x:auto;">
+      <table class="mgr-table">
+        <thead>
+          <tr>
+            <th>店舗</th>
+            <th>売上</th>
+            <th>目標</th>
+            <th>達成率</th>
+            <th>申込数</th>
+            <th>成約数</th>
+            <th>成約率</th>
+            <th>前月比</th>
+            <th>KPI入力</th>
+          </tr>
+        </thead>
+        <tbody id="mgr-tbody">
+          <tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:20px;">読込中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ⑥ AIサマリー -->
+  <div class="hq-section">
+    <div class="hq-section-title">🤖 AIサマリー <span class="badge-pro">PRO</span></div>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
+      <button id="ai-btn" onclick="generateAISummary()"
+        style="padding:8px 20px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
+        ✨ AIに分析させる
+      </button>
+      <span style="font-size:11px;color:#9ca3af;">Claude AI が当月データを元に経営分析レポートを生成します</span>
+    </div>
+    <div id="ai-summary-box">ボタンを押すとAIが全店舗のKPIを分析してレポートを生成します。</div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const HQ_YEAR  = {{ year }};
+const HQ_MONTH = {{ month }};
+let hqYear  = HQ_YEAR;
+let hqMonth = HQ_MONTH;
+let rankMetric = 'sales';
+let compChart  = null;
+
+/* ─── 年月パース ─── */
+function getYM() {
+  const ym = document.getElementById('hq-ym').value;
+  if (ym) {
+    hqYear  = parseInt(ym.slice(0,4));
+    hqMonth = parseInt(ym.slice(5,7));
+  }
+  return { year: hqYear, month: hqMonth };
+}
+
+/* ─── 全データロード ─── */
+async function loadAll() {
+  const { year, month } = getYM();
+  await Promise.all([
+    loadSummary(year, month),
+    loadRankings(rankMetric, year, month),
+  ]);
+  loadComparison();
+}
+
+/* ─── ① サマリー ─── */
+async function loadSummary(year, month) {
+  try {
+    const res = await fetch(`/api/hq/summary?year=${year}&month=${month}`);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+
+    // KPIカード
+    document.getElementById('kpi-total-sales').textContent =
+      d.total_sales ? '¥' + Math.round(d.total_sales).toLocaleString() : '¥0';
+    document.getElementById('kpi-total-sales-sub').textContent =
+      d.total_target ? `目標 ¥${Math.round(d.total_target).toLocaleString()}` : '目標未設定';
+    document.getElementById('kpi-forecast').textContent =
+      d.total_forecast ? '¥' + Math.round(d.total_forecast).toLocaleString() : '¥0';
+    document.getElementById('kpi-forecast-sub').textContent =
+      `${d.elapsed_days}日経過 / ${d.days_in_month}日`;
+    document.getElementById('kpi-total-apps').textContent = d.total_apps || 0;
+    document.getElementById('kpi-total-apps-sub').textContent =
+      `成約 ${d.total_contracts || 0}件`;
+    document.getElementById('kpi-close-rate').textContent =
+      (d.total_close_rate || 0) + '%';
+
+    // アラート
+    const dangerStores = (d.stores || []).filter(s => s.is_danger);
+    const dropStores   = (d.stores || []).filter(s => s.is_drop);
+    if (dangerStores.length || dropStores.length) {
+      document.getElementById('hq-alerts-section').style.display = '';
+    }
+    const dangerList = document.getElementById('danger-stores-list');
+    dangerList.innerHTML = dangerStores.length
+      ? dangerStores.map(s =>
+          `<div class="alert-row">
+            <span>⚠ ${s.store_name}</span>
+            <span style="color:#dc2626;font-weight:700;">
+              ¥${Math.round(s.sales).toLocaleString()} / 目標¥${Math.round(s.target).toLocaleString()}
+            </span>
+          </div>`).join('')
+      : '<span style="color:#9ca3af;font-size:12px;">危険店舗なし ✓</span>';
+
+    const dropList = document.getElementById('drop-stores-list');
+    dropList.innerHTML = dropStores.length
+      ? dropStores.map(s =>
+          `<div class="alert-row">
+            <span>📉 ${s.store_name}</span>
+            <span style="color:#f59e0b;font-weight:700;">${s.vs_prev}%</span>
+          </div>`).join('')
+      : '<span style="color:#9ca3af;font-size:12px;">急落店舗なし ✓</span>';
+
+    // 店長管理テーブル
+    const tbody = document.getElementById('mgr-tbody');
+    if (!d.stores || !d.stores.length) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:20px;">店舗データなし</td></tr>';
+      return;
+    }
+    tbody.innerHTML = d.stores.map(s => {
+      const ach = s.target > 0 ? Math.round(s.sales / s.target * 100) : null;
+      const dotCls = !ach ? 'dot-warn' : ach >= 80 ? 'dot-ok' : ach >= 50 ? 'dot-warn' : 'dot-danger';
+      const vstxt = s.vs_prev != null
+        ? (s.vs_prev >= 0 ? `<span style="color:#16a34a;">+${s.vs_prev}%</span>` : `<span style="color:#dc2626;">${s.vs_prev}%</span>`)
+        : '<span style="color:#9ca3af;">―</span>';
+      const hasKpi = s.sales > 0 || s.apps > 0;
+      return `<tr>
+        <td style="font-weight:600;">${s.store_name}</td>
+        <td>¥${Math.round(s.sales).toLocaleString()}</td>
+        <td style="color:#9ca3af;">${s.target > 0 ? '¥'+Math.round(s.target).toLocaleString() : '―'}</td>
+        <td>
+          <span class="status-dot ${dotCls}"></span>
+          ${ach != null ? ach + '%' : '―'}
+        </td>
+        <td>${s.apps}</td>
+        <td>${s.contracts}</td>
+        <td>${s.close_rate}%</td>
+        <td>${vstxt}</td>
+        <td>
+          ${hasKpi
+            ? '<span style="color:#16a34a;font-size:11px;font-weight:700;">✓ 入力済</span>'
+            : '<span style="color:#dc2626;font-size:11px;font-weight:700;">未入力</span>'}
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    console.error('loadSummary error', e);
+  }
+}
+
+/* ─── ③ ランキング ─── */
+async function loadRankings(metric, year, month) {
+  if (!year || !month) { const ym = getYM(); year = ym.year; month = ym.month; }
+  try {
+    const res = await fetch(`/api/hq/rankings?metric=${metric}&year=${year}&month=${month}`);
+    if (!res.ok) throw new Error();
+    const rows = await res.json();
+    const maxVal = rows.length ? rows[0][metric] : 1;
+    const el = document.getElementById('rank-list');
+    if (!rows.length) { el.innerHTML = '<p style="color:#9ca3af;font-size:13px;">データなし</p>'; return; }
+    el.innerHTML = rows.map((r, i) => {
+      const val = metric === 'sales' ? '¥' + Math.round(r[metric]).toLocaleString()
+               : metric === 'close_rate' ? r[metric] + '%'
+               : r[metric] + '件';
+      const pct  = maxVal > 0 ? (r[metric] / maxVal * 100).toFixed(1) : 0;
+      const fillCls = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+      return `<div class="rank-bar-wrap">
+        <div class="rank-bar-label">
+          <span><strong>#${r.rank}</strong> ${r.store_name}</span>
+          <span style="font-weight:700;">${val}</span>
+        </div>
+        <div class="rank-bar-track">
+          <div class="rank-bar-fill ${fillCls}" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('loadRankings error', e); }
+}
+
+function switchRankTab(metric, el) {
+  rankMetric = metric;
+  document.querySelectorAll('.rank-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const { year, month } = getYM();
+  loadRankings(metric, year, month);
+}
+
+/* ─── ④ 比較チャート ─── */
+async function loadComparison() {
+  const fromEl   = document.getElementById('compare-from');
+  const toEl     = document.getElementById('compare-to');
+  const metric   = document.getElementById('compare-metric').value;
+  const from = fromEl.value;
+  const to   = toEl.value;
+  const url  = `/api/hq/store-comparison?metric=${metric}` +
+               (from ? `&from=${from}` : '') + (to ? `&to=${to}` : '');
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error();
+    const d = await res.json();
+    renderComparisonChart(d);
+  } catch(e) { console.error('loadComparison error', e); }
+}
+
+function renderComparisonChart(d) {
+  const ctx = document.getElementById('comparison-chart').getContext('2d');
+  if (compChart) { compChart.destroy(); compChart = null; }
+  if (!d.labels || !d.datasets || !d.datasets.length) return;
+  compChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: d.labels,
+      datasets: d.datasets.map(ds => ({
+        label: ds.store_name,
+        data: ds.data,
+        borderColor: ds.color,
+        backgroundColor: ds.color + '20',
+        borderWidth: 2,
+        pointRadius: 4,
+        tension: 0.3,
+        fill: false,
+      })),
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const metric = document.getElementById('compare-metric').value;
+              const v = ctx.raw;
+              if (metric === 'sales') return `${ctx.dataset.label}: ¥${Math.round(v).toLocaleString()}`;
+              if (metric === 'close_rate') return `${ctx.dataset.label}: ${v}%`;
+              return `${ctx.dataset.label}: ${v}件`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: { beginAtZero: true, grid: { color: '#f3f4f6' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+/* ─── ⑥ AIサマリー ─── */
+async function generateAISummary() {
+  const btn = document.getElementById('ai-btn');
+  const box = document.getElementById('ai-summary-box');
+  btn.disabled = true;
+  btn.textContent = '⏳ 分析中...';
+  box.textContent = 'AIが分析しています。しばらくお待ちください...';
+  const { year, month } = getYM();
+  try {
+    const res = await fetch('/api/hq/ai-summary', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ year, month })
+    });
+    const d = await res.json();
+    box.textContent = d.summary || d.error || '分析に失敗しました。';
+  } catch(e) {
+    box.textContent = '通信エラーが発生しました。';
+  }
+  btn.disabled = false;
+  btn.textContent = '✨ AIに分析させる';
+}
+
+/* ─── 初期化 ─── */
+document.addEventListener('DOMContentLoaded', () => {
+  // 比較チャートのデフォルト期間（過去6ヶ月〜今月）
+  const today = new Date();
+  const toDate = new Date(today.getFullYear(), today.getMonth(), 1);
+  const frDate = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  document.getElementById('compare-from').value = fmt(frDate);
+  document.getElementById('compare-to').value   = fmt(toDate);
+
+  loadAll();
+});
+</script>
+{% endblock %}

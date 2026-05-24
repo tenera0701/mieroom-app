@@ -1032,6 +1032,35 @@ def super_admin_required(f):
     return decorated
 
 
+def manager_or_above_required(f):
+    """store_manager / owner / super_admin のみアクセス可。staff はブロック。"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'app_user_id' not in session:
+            return redirect(url_for('app_login'))
+        user = AppUser.query.get(session['app_user_id'])
+        if not user or user.role == 'staff':
+            return redirect(url_for('sales_management'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def is_premium_user():
+    """現在のログインユーザーのテナントがプレミアプランかどうかを返す"""
+    uid = session.get('app_user_id')
+    if not uid:
+        return False
+    user = AppUser.query.get(uid)
+    if not user:
+        return False
+    if user.role == 'super_admin':
+        return True  # super_adminは全機能アクセス可
+    if not user.tenant_id:
+        return False
+    tenant = Tenant.query.get(user.tenant_id)
+    return bool(tenant and tenant.plan == 'premium')
+
+
 # ── ユーティリティ ─────────────────────────────────────────
 
 def get_current_user():
@@ -1046,8 +1075,10 @@ def current_ym():
     return now.year, now.month
 
 
-def get_allowed_store_ids():
-    """ログインユーザーが参照できる店舗IDリストを返す（テナント分離）"""
+def get_allowed_store_ids(ignore_active=False):
+    """ログインユーザーが参照できる店舗IDリストを返す（テナント分離）
+    ignore_active=True の場合はセッションの active_store_id を無視して全店舗返す（本部ダッシュボード用）
+    """
     uid = session.get('app_user_id')
     if not uid:
         return []
@@ -1057,12 +1088,17 @@ def get_allowed_store_ids():
     if user.role == 'super_admin':
         return [s.id for s in Store.query.filter_by(is_active=True).all()]
     elif user.role == 'owner':
-        return [s.id for s in Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()]
+        all_ids = [s.id for s in Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()]
+        if not ignore_active:
+            active = session.get('active_store_id')
+            if active and active in all_ids:
+                return [active]
+        return all_ids
     else:
         return [user.store_id] if user.store_id else []
 
 
-def get_allowed_stores():
+def get_allowed_stores(ignore_active=False):
     """ログインユーザーが参照できるStoreオブジェクトリストを返す"""
     uid = session.get('app_user_id')
     if not uid:
@@ -1073,7 +1109,14 @@ def get_allowed_stores():
     if user.role == 'super_admin':
         return Store.query.filter_by(is_active=True).all()
     elif user.role == 'owner':
-        return Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()
+        all_stores = Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()
+        if not ignore_active:
+            active = session.get('active_store_id')
+            if active:
+                filtered = [s for s in all_stores if s.id == active]
+                if filtered:
+                    return filtered
+        return all_stores
     else:
         if user.store_id:
             s = Store.query.get(user.store_id)
@@ -1331,13 +1374,15 @@ def assessment():
 
 @app.route("/executive")
 @login_required
+@manager_or_above_required
 def executive_dashboard():
     """売上管理ダッシュボード"""
-    allowed_ids = get_allowed_store_ids()
+    stores = get_allowed_stores(ignore_active=True)
+    allowed_ids = [s.id for s in stores]
     staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all()
     year, month = current_ym()
     return render_template("executive_dashboard.html",
-                           staff_list=staff_list, year=year, month=month,
+                           stores=stores, staff_list=staff_list, year=year, month=month,
                            now=datetime.now())
 
 
@@ -1364,6 +1409,7 @@ def sales_management():
 
 @app.route("/leads")
 @login_required
+@manager_or_above_required
 def leads_management():
     """反響管理ページ：リード一覧・追加"""
     stores = get_allowed_stores()
@@ -1429,6 +1475,7 @@ def leads_status_update(lead_id):
 
 @app.route("/accounting")
 @login_required
+@manager_or_above_required
 def accounting():
     """会計・PL管理ページ"""
     stores = get_allowed_stores()
@@ -2961,13 +3008,15 @@ def api_payments_summary():
 @login_required
 def settings():
     """設定ページ（スタッフ以上）"""
-    staff_list = Staff.query.filter_by(is_active=True).all()
+    stores     = get_allowed_stores(ignore_active=True)
+    allowed_ids = [s.id for s in stores]
+    staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all() if allowed_ids else Staff.query.filter_by(is_active=True).all()
     # アカウント一覧はオーナーのみ表示
     user = AppUser.query.get(session['app_user_id'])
     is_owner = user and user.role == 'owner'
     accounts = AppUser.query.filter_by(is_active=True).all() if is_owner else []
     return render_template("settings.html",
-                           staff_list=staff_list, accounts=accounts,
+                           stores=stores, staff_list=staff_list, accounts=accounts,
                            is_owner=is_owner,
                            now=datetime.now())
 
@@ -3354,10 +3403,29 @@ def api_uncollected_sync_from_applications():
 
 @app.route("/leave-management")
 @login_required
+@manager_or_above_required
 def leave_management():
-    staff_list = Staff.query.filter_by(is_active=True).order_by(Staff.name).all()
+    stores     = get_allowed_stores(ignore_active=True)
+    allowed_ids = [s.id for s in stores]
+    staff_list = Staff.query.filter(
+        Staff.store_id.in_(allowed_ids), Staff.is_active == True
+    ).order_by(Staff.name).all()
     year = request.args.get('year', type=int) or date.today().year
-    return render_template("leave_management.html", staff_list=staff_list, year=year)
+    return render_template("leave_management.html", stores=stores, staff_list=staff_list, year=year)
+
+
+@app.route("/api/set-active-store", methods=["POST"])
+@login_required
+def api_set_active_store():
+    """プレミアオーナーがサイドバーで店舗を切り替えるためのAPI"""
+    data = request.get_json() or {}
+    store_id = data.get('store_id')
+    allowed = get_allowed_store_ids(ignore_active=True)  # 全店舗で検証
+    if store_id and int(store_id) in allowed:
+        session['active_store_id'] = int(store_id)
+    else:
+        session.pop('active_store_id', None)
+    return jsonify({'status': 'ok', 'active_store_id': session.get('active_store_id')})
 
 
 @app.route("/api/leave", methods=["GET"])
@@ -3780,13 +3848,14 @@ def settings_users():
     app_user = AppUser.query.get(session.get('app_user_id'))
     if not app_user or app_user.role not in ('owner', 'super_admin'):
         return redirect(url_for('executive_dashboard'))
-    allowed_ids = get_allowed_store_ids()
+    stores      = get_allowed_stores(ignore_active=True)
+    allowed_ids = [s.id for s in stores]
     q = AppUser.query.filter_by(is_active=True)
     if app_user.role == 'owner':
         q = q.filter_by(tenant_id=app_user.tenant_id)
     users = q.order_by(AppUser.created_at).all()
     staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all()
-    return render_template("settings_users.html", users=users, staff_list=staff_list)
+    return render_template("settings_users.html", stores=stores, users=users, staff_list=staff_list)
 
 
 @app.route("/api/users", methods=["POST"])
@@ -4355,6 +4424,242 @@ def api_sales_kpi_target():
     kpi.target_sales = target
     db.session.commit()
     return jsonify({'status': 'ok'})
+
+
+# ── プレミアム：本部ダッシュボード ────────────────────────
+
+@app.route("/headquarters")
+@login_required
+def headquarters_dashboard():
+    """本部ダッシュボード（プレミアプラン専用）"""
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    if not cur_user:
+        return redirect(url_for('app_login'))
+    if cur_user.role == 'staff':
+        return redirect(url_for('sales_management'))
+    if not is_premium_user():
+        return redirect(url_for('executive_dashboard'))
+    stores = get_allowed_stores(ignore_active=True)   # HQは全店舗
+    year, month = current_ym()
+    return render_template("headquarters_dashboard.html",
+                           stores=stores, year=year, month=month,
+                           now=datetime.now())
+
+
+@app.route("/api/hq/summary")
+@login_required
+def api_hq_summary():
+    """全店舗KPIサマリー（本部ダッシュボード用）"""
+    if not is_premium_user():
+        return jsonify({'error': 'premium required'}), 403
+    year  = request.args.get('year',  type=int) or date.today().year
+    month = request.args.get('month', type=int) or date.today().month
+    store_ids = get_allowed_store_ids(ignore_active=True)
+
+    today = date.today()
+    days_in_month = (date(year, month % 12 + 1, 1) - timedelta(days=1)).day if month < 12 else 31
+    elapsed_days  = min(today.day, days_in_month) if (today.year == year and today.month == month) else days_in_month
+
+    result = []
+    total_sales = 0
+    total_target = 0
+    total_apps   = 0
+    total_contracts = 0
+
+    for sid in store_ids:
+        store = Store.query.get(sid)
+        if not store:
+            continue
+        kpis = SalesKPI.query.filter_by(store_id=sid, year=year, month=month).all()
+        sales    = sum(k.sales_amount  or 0 for k in kpis)
+        target   = sum(k.target_sales  or 0 for k in kpis)
+        apps     = sum(k.applications  or 0 for k in kpis)
+        contracts= sum(k.contracts     or 0 for k in kpis)
+        inquiries= sum(k.inquiries     or 0 for k in kpis)
+
+        # 前月売上
+        pm = month - 1 if month > 1 else 12
+        py = year if month > 1 else year - 1
+        prev_kpis = SalesKPI.query.filter_by(store_id=sid, year=py, month=pm).all()
+        prev_sales = sum(k.sales_amount or 0 for k in prev_kpis)
+
+        # 着地予測（現ペース × 月日数）
+        forecast = int(sales / elapsed_days * days_in_month) if elapsed_days > 0 else 0
+
+        close_rate = round(contracts / apps * 100, 1) if apps > 0 else 0
+        vs_prev    = round((sales - prev_sales) / prev_sales * 100, 1) if prev_sales > 0 else None
+
+        total_sales    += sales
+        total_target   += target
+        total_apps     += apps
+        total_contracts += contracts
+
+        result.append({
+            'store_id':   sid,
+            'store_name': store.name,
+            'sales':      sales,
+            'target':     target,
+            'forecast':   forecast,
+            'apps':       apps,
+            'contracts':  contracts,
+            'inquiries':  inquiries,
+            'close_rate': close_rate,
+            'vs_prev':    vs_prev,
+            'prev_sales': prev_sales,
+            'is_danger':  (target > 0 and sales < target * 0.5),
+            'is_drop':    (vs_prev is not None and vs_prev <= -20),
+        })
+
+    total_forecast = int(total_sales / elapsed_days * days_in_month) if elapsed_days > 0 else 0
+    total_close    = round(total_contracts / total_apps * 100, 1) if total_apps > 0 else 0
+    return jsonify({
+        'stores':          result,
+        'total_sales':     total_sales,
+        'total_target':    total_target,
+        'total_forecast':  total_forecast,
+        'total_apps':      total_apps,
+        'total_contracts': total_contracts,
+        'total_close_rate':total_close,
+        'year': year, 'month': month,
+        'elapsed_days': elapsed_days, 'days_in_month': days_in_month,
+    })
+
+
+@app.route("/api/hq/rankings")
+@login_required
+def api_hq_rankings():
+    """店舗別ランキング（metric: sales / apps / close_rate）"""
+    if not is_premium_user():
+        return jsonify({'error': 'premium required'}), 403
+    year   = request.args.get('year',   type=int) or date.today().year
+    month  = request.args.get('month',  type=int) or date.today().month
+    metric = request.args.get('metric', 'sales')
+    store_ids = get_allowed_store_ids(ignore_active=True)
+
+    rows = []
+    for sid in store_ids:
+        store = Store.query.get(sid)
+        if not store:
+            continue
+        kpis = SalesKPI.query.filter_by(store_id=sid, year=year, month=month).all()
+        sales     = sum(k.sales_amount or 0 for k in kpis)
+        apps      = sum(k.applications or 0 for k in kpis)
+        contracts = sum(k.contracts    or 0 for k in kpis)
+        close_rate= round(contracts / apps * 100, 1) if apps > 0 else 0
+        rows.append({'store_id': sid, 'store_name': store.name,
+                     'sales': sales, 'apps': apps, 'close_rate': close_rate})
+
+    key_map = {'sales': 'sales', 'apps': 'apps', 'close_rate': 'close_rate'}
+    sort_key = key_map.get(metric, 'sales')
+    rows.sort(key=lambda r: r[sort_key], reverse=True)
+    for i, r in enumerate(rows):
+        r['rank'] = i + 1
+    return jsonify(rows)
+
+
+@app.route("/api/hq/store-comparison")
+@login_required
+def api_hq_store_comparison():
+    """店舗別月次推移（グラフ用）"""
+    if not is_premium_user():
+        return jsonify({'error': 'premium required'}), 403
+    from_param = request.args.get('from')
+    to_param   = request.args.get('to')
+    metric     = request.args.get('metric', 'sales')
+    store_ids  = get_allowed_store_ids(ignore_active=True)
+
+    today = date.today()
+    if from_param and to_param:
+        try:
+            fy, fm = int(from_param[:4]), int(from_param[5:7])
+            ty, tm = int(to_param[:4]),   int(to_param[5:7])
+        except Exception:
+            fy, fm = today.year, today.month - 5
+            ty, tm = today.year, today.month
+    else:
+        base = today.year * 12 + today.month - 1
+        fy, fm = divmod(base - 5, 12)
+        fm += 1
+        ty, tm = today.year, today.month
+
+    base_s = fy * 12 + fm - 1
+    base_e = ty * 12 + tm - 1
+    periods = [(t // 12, t % 12 + 1) for t in range(base_s, base_e + 1)]
+    labels  = [f'{y}/{m:02d}' for y, m in periods]
+
+    datasets = []
+    colors_list = ['#16a34a','#2563eb','#dc2626','#d97706','#7c3aed','#db2777','#0891b2']
+    for ci, sid in enumerate(store_ids):
+        store = Store.query.get(sid)
+        if not store:
+            continue
+        values = []
+        for y, m in periods:
+            kpis = SalesKPI.query.filter_by(store_id=sid, year=y, month=m).all()
+            if metric == 'sales':
+                v = sum(k.sales_amount or 0 for k in kpis)
+            elif metric == 'apps':
+                v = sum(k.applications or 0 for k in kpis)
+            elif metric == 'close_rate':
+                apps = sum(k.applications or 0 for k in kpis)
+                ctrs = sum(k.contracts   or 0 for k in kpis)
+                v = round(ctrs / apps * 100, 1) if apps > 0 else 0
+            else:
+                v = 0
+            values.append(v)
+        datasets.append({
+            'store_id':   sid,
+            'store_name': store.name,
+            'color':      colors_list[ci % len(colors_list)],
+            'data':       values,
+        })
+    return jsonify({'labels': labels, 'datasets': datasets})
+
+
+@app.route("/api/hq/ai-summary", methods=["POST"])
+@login_required
+def api_hq_ai_summary():
+    """Claude APIで全店舗データのAIサマリーを生成"""
+    if not is_premium_user():
+        return jsonify({'error': 'premium required'}), 403
+    year  = request.json.get('year',  date.today().year)
+    month = request.json.get('month', date.today().month)
+    store_ids = get_allowed_store_ids(ignore_active=True)
+
+    store_lines = []
+    for sid in store_ids:
+        store = Store.query.get(sid)
+        if not store:
+            continue
+        kpis = SalesKPI.query.filter_by(store_id=sid, year=year, month=month).all()
+        sales     = sum(k.sales_amount or 0 for k in kpis)
+        target    = sum(k.target_sales or 0 for k in kpis)
+        apps      = sum(k.applications or 0 for k in kpis)
+        contracts = sum(k.contracts    or 0 for k in kpis)
+        close     = round(contracts / apps * 100, 1) if apps > 0 else 0
+        store_lines.append(
+            f"・{store.name}: 売上¥{sales:,.0f} (目標¥{target:,.0f}), 申込{apps}件, 成約{contracts}件, 成約率{close}%"
+        )
+
+    prompt = f"""あなたは不動産会社の経営コンサルタントです。
+以下は{year}年{month}月の全店舗KPIデータです。
+
+{chr(10).join(store_lines) if store_lines else '（データなし）'}
+
+以下の観点で簡潔に分析してください（400字以内）：
+1. 全体の状況と注目すべき店舗
+2. 課題・リスク
+3. 来月に向けたアドバイス"""
+
+    try:
+        msg = anthropic_client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=600,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return jsonify({'summary': msg.content[0].text})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == "__main__":
