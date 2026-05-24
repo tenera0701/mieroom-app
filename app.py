@@ -1167,16 +1167,13 @@ def get_allowed_store_ids(ignore_active=False):
     if not user:
         return []
     if user.role == 'super_admin':
-        return [s.id for s in Store.query.filter_by(is_active=True).all()]
+        return [s.id for s in Store.query.filter_by(is_active=True).order_by(Store.id).all()]
     elif user.role == 'owner':
-        all_ids = [s.id for s in Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()]
-        # フォールバック: tenant_idが一致する店舗がない場合（マイグレーション未完了の可能性）
-        # tenant_id=NULLの店舗も含めて検索
+        all_ids = [s.id for s in Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).order_by(Store.id).all()]
         if not all_ids:
-            # フォールバック: tenant_id=NULLの店舗も候補にする（マイグレーション未完了時）
             null_stores = Store.query.filter(
                 Store.tenant_id == None, Store.is_active == True
-            ).all()
+            ).order_by(Store.id).all()
             if null_stores:
                 all_ids = [s.id for s in null_stores]
         if not ignore_active:
@@ -1187,10 +1184,9 @@ def get_allowed_store_ids(ignore_active=False):
     else:
         if user.store_id:
             return [user.store_id]
-        # store_idが未設定のスタッフ: tenant経由で店舗を検索
         if user.tenant_id:
-            ids = [s.id for s in Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()]
-            return ids[:1]  # 最初の店舗のみ
+            ids = [s.id for s in Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).order_by(Store.id).all()]
+            return ids[:1]
         return []
 
 
@@ -1203,14 +1199,13 @@ def get_allowed_stores(ignore_active=False):
     if not user:
         return []
     if user.role == 'super_admin':
-        return Store.query.filter_by(is_active=True).all()
+        return Store.query.filter_by(is_active=True).order_by(Store.id).all()
     elif user.role == 'owner':
-        all_stores = Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()
-        # フォールバック: tenant_idが一致する店舗がない場合
+        all_stores = Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).order_by(Store.id).all()
         if not all_stores:
             all_stores = Store.query.filter(
                 Store.tenant_id == None, Store.is_active == True
-            ).all()
+            ).order_by(Store.id).all()
         if not ignore_active:
             active = session.get('active_store_id')
             if active:
@@ -1222,9 +1217,8 @@ def get_allowed_stores(ignore_active=False):
         if user.store_id:
             s = Store.query.get(user.store_id)
             return [s] if s and s.is_active else []
-        # store_idが未設定のスタッフ: tenant経由
         if user.tenant_id:
-            return Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).limit(1).all()
+            return Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).order_by(Store.id).limit(1).all()
         return []
 
 
@@ -2586,45 +2580,56 @@ def api_staff_ranking():
 @login_required
 def api_kpi_input():
     """KPIデータを入力・更新する"""
-    data = request.get_json() or request.form
-    staff_id_raw = data.get('staff_id', 0)
+    import traceback
     try:
-        staff_id = int(staff_id_raw)
-    except (TypeError, ValueError):
-        staff_id = 0
-    store_id = safe_store_id(data.get('store_id'))
-    if not store_id:
-        return jsonify({'error': 'unauthorized: store not found'}), 403
-    if not staff_id or staff_id <= 0:
-        return jsonify({'error': 'staff_id は必須です'}), 400
-    # staff が存在するか確認（FK違反防止）
-    if not Staff.query.get(staff_id):
-        return jsonify({'error': f'スタッフ(id={staff_id})が見つかりません'}), 400
-    year     = int(data.get('year', current_ym()[0]))
-    month    = int(data.get('month', current_ym()[1]))
+        data = request.get_json() or request.form
+        staff_id_raw = data.get('staff_id', 0)
+        try:
+            staff_id = int(staff_id_raw)
+        except (TypeError, ValueError):
+            staff_id = 0
+        store_id = safe_store_id(data.get('store_id'))
+        if not store_id:
+            return jsonify({'error': 'store not found', 'allowed': get_allowed_store_ids()}), 403
+        if not staff_id or staff_id <= 0:
+            return jsonify({'error': 'staff_id は必須です', 'got': staff_id_raw}), 400
+        staff = db.session.get(Staff, staff_id) if hasattr(db.session, 'get') else Staff.query.get(staff_id)
+        if not staff:
+            return jsonify({'error': f'スタッフ(id={staff_id})が見つかりません'}), 400
+        year  = int(data.get('year',  current_ym()[0]))
+        month = int(data.get('month', current_ym()[1]))
 
-    # 既存レコードがあれば更新、なければ新規作成
-    kpi = SalesKPI.query.filter_by(staff_id=staff_id, store_id=store_id,
-                                    year=year, month=month).first()
-    if not kpi:
-        kpi = SalesKPI(staff_id=staff_id, store_id=store_id, year=year, month=month)
-        db.session.add(kpi)
+        kpi = SalesKPI.query.filter_by(staff_id=staff_id, store_id=store_id,
+                                        year=year, month=month).first()
+        if not kpi:
+            kpi = SalesKPI(staff_id=staff_id, store_id=store_id, year=year, month=month,
+                           inquiries=0, store_visits=0, viewings=0, applications=0,
+                           contracts=0, cancellations=0, sales_amount=0.0,
+                           option_sales=0.0, estimated_sales=0.0, target_sales=0.0,
+                           fire_insurance_count=0, lifeline_count=0, moving_count=0)
+            db.session.add(kpi)
+            db.session.flush()  # idを確定させてからフィールドを設定
 
-    kpi.inquiries    = int(data.get('inquiries',     kpi.inquiries    or 0))
-    kpi.store_visits = int(data.get('store_visits', kpi.store_visits or 0))
-    kpi.viewings     = int(data.get('viewings',     kpi.viewings     or 0))
-    kpi.applications = int(data.get('applications', kpi.applications or 0))
-    kpi.contracts    = int(data.get('contracts',    kpi.contracts    or 0))
-    kpi.cancellations= int(data.get('cancellations',kpi.cancellations or 0))
-    kpi.sales_amount = float(data.get('sales_amount', kpi.sales_amount or 0))
-    kpi.option_sales = float(data.get('option_sales', kpi.option_sales or 0))
-    kpi.estimated_sales     = float(data.get('estimated_sales',      kpi.estimated_sales      or 0))
-    kpi.fire_insurance_count= int(data.get('fire_insurance_count',   kpi.fire_insurance_count or 0))
-    kpi.lifeline_count      = int(data.get('lifeline_count',         kpi.lifeline_count       or 0))
-    kpi.moving_count        = int(data.get('moving_count',           kpi.moving_count         or 0))
-    db.session.commit()
-
-    return jsonify({'status': 'ok', 'id': kpi.id})
+        kpi.inquiries    = int(data.get('inquiries',     0) or 0)
+        kpi.store_visits = int(data.get('store_visits',  0) or 0)
+        kpi.viewings     = int(data.get('viewings',      0) or 0)
+        kpi.applications = int(data.get('applications',  0) or 0)
+        kpi.contracts    = int(data.get('contracts',     0) or 0)
+        kpi.cancellations= int(data.get('cancellations', 0) or 0)
+        kpi.sales_amount = float(data.get('sales_amount',  kpi.sales_amount  or 0) or 0)
+        kpi.option_sales = float(data.get('option_sales',  kpi.option_sales  or 0) or 0)
+        kpi.estimated_sales      = float(data.get('estimated_sales',      kpi.estimated_sales      or 0) or 0)
+        kpi.target_sales         = float(data.get('target_sales',         kpi.target_sales         or 0) or 0)
+        kpi.fire_insurance_count = int(data.get('fire_insurance_count',   kpi.fire_insurance_count or 0) or 0)
+        kpi.lifeline_count       = int(data.get('lifeline_count',         kpi.lifeline_count       or 0) or 0)
+        kpi.moving_count         = int(data.get('moving_count',           kpi.moving_count         or 0) or 0)
+        db.session.commit()
+        return jsonify({'status': 'ok', 'id': kpi.id})
+    except Exception as e:
+        db.session.rollback()
+        tb = traceback.format_exc()
+        print(f"api_kpi_input error: {e}\n{tb}")
+        return jsonify({'error': str(e), 'detail': tb[-300:]}), 500
 
 
 def _apply_pl_fields(pl, data):
