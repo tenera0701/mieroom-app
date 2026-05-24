@@ -2055,9 +2055,12 @@ def api_leads_monthly_stats():
     cy, cm = current_ym()
     year  = request.args.get('year',  type=int) or cy
     month = request.args.get('month', type=int) or cm
-    store_id = safe_store_id(request.args.get('store_id', type=int))
-    if not store_id:
+    # ignore_active=True で保存時と同じ基準で店舗を解決する
+    allowed = get_allowed_store_ids(ignore_active=True)
+    if not allowed:
         return jsonify({'stats': [], 'totals': {}, 'trend': []}), 200
+    req_sid = request.args.get('store_id', type=int) or 0
+    store_id = req_sid if req_sid and req_sid in allowed else allowed[0]
 
     stats = LeadMediaStat.query.filter_by(store_id=store_id, year=year, month=month).all()
 
@@ -2209,9 +2212,15 @@ def api_leads_monthly_stats_input():
     data = request.get_json() or request.form
     year  = int(data.get('year', current_ym()[0]))
     month = int(data.get('month', current_ym()[1]))
-    store_id = safe_store_id(data.get('store_id'))
-    if not store_id:
+    # ignore_active=True で保存・取得ともに同じ基準にする
+    allowed = get_allowed_store_ids(ignore_active=True)
+    if not allowed:
         return jsonify({'error': 'unauthorized'}), 403
+    try:
+        req_sid = int(data.get('store_id') or 0)
+    except (TypeError, ValueError):
+        req_sid = 0
+    store_id = req_sid if req_sid and req_sid in allowed else allowed[0]
     media = data.get('media', '').strip()
     if not media:
         return jsonify({'error': '媒体名は必須です'}), 400
@@ -2231,7 +2240,7 @@ def api_leads_monthly_stats_input():
             setattr(stat, field, float(v or 0))
 
     db.session.commit()
-    return jsonify({'status': 'ok', 'id': stat.id})
+    return jsonify({'status': 'ok', 'id': stat.id, 'store_id': store_id, 'year': year, 'month': month})
 
 
 @app.route("/api/leads/monthly-stats/<int:stat_id>", methods=["PUT"])
@@ -3210,6 +3219,16 @@ def settings():
 def api_settings_staff_add():
     """スタッフ追加"""
     data = request.get_json() or request.form
+    # ignore_active=True で設定ページと同じ基準で店舗を解決する
+    allowed = get_allowed_store_ids(ignore_active=True)
+    if not allowed:
+        return jsonify({'error': 'store not found'}), 403
+    try:
+        req_sid = int(data.get('store_id') or 0)
+    except (TypeError, ValueError):
+        req_sid = 0
+    sid = req_sid if req_sid and req_sid in allowed else allowed[0]
+
     hired_str = data.get('hired_at', '')
     hired_date = None
     if hired_str:
@@ -3217,9 +3236,6 @@ def api_settings_staff_add():
             hired_date = date.fromisoformat(hired_str)
         except ValueError:
             pass
-    sid = safe_store_id(data.get('store_id'))
-    if not sid:
-        return jsonify({'error': 'unauthorized'}), 403
     staff = Staff(
         name=data.get('name', ''),
         store_id=sid,

@@ -416,7 +416,7 @@
 {% block extra_scripts %}
 <script>
 /* ===== 状態 ===== */
-const STORE_ID   = {{ store_id or 0 }};  // テナント分離：バックエンドから注入
+let STORE_ID   = {{ store_id or 0 }};  // テナント分離：バックエンドから注入
 let currentYear  = {{ year }};
 let currentMonth = {{ month }};
 let statsData    = [];
@@ -839,8 +839,10 @@ async function submitManual() {
       throw new Error(`HTTP ${res.status}: ${errText.slice(0, 120)}`);
     }
     const savedResult = await res.json();
-    currentYear = payload.year;
-    currentMonth = payload.month;
+    // サーバーが実際に使用した store_id/year/month でページ状態を同期する
+    if (savedResult.store_id) STORE_ID = savedResult.store_id;
+    currentYear  = savedResult.year  || payload.year;
+    currentMonth = savedResult.month || payload.month;
     updateMonthLabel();
     closeManualModal();
     showAlert('データを保存しました');
