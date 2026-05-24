@@ -988,7 +988,8 @@ def migrate_tenant_data():
             db.session.add(t)
             db.session.commit()
 
-        default_tenant = Tenant.query.first()
+        # ORDER BY id で決定的に最初のテナントを取得（PostgreSQLでも安定）
+        default_tenant = Tenant.query.order_by(Tenant.id).first()
 
         # tenant_idのないstoreを割り当て
         for s in Store.query.filter_by(tenant_id=None).all():
@@ -1000,6 +1001,18 @@ def migrate_tenant_data():
                 u.tenant_id = default_tenant.id
 
         db.session.commit()
+
+        # オーナーのテナントに店舗がない場合は全アクティブ店舗を割り当て（データ整合性修復）
+        for owner in AppUser.query.filter_by(role='owner').all():
+            if owner.tenant_id:
+                store_count = Store.query.filter_by(tenant_id=owner.tenant_id, is_active=True).count()
+                if store_count == 0:
+                    # このオーナーのテナントに属する店舗がない → デフォルトテナントの店舗を割り当て
+                    for s in Store.query.filter_by(tenant_id=default_tenant.id, is_active=True).all():
+                        s.tenant_id = owner.tenant_id
+                    db.session.commit()
+                    print(f"オーナー(id={owner.id})のテナント店舗を修復しました")
+
         print("テナントデータのマイグレーション完了")
 
         # 既存店舗に媒体マスターがなければ初期化
@@ -1140,13 +1153,37 @@ def get_allowed_store_ids(ignore_active=False):
         return [s.id for s in Store.query.filter_by(is_active=True).all()]
     elif user.role == 'owner':
         all_ids = [s.id for s in Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()]
+        # フォールバック: tenant_idが一致する店舗がない場合（マイグレーション未完了の可能性）
+        # tenant_id=NULLの店舗も含めて検索
+        if not all_ids:
+            null_stores = Store.query.filter(
+                Store.tenant_id == None, Store.is_active == True
+            ).all()
+            if null_stores:
+                # データを自動修復: NULLの店舗をこのオーナーのテナントに割り当て
+                for s in null_stores:
+                    s.tenant_id = user.tenant_id
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                all_ids = [s.id for s in null_stores]
+        # それでも空の場合、テナントの全アクティブ店舗（再クエリ）
+        if not all_ids:
+            all_ids = [s.id for s in Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()]
         if not ignore_active:
             active = session.get('active_store_id')
             if active and active in all_ids:
                 return [active]
         return all_ids
     else:
-        return [user.store_id] if user.store_id else []
+        if user.store_id:
+            return [user.store_id]
+        # store_idが未設定のスタッフ: tenant経由で店舗を検索
+        if user.tenant_id:
+            ids = [s.id for s in Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()]
+            return ids[:1]  # 最初の店舗のみ
+        return []
 
 
 def get_allowed_stores(ignore_active=False):
@@ -1161,6 +1198,19 @@ def get_allowed_stores(ignore_active=False):
         return Store.query.filter_by(is_active=True).all()
     elif user.role == 'owner':
         all_stores = Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()
+        # フォールバック: tenant_idが一致する店舗がない場合
+        if not all_stores:
+            all_stores = Store.query.filter(
+                Store.tenant_id == None, Store.is_active == True
+            ).all()
+            if all_stores:
+                for s in all_stores:
+                    s.tenant_id = user.tenant_id
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                all_stores = Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).all()
         if not ignore_active:
             active = session.get('active_store_id')
             if active:
@@ -1172,6 +1222,9 @@ def get_allowed_stores(ignore_active=False):
         if user.store_id:
             s = Store.query.get(user.store_id)
             return [s] if s and s.is_active else []
+        # store_idが未設定のスタッフ: tenant経由
+        if user.tenant_id:
+            return Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).limit(1).all()
         return []
 
 
@@ -2002,6 +2055,7 @@ def api_leads_summary():
 
 
 @app.route("/api/leads/monthly-stats")
+@login_required
 def api_leads_monthly_stats():
     """媒体別月次反響統計を返す"""
     cy, cm = current_ym()
@@ -2155,6 +2209,7 @@ def api_leads_trend():
 
 
 @app.route("/api/leads/monthly-stats", methods=["POST"])
+@login_required
 def api_leads_monthly_stats_input():
     """媒体別月次反響統計を手動入力"""
     data = request.get_json() or request.form
@@ -2528,13 +2583,23 @@ def api_staff_ranking():
 # ── 幹部向け管理ツール：データ入力API ────────────────────
 
 @app.route("/api/kpi/input", methods=["POST"])
+@login_required
 def api_kpi_input():
     """KPIデータを入力・更新する"""
     data = request.get_json() or request.form
-    staff_id = int(data.get('staff_id', 0))
+    staff_id_raw = data.get('staff_id', 0)
+    try:
+        staff_id = int(staff_id_raw)
+    except (TypeError, ValueError):
+        staff_id = 0
     store_id = safe_store_id(data.get('store_id'))
     if not store_id:
-        return jsonify({'error': 'unauthorized'}), 403
+        return jsonify({'error': 'unauthorized: store not found'}), 403
+    if not staff_id or staff_id <= 0:
+        return jsonify({'error': 'staff_id は必須です'}), 400
+    # staff が存在するか確認（FK違反防止）
+    if not Staff.query.get(staff_id):
+        return jsonify({'error': f'スタッフ(id={staff_id})が見つかりません'}), 400
     year     = int(data.get('year', current_ym()[0]))
     month    = int(data.get('month', current_ym()[1]))
 
