@@ -57,6 +57,26 @@ def add_no_cache(response):
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
     return response
+
+
+@app.context_processor
+def inject_ui_context():
+    """全テンプレートに共通変数を注入（is_premium はリクエスト時に評価）"""
+    def _is_premium():
+        uid = session.get('app_user_id')
+        if not uid:
+            return False
+        u = AppUser.query.get(uid)
+        if not u or u.role == 'super_admin' or not u.tenant_id:
+            return False
+        t = Tenant.query.get(u.tenant_id)
+        return bool(t and t.plan == 'premium')
+    return {
+        'is_premium': _is_premium(),
+        'current_role': session.get('app_user_role', ''),
+    }
+
+
 oauth = OAuth(app)
 
 google = oauth.register(
@@ -1033,29 +1053,41 @@ def super_admin_required(f):
 
 
 def manager_or_above_required(f):
-    """store_manager / owner / super_admin のみアクセス可。staff はブロック。"""
+    """store_manager / owner のみアクセス可。staff と super_admin はブロック。"""
     @wraps(f)
     def decorated(*args, **kwargs):
         if 'app_user_id' not in session:
             return redirect(url_for('app_login'))
         user = AppUser.query.get(session['app_user_id'])
-        if not user or user.role == 'staff':
+        if not user:
+            return redirect(url_for('app_login'))
+        if user.role == 'super_admin':
+            return redirect(url_for('admin_tenants'))
+        if user.role == 'staff':
             return redirect(url_for('sales_management'))
         return f(*args, **kwargs)
     return decorated
 
 
+def block_super_admin(f):
+    """ビジネス系ページから super_admin を弾く（テナント管理のみ許可）"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if session.get('app_user_role') == 'super_admin':
+            return redirect(url_for('admin_tenants'))
+        return f(*args, **kwargs)
+    return decorated
+
+
 def is_premium_user():
-    """現在のログインユーザーのテナントがプレミアプランかどうかを返す"""
+    """現在のログインユーザーのテナントがプレミアプランかどうかを返す。
+    super_admin はテナントを持たないため False。
+    """
     uid = session.get('app_user_id')
     if not uid:
         return False
     user = AppUser.query.get(uid)
-    if not user:
-        return False
-    if user.role == 'super_admin':
-        return True  # super_adminは全機能アクセス可
-    if not user.tenant_id:
+    if not user or user.role == 'super_admin' or not user.tenant_id:
         return False
     tenant = Tenant.query.get(user.tenant_id)
     return bool(tenant and tenant.plan == 'premium')
@@ -1188,8 +1220,13 @@ def app_login():
             session['tenant_id'] = user.tenant_id
             user.last_login = datetime.utcnow()
             db.session.commit()
-            # sessionStorageにフラグを立ててリダイレクト（ブラウザ閉じ検出用）
-            dashboard_url = url_for('executive_dashboard')
+            # super_admin はテナント管理へ、それ以外は売上管理ダッシュボードへ
+            if user.role == 'super_admin':
+                dashboard_url = url_for('admin_tenants')
+            elif user.role == 'staff':
+                dashboard_url = url_for('sales_management')
+            else:
+                dashboard_url = url_for('executive_dashboard')
             return make_response(f'''<!DOCTYPE html><html><head>
 <meta charset="utf-8"><title>ログイン中...</title></head><body>
 <script>
@@ -1388,6 +1425,7 @@ def executive_dashboard():
 
 @app.route("/sales")
 @login_required
+@block_super_admin
 def sales_management():
     """営業管理ページ：KPI入力・閲覧"""
     stores = get_allowed_stores()
@@ -1486,6 +1524,7 @@ def accounting():
 
 @app.route("/staff-ranking")
 @login_required
+@block_super_admin
 def staff_ranking():
     """スタッフランキングページ"""
     stores = get_allowed_stores()
@@ -3545,6 +3584,7 @@ def api_leave_balance_update():
 
 @app.route("/daily-report")
 @login_required
+@block_super_admin
 def daily_report():
     """日報ページ"""
     stores = Store.query.filter_by(is_active=True).all()
@@ -4430,6 +4470,7 @@ def api_sales_kpi_target():
 
 @app.route("/headquarters")
 @login_required
+@block_super_admin
 def headquarters_dashboard():
     """本部ダッシュボード（プレミアプラン専用）"""
     cur_user = AppUser.query.get(session.get('app_user_id'))

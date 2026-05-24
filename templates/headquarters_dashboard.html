@@ -67,13 +67,6 @@
   .dot-warn   { background:var(--hq-accent); }
   .dot-danger { background:var(--hq-danger); }
 
-  /* ─── AI サマリー ─── */
-  #ai-summary-box {
-    background:#f0f9ff; border:1px solid #bae6fd; border-radius:10px;
-    padding:18px 20px; font-size:13px; line-height:1.8; color:#1e3a5f; white-space:pre-wrap;
-    min-height:60px;
-  }
-
   /* ─── セクション共通 ─── */
   .hq-section {
     background:#fff; border-radius:12px; border:1px solid #e5e7eb;
@@ -211,18 +204,6 @@
     </div>
   </div>
 
-  <!-- ⑥ AIサマリー -->
-  <div class="hq-section">
-    <div class="hq-section-title">🤖 AIサマリー <span class="badge-pro">PRO</span></div>
-    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
-      <button id="ai-btn" onclick="generateAISummary()"
-        style="padding:8px 20px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">
-        ✨ AIに分析させる
-      </button>
-      <span style="font-size:11px;color:#9ca3af;">Claude AI が当月データを元に経営分析レポートを生成します</span>
-    </div>
-    <div id="ai-summary-box">ボタンを押すとAIが全店舗のKPIを分析してレポートを生成します。</div>
-  </div>
 
 </div>
 {% endblock %}
@@ -436,29 +417,6 @@ function renderComparisonChart(d) {
       }
     }
   });
-}
-
-/* ─── ⑥ AIサマリー ─── */
-async function generateAISummary() {
-  const btn = document.getElementById('ai-btn');
-  const box = document.getElementById('ai-summary-box');
-  btn.disabled = true;
-  btn.textContent = '⏳ 分析中...';
-  box.textContent = 'AIが分析しています。しばらくお待ちください...';
-  const { year, month } = getYM();
-  try {
-    const res = await fetch('/api/hq/ai-summary', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ year, month })
-    });
-    const d = await res.json();
-    box.textContent = d.summary || d.error || '分析に失敗しました。';
-  } catch(e) {
-    box.textContent = '通信エラーが発生しました。';
-  }
-  btn.disabled = false;
-  btn.textContent = '✨ AIに分析させる';
 }
 
 /* ─── 初期化 ─── */
