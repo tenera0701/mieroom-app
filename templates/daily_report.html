@@ -166,6 +166,7 @@
 
 {% block scripts %}
 <script>
+const STORE_ID = {{ store_id or 0 }};  // テナント分離：バックエンドから注入
 let customerIndex = 0;
 
 function switchReportTab(tab) {
@@ -293,7 +294,7 @@ async function saveReport() {
 
   const payload = {
     staff_id: staffId,
-    store_id: 1,
+    store_id: STORE_ID,
     report_date: dateVal,
     prev_day_contact_done:  document.getElementById('task-prev-day').checked,
     same_day_contact_done:  document.getElementById('task-same-day').checked,
@@ -386,7 +387,7 @@ async function addTaskTemplate() {
   await fetch('/api/daily-task-template', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ task_name: name, store_id: 1 }),
+    body: JSON.stringify({ task_name: name, store_id: STORE_ID }),
   });
   document.getElementById('new-task-name').value = '';
   loadTaskTemplates();

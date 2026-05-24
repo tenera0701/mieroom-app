@@ -420,7 +420,7 @@
     </div>
     <div class="modal-body">
       <form id="pl-form" onsubmit="return false;">
-        <input type="hidden" name="store_id" value="1">
+        <input type="hidden" name="store_id" id="pl-form-store-id" value="0">
         <input type="hidden" id="editing-pl-id" value="">
         <div class="form-group full-width" style="margin-bottom:16px;">
           <label>対象月</label>
@@ -494,6 +494,7 @@
 /* ===================================================
    状態管理
 =================================================== */
+const STORE_ID   = {{ store_id or 0 }};  // テナント分離：バックエンドから注入
 let currentYear  = {{ year }};
 let currentMonth = {{ month }};
 let plChart = null;
@@ -569,7 +570,7 @@ async function submitPlImport() {
   fd.append('file', fileEl.files[0]);
   fd.append('year', currentYear);
   fd.append('month', currentMonth);
-  fd.append('store_id', 1);
+  fd.append('store_id', STORE_ID);
   const resEl = document.getElementById('pl-import-result');
   resEl.innerHTML = '<p style="color:#6b7280;">インポート中...</p>';
   try {
@@ -1101,7 +1102,8 @@ async function openPlModal(existingData, isEdit=false) {
     // 新規モード：前月データで自動入力
     title.textContent = '月次データ入力';
     try {
-      const res = await fetch(`/api/pl/prev-month-data?year=${currentYear}&month=${currentMonth}&store_id=1`);
+      document.getElementById('pl-form-store-id').value = STORE_ID;
+      const res = await fetch(`/api/pl/prev-month-data?year=${currentYear}&month=${currentMonth}&store_id=${STORE_ID}`);
       if (res.ok) {
         const prev = await res.json();
         // 広告費（動的行）
@@ -1167,7 +1169,7 @@ async function submitPl() {
   }
 
   const [year, month] = targetMonth.split('-').map(Number);
-  const payload = { store_id: 1, year, month };
+  const payload = { store_id: STORE_ID, year, month };
 
   // フォームの数値フィールドを収集
   const numFields = ['revenue','regular_salary','parttime_salary','social_insurance'];

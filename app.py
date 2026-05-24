@@ -1454,9 +1454,10 @@ def executive_dashboard():
     allowed_ids = [s.id for s in stores]
     staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all()
     year, month = current_ym()
+    store_id = allowed_ids[0] if allowed_ids else None
     return render_template("executive_dashboard.html",
                            stores=stores, staff_list=staff_list, year=year, month=month,
-                           now=datetime.now())
+                           store_id=store_id, now=datetime.now())
 
 
 @app.route("/sales")
@@ -1495,8 +1496,9 @@ def leads_management():
              .limit(100)
              .all())
     year, month = current_ym()
+    store_id = allowed_ids[0] if allowed_ids else None
     return render_template("leads_management.html", stores=stores, staff_list=staff_list,
-                           year=year, month=month, now=datetime.now())
+                           year=year, month=month, store_id=store_id, now=datetime.now())
 
 
 @app.route("/leads/add", methods=["POST"])
@@ -1556,9 +1558,11 @@ def leads_status_update(lead_id):
 def accounting():
     """会計・PL管理ページ"""
     stores = get_allowed_stores()
+    allowed_ids = [s.id for s in stores]
     year, month = current_ym()
+    store_id = allowed_ids[0] if allowed_ids else None
     return render_template("accounting.html", stores=stores, year=year, month=month,
-                           now=datetime.now())
+                           store_id=store_id, now=datetime.now())
 
 
 @app.route("/staff-ranking")
@@ -2216,7 +2220,9 @@ def api_leads_import_excel_stats():
     """反響統計ExcelをインポートしてLeadMediaStatに保存"""
     year  = int(request.form.get('year',  current_ym()[0]))
     month = int(request.form.get('month', current_ym()[1]))
-    store_id = int(request.form.get('store_id', 1))
+    store_id = safe_store_id(request.form.get('store_id', type=int))
+    if not store_id:
+        return jsonify({'error': 'unauthorized'}), 403
 
     if 'file' not in request.files:
         return jsonify({'error': 'ファイルが必要です'}), 400
@@ -2365,8 +2371,9 @@ def api_pl_summary():
             'custom_items':   custom_items,
         })
 
-    # テンプレート一覧（type別）
-    all_items = PLCustomItem.query.filter_by(store_id=1).order_by(PLCustomItem.sort_order).all()
+    # テンプレート一覧（type別・テナント分離）
+    _pl_sid = safe_store_id()
+    all_items = PLCustomItem.query.filter_by(store_id=_pl_sid).order_by(PLCustomItem.sort_order).all() if _pl_sid else []
     template_fixed    = [i.name for i in all_items if (i.item_type or '固定費') == '固定費']
     template_variable = [i.name for i in all_items if (i.item_type or '固定費') == '変動費']
     template_items    = [i.name for i in all_items if (i.item_type or '固定費') not in ('固定費','変動費')]
@@ -2416,8 +2423,9 @@ def api_pl_summary():
 
 @app.route("/api/pl/custom-items")
 def api_pl_custom_items():
-    """PLカスタム項目テンプレート一覧（type別）"""
-    items = PLCustomItem.query.filter_by(store_id=1).order_by(PLCustomItem.sort_order).all()
+    """PLカスタム項目テンプレート一覧（type別・テナント分離）"""
+    sid = safe_store_id()
+    items = PLCustomItem.query.filter_by(store_id=sid).order_by(PLCustomItem.sort_order).all() if sid else []
     return jsonify({
         'fixed':    [{'id': i.id, 'name': i.name} for i in items if (i.item_type or '固定費') == '固定費'],
         'variable': [{'id': i.id, 'name': i.name} for i in items if (i.item_type or '固定費') == '変動費'],
@@ -2885,7 +2893,7 @@ def api_import_excel():
 
     year = request.form.get('year', type=int) or current_ym()[0]
     month = request.form.get('month', type=int) or current_ym()[1]
-    store_id = request.form.get('store_id', type=int) or 1
+    store_id = safe_store_id(request.form.get('store_id', type=int))
 
     filename = secure_filename(f.filename)
 
@@ -3136,9 +3144,12 @@ def api_settings_staff_add():
             hired_date = date.fromisoformat(hired_str)
         except ValueError:
             pass
+    sid = safe_store_id(data.get('store_id'))
+    if not sid:
+        return jsonify({'error': 'unauthorized'}), 403
     staff = Staff(
         name=data.get('name', ''),
-        store_id=1,
+        store_id=sid,
         role=data.get('role', '営業'),
         is_active=True,
         hired_at=hired_date,
@@ -3349,7 +3360,7 @@ def api_uncollected_add():
         except: return None
 
     p = UncollectedPayment(
-        store_id=int(data.get('store_id', 1) or 1),
+        store_id=safe_store_id(data.get('store_id')) or (get_allowed_store_ids() or [1])[0],
         staff_id=int(data.get('staff_id') or 0) or None,
         property_name=data.get('property_name', ''),
         room_number=data.get('room_number', ''),
@@ -3651,31 +3662,36 @@ def api_leave_balance_update():
 @block_super_admin
 def daily_report():
     """日報ページ"""
-    stores = Store.query.filter_by(is_active=True).all()
-    staff_list = Staff.query.filter_by(is_active=True).all()
+    allowed_stores = get_allowed_stores()
+    allowed_ids = [s.id for s in allowed_stores]
+    stores = allowed_stores
+    staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all()
     year, month = current_ym()
     today = date.today()
-    # デフォルトタスクが未作成なら初期化
-    store_id = 1
-    default_tasks = [
-        ("来店前日連絡", True, 1),
-        ("来店当日連絡", True, 2),
-        ("申込管理入力", True, 3),
-    ]
-    for task_name, is_def, order in default_tasks:
-        exists = DailyTaskTemplate.query.filter_by(store_id=store_id, task_name=task_name).first()
-        if not exists:
-            db.session.add(DailyTaskTemplate(
-                store_id=store_id, task_name=task_name,
-                is_default=is_def, is_active=True, sort_order=order
-            ))
-    db.session.commit()
-    tasks = DailyTaskTemplate.query.filter_by(store_id=store_id, is_active=True).order_by(
-        DailyTaskTemplate.sort_order).all()
+    # デフォルトタスクが未作成なら初期化（テナント分離）
+    store_id = allowed_ids[0] if allowed_ids else None
+    if store_id:
+        default_tasks = [
+            ("来店前日連絡", True, 1),
+            ("来店当日連絡", True, 2),
+            ("申込管理入力", True, 3),
+        ]
+        for task_name, is_def, order in default_tasks:
+            exists = DailyTaskTemplate.query.filter_by(store_id=store_id, task_name=task_name).first()
+            if not exists:
+                db.session.add(DailyTaskTemplate(
+                    store_id=store_id, task_name=task_name,
+                    is_default=is_def, is_active=True, sort_order=order
+                ))
+        db.session.commit()
+    tasks = DailyTaskTemplate.query.filter(
+        DailyTaskTemplate.store_id.in_(allowed_ids),
+        DailyTaskTemplate.is_active == True
+    ).order_by(DailyTaskTemplate.sort_order).all()
     return render_template("daily_report.html",
                            stores=stores, staff_list=staff_list,
                            tasks=tasks, year=year, month=month,
-                           today=today, now=datetime.now())
+                           store_id=store_id, today=today, now=datetime.now())
 
 
 @app.route("/api/daily-report")
@@ -3738,8 +3754,10 @@ def api_daily_report_list():
 def api_daily_report_save():
     """日報保存（新規 or 更新）"""
     data = request.get_json() or {}
-    staff_id = int(data.get('staff_id') or 1)
-    store_id = int(data.get('store_id') or 1)
+    staff_id = int(data.get('staff_id') or 0) or None
+    store_id = safe_store_id(data.get('store_id'))
+    if not store_id:
+        return jsonify({'error': 'unauthorized'}), 403
     report_date_str = data.get('report_date') or date.today().isoformat()
     try:
         report_date = datetime.strptime(report_date_str, '%Y-%m-%d').date()
@@ -3804,9 +3822,14 @@ def api_daily_report_delete(rid):
 @login_required
 def api_task_template_list():
     """タスクテンプレート一覧"""
-    store_id = request.args.get('store_id', type=int) or 1
-    tasks = DailyTaskTemplate.query.filter_by(store_id=store_id, is_active=True).order_by(
-        DailyTaskTemplate.sort_order).all()
+    store_id = safe_store_id(request.args.get('store_id', type=int))
+    if not store_id:
+        return jsonify([])
+    allowed_ids = get_allowed_store_ids()
+    tasks = DailyTaskTemplate.query.filter(
+        DailyTaskTemplate.store_id.in_(allowed_ids),
+        DailyTaskTemplate.is_active == True
+    ).order_by(DailyTaskTemplate.sort_order).all()
     return jsonify([{'id': t.id, 'task_name': t.task_name, 'is_default': t.is_default} for t in tasks])
 
 
@@ -3818,7 +3841,9 @@ def api_task_template_add():
     task_name = (data.get('task_name') or '').strip()
     if not task_name:
         return jsonify({'error': 'task_name required'}), 400
-    store_id = int(data.get('store_id') or 1)
+    store_id = safe_store_id(data.get('store_id'))
+    if not store_id:
+        return jsonify({'error': 'unauthorized'}), 403
     max_order = db.session.query(db.func.max(DailyTaskTemplate.sort_order)).filter_by(
         store_id=store_id).scalar() or 0
     t = DailyTaskTemplate(store_id=store_id, task_name=task_name, sort_order=max_order + 1)

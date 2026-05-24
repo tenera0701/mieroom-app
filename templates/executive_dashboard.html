@@ -460,6 +460,8 @@
   .diff-zero { color: #6b7280; font-weight: 600; }
 </style>
 <script>
+// テナント分離：バックエンドから注入されたストアID
+const STORE_ID = {{ store_id or 0 }};
 // ==============================
 // 月ナビゲーション
 // ==============================
@@ -959,7 +961,7 @@ async function submitKPI() {
     body.staff_id = staffId;
     body.year     = ym[0];
     body.month    = ym[1];
-    body.store_id = 1;
+    body.store_id = STORE_ID;
     url    = '/api/kpi/input';
     method = 'POST';
   }

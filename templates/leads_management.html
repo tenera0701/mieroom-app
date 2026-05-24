@@ -416,6 +416,7 @@
 {% block extra_scripts %}
 <script>
 /* ===== 状態 ===== */
+const STORE_ID   = {{ store_id or 0 }};  // テナント分離：バックエンドから注入
 let currentYear  = {{ year }};
 let currentMonth = {{ month }};
 let statsData    = [];
@@ -763,7 +764,7 @@ async function submitImport() {
   fd.append('file', file);
   fd.append('year', year);
   fd.append('month', month);
-  fd.append('store_id', 1);
+  fd.append('store_id', STORE_ID);
 
   try {
     const res = await fetch('/api/leads/import-excel-stats', { method: 'POST', body: fd });
@@ -816,7 +817,7 @@ async function submitManual() {
   const payload = {
     year:          parseInt(document.getElementById('manual-year').value),
     month:         parseInt(document.getElementById('manual-month').value),
-    store_id:      1,
+    store_id:      STORE_ID,
     media,
     inquiries:     parseInt(document.getElementById('manual-inquiries').value)     || 0,
     line_added:    parseInt(document.getElementById('manual-line').value)           || 0,
