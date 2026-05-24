@@ -837,9 +837,9 @@ async function load() {
 
   try {
     const [sum, monthly, staff] = await Promise.all([
-      fetch(`/api/kpi/summary?year=${y}&month=${m}`).then(r => r.ok ? r.json() : {}),
-      fetch(`/api/kpi/monthly`).then(r => r.ok ? r.json() : []),
-      fetch(`/api/kpi/staff?year=${y}&month=${m}`).then(r => r.ok ? r.json() : []),
+      fetch(`/api/kpi/summary?year=${y}&month=${m}&store_id=${STORE_ID}`).then(r => r.ok ? r.json() : {}),
+      fetch(`/api/kpi/monthly?store_id=${STORE_ID}`).then(r => r.ok ? r.json() : []),
+      fetch(`/api/kpi/staff?year=${y}&month=${m}&store_id=${STORE_ID}`).then(r => r.ok ? r.json() : []),
     ]);
 
     renderKPI(sum || {}, monthly || []);
@@ -994,6 +994,7 @@ async function submitPL() {
   const body = {
     year:           ym[0],
     month:          ym[1],
+    store_id:       STORE_ID,
     revenue:        parseInt(document.getElementById('pl-revenue').value)  || 0,
     gross_profit:   parseInt(document.getElementById('pl-gross').value)    || 0,
     ad_cost:        parseInt(document.getElementById('pl-adcost').value)   || 0,

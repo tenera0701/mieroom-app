@@ -606,7 +606,7 @@ function updateMonthLabel() {
 =================================================== */
 async function loadPlData() {
   try {
-    const res = await fetch(`/api/pl/summary?year=${currentYear}&month=${currentMonth}`);
+    const res = await fetch(`/api/pl/summary?year=${currentYear}&month=${currentMonth}&store_id=${STORE_ID}`);
     if (!res.ok) throw new Error('API error');
     const json = await res.json();
     const current = json.current ?? (json.stores && json.stores[0]) ?? null;
@@ -625,8 +625,8 @@ async function loadPlData() {
   try {
     const from = document.getElementById('pl-chart-from')?.value;
     const to   = document.getElementById('pl-chart-to')?.value;
-    let url = '/api/kpi/monthly';
-    if (from && to) url += `?from=${from}&to=${to}`;
+    let url = `/api/kpi/monthly?store_id=${STORE_ID}`;
+    if (from && to) url += `&from=${from}&to=${to}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error('API error');
     const json = await res.json();
@@ -653,7 +653,7 @@ async function applyPlChartRange() {
   const to   = document.getElementById('pl-chart-to').value;
   if (!from || !to) return;
   try {
-    const res = await fetch(`/api/kpi/monthly?from=${from}&to=${to}`);
+    const res = await fetch(`/api/kpi/monthly?store_id=${STORE_ID}&from=${from}&to=${to}`);
     if (!res.ok) throw new Error();
     renderPlChart(await res.json());
   } catch(e) { renderPlChart(null); }

@@ -487,7 +487,7 @@ async function loadStats() {
   document.getElementById('table-empty').style.display  = 'none';
 
   try {
-    const params = new URLSearchParams({ year: currentYear, month: currentMonth });
+    const params = new URLSearchParams({ year: currentYear, month: currentMonth, store_id: STORE_ID });
     const res = await fetch(`/api/leads/monthly-stats?${params}`);
     if (!res.ok) throw new Error('API error');
     const json = await res.json();
@@ -633,8 +633,8 @@ function initTrendRange() {
 }
 
 async function loadTrendChart(from, to) {
-  let url = '/api/leads/trend';
-  if (from && to) url += `?from=${from}&to=${to}`;
+  let url = `/api/leads/trend?store_id=${STORE_ID}`;
+  if (from && to) url += `&from=${from}&to=${to}`;
   try {
     const res = await fetch(url);
     const trend = res.ok ? await res.json() : [];

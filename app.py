@@ -4213,6 +4213,26 @@ def api_tenant_store_add(tid):
     return jsonify({'status': 'ok', 'id': store.id})
 
 
+@app.route("/api/admin/data-audit")
+@super_admin_required
+def api_admin_data_audit():
+    """テナント別データ件数を確認（テナント分離診断ツール）"""
+    result = {}
+    stores = Store.query.all()
+    for s in stores:
+        tenant = Tenant.query.get(s.tenant_id) if s.tenant_id else None
+        result[s.id] = {
+            'store_name':  s.name,
+            'tenant_name': tenant.name if tenant else 'なし',
+            'pl_records':     PLRecord.query.filter_by(store_id=s.id).count(),
+            'lead_stats':     LeadMediaStat.query.filter_by(store_id=s.id).count(),
+            'leads':          Lead.query.filter_by(store_id=s.id).count(),
+            'kpis':           SalesKPI.query.filter_by(store_id=s.id).count(),
+            'staff':          Staff.query.filter_by(store_id=s.id, is_active=True).count(),
+        }
+    return jsonify(result)
+
+
 # ── 申込一覧 API ──────────────────────────────────────────
 
 def _parse_date(s):
