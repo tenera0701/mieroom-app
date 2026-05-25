@@ -1,0 +1,391 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}接客管理表 | ルームピック管理ツール{% endblock %}
+
+{% block extra_head %}
+<style>
+  :root { --primary:#16a34a; --primary-dark:#15803d; --primary-light:#dcfce7; }
+  .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+  .page-title  { font-size:22px; font-weight:800; color:#111827; margin:0; }
+  .ctrl-bar    { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .month-btn   { background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; }
+  .month-btn:hover { background:#f0fdf4; border-color:#86efac; }
+  .month-label { font-size:15px; font-weight:700; color:#111827; min-width:80px; text-align:center; }
+  select.filter { border:1px solid #d1d5db; border-radius:6px; padding:7px 10px; font-size:13px; }
+  .btn-add  { background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 18px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-add:hover { background:var(--primary-dark); }
+
+  .summary-bar { display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
+  .summary-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px 20px; min-width:130px; }
+  .summary-card .label { font-size:11px; font-weight:600; color:#6b7280; text-transform:uppercase; margin-bottom:4px; }
+  .summary-card .value { font-size:22px; font-weight:800; color:#111827; }
+  .summary-card .unit  { font-size:12px; color:#6b7280; margin-left:4px; }
+
+  .table-wrap { overflow-x:auto; border-radius:10px; border:1px solid #e5e7eb; background:#fff; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { background:#f0fdf4; padding:10px 14px; text-align:left; font-weight:700; color:#374151;
+             border-bottom:2px solid #d1fae5; white-space:nowrap; }
+  thead th.center { text-align:center; }
+  tbody tr { border-bottom:1px solid #f3f4f6; }
+  tbody tr:hover { background:#f0fdf4; }
+  tbody td { padding:9px 14px; color:#111827; white-space:nowrap; }
+  tbody td.center { text-align:center; }
+  .badge { display:inline-block; font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; }
+  .badge-visit  { background:#dcfce7; color:#15803d; }
+  .badge-phone  { background:#dbeafe; color:#1d4ed8; }
+  .badge-email  { background:#fef9c3; color:#92400e; }
+  .badge-online { background:#f3e8ff; color:#7c3aed; }
+  .badge-other  { background:#f3f4f6; color:#374151; }
+  .btn-sm  { padding:4px 10px; font-size:11px; border:1px solid #d1d5db; border-radius:4px; background:#fff; cursor:pointer; }
+  .btn-sm:hover { background:#f3f4f6; }
+  .btn-del { border-color:#fca5a5; color:#ef4444; }
+  .btn-del:hover { background:#fee2e2; }
+
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center; }
+  .modal-overlay.active { display:flex; }
+  .modal { background:#fff; border-radius:12px; width:520px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
+  .modal-header { padding:16px 24px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; }
+  .modal-header h3 { font-size:16px; font-weight:700; margin:0; }
+  .modal-close { background:none; border:none; font-size:22px; color:#9ca3af; cursor:pointer; }
+  .modal-body  { padding:20px 24px; }
+  .modal-footer { padding:14px 24px; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:10px; }
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .form-full { grid-column:1/-1; }
+  .form-group { display:flex; flex-direction:column; gap:4px; }
+  .form-group label { font-size:12px; font-weight:600; color:#374151; }
+  .form-group input, .form-group select, .form-group textarea {
+    border:1px solid #d1d5db; border-radius:6px; padding:7px 10px; font-size:13px; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline:none; border-color:var(--primary); box-shadow:0 0 0 2px rgba(22,163,74,0.2); }
+  .btn-cancel { background:#fff; color:#374151; border:1px solid #d1d5db; border-radius:6px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; }
+  .btn-save   { background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 20px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-save:hover { background:var(--primary-dark); }
+  .alert { padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
+  .alert.show { display:block; }
+  .alert-success { background:var(--primary-light); color:var(--primary-dark); border:1px solid #86efac; }
+  .alert-error   { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+  .empty-row td  { text-align:center; color:#9ca3af; padding:40px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1200px; margin:0 auto;">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">接客管理表</h1>
+      <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">来店・電話・メール等の接客記録を管理します</p>
+    </div>
+    <div class="ctrl-bar">
+      <button class="month-btn" onclick="navigate(-1)">&#8249; 前月</button>
+      <span class="month-label" id="month-label"></span>
+      <button class="month-btn" onclick="navigate(1)">次月 &#8250;</button>
+      <input type="month" id="month-jump" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;" onchange="jumpMonth(this.value)">
+      <select class="filter" id="filter-staff" onchange="loadRecords()">
+        <option value="">全スタッフ</option>
+        {% for s in staff_list %}
+        <option value="{{ s.id }}">{{ s.name }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn-add" onclick="openModal()">＋ 新規追加</button>
+    </div>
+  </div>
+
+  <div id="alert-msg" class="alert"></div>
+
+  <!-- サマリーカード -->
+  <div class="summary-bar">
+    <div class="summary-card">
+      <div class="label">総接客数</div>
+      <div class="value" id="sum-total">0<span class="unit">件</span></div>
+    </div>
+    <div class="summary-card">
+      <div class="label">来店</div>
+      <div class="value" id="sum-visit">0<span class="unit">件</span></div>
+    </div>
+    <div class="summary-card">
+      <div class="label">電話</div>
+      <div class="value" id="sum-phone">0<span class="unit">件</span></div>
+    </div>
+    <div class="summary-card">
+      <div class="label">メール</div>
+      <div class="value" id="sum-email">0<span class="unit">件</span></div>
+    </div>
+    <div class="summary-card">
+      <div class="label">オンライン</div>
+      <div class="value" id="sum-online">0<span class="unit">件</span></div>
+    </div>
+    <div class="summary-card">
+      <div class="label">来店合計数</div>
+      <div class="value" id="sum-visit-count">0<span class="unit">回</span></div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>カードNo</th>
+          <th>日付</th>
+          <th>反響媒体</th>
+          <th>担当者</th>
+          <th>お客様名</th>
+          <th class="center">対応</th>
+          <th class="center">来店数</th>
+          <th>メモ</th>
+          <th class="center">操作</th>
+        </tr>
+      </thead>
+      <tbody id="cs-tbody">
+        <tr class="empty-row"><td colspan="9">読み込み中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 追加/編集モーダル -->
+<div class="modal-overlay" id="record-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">接客記録追加</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>カードNo</label>
+          <input type="text" id="f-card-no" placeholder="例：2401001">
+        </div>
+        <div class="form-group">
+          <label>日付 <span style="color:#ef4444;">*</span></label>
+          <input type="date" id="f-service-date">
+        </div>
+        <div class="form-group">
+          <label>反響媒体</label>
+          <input type="text" id="f-echo-media" placeholder="例：SUUMO、HOME'S、直接来店">
+        </div>
+        <div class="form-group">
+          <label>担当者</label>
+          <select id="f-staff">
+            <option value="">― 未選択 ―</option>
+            {% for s in staff_list %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>お客様名</label>
+          <input type="text" id="f-customer-name" placeholder="例：田中 太郎">
+        </div>
+        <div class="form-group">
+          <label>対応種別</label>
+          <select id="f-service-type">
+            <option value="来店">来店</option>
+            <option value="電話">電話</option>
+            <option value="メール">メール</option>
+            <option value="オンライン">オンライン</option>
+            <option value="LINE">LINE</option>
+            <option value="その他">その他</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>来店数</label>
+          <input type="number" id="f-visit-count" min="0" value="0">
+        </div>
+        <div class="form-group form-full">
+          <label>メモ</label>
+          <textarea id="f-memo" rows="2" placeholder="備考・特記事項"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal()">キャンセル</button>
+      <button class="btn-save" onclick="saveRecord()">保存する</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const STORE_ID = {{ store_id or 0 }};
+let currentYear  = {{ year }};
+let currentMonth = {{ month }};
+let records = [];
+
+const SERVICE_BADGE = {
+  '来店':    'badge-visit',
+  '電話':    'badge-phone',
+  'メール':  'badge-email',
+  'オンライン': 'badge-online',
+  'LINE':    'badge-online',
+};
+
+function showAlert(msg, type='success') {
+  const el = document.getElementById('alert-msg');
+  el.textContent = msg;
+  el.className = `alert alert-${type} show`;
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+function updateLabel() {
+  document.getElementById('month-label').textContent = `${currentYear}年${currentMonth}月`;
+  document.getElementById('month-jump').value = `${currentYear}-${String(currentMonth).padStart(2,'0')}`;
+}
+
+function navigate(dir) {
+  currentMonth += dir;
+  if (currentMonth > 12) { currentMonth = 1;  currentYear++; }
+  if (currentMonth < 1)  { currentMonth = 12; currentYear--; }
+  updateLabel();
+  loadRecords();
+}
+
+function jumpMonth(val) {
+  const [y, m] = val.split('-').map(Number);
+  currentYear = y; currentMonth = m;
+  updateLabel();
+  loadRecords();
+}
+
+async function loadRecords() {
+  const staffId = document.getElementById('filter-staff').value;
+  const params  = new URLSearchParams({ year: currentYear, month: currentMonth });
+  if (staffId) params.set('staff_id', staffId);
+  try {
+    const res = await fetch(`/api/customer-service-records?${params}`);
+    records = res.ok ? await res.json() : [];
+    renderTable();
+    updateSummary();
+  } catch(e) {
+    showAlert('データの取得に失敗しました', 'error');
+  }
+}
+
+function updateSummary() {
+  const total = records.length;
+  const byType = t => records.filter(r => r.service_type === t).length;
+  const visitCount = records.reduce((s, r) => s + (r.visit_count || 0), 0);
+  document.getElementById('sum-total').innerHTML       = `${total}<span class="unit">件</span>`;
+  document.getElementById('sum-visit').innerHTML       = `${byType('来店')}<span class="unit">件</span>`;
+  document.getElementById('sum-phone').innerHTML       = `${byType('電話')}<span class="unit">件</span>`;
+  document.getElementById('sum-email').innerHTML       = `${byType('メール')}<span class="unit">件</span>`;
+  document.getElementById('sum-online').innerHTML      = `${byType('オンライン') + byType('LINE')}<span class="unit">件</span>`;
+  document.getElementById('sum-visit-count').innerHTML = `${visitCount}<span class="unit">回</span>`;
+}
+
+function renderTable() {
+  const tbody = document.getElementById('cs-tbody');
+  if (!records.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">データがありません</td></tr>';
+    return;
+  }
+  tbody.innerHTML = records.map(r => {
+    const badgeCls = SERVICE_BADGE[r.service_type] || 'badge-other';
+    return `<tr>
+      <td>${escHtml(r.card_no) || '—'}</td>
+      <td>${r.service_date || '—'}</td>
+      <td>${escHtml(r.echo_media) || '—'}</td>
+      <td>${escHtml(r.staff_name) || '—'}</td>
+      <td>${escHtml(r.customer_name) || '—'}</td>
+      <td class="center"><span class="badge ${badgeCls}">${escHtml(r.service_type)}</span></td>
+      <td class="center">${r.visit_count || 0}</td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(r.memo)}">${escHtml(r.memo) || ''}</td>
+      <td class="center" style="white-space:nowrap;">
+        <button class="btn-sm" onclick="openEditModal(${r.id})">編集</button>
+        <button class="btn-sm btn-del" onclick="deleteRecord(${r.id})" style="margin-left:4px;">削除</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function openModal() {
+  document.getElementById('edit-id').value = '';
+  document.getElementById('modal-title').textContent = '接客記録追加';
+  clearForm();
+  document.getElementById('record-modal').classList.add('active');
+}
+
+function openEditModal(id) {
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('edit-id').value = id;
+  document.getElementById('modal-title').textContent = '接客記録編集';
+  document.getElementById('f-card-no').value      = r.card_no || '';
+  document.getElementById('f-service-date').value = r.service_date || '';
+  document.getElementById('f-echo-media').value   = r.echo_media || '';
+  document.getElementById('f-staff').value        = r.staff_id || '';
+  document.getElementById('f-customer-name').value= r.customer_name || '';
+  document.getElementById('f-service-type').value = r.service_type || '来店';
+  document.getElementById('f-visit-count').value  = r.visit_count || 0;
+  document.getElementById('f-memo').value         = r.memo || '';
+  document.getElementById('record-modal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('record-modal').classList.remove('active');
+}
+
+function clearForm() {
+  document.getElementById('f-card-no').value       = '';
+  document.getElementById('f-service-date').value  = '';
+  document.getElementById('f-echo-media').value    = '';
+  document.getElementById('f-staff').value         = '';
+  document.getElementById('f-customer-name').value = '';
+  document.getElementById('f-service-type').value  = '来店';
+  document.getElementById('f-visit-count').value   = '0';
+  document.getElementById('f-memo').value          = '';
+}
+
+async function saveRecord() {
+  const editId = document.getElementById('edit-id').value;
+  const serviceDate = document.getElementById('f-service-date').value;
+  if (!serviceDate) { showAlert('日付は必須です', 'error'); return; }
+
+  const payload = {
+    store_id:      STORE_ID,
+    card_no:       document.getElementById('f-card-no').value.trim(),
+    service_date:  serviceDate,
+    echo_media:    document.getElementById('f-echo-media').value.trim(),
+    staff_id:      document.getElementById('f-staff').value || null,
+    customer_name: document.getElementById('f-customer-name').value.trim(),
+    service_type:  document.getElementById('f-service-type').value,
+    visit_count:   parseInt(document.getElementById('f-visit-count').value) || 0,
+    memo:          document.getElementById('f-memo').value.trim(),
+  };
+
+  const url    = editId ? `/api/customer-service-records/${editId}` : '/api/customer-service-records';
+  const method = editId ? 'PUT' : 'POST';
+  try {
+    const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    if (!res.ok) throw new Error('API error');
+    closeModal();
+    showAlert(editId ? '更新しました' : '追加しました');
+    await loadRecords();
+  } catch(e) {
+    showAlert('保存に失敗しました', 'error');
+  }
+}
+
+async function deleteRecord(id) {
+  if (!confirm('このレコードを削除しますか？')) return;
+  try {
+    const res = await fetch(`/api/customer-service-records/${id}`, { method:'DELETE' });
+    if (!res.ok) throw new Error('error');
+    showAlert('削除しました');
+    await loadRecords();
+  } catch(e) {
+    showAlert('削除に失敗しました', 'error');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  updateLabel();
+  loadRecords();
+});
+</script>
+{% endblock %}

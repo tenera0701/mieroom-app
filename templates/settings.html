@@ -172,48 +172,63 @@
     </div>
   </div>
 
-  <!-- ===== セクション2: アカウント管理（オーナーのみ） ===== -->
-  {% if is_owner %}
+  <!-- ===== セクション2: ユーザー管理（オーナー・店長） ===== -->
+  {% if is_owner or is_manager %}
   <div class="section-card">
     <div class="section-header">
       <h2>ログインアカウント管理</h2>
-      <button class="btn-primary" onclick="openAccountModal()">＋ アカウント追加</button>
+      <button class="btn-primary" onclick="openCreateUserModal()">＋ アカウント追加</button>
     </div>
     <div style="overflow-x: auto;">
       <table>
         <thead>
           <tr>
             <th>ユーザー名</th>
+            <th>メール</th>
             <th>役割</th>
             <th>担当スタッフ</th>
+            <th style="text-align:center;">経理閲覧</th>
+            <th style="text-align:center;">全スタッフ</th>
+            <th style="text-align:center;">KPI編集</th>
+            <th style="text-align:center;">未入金管理</th>
             <th>最終ログイン</th>
             <th>操作</th>
           </tr>
         </thead>
-        <tbody id="account-tbody">
+        <tbody>
           {% for acc in accounts %}
           <tr id="account-row-{{ acc.id }}">
-            <td style="font-weight: 600;">{{ acc.username }}</td>
+            <td style="font-weight:600;">
+              {{ acc.username }}
+              {% if acc.id == session.get('app_user_id') %}
+              <span style="font-size:10px;background:#dcfce7;color:#16a34a;padding:1px 6px;border-radius:999px;font-weight:700;margin-left:4px;">あなた</span>
+              {% endif %}
+            </td>
+            <td>{{ acc.email or '—' }}</td>
             <td>
-              <span class="badge-role {% if acc.role == 'owner' %}badge-owner{% else %}badge-staff{% endif %}">
-                {{ 'オーナー' if acc.role == 'owner' else 'スタッフ' }}
+              <span class="badge-role {% if acc.role == 'owner' %}badge-owner{% elif acc.role == 'store_manager' %}badge-owner{% else %}badge-staff{% endif %}">
+                {{ 'オーナー' if acc.role == 'owner' else ('店長' if acc.role == 'store_manager' else 'スタッフ') }}
               </span>
             </td>
             <td>
               {% if acc.staff_id %}
                 {% for s in staff_list %}{% if s.id == acc.staff_id %}{{ s.name }}{% endif %}{% endfor %}
-              {% else %}-{% endif %}
+              {% else %}—{% endif %}
             </td>
-            <td>{{ acc.last_login.strftime('%Y-%m-%d %H:%M') if acc.last_login else '-' }}</td>
+            <td style="text-align:center;">{% if acc.can_view_accounting %}<span style="color:#16a34a;font-size:15px;">✓</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
+            <td style="text-align:center;">{% if acc.can_view_all_staff %}<span style="color:#16a34a;font-size:15px;">✓</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
+            <td style="text-align:center;">{% if acc.can_edit_kpi %}<span style="color:#16a34a;font-size:15px;">✓</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
+            <td style="text-align:center;">{% if acc.can_manage_uncollected %}<span style="color:#16a34a;font-size:15px;">✓</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
+            <td>{{ acc.last_login.strftime('%Y/%m/%d %H:%M') if acc.last_login else '未ログイン' }}</td>
             <td>
-              <button class="btn-sm" onclick="openPasswordModal({{ acc.id }}, '{{ acc.username }}')">パスワード変更</button>
-              {% if acc.username != 'owner' %}
-              <button class="btn-sm btn-danger" onclick="deleteAccount({{ acc.id }})" style="margin-left: 6px;">削除</button>
+              <button class="btn-sm" onclick="openEditUserModal({{ acc.id }}, '{{ acc.username }}', '{{ acc.email or '' }}', '{{ acc.role }}', {{ acc.staff_id or 'null' }}, {{ acc.can_view_accounting|lower }}, {{ acc.can_view_all_staff|lower }}, {{ acc.can_edit_kpi|lower }}, {{ acc.can_manage_uncollected|lower }})">編集</button>
+              {% if acc.id != session.get('app_user_id') %}
+              <button class="btn-sm btn-danger" onclick="deleteUser({{ acc.id }})" style="margin-left:4px;">削除</button>
               {% endif %}
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="5" style="text-align: center; padding: 30px; color: var(--text-muted);">アカウントがありません</td></tr>
+          <tr><td colspan="10" style="text-align:center;padding:30px;color:var(--text-muted);">アカウントがありません</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -305,78 +320,137 @@
   </div>
 </div>
 
-<!-- ===== アカウント追加モーダル ===== -->
-<div class="modal-overlay" id="account-modal">
+<!-- ===== ユーザー作成モーダル ===== -->
+<div class="modal-overlay" id="create-user-modal">
   <div class="modal">
     <div class="modal-header">
       <h3>アカウント追加</h3>
-      <button class="modal-close" onclick="closeAccountModal()">✕</button>
+      <button class="modal-close" onclick="closeCreateUserModal()">✕</button>
     </div>
     <div class="modal-body">
+      <div id="create-user-error" style="display:none;margin-bottom:12px;font-size:13px;color:#b91c1c;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:10px 14px;"></div>
       <div class="form-group">
         <label>ユーザー名 <span style="color:#ef4444;">*</span></label>
-        <input type="text" id="acc-username" placeholder="例：tanaka">
+        <input type="text" id="cu-username" placeholder="例：tanaka">
+      </div>
+      <div class="form-group">
+        <label>メールアドレス</label>
+        <input type="email" id="cu-email" placeholder="example@company.com">
       </div>
       <div class="form-group">
         <label>パスワード <span style="color:#ef4444;">*</span></label>
-        <input type="password" id="acc-password" placeholder="パスワード">
+        <input type="password" id="cu-password" placeholder="8文字以上">
       </div>
       <div class="form-group">
         <label>役割</label>
-        <select id="acc-role">
+        <select id="cu-role">
           <option value="staff">スタッフ</option>
+          <option value="store_manager">店長</option>
           <option value="owner">オーナー</option>
         </select>
       </div>
       {% if stores|length > 1 %}
       <div class="form-group">
         <label>所属店舗</label>
-        <select id="acc-store-id">
+        <select id="cu-store-id">
           {% for s in stores %}
           <option value="{{ s.id }}">{{ s.name }}</option>
           {% endfor %}
         </select>
       </div>
       {% else %}
-      <input type="hidden" id="acc-store-id" value="{{ stores[0].id if stores else '' }}">
+      <input type="hidden" id="cu-store-id" value="{{ stores[0].id if stores else '' }}">
       {% endif %}
       <div class="form-group">
         <label>担当スタッフ</label>
-        <select id="acc-staff-id">
+        <select id="cu-staff-id">
           <option value="">なし</option>
           {% for s in staff_list %}
           <option value="{{ s.id }}">{{ s.name }}</option>
           {% endfor %}
         </select>
       </div>
+      <div style="border-top:1px solid #e5e7eb;padding-top:14px;margin-top:4px;">
+        <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:10px;">権限設定</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
+            <input type="checkbox" id="cu-accounting" checked style="width:15px;height:15px;accent-color:#16a34a;">経理・PL管理を閲覧できる
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
+            <input type="checkbox" id="cu-allstaff" checked style="width:15px;height:15px;accent-color:#16a34a;">全スタッフのデータを閲覧できる
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
+            <input type="checkbox" id="cu-kpi" checked style="width:15px;height:15px;accent-color:#16a34a;">KPI・売上データを編集できる
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
+            <input type="checkbox" id="cu-uncollected" checked style="width:15px;height:15px;accent-color:#16a34a;">未入金管理を操作できる
+          </label>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
-      <button class="btn-cancel" onclick="closeAccountModal()">キャンセル</button>
-      <button class="btn-primary" onclick="saveAccount()">追加する</button>
+      <button class="btn-cancel" onclick="closeCreateUserModal()">キャンセル</button>
+      <button class="btn-primary" onclick="submitCreateUser()">作成する</button>
     </div>
   </div>
 </div>
 
-<!-- ===== パスワード変更モーダル ===== -->
-<div class="modal-overlay" id="password-modal">
+<!-- ===== ユーザー編集モーダル ===== -->
+<div class="modal-overlay" id="edit-user-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3>パスワード変更</h3>
-      <button class="modal-close" onclick="closePasswordModal()">✕</button>
+      <h3>編集: <span id="eu-name-label" style="color:#16a34a;"></span></h3>
+      <button class="modal-close" onclick="closeEditUserModal()">✕</button>
     </div>
     <div class="modal-body">
-      <p style="font-size:13px; color:#374151; margin-bottom:14px;">
-        ユーザー: <strong id="pw-username"></strong>
-      </p>
-      <input type="hidden" id="pw-account-id">
+      <div id="edit-user-error" style="display:none;margin-bottom:12px;font-size:13px;color:#b91c1c;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:10px 14px;"></div>
+      <input type="hidden" id="eu-id">
       <div class="form-group">
-        <label>新パスワード <span style="color:#ef4444;">*</span></label>
-        <input type="password" id="pw-new" placeholder="新しいパスワード">
+        <label>メールアドレス</label>
+        <input type="email" id="eu-email" placeholder="example@company.com">
+      </div>
+      <div class="form-group">
+        <label>新パスワード <span style="color:#9ca3af;font-size:11px;">（変更する場合のみ）</span></label>
+        <input type="password" id="eu-password" placeholder="空白のままで変更しない">
+      </div>
+      <div class="form-group">
+        <label>役割</label>
+        <select id="eu-role">
+          <option value="staff">スタッフ</option>
+          <option value="store_manager">店長</option>
+          <option value="owner">オーナー</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>担当スタッフ</label>
+        <select id="eu-staff-id">
+          <option value="">なし</option>
+          {% for s in staff_list %}
+          <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="border-top:1px solid #e5e7eb;padding-top:14px;margin-top:4px;">
+        <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:10px;">権限設定</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
+            <input type="checkbox" id="eu-accounting" style="width:15px;height:15px;accent-color:#16a34a;">経理・PL管理を閲覧できる
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
+            <input type="checkbox" id="eu-allstaff" style="width:15px;height:15px;accent-color:#16a34a;">全スタッフのデータを閲覧できる
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
+            <input type="checkbox" id="eu-kpi" style="width:15px;height:15px;accent-color:#16a34a;">KPI・売上データを編集できる
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;">
+            <input type="checkbox" id="eu-uncollected" style="width:15px;height:15px;accent-color:#16a34a;">未入金管理を操作できる
+          </label>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn-cancel" onclick="closePasswordModal()">キャンセル</button>
-      <button class="btn-primary" onclick="savePassword()">変更する</button>
+      <button class="btn-cancel" onclick="closeEditUserModal()">キャンセル</button>
+      <button class="btn-primary" onclick="submitEditUser()">保存する</button>
     </div>
   </div>
 </div>
@@ -459,51 +533,111 @@ async function deleteStaff(id) {
   }
 }
 
-/* ===== アカウントモーダル ===== */
-function openAccountModal() {
-  document.getElementById('acc-username').value = '';
-  document.getElementById('acc-password').value = '';
-  document.getElementById('acc-role').value = 'staff';
-  document.getElementById('acc-staff-id').value = '';
-  document.getElementById('account-modal').classList.add('active');
+/* ===== ユーザー管理モーダル ===== */
+function openCreateUserModal() {
+  document.getElementById('cu-username').value = '';
+  document.getElementById('cu-email').value = '';
+  document.getElementById('cu-password').value = '';
+  document.getElementById('cu-role').value = 'staff';
+  document.getElementById('cu-staff-id').value = '';
+  document.getElementById('cu-accounting').checked = true;
+  document.getElementById('cu-allstaff').checked = true;
+  document.getElementById('cu-kpi').checked = true;
+  document.getElementById('cu-uncollected').checked = true;
+  document.getElementById('create-user-error').style.display = 'none';
+  document.getElementById('create-user-modal').classList.add('active');
 }
-
-function closeAccountModal() {
-  document.getElementById('account-modal').classList.remove('active');
+function closeCreateUserModal() {
+  document.getElementById('create-user-modal').classList.remove('active');
 }
-
-async function saveAccount() {
-  const username = document.getElementById('acc-username').value.trim();
-  const password = document.getElementById('acc-password').value;
-  if (!username || !password) { showAlert('ユーザー名とパスワードは必須です', 'error'); return; }
-  const accStoreEl = document.getElementById('acc-store-id');
+async function submitCreateUser() {
+  const errEl = document.getElementById('create-user-error');
+  errEl.style.display = 'none';
+  const storeEl = document.getElementById('cu-store-id');
   const payload = {
-    username,
-    password,
-    role: document.getElementById('acc-role').value,
-    staff_id: document.getElementById('acc-staff-id').value || null,
-    store_id: accStoreEl ? parseInt(accStoreEl.value) || null : null,
+    username: document.getElementById('cu-username').value.trim(),
+    email: document.getElementById('cu-email').value.trim(),
+    password: document.getElementById('cu-password').value,
+    role: document.getElementById('cu-role').value,
+    staff_id: document.getElementById('cu-staff-id').value || null,
+    store_id: storeEl ? parseInt(storeEl.value) || null : null,
+    can_view_accounting: document.getElementById('cu-accounting').checked,
+    can_view_all_staff: document.getElementById('cu-allstaff').checked,
+    can_edit_kpi: document.getElementById('cu-kpi').checked,
+    can_manage_uncollected: document.getElementById('cu-uncollected').checked,
   };
+  if (!payload.username || !payload.password) {
+    errEl.textContent = 'ユーザー名とパスワードは必須です';
+    errEl.style.display = 'block';
+    return;
+  }
   try {
     const res = await fetch('/api/settings/account/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) {
-      const err = await res.json();
-      showAlert(err.message || '保存に失敗しました。', 'error');
-      return;
-    }
-    closeAccountModal();
+    const json = await res.json();
+    if (!res.ok) { errEl.textContent = json.message || '作成に失敗しました'; errEl.style.display = 'block'; return; }
+    closeCreateUserModal();
     showAlert('アカウントを追加しました。');
     setTimeout(() => location.reload(), 800);
   } catch(e) {
-    showAlert('保存に失敗しました。', 'error');
+    errEl.textContent = '通信エラーが発生しました';
+    errEl.style.display = 'block';
   }
 }
 
-async function deleteAccount(id) {
+function openEditUserModal(uid, username, email, role, staffId, accounting, allstaff, kpi, uncollected) {
+  document.getElementById('eu-id').value = uid;
+  document.getElementById('eu-name-label').textContent = username;
+  document.getElementById('eu-email').value = email;
+  document.getElementById('eu-password').value = '';
+  document.getElementById('eu-role').value = role;
+  document.getElementById('eu-staff-id').value = staffId || '';
+  document.getElementById('eu-accounting').checked = accounting;
+  document.getElementById('eu-allstaff').checked = allstaff;
+  document.getElementById('eu-kpi').checked = kpi;
+  document.getElementById('eu-uncollected').checked = uncollected;
+  document.getElementById('edit-user-error').style.display = 'none';
+  document.getElementById('edit-user-modal').classList.add('active');
+}
+function closeEditUserModal() {
+  document.getElementById('edit-user-modal').classList.remove('active');
+}
+async function submitEditUser() {
+  const errEl = document.getElementById('edit-user-error');
+  errEl.style.display = 'none';
+  const uid = document.getElementById('eu-id').value;
+  const payload = {
+    email: document.getElementById('eu-email').value.trim(),
+    role: document.getElementById('eu-role').value,
+    staff_id: document.getElementById('eu-staff-id').value || null,
+    can_view_accounting: document.getElementById('eu-accounting').checked,
+    can_view_all_staff: document.getElementById('eu-allstaff').checked,
+    can_edit_kpi: document.getElementById('eu-kpi').checked,
+    can_manage_uncollected: document.getElementById('eu-uncollected').checked,
+  };
+  const pw = document.getElementById('eu-password').value;
+  if (pw) payload.password = pw;
+  try {
+    const res = await fetch(`/api/users/${uid}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const json = await res.json();
+    if (!res.ok) { errEl.textContent = json.error || '更新に失敗しました'; errEl.style.display = 'block'; return; }
+    closeEditUserModal();
+    showAlert('アカウントを更新しました。');
+    setTimeout(() => location.reload(), 800);
+  } catch(e) {
+    errEl.textContent = '通信エラーが発生しました';
+    errEl.style.display = 'block';
+  }
+}
+
+async function deleteUser(id) {
   if (!confirm('このアカウントを削除してよろしいですか？')) return;
   try {
     const res = await fetch(`/api/settings/account/${id}`, { method: 'DELETE' });
@@ -516,36 +650,6 @@ async function deleteAccount(id) {
     showAlert('アカウントを削除しました。');
   } catch(e) {
     showAlert('削除に失敗しました。', 'error');
-  }
-}
-
-/* ===== パスワードモーダル ===== */
-function openPasswordModal(id, username) {
-  document.getElementById('pw-account-id').value = id;
-  document.getElementById('pw-username').textContent = username;
-  document.getElementById('pw-new').value = '';
-  document.getElementById('password-modal').classList.add('active');
-}
-
-function closePasswordModal() {
-  document.getElementById('password-modal').classList.remove('active');
-}
-
-async function savePassword() {
-  const id = document.getElementById('pw-account-id').value;
-  const password = document.getElementById('pw-new').value;
-  if (!password) { showAlert('新パスワードを入力してください', 'error'); return; }
-  try {
-    const res = await fetch(`/api/settings/account/${id}/password`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
-    });
-    if (!res.ok) throw new Error('error');
-    closePasswordModal();
-    showAlert('パスワードを変更しました。');
-  } catch(e) {
-    showAlert('変更に失敗しました。', 'error');
   }
 }
 
@@ -592,8 +696,8 @@ async function changeMyPassword() {
 }
 
 /* モーダル外クリックで閉じる */
-['staff-modal','account-modal','password-modal'].forEach(id => {
-  document.getElementById(id).addEventListener('click', function(e) {
+['staff-modal','create-user-modal','edit-user-modal'].forEach(id => {
+  document.getElementById(id)?.addEventListener('click', function(e) {
     if (e.target === this) this.classList.remove('active');
   });
 });

@@ -1,0 +1,383 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}反響管理表 | ルームピック管理ツール{% endblock %}
+
+{% block extra_head %}
+<style>
+  :root { --primary:#16a34a; --primary-dark:#15803d; --primary-light:#dcfce7; }
+  .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+  .page-title  { font-size:22px; font-weight:800; color:#111827; margin:0; }
+  .ctrl-bar    { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .month-btn   { background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; }
+  .month-btn:hover { background:#f0fdf4; border-color:#86efac; }
+  .month-label { font-size:15px; font-weight:700; color:#111827; min-width:80px; text-align:center; }
+  select.filter { border:1px solid #d1d5db; border-radius:6px; padding:7px 10px; font-size:13px; }
+  .btn-add  { background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 18px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-add:hover { background:var(--primary-dark); }
+
+  .table-wrap { overflow-x:auto; border-radius:10px; border:1px solid #e5e7eb; background:#fff; }
+  table { width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap; }
+  thead th { background:#f0fdf4; padding:8px 10px; text-align:center; font-weight:700; color:#374151;
+             border-bottom:2px solid #d1fae5; position:sticky; top:0; z-index:1; }
+  tbody tr { border-bottom:1px solid #f3f4f6; }
+  tbody tr:hover { background:#f0fdf4; }
+  tbody td { padding:7px 8px; text-align:center; color:#111827; max-width:120px; overflow:hidden; text-overflow:ellipsis; }
+  td.left   { text-align:left; }
+  .chk-yes  { color:#16a34a; font-weight:700; }
+  .chk-no   { color:#d1d5db; }
+  .btn-sm   { padding:3px 8px; font-size:11px; border:1px solid #d1d5db; border-radius:4px; background:#fff; cursor:pointer; }
+  .btn-sm:hover { background:#f3f4f6; }
+  .btn-del  { border-color:#fca5a5; color:#ef4444; }
+  .btn-del:hover { background:#fee2e2; }
+  .followup-date { font-size:11px; color:#059669; font-weight:600; }
+  .followup-empty { color:#e5e7eb; font-size:11px; }
+
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center; }
+  .modal-overlay.active { display:flex; }
+  .modal { background:#fff; border-radius:12px; width:680px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
+  .modal-header { padding:16px 24px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; }
+  .modal-header h3 { font-size:16px; font-weight:700; margin:0; }
+  .modal-close { background:none; border:none; font-size:22px; color:#9ca3af; cursor:pointer; }
+  .modal-body  { padding:20px 24px; }
+  .modal-footer { padding:14px 24px; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:10px; }
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .form-full { grid-column:1/-1; }
+  .form-group { display:flex; flex-direction:column; gap:4px; }
+  .form-group label { font-size:12px; font-weight:600; color:#374151; }
+  .form-group input, .form-group select, .form-group textarea {
+    border:1px solid #d1d5db; border-radius:6px; padding:7px 10px; font-size:13px; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline:none; border-color:var(--primary); box-shadow:0 0 0 2px rgba(22,163,74,0.2); }
+  .followup-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+  .checkbox-row  { display:flex; gap:20px; align-items:center; margin-top:4px; }
+  .checkbox-row label { display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer; }
+  .btn-cancel { background:#fff; color:#374151; border:1px solid #d1d5db; border-radius:6px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; }
+  .btn-save   { background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 20px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-save:hover { background:var(--primary-dark); }
+  .alert { padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
+  .alert.show { display:block; }
+  .alert-success { background:var(--primary-light); color:var(--primary-dark); border:1px solid #86efac; }
+  .alert-error   { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+  .empty-row td  { text-align:center; color:#9ca3af; padding:40px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1600px; margin:0 auto;">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">反響管理表</h1>
+      <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">反響の追客進捗を管理します</p>
+    </div>
+    <div class="ctrl-bar">
+      <button class="month-btn" onclick="navigate(-1)">&#8249; 前月</button>
+      <span class="month-label" id="month-label"></span>
+      <button class="month-btn" onclick="navigate(1)">次月 &#8250;</button>
+      <input type="month" id="month-jump" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;" onchange="jumpMonth(this.value)">
+      <select class="filter" id="filter-staff" onchange="loadRecords()">
+        <option value="">全スタッフ</option>
+        {% for s in staff_list %}
+        <option value="{{ s.id }}">{{ s.name }}</option>
+        {% endfor %}
+      </select>
+      <button class="btn-add" onclick="openModal()">＋ 新規追加</button>
+    </div>
+  </div>
+
+  <div id="alert-msg" class="alert"></div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>担当者</th>
+          <th>リスト名</th>
+          <th>反響日</th>
+          <th>媒体</th>
+          <th>手段</th>
+          <th>初回対応日</th>
+          <th title="追客①">追①</th>
+          <th title="追客②">追②</th>
+          <th title="追客③">追③</th>
+          <th title="追客④">追④</th>
+          <th title="追客⑤">追⑤</th>
+          <th title="追客⑥">追⑥</th>
+          <th title="追客⑦">追⑦</th>
+          <th title="追客⑧">追⑧</th>
+          <th title="追客⑨">追⑨</th>
+          <th title="追客⑩">追⑩</th>
+          <th>返信</th>
+          <th>電話</th>
+          <th>LINE</th>
+          <th class="left">メモ</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="echo-tbody">
+        <tr class="empty-row"><td colspan="21">読み込み中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 追加/編集モーダル -->
+<div class="modal-overlay" id="record-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">反響追加</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-id">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>担当者</label>
+          <select id="f-staff">
+            <option value="">― 未選択 ―</option>
+            {% for s in staff_list %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>リスト名</label>
+          <input type="text" id="f-list-name" placeholder="例：〇〇マンション">
+        </div>
+        <div class="form-group">
+          <label>反響日 <span style="color:#ef4444;">*</span></label>
+          <input type="date" id="f-echo-date">
+        </div>
+        <div class="form-group">
+          <label>初回対応日</label>
+          <input type="date" id="f-first-contact">
+        </div>
+        <div class="form-group">
+          <label>媒体</label>
+          <input type="text" id="f-media" placeholder="例：SUUMO、HOME'S">
+        </div>
+        <div class="form-group">
+          <label>手段</label>
+          <input type="text" id="f-method" placeholder="例：メール、電話、LINE">
+        </div>
+
+        <div class="form-full">
+          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:8px;">追客日程（各回の連絡日を入力）</label>
+          <div class="followup-grid">
+            {% for i in range(1, 11) %}
+            <div class="form-group">
+              <label>追客{{ '①②③④⑤⑥⑦⑧⑨⑩'[i-1] }}</label>
+              <input type="date" id="f-followup-{{ i }}">
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="form-full">
+          <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:6px;">対応フラグ</label>
+          <div class="checkbox-row">
+            <label><input type="checkbox" id="f-has-reply"> 返信有</label>
+            <label><input type="checkbox" id="f-has-phone"> 電話対応</label>
+            <label><input type="checkbox" id="f-has-line">  LINE追加</label>
+          </div>
+        </div>
+
+        <div class="form-group form-full">
+          <label>メモ</label>
+          <textarea id="f-memo" rows="2" placeholder="備考・特記事項"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal()">キャンセル</button>
+      <button class="btn-save" onclick="saveRecord()">保存する</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const STORE_ID = {{ store_id or 0 }};
+let currentYear  = {{ year }};
+let currentMonth = {{ month }};
+let records = [];
+
+function showAlert(msg, type='success') {
+  const el = document.getElementById('alert-msg');
+  el.textContent = msg;
+  el.className = `alert alert-${type} show`;
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+function updateLabel() {
+  document.getElementById('month-label').textContent = `${currentYear}年${currentMonth}月`;
+  document.getElementById('month-jump').value = `${currentYear}-${String(currentMonth).padStart(2,'0')}`;
+}
+
+function navigate(dir) {
+  currentMonth += dir;
+  if (currentMonth > 12) { currentMonth = 1;  currentYear++; }
+  if (currentMonth < 1)  { currentMonth = 12; currentYear--; }
+  updateLabel();
+  loadRecords();
+}
+
+function jumpMonth(val) {
+  const [y, m] = val.split('-').map(Number);
+  currentYear = y; currentMonth = m;
+  updateLabel();
+  loadRecords();
+}
+
+const CIRCLE_NUMS = '①②③④⑤⑥⑦⑧⑨⑩';
+function shortDate(s) {
+  if (!s) return '';
+  const d = new Date(s);
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+async function loadRecords() {
+  const staffId = document.getElementById('filter-staff').value;
+  const params  = new URLSearchParams({ year: currentYear, month: currentMonth });
+  if (staffId) params.set('staff_id', staffId);
+  try {
+    const res = await fetch(`/api/echo-records?${params}`);
+    records = res.ok ? await res.json() : [];
+    renderTable();
+  } catch(e) {
+    showAlert('データの取得に失敗しました', 'error');
+  }
+}
+
+function renderTable() {
+  const tbody = document.getElementById('echo-tbody');
+  if (!records.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="21">データがありません</td></tr>';
+    return;
+  }
+  tbody.innerHTML = records.map(r => `
+    <tr>
+      <td>${escHtml(r.staff_name || '―')}</td>
+      <td class="left" style="max-width:100px;" title="${escHtml(r.list_name)}">${escHtml(r.list_name) || '―'}</td>
+      <td>${r.echo_date || '―'}</td>
+      <td>${escHtml(r.media) || '―'}</td>
+      <td>${escHtml(r.method) || '―'}</td>
+      <td>${r.first_contact_date || '―'}</td>
+      ${[1,2,3,4,5,6,7,8,9,10].map(i => `<td>${r['followup_'+i] ? `<span class="followup-date">${shortDate(r['followup_'+i])}</span>` : '<span class="followup-empty">—</span>'}</td>`).join('')}
+      <td>${r.has_reply ? '<span class="chk-yes">✓</span>' : '<span class="chk-no">—</span>'}</td>
+      <td>${r.has_phone ? '<span class="chk-yes">✓</span>' : '<span class="chk-no">—</span>'}</td>
+      <td>${r.has_line  ? '<span class="chk-yes">✓</span>' : '<span class="chk-no">—</span>'}</td>
+      <td class="left" style="max-width:100px;" title="${escHtml(r.memo)}">${escHtml(r.memo) || ''}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn-sm" onclick="openEditModal(${r.id})">編集</button>
+        <button class="btn-sm btn-del" onclick="deleteRecord(${r.id})" style="margin-left:4px;">削除</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function openModal(id) {
+  document.getElementById('edit-id').value = '';
+  document.getElementById('modal-title').textContent = '反響追加';
+  clearForm();
+  document.getElementById('record-modal').classList.add('active');
+}
+
+function openEditModal(id) {
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('edit-id').value = id;
+  document.getElementById('modal-title').textContent = '反響編集';
+  document.getElementById('f-staff').value          = r.staff_id || '';
+  document.getElementById('f-list-name').value      = r.list_name || '';
+  document.getElementById('f-echo-date').value      = r.echo_date || '';
+  document.getElementById('f-first-contact').value  = r.first_contact_date || '';
+  document.getElementById('f-media').value          = r.media || '';
+  document.getElementById('f-method').value         = r.method || '';
+  for (let i = 1; i <= 10; i++) {
+    document.getElementById(`f-followup-${i}`).value = r[`followup_${i}`] || '';
+  }
+  document.getElementById('f-has-reply').checked = !!r.has_reply;
+  document.getElementById('f-has-phone').checked = !!r.has_phone;
+  document.getElementById('f-has-line').checked  = !!r.has_line;
+  document.getElementById('f-memo').value         = r.memo || '';
+  document.getElementById('record-modal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('record-modal').classList.remove('active');
+}
+
+function clearForm() {
+  ['f-staff','f-list-name','f-echo-date','f-first-contact','f-media','f-method','f-memo'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  for (let i = 1; i <= 10; i++) document.getElementById(`f-followup-${i}`).value = '';
+  document.getElementById('f-has-reply').checked = false;
+  document.getElementById('f-has-phone').checked = false;
+  document.getElementById('f-has-line').checked  = false;
+}
+
+async function saveRecord() {
+  const editId = document.getElementById('edit-id').value;
+  const echoDate = document.getElementById('f-echo-date').value;
+  if (!echoDate) { showAlert('反響日は必須です', 'error'); return; }
+
+  const payload = {
+    store_id: STORE_ID,
+    staff_id: document.getElementById('f-staff').value || null,
+    list_name: document.getElementById('f-list-name').value.trim(),
+    echo_date: echoDate,
+    media:     document.getElementById('f-media').value.trim(),
+    method:    document.getElementById('f-method').value.trim(),
+    first_contact_date: document.getElementById('f-first-contact').value || null,
+    has_reply: document.getElementById('f-has-reply').checked,
+    has_phone: document.getElementById('f-has-phone').checked,
+    has_line:  document.getElementById('f-has-line').checked,
+    memo:      document.getElementById('f-memo').value.trim(),
+  };
+  for (let i = 1; i <= 10; i++) {
+    payload[`followup_${i}`] = document.getElementById(`f-followup-${i}`).value || null;
+  }
+
+  const url    = editId ? `/api/echo-records/${editId}` : '/api/echo-records';
+  const method = editId ? 'PUT' : 'POST';
+  try {
+    const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    if (!res.ok) throw new Error('API error');
+    closeModal();
+    showAlert(editId ? '更新しました' : '追加しました');
+    await loadRecords();
+  } catch(e) {
+    showAlert('保存に失敗しました', 'error');
+  }
+}
+
+async function deleteRecord(id) {
+  if (!confirm('このレコードを削除しますか？')) return;
+  try {
+    const res = await fetch(`/api/echo-records/${id}`, { method:'DELETE' });
+    if (!res.ok) throw new Error('error');
+    showAlert('削除しました');
+    await loadRecords();
+  } catch(e) {
+    showAlert('削除に失敗しました', 'error');
+  }
+}
+
+// スタッフ名をレコードに付加
+async function enrichStaffNames() {
+  // staff_id → name マップ (staff_list はサーバー側で渡す)
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  updateLabel();
+  loadRecords();
+});
+</script>
+{% endblock %}

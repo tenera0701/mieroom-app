@@ -507,7 +507,7 @@
       <!-- スタッフフィルター -->
       <select id="filter-staff"
         style="border:1px solid #d1d5db;border-radius:6px;padding:7px 10px;font-size:13px;color:#111827;outline:none;"
-        onchange="loadData()">
+        onchange="syncStaffFilter()">
         <option value="">全スタッフ</option>
       </select>
       <button onclick="openSalesImportModal()" style="padding:8px 16px;font-size:13px;font-weight:700;background:#84cc16;color:#fff;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background 0.15s;" onmouseover="this.style.background='#65a30d'" onmouseout="this.style.background='#84cc16'">
@@ -594,16 +594,12 @@
     </div>
   </div>
 
-  <!-- 月次推移グラフ -->
+  <!-- 月次売上推移グラフ -->
   <div class="chart-section">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
-      <h2 style="margin:0;">月次売上推移（全体）</h2>
-      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#374151;">
-        <input type="month" id="sales-chart-from" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;">
-        <span style="color:#9ca3af;">〜</span>
-        <input type="month" id="sales-chart-to" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;">
-        <button onclick="applySalesChartRange()" style="padding:4px 12px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">適用</button>
-        <button onclick="resetSalesChartRange()" style="padding:4px 10px;background:#fff;color:#6b7280;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;">リセット</button>
+      <div>
+        <h2 style="margin:0;">月次売上推移</h2>
+        <p id="chart-staff-label" style="margin:2px 0 0;font-size:12px;color:#6b7280;"></p>
       </div>
     </div>
     <div style="position:relative; height:300px;">
@@ -653,7 +649,7 @@
             <th>仲介手数料</th>
             <th>AD</th>
             <th>AD入金日</th>
-            <th>付帯サービス</th>
+            <th>オプション</th>
             <th>LL</th>
             <th>引越</th>
             <th>火保</th>
@@ -689,7 +685,7 @@
             <tr>
               <th>申込日</th><th>担当</th><th>媒体</th><th>物件名</th><th>号室</th>
               <th>客名</th><th>賃料</th><th>契約開始日</th><th>仲介手数料</th>
-              <th>AD</th><th>AD入金日</th><th>付帯サービス</th>
+              <th>AD</th><th>AD入金日</th><th>オプション</th>
               <th>LL</th><th>引越</th><th>火保</th><th>ステータス</th>
               <th>仲介入金</th><th>AD入金</th><th>操作</th>
             </tr>
@@ -757,7 +753,9 @@
         </div>
         <div class="detail-chart-wrap">
           <h3>📈 6ヶ月推移（契約数・売上）</h3>
-          <canvas class="trend-chart" style="height:200px;"></canvas>
+          <div style="position:relative;height:180px;overflow:hidden;">
+            <canvas class="trend-chart"></canvas>
+          </div>
         </div>
         <div class="yoy-list">
           <h3>📊 昨年同月比</h3>
@@ -914,9 +912,9 @@
           <label id="app-ad-label">AD金額（円）</label>
           <input type="number" id="app-ad_amount" min="0" placeholder="0">
         </div>
-        <div class="form-group full-width" style="grid-column:1/-1;">
-          <label>付帯サービス</label>
-          <input type="text" id="app-ancillary_services" placeholder="例: 保証会社: 日本賃貸保証">
+        <div class="form-group">
+          <label>オプション金額（円）</label>
+          <input type="number" id="app-option_amount" min="0" placeholder="0">
         </div>
         <div class="form-group" style="grid-column:1/-1;">
           <label>ステータス</label>
@@ -1064,8 +1062,6 @@ const STORE_ID     = {{ store_id or 0 }};
 let appData = [];
 let statusColors = {};
 let staffData = [];
-let useCustomChartRange = false;
-let monthlyData = {};
 let sortCol = -1;
 let sortDir = 1; // 1=昇順, -1=降順
 let expandedRow = null;
@@ -1138,26 +1134,8 @@ function showAlert(msg, type='success') {
 async function loadData() {
   const year  = salesYear;
   const month = salesMonth;
-
-  let chartFrom, chartTo;
-  if (useCustomChartRange) {
-    // ユーザーが手動設定したレンジを使用
-    chartFrom = document.getElementById('sales-chart-from')?.value;
-    chartTo   = document.getElementById('sales-chart-to')?.value;
-  }
-  if (!chartFrom || !chartTo) {
-    // 選択月を中央にした12ヶ月（前5ヶ月・後6ヶ月）
-    const fd = new Date(year, month - 6, 1);
-    const td = new Date(year, month + 6, 1);
-    chartFrom = `${fd.getFullYear()}-${String(fd.getMonth()+1).padStart(2,'0')}`;
-    chartTo   = `${td.getFullYear()}-${String(td.getMonth()+1).padStart(2,'0')}`;
-    const fromEl = document.getElementById('sales-chart-from');
-    const toEl   = document.getElementById('sales-chart-to');
-    if (fromEl) fromEl.value = chartFrom;
-    if (toEl)   toEl.value   = chartTo;
-  }
-
-  await Promise.all([loadStaffKpi(year, month), loadMonthlyKpi(chartFrom, chartTo)]);
+  await loadStaffKpi(year, month);
+  await loadChartHistory();
 }
 
 async function loadStaffKpi(year, month) {
@@ -1185,6 +1163,15 @@ async function loadStaffKpi(year, month) {
     }));
     await populateStaffSelect();
     renderStaffTable(staffData);
+
+    // 入金済み申込の売上合計（brokerage_fee + ad_amount + option_amount）
+    try {
+      const paidRes = await fetch(`/api/applications/approved-sum?year=${year}&month=${month}`);
+      if (paidRes.ok) {
+        const paidJson = await paidRes.json();
+        staffData._paidSum = paidJson.total || 0;
+      }
+    } catch(e2) { staffData._paidSum = 0; }
     updateKpiCards(staffData);
   } catch(e) {
     console.error('loadStaffKpi error:', e);
@@ -1197,48 +1184,6 @@ async function loadStaffKpi(year, month) {
   }
 }
 
-function initSalesChartRange() {
-  // loadData()内で自動計算するため初期設定は不要（カスタムレンジ使用時のみ値が入る）
-}
-
-function applySalesChartRange() {
-  const from = document.getElementById('sales-chart-from').value;
-  const to   = document.getElementById('sales-chart-to').value;
-  if (from && to) {
-    useCustomChartRange = true;
-    loadMonthlyKpi(from, to);
-  }
-}
-
-function resetSalesChartRange() {
-  useCustomChartRange = false;
-  document.getElementById('sales-chart-from').value = '';
-  document.getElementById('sales-chart-to').value   = '';
-  loadData();
-}
-
-async function loadMonthlyKpi(from, to) {
-  try {
-    const staffId = document.getElementById('filter-staff')?.value;
-    const params  = new URLSearchParams({ store_id: STORE_ID });
-    if (from)    params.set('from',     from);
-    if (to)      params.set('to',       to);
-    if (staffId) params.set('staff_id', staffId);
-    const url = '/api/kpi/monthly?' + params.toString();
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('API error');
-    const rawData = await res.json();
-    monthlyData = {
-      labels:   Array.isArray(rawData) ? rawData.map(d => d.label)         : [],
-      current:  Array.isArray(rawData) ? rawData.map(d => d.sales || 0)    : [],
-      previous: Array.isArray(rawData) ? rawData.map(() => 0)              : [],
-    };
-  } catch(e) {
-    console.warn('monthlyKpi error', e);
-    monthlyData = { labels: [], current: [], previous: [] };
-  }
-  renderMonthlyChart(monthlyData);
-}
 
 /* ===================================================
    KPIカード更新
@@ -1251,11 +1196,11 @@ function updateKpiCards(data) {
     document.getElementById('card-applications').textContent = '0';
     return;
   }
-  const totalRevenue = data.reduce((s, d) => s + (d.revenue || 0), 0);
+  const totalRevenue = data._paidSum || 0;
   const totalContracts = data.reduce((s, d) => s + (d.contracts || 0), 0);
   const totalApplications = data.reduce((s, d) => s + (d.applications || 0), 0);
   const totalVisits = data.reduce((s, d) => s + (d.visits || 0), 0);
-  const avgCloseRate = totalVisits ? pct(totalContracts, totalVisits) : 0;
+  const avgCloseRate = totalVisits ? pct(totalApplications, totalVisits) : 0;
   const prevRevenue = data.reduce((s, d) => s + (d.prev_revenue || 0), 0);
   const revTrend = prevRevenue ? ((totalRevenue - prevRevenue) / prevRevenue * 100).toFixed(1) : null;
 
@@ -1275,6 +1220,11 @@ function updateKpiCards(data) {
    スタッフテーブル描画
 =================================================== */
 function renderStaffTable(data) {
+  // 既存のチャートインスタンスをすべて破棄してからテーブルを再描画
+  Object.keys(detailCharts).forEach(key => {
+    try { detailCharts[key]?.destroy(); } catch(e) {}
+    delete detailCharts[key];
+  });
   const tbody = document.getElementById('staff-tbody');
   tbody.innerHTML = '';
   expandedRow = null;
@@ -1447,51 +1397,93 @@ function toggleDetail(tr, staffObj) {
 }
 
 /* ===================================================
-   月次推移グラフ
+   月次売上推移グラフ（時系列）
 =================================================== */
+async function loadChartHistory() {
+  const staffSel  = document.getElementById('filter-staff');
+  const staffId   = staffSel ? staffSel.value : '';
+  const staffName = staffSel && staffSel.value
+    ? staffSel.options[staffSel.selectedIndex].text
+    : null;
+
+  const labelEl = document.getElementById('chart-staff-label');
+  if (labelEl) labelEl.textContent = staffName ? `対象スタッフ：${staffName}` : '全スタッフ合計';
+
+  try {
+    const params = new URLSearchParams({ year: salesYear, month: salesMonth });
+    if (staffId) params.set('staff_id', staffId);
+    const res = await fetch(`/api/kpi/staff-history?${params}`);
+    const d = res.ok ? await res.json() : null;
+    renderMonthlyChart(d ? d.history || d : []);
+  } catch(e) {
+    renderMonthlyChart([]);
+  }
+}
+
 function renderMonthlyChart(data) {
   const ctx = document.getElementById('monthly-chart').getContext('2d');
   if (monthlyChart) monthlyChart.destroy();
+
+  if (!data || data.length === 0) {
+    monthlyChart = null;
+    return;
+  }
+
+  const labels   = data.map(d => d.label);
+  const revenues = data.map(d => d.revenue || 0);
+  const apps     = data.map(d => d.contracts || 0);
+
   monthlyChart = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: data.labels,
+      labels,
       datasets: [
         {
-          label: '今年売上(万円)',
-          data: data.current,
-          backgroundColor: 'rgba(22,163,74,0.75)',
+          label: '売上',
+          data: revenues,
+          backgroundColor: '#16a34a',
           borderRadius: 4,
-          order: 1,
+          yAxisID: 'y',
         },
         {
-          label: '前年売上(万円)',
-          data: data.previous,
-          backgroundColor: 'rgba(22,163,74,0.2)',
+          label: '申込数（件）',
+          data: apps,
+          backgroundColor: '#f59e0b',
           borderRadius: 4,
-          order: 2,
+          yAxisID: 'y1',
         }
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { labels: { font: { size: 12 } } },
+        legend: { labels: { font: { size: 12 }, boxWidth: 14 } },
         tooltip: {
           callbacks: {
-            label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString()} 万円`
+            label: ctx => ctx.datasetIndex === 0
+              ? `売上: ¥${ctx.parsed.y.toLocaleString()}`
+              : `申込数: ${ctx.parsed.y} 件`
           }
         }
       },
       scales: {
         x: { grid: { display: false } },
         y: {
+          type: 'linear',
+          position: 'left',
           beginAtZero: true,
-          title: { display: true, text: '売上（万円）', font: { size: 12 } },
-          ticks: {
-            callback: v => v.toLocaleString()
-          }
+          title: { display: true, text: '売上（円）', font: { size: 11 } },
+          ticks: { callback: v => '¥' + v.toLocaleString() }
+        },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          beginAtZero: true,
+          title: { display: true, text: '申込数', font: { size: 11 } },
+          ticks: { stepSize: 1 },
+          grid: { drawOnChartArea: false }
         }
       }
     }
@@ -1590,6 +1582,17 @@ async function populateStaffSelect() {
   sel.value = currentVal;
 }
 
+function syncStaffFilter() {
+  const val = document.getElementById('filter-staff')?.value || '';
+  const appFilter = document.getElementById('app-filter-staff');
+  const uncFilter = document.getElementById('unc-filter-staff');
+  if (appFilter) appFilter.value = val;
+  if (uncFilter) uncFilter.value = val;
+  loadData();
+  loadApplications();
+  loadUncollected();
+}
+
 /* ===================================================
    KPIモーダル
 =================================================== */
@@ -1602,6 +1605,7 @@ function openKpiModal() {
   const ymInput  = document.getElementById('modal-ym');
   staffSel.disabled = false;
   ymInput.disabled  = false;
+  ymInput.value = `${salesYear}-${String(salesMonth).padStart(2,'0')}`;
   document.getElementById('kpi-modal').classList.add('active');
 }
 
@@ -2005,7 +2009,7 @@ function buildAppRow(r, colors) {
     <td style="text-align:right;white-space:nowrap;">${r.brokerage_fee ? '¥' + r.brokerage_fee.toLocaleString() : '―'}</td>
     <td style="text-align:right;white-space:nowrap;">${adLabel}</td>
     <td style="white-space:nowrap;">${r.ad_payment_date || '―'}</td>
-    <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.ancillary_services||''}">${r.ancillary_services || '―'}</td>
+    <td style="text-align:right;white-space:nowrap;">${r.option_amount ? '¥' + r.option_amount.toLocaleString() : '―'}</td>
     <td style="text-align:center;">${r.lifeline ? '●' : '×'}</td>
     <td style="text-align:center;">${r.moving ? '●' : '×'}</td>
     <td style="text-align:center;">${r.fire_insurance ? '●' : '×'}</td>
@@ -2079,7 +2083,7 @@ function openAppModal(existing) {
   document.getElementById('app-editing-id').value = existing?.id || '';
 
   const fields = ['application_date','property_name','room_number','customer_name',
-    'rent','contract_start_date','ad_payment_date','brokerage_fee','ad_amount','ancillary_services'];
+    'rent','contract_start_date','ad_payment_date','brokerage_fee','ad_amount','option_amount'];
   fields.forEach(f => {
     const el = document.getElementById(`app-${f}`);
     if (el) el.value = existing?.[f] ?? '';
@@ -2132,7 +2136,7 @@ async function submitApp() {
     brokerage_fee:      parseFloat(document.getElementById('app-brokerage_fee').value) || 0,
     ad_type:            document.getElementById('app-ad_type').value,
     ad_amount:          parseFloat(document.getElementById('app-ad_amount').value) || 0,
-    ancillary_services: document.getElementById('app-ancillary_services').value,
+    option_amount:      parseFloat(document.getElementById('app-option_amount').value) || 0,
     lifeline:           document.getElementById('app-lifeline').checked,
     moving:             document.getElementById('app-moving').checked,
     fire_insurance:     document.getElementById('app-fire_insurance').checked,
@@ -2421,7 +2425,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (params.get('year'))  salesYear  = parseInt(params.get('year'));
   if (params.get('month')) salesMonth = parseInt(params.get('month'));
   updateSalesMonthLabel();
-  initSalesChartRange();
   loadData();
   loadUncollected();
   loadApplications();
