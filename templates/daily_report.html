@@ -1,5 +1,5 @@
 {% extends 'mgmt_base.html' %}
-{% block title %}日報 | ルームピック管理ポータル{% endblock %}
+{% block title %}日報 | ミエルーム管理ポータル{% endblock %}
 {% block breadcrumb %}日報{% endblock %}
 
 {% block extra_head %}
@@ -373,13 +373,36 @@ async function loadTaskTemplates() {
   const tasks = await res.json();
   const el = document.getElementById('task-template-list');
   el.innerHTML = tasks.map(t => `
-    <div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #f3f4f6;">
-      <span style="flex:1; font-size:14px; color:#374151;">${t.task_name}</span>
+    <div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #f3f4f6;" id="task-item-${t.id}">
+      <span id="task-label-${t.id}" style="flex:1; font-size:14px; color:#374151;">${t.task_name}</span>
+      <input id="task-edit-${t.id}" type="text" value="${t.task_name}" style="flex:1;display:none;border:1px solid #16a34a;border-radius:6px;padding:4px 8px;font-size:13px;">
+      <button onclick="startEditTask(${t.id})" id="task-edit-btn-${t.id}" style="background:#f0fdf4;border:1px solid #86efac;color:#15803d;border-radius:4px;padding:2px 8px;font-size:12px;cursor:pointer;">編集</button>
+      <button onclick="saveTaskEdit(${t.id})" id="task-save-btn-${t.id}" style="display:none;background:#16a34a;border:none;color:#fff;border-radius:4px;padding:2px 8px;font-size:12px;cursor:pointer;">保存</button>
       ${t.is_default
         ? '<span style="font-size:11px; color:#9ca3af; background:#f3f4f6; padding:2px 6px; border-radius:4px;">デフォルト</span>'
         : `<button onclick="deleteTaskTemplate(${t.id})" style="background:none;border:none;color:#ef4444;font-size:12px;cursor:pointer;">削除</button>`}
     </div>
   `).join('');
+}
+
+function startEditTask(id) {
+  document.getElementById('task-label-' + id).style.display = 'none';
+  document.getElementById('task-edit-' + id).style.display = '';
+  document.getElementById('task-edit-btn-' + id).style.display = 'none';
+  document.getElementById('task-save-btn-' + id).style.display = '';
+  document.getElementById('task-edit-' + id).focus();
+}
+
+async function saveTaskEdit(id) {
+  const newName = document.getElementById('task-edit-' + id).value.trim();
+  if (!newName) { alert('タスク名を入力してください'); return; }
+  const res = await fetch(`/api/daily-task-template/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task_name: newName }),
+  });
+  if (!res.ok) { alert('保存に失敗しました'); return; }
+  await loadTaskTemplates();
 }
 
 async function addTaskTemplate() {

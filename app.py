@@ -88,10 +88,26 @@ def inject_ui_context():
             return [s] if s and s.is_active else []
         return []
 
+    def _current_user_perms():
+        uid = session.get('app_user_id')
+        if not uid:
+            return {}
+        u = AppUser.query.get(uid)
+        if not u:
+            return {}
+        return {
+            'can_view_executive':   getattr(u, 'can_view_executive', True),
+            'can_view_leads_page':  getattr(u, 'can_view_leads_page', True),
+            'can_view_daily_report':getattr(u, 'can_view_daily_report', True),
+            'can_view_leave':       getattr(u, 'can_view_leave', True),
+            'can_view_accounting':  getattr(u, 'can_view_accounting', True),
+        }
+
     return {
         'is_premium': _is_premium(),
         'current_role': session.get('app_user_role', ''),
         'sidebar_stores': _sidebar_stores(),
+        'user_perms': _current_user_perms(),
     }
 
 
@@ -315,6 +331,11 @@ class AppUser(db.Model):
     can_view_all_staff = db.Column(db.Boolean, default=True)
     can_edit_kpi = db.Column(db.Boolean, default=True)
     can_manage_uncollected = db.Column(db.Boolean, default=True)
+    # ページアクセス権限（ナビ項目ごと）
+    can_view_executive = db.Column(db.Boolean, default=True)      # 売上管理
+    can_view_leads_page = db.Column(db.Boolean, default=True)     # 反響管理
+    can_view_daily_report = db.Column(db.Boolean, default=True)   # 日報
+    can_view_leave = db.Column(db.Boolean, default=True)          # 有給管理
 
 
 class PasswordResetToken(db.Model):
@@ -1044,6 +1065,10 @@ def migrate_postgres():
                 ("app_user",           "can_view_all_staff",      "BOOLEAN DEFAULT TRUE"),
                 ("app_user",           "can_edit_kpi",            "BOOLEAN DEFAULT TRUE"),
                 ("app_user",           "can_manage_uncollected",  "BOOLEAN DEFAULT TRUE"),
+                ("app_user",           "can_view_executive",      "BOOLEAN DEFAULT TRUE"),
+                ("app_user",           "can_view_leads_page",     "BOOLEAN DEFAULT TRUE"),
+                ("app_user",           "can_view_daily_report",   "BOOLEAN DEFAULT TRUE"),
+                ("app_user",           "can_view_leave",          "BOOLEAN DEFAULT TRUE"),
                 ("application_record",        "option_amount", "FLOAT DEFAULT 0"),
                 ("daily_report",             "store_id",     "INTEGER"),
                 ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
@@ -1065,6 +1090,7 @@ _DROPDOWN_DEFAULTS = {
     'echo_method':     ['メール', '電話', 'LINE', 'チャット', 'その他'],
     'cs_media':        ['SUUMO', "HOME'S", 'アットホーム', 'カナリー', 'Instagram', 'TikTok', '自社HP', '電話', 'SNS', '紹介', 'その他'],
     'cs_service_type': ['来店', '電話', 'メール', 'オンライン', 'LINE', 'その他'],
+    'cs_status':       ['追客中', '申込', '他決', 'キャンセル'],
     'leads_media':     ['SUUMO', "HOME'S", 'アットホーム', 'カナリー', 'Instagram', 'TikTok', '自社HP', '電話', 'SNS', '紹介', 'その他'],
 }
 
@@ -4205,6 +4231,20 @@ def api_task_template_add():
     return jsonify({'status': 'ok', 'id': t.id})
 
 
+@app.route("/api/daily-task-template/<int:tid>", methods=["PUT"])
+@login_required
+def api_task_template_update(tid):
+    """タスクテンプレート名変更（デフォルト含む）"""
+    t = DailyTaskTemplate.query.get_or_404(tid)
+    data = request.get_json() or {}
+    new_name = (data.get('task_name') or '').strip()
+    if not new_name:
+        return jsonify({'error': 'task_name required'}), 400
+    t.task_name = new_name
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
 @app.route("/api/daily-task-template/<int:tid>", methods=["DELETE"])
 @login_required
 def api_task_template_delete(tid):
@@ -4368,6 +4408,10 @@ def api_user_create():
         can_view_all_staff=bool(data.get('can_view_all_staff', True)),
         can_edit_kpi=bool(data.get('can_edit_kpi', True)),
         can_manage_uncollected=bool(data.get('can_manage_uncollected', True)),
+        can_view_executive=bool(data.get('can_view_executive', True)),
+        can_view_leads_page=bool(data.get('can_view_leads_page', True)),
+        can_view_daily_report=bool(data.get('can_view_daily_report', True)),
+        can_view_leave=bool(data.get('can_view_leave', True)),
     )
     db.session.add(u)
     db.session.commit()
@@ -4392,6 +4436,10 @@ def api_user_update(uid):
     if 'can_view_all_staff'     in data: u.can_view_all_staff     = bool(data['can_view_all_staff'])
     if 'can_edit_kpi'           in data: u.can_edit_kpi           = bool(data['can_edit_kpi'])
     if 'can_manage_uncollected' in data: u.can_manage_uncollected = bool(data['can_manage_uncollected'])
+    if 'can_view_executive'     in data: u.can_view_executive     = bool(data['can_view_executive'])
+    if 'can_view_leads_page'    in data: u.can_view_leads_page    = bool(data['can_view_leads_page'])
+    if 'can_view_daily_report'  in data: u.can_view_daily_report  = bool(data['can_view_daily_report'])
+    if 'can_view_leave'         in data: u.can_view_leave         = bool(data['can_view_leave'])
     db.session.commit()
     return jsonify({'status': 'ok'})
 

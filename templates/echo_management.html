@@ -1,5 +1,5 @@
 {% extends 'mgmt_base.html' %}
-{% block title %}反響管理表 | ルームピック管理ツール{% endblock %}
+{% block title %}反響管理表 | ミエルーム管理ツール{% endblock %}
 {% block breadcrumb %}反響管理表{% endblock %}
 
 {% block extra_head %}
@@ -25,6 +25,13 @@
   td.left   { text-align:left; }
   .chk-yes  { color:#16a34a; font-weight:700; }
   .chk-no   { color:#d1d5db; }
+  /* フラグ行カラー（優先順: LINE > 電話 > 返信） */
+  tbody tr.row-line  { background:#dcfce7 !important; }
+  tbody tr.row-phone { background:#dbeafe !important; }
+  tbody tr.row-reply { background:#fef9c3 !important; }
+  tbody tr.row-line:hover  { background:#bbf7d0 !important; }
+  tbody tr.row-phone:hover { background:#bfdbfe !important; }
+  tbody tr.row-reply:hover { background:#fde68a !important; }
   .btn-sm   { padding:3px 8px; font-size:11px; border:1px solid #d1d5db; border-radius:4px; background:#fff; cursor:pointer; }
   .btn-sm:hover { background:#f3f4f6; }
   .btn-del  { border-color:#fca5a5; color:#ef4444; }
@@ -425,8 +432,10 @@ function renderTable() {
     tbody.innerHTML = '<tr class="empty-row"><td colspan="21">データがありません</td></tr>';
     return;
   }
-  tbody.innerHTML = records.map(r => `
-    <tr>
+  tbody.innerHTML = records.map(r => {
+    const rowCls = r.has_line ? 'row-line' : r.has_phone ? 'row-phone' : r.has_reply ? 'row-reply' : '';
+    return `
+    <tr class="${rowCls}">
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${escHtml(r.staff_name || '―')}</td>
       <td class="left" style="max-width:100px;cursor:pointer;" title="${escHtml(r.list_name)}" onclick="editCell(this,${r.id},'list_name','text','${escHtml(r.list_name)}')">${escHtml(r.list_name) || '―'}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'echo_date','date','${r.echo_date||''}')">${r.echo_date ? fmtMD(r.echo_date) : '―'}</td>
@@ -442,7 +451,8 @@ function renderTable() {
         <button class="btn-sm btn-del" onclick="deleteRecord(${r.id})">削除</button>
       </td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function escHtml(s) {

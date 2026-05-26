@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ルームピック - 賃貸仲介会社の業務管理をひとつに</title>
+  <meta name="description" content="反響・日報・売上・PL管理・有給をひとつのツールで。5店舗以下の賃貸仲介会社に特化した業務管理SaaSです。初月無料。">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: {
+              50:'#f0fdf4', 100:'#dcfce7', 200:'#bbf7d0',
+              400:'#4ade80', 500:'#22c55e', 600:'#16a34a',
+              700:'#15803d', 800:'#166534', 900:'#14532d',
+            }
+          },
+          fontFamily: { sans: ['Noto Sans JP','sans-serif'] }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family:'Noto Sans JP',sans-serif; }
+
+    /* グラデーション */
+    .grad-main { background: linear-gradient(135deg,#15803d 0%,#16a34a 60%,#22c55e 100%); }
+    .grad-text  {
+      background: linear-gradient(135deg,#15803d 0%,#22c55e 100%);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+    }
+    .hero-bg { background:linear-gradient(160deg,#f0fdf4 0%,#ffffff 70%); }
+
+    /* カードホバー */
+    .card-hover { transition:transform .22s,box-shadow .22s; }
+    .card-hover:hover { transform:translateY(-6px); box-shadow:0 20px 40px rgba(22,163,74,.15); }
+
+    /* FAQ */
+    .faq-body { max-height:0; overflow:hidden; transition:max-height .35s ease; }
+    .faq-body.open { max-height:300px; }
+    .faq-icon { transition:transform .3s; }
+    .faq-icon.open { transform:rotate(180deg); }
+
+    /* ナビスクロール */
+    .nav-scrolled { box-shadow:0 2px 14px rgba(22,163,74,.12); }
+
+    /* ドットパルス */
+    .dot-pulse { width:8px;height:8px;background:#22c55e;border-radius:50%;display:inline-block;animation:dpulse 2s infinite; }
+    @keyframes dpulse{ 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.35)} }
+
+    /* 画像カード共通 */
+    .img-card {
+      background:linear-gradient(145deg,#f0fdf4,#dcfce7);
+      border-radius:1.5rem; padding:2rem;
+      display:flex; align-items:center; justify-content:center;
+    }
+
+    /* blob装飾 */
+    .blob {
+      position:absolute; border-radius:50%;
+      background:radial-gradient(circle,#bbf7d0 0%,#86efac 60%,transparent 100%);
+      filter:blur(48px); opacity:.55; pointer-events:none;
+    }
+  </style>
+</head>
+<body class="bg-white text-gray-800 antialiased">
+
+
+<!-- ============================================================
+     NAV
+============================================================ -->
+<nav id="nav" class="fixed top-0 inset-x-0 z-50 bg-white/90 backdrop-blur-md border-b border-primary-100 transition-shadow">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
+    <a href="/roompick-lp" class="flex items-center gap-2.5">
+      <div class="w-9 h-9 grad-main rounded-xl flex items-center justify-center shadow-sm">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+        </svg>
+      </div>
+      <span class="text-xl font-black text-gray-900">ルームピック</span>
+    </a>
+    <div class="hidden md:flex items-center gap-8">
+      <a href="#features" class="text-sm text-gray-500 hover:text-primary-600 font-medium transition">機能</a>
+      <a href="#flow"     class="text-sm text-gray-500 hover:text-primary-600 font-medium transition">導入前後</a>
+      <a href="#pricing"  class="text-sm text-gray-500 hover:text-primary-600 font-medium transition">料金</a>
+      <a href="#faq"      class="text-sm text-gray-500 hover:text-primary-600 font-medium transition">FAQ</a>
+    </div>
+    <a href="/app-login" class="grad-main text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition shadow-md">
+      1ヶ月無料ではじめる
+    </a>
+  </div>
+</nav>
+
+
+<!-- ============================================================
+     HERO
+============================================================ -->
+<section class="hero-bg pt-28 pb-24 overflow-hidden">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="grid lg:grid-cols-2 gap-12 items-center">
+
+      <!-- テキスト -->
+      <div>
+        <div class="inline-flex items-center gap-2 bg-primary-50 border border-primary-200 text-primary-700 text-xs font-bold px-4 py-1.5 rounded-full mb-6">
+          <span class="dot-pulse"></span>賃貸仲介会社専用の業務管理SaaS
+        </div>
+        <h1 class="text-4xl md:text-[2.75rem] font-black text-gray-900 leading-tight mb-5">
+          複数店舗の経営を、<br><span class="grad-text">ひとつの画面で。</span>
+        </h1>
+        <p class="text-lg text-gray-500 leading-relaxed mb-8">
+          反響・日報・売上・PL・有給管理まで、<br>
+          賃貸仲介に必要な業務をまるごとカバー。<br>
+          1〜5店舗の経営者が「今すぐ把握」できる<br>
+          シンプルな業務管理ツールです。
+        </p>
+        <a href="/app-login" class="inline-block grad-main text-white px-9 py-4 rounded-xl text-base font-black hover:opacity-90 transition shadow-xl mb-3">
+          1ヶ月無料ではじめる &rarr;
+        </a>
+        <p class="text-xs text-gray-400">クレジットカード不要・いつでもキャンセル可能</p>
+      </div>
+
+      <!-- ★ イラスト：blobシェイプ＋浮かせカード ★ -->
+      <div class="relative flex items-center justify-center min-h-[340px]">
+        <!-- 背景blob -->
+        <div class="blob w-80 h-80 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+        <!-- 白いカードフレーム -->
+        <div class="relative z-10 bg-white rounded-3xl shadow-2xl p-8 rotate-1 hover:rotate-0 transition-transform duration-500">
+          <img src="https://soco-st.com/wp-content/themes/socost/upload/28079_paint.png"
+               alt="ルームピック管理イメージ" class="w-72 h-72 object-contain drop-shadow-md" loading="lazy"/>
+        </div>
+        <!-- 装飾バッジ（右下） -->
+        <div class="absolute bottom-4 right-4 z-20 bg-white rounded-2xl shadow-lg px-4 py-3 flex items-center gap-2">
+          <div class="w-8 h-8 grad-main rounded-lg flex items-center justify-center">
+            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+          </div>
+          <div>
+            <div class="text-xs font-black text-gray-800">8機能まとめて</div>
+            <div class="text-xs text-primary-600 font-bold">初月無料</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     NUMBERS BAR
+============================================================ -->
+<section class="bg-primary-800 py-10">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+      <div><div class="text-3xl font-black text-white mb-1">8つ</div><div class="text-primary-200 text-sm">搭載機能</div></div>
+      <div><div class="text-3xl font-black text-white mb-1">1〜5店</div><div class="text-primary-200 text-sm">想定店舗規模</div></div>
+      <div><div class="text-3xl font-black text-white mb-1">初月0円</div><div class="text-primary-200 text-sm">無料トライアル</div></div>
+      <div><div class="text-3xl font-black text-white mb-1">即日</div><div class="text-primary-200 text-sm">利用開始可能</div></div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     PAIN POINTS
+============================================================ -->
+<section class="py-24 bg-white overflow-hidden">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="grid lg:grid-cols-2 gap-16 items-center">
+
+      <!-- ★ イラスト：緑の大きな丸フレーム ★ -->
+      <div class="relative flex justify-center order-2 lg:order-1">
+        <div class="blob w-72 h-72 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+        <div class="relative z-10 w-72 h-72 rounded-full overflow-hidden bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center shadow-xl border-4 border-white">
+          <img src="https://soco-st.com/wp-content/themes/socost/upload/16220_paint.png"
+               alt="不動産業務の課題" class="w-64 h-64 object-contain scale-110" loading="lazy"/>
+        </div>
+      </div>
+
+      <!-- テキスト -->
+      <div class="order-1 lg:order-2">
+        <div class="text-xs font-bold text-primary-600 tracking-widest mb-3">PROBLEM</div>
+        <h2 class="text-3xl font-black text-gray-900 mb-8">こんなお悩み、<br>ありませんか？</h2>
+        <div class="space-y-4">
+          <div class="flex gap-4 p-5 bg-red-50 rounded-2xl border border-red-100">
+            <div class="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span class="text-red-500 font-black text-sm">✕</span>
+            </div>
+            <div>
+              <div class="font-bold text-gray-800 mb-1">月末集計に毎月半日以上とられる</div>
+              <div class="text-sm text-gray-500 leading-relaxed">各店舗からExcelを集めてコピペ集計。ミスが多く、時間の無駄になっている。</div>
+            </div>
+          </div>
+          <div class="flex gap-4 p-5 bg-red-50 rounded-2xl border border-red-100">
+            <div class="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span class="text-red-500 font-black text-sm">✕</span>
+            </div>
+            <div>
+              <div class="font-bold text-gray-800 mb-1">反響や接客の状況が本部から見えない</div>
+              <div class="text-sm text-gray-500 leading-relaxed">対応漏れや進捗を確認するたびに電話やLINEが必要になる。</div>
+            </div>
+          </div>
+          <div class="flex gap-4 p-5 bg-red-50 rounded-2xl border border-red-100">
+            <div class="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span class="text-red-500 font-black text-sm">✕</span>
+            </div>
+            <div>
+              <div class="font-bold text-gray-800 mb-1">PL・有給・日報がバラバラに管理されている</div>
+              <div class="text-sm text-gray-500 leading-relaxed">ツールや書式がバラバラで、情報を集めるだけで一苦労。経営判断に使えない。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     FEATURES — 左右交互レイアウト（主要4機能）
+============================================================ -->
+<section id="features" class="py-20 bg-primary-50">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+    <div class="text-center mb-16">
+      <div class="text-xs font-bold text-primary-600 tracking-widest mb-3">FEATURES</div>
+      <h2 class="text-3xl md:text-4xl font-black text-gray-900 mb-4">8つの機能がひとつに</h2>
+      <p class="text-gray-500 max-w-xl mx-auto leading-relaxed">
+        賃貸仲介会社に必要な業務管理機能を、ルームピック1本に集約しました。
+      </p>
+    </div>
+
+    <!-- Feature 01：売上管理（画像左） -->
+    <div class="grid lg:grid-cols-2 gap-12 items-center mb-20">
+      <div class="relative flex justify-center">
+        <div class="blob w-64 h-64 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+        <div class="relative z-10 img-card w-full max-w-sm -rotate-2 hover:rotate-0 transition-transform duration-500 shadow-xl">
+          <img src="https://soco-st.com/wp-content/themes/socost/upload/9780_paint.png"
+               alt="売上管理" class="w-56 h-56 object-contain drop-shadow-lg mx-auto" loading="lazy"/>
+        </div>
+      </div>
+      <div>
+        <div class="inline-block bg-primary-100 text-primary-700 text-xs font-black px-3 py-1 rounded-full mb-4">機能 01</div>
+        <h3 class="text-2xl font-black text-gray-900 mb-4">売上管理</h3>
+        <p class="text-gray-500 leading-relaxed mb-6">月次売上・KPIをリアルタイム集計。前月・前年同月比をグラフで一目比較できます。数字を集める作業から解放されます。</p>
+        <div class="flex flex-wrap gap-2">
+          <span class="bg-primary-100 text-primary-700 text-xs font-bold px-3 py-1 rounded-full">月次集計自動化</span>
+          <span class="bg-primary-100 text-primary-700 text-xs font-bold px-3 py-1 rounded-full">前月・前年比較</span>
+          <span class="bg-primary-100 text-primary-700 text-xs font-bold px-3 py-1 rounded-full">スパークライン表示</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 02：反響・接客管理（画像右） -->
+    <div class="grid lg:grid-cols-2 gap-12 items-center mb-20">
+      <div class="lg:order-2 relative flex justify-center">
+        <div class="blob w-64 h-64 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+        <div class="relative z-10 img-card w-full max-w-sm rotate-2 hover:rotate-0 transition-transform duration-500 shadow-xl">
+          <img src="https://soco-st.com/wp-content/themes/socost/upload/16122_paint.png"
+               alt="反響・接客管理" class="w-56 h-56 object-contain drop-shadow-lg mx-auto" loading="lazy"/>
+        </div>
+      </div>
+      <div class="lg:order-1">
+        <div class="inline-block bg-primary-100 text-primary-700 text-xs font-black px-3 py-1 rounded-full mb-4">機能 02</div>
+        <h3 class="text-2xl font-black text-gray-900 mb-4">反響・接客管理</h3>
+        <p class="text-gray-500 leading-relaxed mb-6">問い合わせから内見・申込・成約まで全ステータスを一元管理。対応漏れをゼロにし、接客の質を底上げします。</p>
+        <div class="flex flex-wrap gap-2">
+          <span class="bg-primary-100 text-primary-700 text-xs font-bold px-3 py-1 rounded-full">ステータス管理</span>
+          <span class="bg-primary-100 text-primary-700 text-xs font-bold px-3 py-1 rounded-full">対応漏れ防止</span>
+          <span class="bg-primary-100 text-primary-700 text-xs font-bold px-3 py-1 rounded-full">接客履歴記録</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 03：経理・PL管理（画像左） -->
+    <div class="grid lg:grid-cols-2 gap-12 items-center mb-20">
+      <div class="relative flex justify-center">
+        <div class="blob w-64 h-64 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+        <div class="relative z-10 img-card w-full max-w-sm -rotate-2 hover:rotate-0 transition-transform duration-500 shadow-xl">
+          <img src="https://soco-st.com/wp-content/themes/socost/upload/16230_paint.png"
+               alt="経理・PL管理" class="w-56 h-56 object-contain drop-shadow-lg mx-auto" loading="lazy"/>
+        </div>
+      </div>
+      <div>
+        <div class="inline-block bg-primary-100 text-primary-700 text-xs font-black px-3 py-1 rounded-full mb-4">機能 03</div>
+        <h3 class="text-2xl font-black text-gray-900 mb-4">経理・PL管理</h3>
+        <p class="text-gray-500 leading-relaxed mb-6">家賃・光熱費などの固定費から売上まで店舗別に記録。月次PLを自動生成し、利益率の変化をひと目で把握できます。</p>
+        <div class="flex flex-wrap gap-2">
+          <span class="bg-primary-100 text-primary-700 text-xs font-bold px-3 py-1 rounded-full">月次PL自動生成</span>
+          <span class="bg-primary-100 text-primary-700 text-xs font-bold px-3 py-1 rounded-full">店舗別経費管理</span>
+          <span class="bg-primary-100 text-primary-700 text-xs font-bold px-3 py-1 rounded-full">利益率トラッキング</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature 04：日報管理（画像右） -->
+    <div class="grid lg:grid-cols-2 gap-12 items-center mb-20">
+      <div class="lg:order-2 relative flex justify-center">
+        <div class="blob w-64 h-64 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+        <div class="relative z-10 img-card w-full max-w-sm rotate-2 hover:rotate-0 transition-transform duration-500 shadow-xl">
+          <img src="https://soco-st.com/wp-content/themes/socost/upload/20036_paint.png"
+               alt="日報管理" class="w-56 h-56 object-contain drop-shadow-lg mx-auto" loading="lazy"/>
+        </div>
+      </div>
+      <div class="lg:order-1">
+        <div class="inline-block bg-primary-100 text-primary-700 text-xs font-black px-3 py-1 rounded-full mb-4">機能 04</div>
+        <h3 class="text-2xl font-black text-gray-900 mb-4">日報管理</h3>
+        <p class="text-gray-500 leading-relaxed mb-6">スタッフがブラウザから日報を入力するだけ。本部はリアルタイムで確認でき、紙やLINEでの報告から完全に卒業できます。</p>
+        <div class="flex flex-wrap gap-2">
+          <span class="bg-primary-100 text-primary-700 text-xs font-bold px-3 py-1 rounded-full">ブラウザから入力</span>
+          <span class="bg-primary-100 text-primary-700 text-xs font-bold px-3 py-1 rounded-full">本部がリアルタイム閲覧</span>
+          <span class="bg-primary-100 text-primary-700 text-xs font-bold px-3 py-1 rounded-full">テンプレート対応</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 残り4機能：小カードグリッド -->
+    <div class="mt-4">
+      <p class="text-center text-sm font-bold text-gray-400 mb-8">＋ さらに4つの機能も標準搭載</p>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+
+        <!-- 営業管理 -->
+        <div class="bg-white rounded-2xl overflow-hidden shadow-sm card-hover">
+          <div class="bg-gradient-to-br from-primary-50 to-primary-100 h-40 flex items-center justify-center">
+            <img src="https://soco-st.com/wp-content/themes/socost/upload/16918_paint.png"
+                 alt="営業管理" class="h-32 w-32 object-contain drop-shadow-md" loading="lazy"/>
+          </div>
+          <div class="p-5">
+            <div class="text-xs font-bold text-primary-500 mb-1">05</div>
+            <h3 class="text-base font-bold text-gray-900 mb-1">営業管理</h3>
+            <p class="text-xs text-gray-500 leading-relaxed">スタッフ別・店舗別KPIを自動集計。目標達成率をリアルタイムで把握。</p>
+          </div>
+        </div>
+
+        <!-- 有給管理 -->
+        <div class="bg-white rounded-2xl overflow-hidden shadow-sm card-hover">
+          <div class="bg-gradient-to-br from-primary-50 to-primary-100 h-40 flex items-center justify-center">
+            <img src="https://soco-st.com/wp-content/themes/socost/upload/16203_paint.png"
+                 alt="有給管理" class="h-32 w-32 object-contain drop-shadow-md" loading="lazy"/>
+          </div>
+          <div class="p-5">
+            <div class="text-xs font-bold text-primary-500 mb-1">06</div>
+            <h3 class="text-base font-bold text-gray-900 mb-1">有給管理</h3>
+            <p class="text-xs text-gray-500 leading-relaxed">残日数・申請・承認をデジタル管理。法令対応もカバー。</p>
+          </div>
+        </div>
+
+        <!-- 本部ダッシュボード -->
+        <div class="bg-white rounded-2xl overflow-hidden shadow-sm card-hover border-2 border-primary-200 relative">
+          <div class="absolute top-3 right-3 z-10 bg-amber-400 text-white text-xs font-black px-2 py-0.5 rounded-full">PRO</div>
+          <div class="bg-gradient-to-br from-primary-100 to-primary-200 h-40 flex items-center justify-center">
+            <img src="https://soco-st.com/wp-content/themes/socost/upload/27567_paint.png"
+                 alt="本部ダッシュボード" class="h-32 w-32 object-contain drop-shadow-md" loading="lazy"/>
+          </div>
+          <div class="p-5">
+            <div class="text-xs font-bold text-primary-500 mb-1">07</div>
+            <h3 class="text-base font-bold text-gray-900 mb-1">本部ダッシュボード</h3>
+            <p class="text-xs text-gray-500 leading-relaxed">全店舗の売上・KPI・反響を1画面で横断比較。</p>
+          </div>
+        </div>
+
+        <!-- スタッフランキング -->
+        <div class="bg-white rounded-2xl overflow-hidden shadow-sm card-hover">
+          <div class="bg-gradient-to-br from-primary-50 to-primary-100 h-40 flex items-center justify-center">
+            <img src="https://soco-st.com/wp-content/themes/socost/upload/16911_paint.png"
+                 alt="スタッフランキング" class="h-32 w-32 object-contain drop-shadow-md" loading="lazy"/>
+          </div>
+          <div class="p-5">
+            <div class="text-xs font-bold text-primary-500 mb-1">08</div>
+            <h3 class="text-base font-bold text-gray-900 mb-1">スタッフランキング</h3>
+            <p class="text-xs text-gray-500 leading-relaxed">実績を自動ランキング化。評価・育成に活かせます。</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+<!-- ============================================================
+     BEFORE / AFTER
+============================================================ -->
+<section id="flow" class="py-20 bg-white">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-14">
+      <div class="text-xs font-bold text-primary-600 tracking-widest mb-3">BEFORE / AFTER</div>
+      <h2 class="text-3xl font-black text-gray-900">導入前 vs 導入後</h2>
+    </div>
+    <div class="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
+      <table class="w-full text-sm">
+        <thead>
+          <tr>
+            <th class="w-1/2 bg-red-50 text-red-500 font-bold py-4 px-6 text-center border-b border-gray-200">❌ 導入前（今まで）</th>
+            <th class="w-1/2 grad-main text-white font-bold py-4 px-6 text-center border-b border-gray-200">✅ 導入後（ルームピック）</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <tr>
+            <td class="py-4 px-6 text-gray-500">各店舗のExcelを集めて月末に手集計</td>
+            <td class="py-4 px-6 text-primary-700 font-medium">ダッシュボードでリアルタイム確認</td>
+          </tr>
+          <tr class="bg-gray-50">
+            <td class="py-4 px-6 text-gray-500">反響・接客の対応漏れを電話で確認</td>
+            <td class="py-4 px-6 text-primary-700 font-medium">ステータス管理で対応漏れゼロ</td>
+          </tr>
+          <tr>
+            <td class="py-4 px-6 text-gray-500">PL集計がバラバラのノート・ファイル</td>
+            <td class="py-4 px-6 text-primary-700 font-medium">店舗別に自動集計・月次PL自動生成</td>
+          </tr>
+          <tr class="bg-gray-50">
+            <td class="py-4 px-6 text-gray-500">日報を紙やLINEで報告・管理</td>
+            <td class="py-4 px-6 text-primary-700 font-medium">ブラウザ入力 → 本部が即時閲覧</td>
+          </tr>
+          <tr>
+            <td class="py-4 px-6 text-gray-500">有給の残日数管理がExcel or 手帳</td>
+            <td class="py-4 px-6 text-primary-700 font-medium">申請・承認・残日数をデジタル管理</td>
+          </tr>
+          <tr class="bg-gray-50">
+            <td class="py-4 px-6 text-gray-500">営業成績は会議まで全員わからない</td>
+            <td class="py-4 px-6 text-primary-700 font-medium">KPI・ランキングをいつでも確認</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     TARGET
+============================================================ -->
+<section class="py-20 bg-primary-800">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="grid lg:grid-cols-2 gap-16 items-center">
+      <div>
+        <div class="text-xs font-bold text-primary-200 tracking-widest mb-3">TARGET</div>
+        <h2 class="text-3xl font-black text-white mb-8">こんな会社に<br>ぴったりです</h2>
+        <ul class="space-y-4">
+          {% for item in ['賃貸仲介会社（店舗数：1〜5店舗）','スタッフ規模：5名〜30名','ExcelやLINEでの管理から脱却したい','本部から全店舗をリアルタイムで把握したい','PL・日報・有給をひとつのツールで管理したい','高額なシステム投資なく低コストで導入したい'] %}
+          <li class="flex items-start gap-3 text-primary-100">
+            <span class="w-6 h-6 bg-primary-600 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+              </svg>
+            </span>
+            <span>{{ item }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <!-- ★ 画像：白い大きな丸フレーム ★ -->
+      <div class="relative flex items-center justify-center">
+        <!-- 背景glow -->
+        <div class="absolute w-72 h-72 rounded-full bg-primary-600 opacity-30 blur-3xl"></div>
+        <!-- 外リング -->
+        <div class="relative z-10 w-72 h-72 rounded-full border-4 border-primary-400/50 flex items-center justify-center">
+          <!-- 内リング -->
+          <div class="w-60 h-60 rounded-full border-4 border-white/20 flex items-center justify-center bg-primary-700/50 backdrop-blur-sm">
+            <img src="https://soco-st.com/wp-content/themes/socost/upload/16203_paint.png"
+                 alt="ターゲット企業イメージ"
+                 class="w-52 h-52 object-contain drop-shadow-2xl" loading="lazy"/>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     PRICING
+============================================================ -->
+<section id="pricing" class="py-20 bg-white">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-14">
+      <div class="text-xs font-bold text-primary-600 tracking-widest mb-3">PRICING</div>
+      <h2 class="text-3xl font-black text-gray-900 mb-4">シンプルな料金プラン</h2>
+      <p class="text-gray-500">どのプランも初月は無料。まずは使ってみてください。</p>
+    </div>
+    <div class="grid md:grid-cols-3 gap-8 items-start">
+      <!-- FREE -->
+      <div class="bg-white rounded-2xl p-8 border-2 border-gray-100 shadow-sm">
+        <div class="text-xs font-black text-gray-400 tracking-widest mb-3">FREE</div>
+        <div class="text-5xl font-black text-gray-900 mb-1">¥0</div>
+        <div class="text-gray-400 text-sm mb-8">/ 月</div>
+        <ul class="space-y-3 text-sm text-gray-600 mb-8">
+          <li class="flex gap-2 items-start"><span class="text-primary-500 font-bold mt-0.5">✓</span>月10回まで利用</li>
+          <li class="flex gap-2 items-start"><span class="text-primary-500 font-bold mt-0.5">✓</span>全8機能が使える</li>
+          <li class="flex gap-2 items-start"><span class="text-gray-300 font-bold mt-0.5">✗</span>複数ユーザー</li>
+          <li class="flex gap-2 items-start"><span class="text-gray-300 font-bold mt-0.5">✗</span>本部ダッシュボード</li>
+        </ul>
+        <a href="/app-login" class="block text-center border-2 border-gray-200 rounded-xl py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 transition">無料ではじめる</a>
+      </div>
+      <!-- STANDARD -->
+      <div class="grad-main rounded-2xl p-8 shadow-2xl relative">
+        <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-amber-400 text-white text-xs font-black px-5 py-1.5 rounded-full shadow-lg whitespace-nowrap">🏆 人気No.1</div>
+        <div class="text-xs font-black text-primary-100 tracking-widest mb-3">STANDARD</div>
+        <div class="text-5xl font-black text-white mb-1">¥3,980</div>
+        <div class="text-primary-100 text-sm mb-8">/ 月（初月無料）</div>
+        <ul class="space-y-3 text-sm text-primary-50 mb-8">
+          <li class="flex gap-2 items-start"><span class="text-primary-200 font-bold mt-0.5">✓</span>月200回まで利用</li>
+          <li class="flex gap-2 items-start"><span class="text-primary-200 font-bold mt-0.5">✓</span>全8機能が使える</li>
+          <li class="flex gap-2 items-start"><span class="text-primary-200 font-bold mt-0.5">✓</span>複数ユーザー対応</li>
+          <li class="flex gap-2 items-start"><span class="text-primary-200 font-bold mt-0.5">✓</span>履歴保存（無制限）</li>
+        </ul>
+        <a href="/app-login" class="block text-center bg-white text-primary-700 rounded-xl py-3 text-sm font-black hover:bg-primary-50 transition">1ヶ月無料ではじめる &rarr;</a>
+      </div>
+      <!-- BUSINESS -->
+      <div class="bg-white rounded-2xl p-8 border-2 border-primary-100 shadow-sm">
+        <div class="text-xs font-black text-gray-400 tracking-widest mb-3">BUSINESS</div>
+        <div class="text-5xl font-black text-gray-900 mb-1">¥9,800</div>
+        <div class="text-gray-400 text-sm mb-8">/ 月（初月無料）</div>
+        <ul class="space-y-3 text-sm text-gray-600 mb-8">
+          <li class="flex gap-2 items-start"><span class="text-primary-500 font-bold mt-0.5">✓</span>無制限利用</li>
+          <li class="flex gap-2 items-start"><span class="text-primary-500 font-bold mt-0.5">✓</span>チームメンバー追加</li>
+          <li class="flex gap-2 items-start"><span class="text-primary-500 font-bold mt-0.5">✓</span>本部ダッシュボード（PRO）</li>
+          <li class="flex gap-2 items-start"><span class="text-primary-500 font-bold mt-0.5">✓</span>優先サポート</li>
+        </ul>
+        <a href="/app-login" class="block text-center border-2 border-primary-600 rounded-xl py-3 text-sm font-bold text-primary-700 hover:bg-primary-50 transition">1ヶ月無料ではじめる</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     FAQ
+============================================================ -->
+<section id="faq" class="py-20 bg-primary-50">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-14">
+      <div class="text-xs font-bold text-primary-600 tracking-widest mb-3">FAQ</div>
+      <h2 class="text-3xl font-black text-gray-900">よくある質問</h2>
+    </div>
+    <div class="space-y-4">
+      {% set faqs = [
+        ('無料プランでどこまで使えますか？','無料プランでは月10回まで全8機能をお試しいただけます。まずは操作感をお確かめください。'),
+        ('1ヶ月無料の後、自動で課金されますか？','トライアル期間中はクレジットカードの登録も不要です。継続利用の場合のみお支払い手続きをお願いします。'),
+        ('既存のExcel管理からの移行は大変ですか？','アカウントを作成すればその日から利用開始できます。Excelデータのインポート機能も備えています。'),
+        ('複数店舗のスタッフ全員が使えますか？','STANDARDプラン以上で複数ユーザーに対応しています。権限（本部・店舗管理者・スタッフ）を設定できます。'),
+        ('本部ダッシュボードはどのプランから使えますか？','BUSINESSプラン（月額¥9,800）のPRO機能として提供しています。複数店舗を1画面で横断比較できます。'),
+        ('データのセキュリティは大丈夫ですか？','データは会社単位で完全に分離管理しています。SSL暗号化通信を採用しており、他社データが閲覧されることはありません。'),
+      ] %}
+      {% for q, a in faqs %}
+      <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        <button onclick="toggleFaq(this)" class="w-full flex justify-between items-center p-6 text-left font-bold text-gray-800 hover:bg-gray-50 transition gap-4">
+          <span>{{ q }}</span>
+          <svg class="faq-icon w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <div class="faq-body px-6 text-sm text-gray-500 leading-relaxed"><div class="pb-6">{{ a }}</div></div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     FINAL CTA
+============================================================ -->
+<section class="py-24 hero-bg overflow-hidden">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="grid md:grid-cols-2 gap-12 items-center">
+      <div>
+        <h2 class="text-3xl md:text-4xl font-black text-gray-900 mb-5">
+          まず1ヶ月、<br><span class="grad-text">無料でお試しください。</span>
+        </h2>
+        <p class="text-gray-500 mb-8 leading-relaxed">複雑な設定は不要です。<br>アカウントを作るだけで、その日から使えます。</p>
+        <a href="/app-login" class="inline-block grad-main text-white px-9 py-4 rounded-xl text-base font-black hover:opacity-90 transition shadow-xl">
+          無料で登録する &rarr;
+        </a>
+        <p class="text-xs text-gray-400 mt-3">クレジットカード不要・いつでもキャンセル可</p>
+      </div>
+
+      <!-- ★ 画像：斜めカード＋blob ★ -->
+      <div class="relative flex items-center justify-center min-h-[280px]">
+        <div class="blob w-64 h-64 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+        <div class="relative z-10 bg-white rounded-3xl shadow-2xl p-8 -rotate-3 hover:rotate-0 transition-transform duration-500">
+          <img src="https://soco-st.com/wp-content/themes/socost/upload/16911_paint.png"
+               alt="業績アップイメージ" class="w-52 h-52 object-contain drop-shadow-md" loading="lazy"/>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ============================================================
+     FOOTER
+============================================================ -->
+<footer class="bg-primary-900 text-primary-300 py-12">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 grad-main rounded-xl flex items-center justify-center">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+          </svg>
+        </div>
+        <span class="text-white font-bold text-lg">ルームピック</span>
+      </div>
+      <div class="flex gap-6 text-sm">
+        <a href="#" class="hover:text-white transition">利用規約</a>
+        <a href="#" class="hover:text-white transition">プライバシーポリシー</a>
+        <a href="#" class="hover:text-white transition">お問い合わせ</a>
+      </div>
+      <div class="text-xs">© 2026 ルームピック. All rights reserved.</div>
+    </div>
+  </div>
+</footer>
+
+
+<!-- ============================================================
+     SCRIPTS
+============================================================ -->
+<script>
+  function toggleFaq(btn) {
+    const body = btn.nextElementSibling;
+    const icon = btn.querySelector('.faq-icon');
+    const isOpen = body.classList.contains('open');
+    document.querySelectorAll('.faq-body').forEach(el => el.classList.remove('open'));
+    document.querySelectorAll('.faq-icon').forEach(el => el.classList.remove('open'));
+    if (!isOpen) { body.classList.add('open'); icon.classList.add('open'); }
+  }
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const t = document.querySelector(a.getAttribute('href'));
+      if (t) { e.preventDefault(); window.scrollTo({ top: t.getBoundingClientRect().top + scrollY - 72, behavior:'smooth' }); }
+    });
+  });
+  window.addEventListener('scroll', () => {
+    document.getElementById('nav').classList.toggle('nav-scrolled', scrollY > 10);
+  });
+</script>
+
+</body>
+</html>

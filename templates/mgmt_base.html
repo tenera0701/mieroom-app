@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{% block title %}ルームピック 管理ポータル{% endblock %}</title>
+  <title>{% block title %}ミエルーム 管理ポータル{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
@@ -163,7 +163,7 @@
         </svg>
       </div>
       <div class="logo-text">
-        <div class="text-white font-bold text-base leading-tight">ルームピック</div>
+        <div class="text-white font-bold text-base leading-tight">ミエルーム</div>
         <div class="text-green-400 text-xs">管理ポータル</div>
       </div>
     </div>
@@ -235,7 +235,7 @@
         </a>
         {% endif %}
 
-        {% if role != 'staff' %}
+        {% if role != 'staff' and user_perms.get('can_view_executive', true) %}
         <a href="/executive"
            class="nav-item {% if request.path == '/executive' %}active{% endif %}">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -271,7 +271,7 @@
           <span class="nav-label">└ 接客管理表</span>
         </a>
 
-        {% if role != 'staff' %}
+        {% if role != 'staff' and user_perms.get('can_view_leads_page', true) %}
         <a href="/leads"
            class="nav-item {% if request.path == '/leads' %}active{% endif %}">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -280,7 +280,9 @@
           </svg>
           <span class="nav-label">反響管理</span>
         </a>
+        {% endif %}
 
+        {% if role != 'staff' and user_perms.get('can_view_accounting', true) %}
         <a href="/accounting"
            class="nav-item {% if request.path == '/accounting' %}active{% endif %}">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -291,6 +293,7 @@
         </a>
         {% endif %}
 
+        {% if user_perms.get('can_view_daily_report', true) %}
         <a href="/daily-report"
            class="nav-item {% if request.path == '/daily-report' %}active{% endif %}">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -299,8 +302,9 @@
           </svg>
           <span class="nav-label">日報</span>
         </a>
+        {% endif %}
 
-        {% if role != 'staff' %}
+        {% if role != 'staff' and user_perms.get('can_view_leave', true) %}
         <a href="/leave-management"
            class="nav-item {% if request.path == '/leave-management' %}active{% endif %}">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -316,23 +320,17 @@
         <a href="/settings"
            class="nav-item {% if request.path == '/settings' %}active{% endif %}">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {% if role in ('owner', 'store_manager') %}
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+            {% else %}
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+            {% endif %}
           </svg>
-          <span class="nav-label">設定</span>
+          <span class="nav-label">{% if role in ('owner', 'store_manager') %}設定・ユーザー管理{% else %}設定{% endif %}</span>
         </a>
-
-        {% if role in ('owner', 'store_manager') %}
-        <a href="/settings"
-           class="nav-item {% if request.path == '/settings' %}active{% endif %}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
-          </svg>
-          <span class="nav-label">設定・ユーザー管理</span>
-        </a>
-        {% endif %}
 
       {% endif %}{# end super_admin / else #}
 
@@ -415,7 +413,7 @@
     </main>
 
     <footer class="px-6 py-3 text-xs text-green-600 border-t border-green-100 text-right">
-      © 2026 ルームピック &nbsp;|&nbsp; 管理ポータル
+      © 2026 ミエルーム &nbsp;|&nbsp; 管理ポータル
     </footer>
   </div>
 

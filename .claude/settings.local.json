@@ -1,7 +1,31 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:beauty.hotpepper.jp)"
+      "WebFetch(domain:beauty.hotpepper.jp)",
+      "Bash(python -c \"import app\")",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import app; print\\('起動OK'\\)\")",
+      "Bash(python -c \"import app; print\\('OK'\\)\")",
+      "Bash(Get-Content \"G:\\\\マイドライブ\\\\Claude開発アプリ\\\\realestate-ai\\\\app.py\")",
+      "Bash(Measure-Object -Line)",
+      "PowerShell(\\(Get-Content \"G:\\\\マイドライブ\\\\Claude開発アプリ\\\\realestate-ai\\\\app.py\"\\).Count)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(gh pr *)",
+      "PowerShell(gh pr list --state open 2>&1)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app.py'\\).read\\(\\)\\); print\\('構文OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('app.py syntax OK'\\)\")",
+      "Bash(python3 -c ' *)",
+      "Bash(grep -v \"^--$\")",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(grep -v \"^[+-][[:space:]]*#\\\\|^[+-][[:space:]]*$\")",
+      "WebFetch(domain:docs.google.com)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('app.py: OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('G:/マイドライブ/Claude開発アプリ/realestate-ai/app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "WebFetch(domain:soco-st.com)"
     ]
   }
 }

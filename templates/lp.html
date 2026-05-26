@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IeAI - 賃貸仲介会社の業務管理をシンプルに</title>
+  <meta name="description" content="反響・日報・売上・スタッフKPIを本部からリアルタイム管理。5店舗以下の賃貸仲介会社に特化した業務管理SaaSです。初月無料。">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50:  '#f0f9ff',
+              100: '#e0f2fe',
+              200: '#bae6fd',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+              800: '#075985',
+              900: '#0c4a6e',
+            }
+          },
+          fontFamily: {
+            sans: ['Noto Sans JP', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Noto Sans JP', sans-serif; }
+    .gradient-bg  { background: linear-gradient(135deg, #0369a1 0%, #0ea5e9 100%); }
+    .gradient-text {
+      background: linear-gradient(135deg, #0369a1 0%, #0ea5e9 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-bg { background: linear-gradient(160deg, #f0f9ff 0%, #ffffff 65%); }
+    .card-hover { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+    .card-hover:hover { transform: translateY(-5px); box-shadow: 0 16px 36px rgba(3,105,161,0.13); }
+    .faq-content { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; }
+    .faq-content.open { max-height: 300px; }
+    .faq-icon { transition: transform 0.3s ease; }
+    .faq-icon.open { transform: rotate(180deg); }
+  </style>
+</head>
+<body class="bg-white text-gray-800 antialiased">
+
+<!-- ======================================================
+     NAVIGATION
+====================================================== -->
+<nav class="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100 shadow-sm">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex justify-between items-center h-16">
+
+      <!-- ロゴ -->
+      <a href="/lp" class="flex items-center gap-2">
+        <div class="w-8 h-8 gradient-bg rounded-lg flex items-center justify-center shadow-sm">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+          </svg>
+        </div>
+        <span class="text-xl font-black text-gray-900">IeAI</span>
+      </a>
+
+      <!-- ナビリンク（PC） -->
+      <div class="hidden md:flex items-center gap-8">
+        <a href="#features" class="text-sm text-gray-500 hover:text-brand-600 transition font-medium">機能</a>
+        <a href="#flow"     class="text-sm text-gray-500 hover:text-brand-600 transition font-medium">導入前後</a>
+        <a href="#pricing"  class="text-sm text-gray-500 hover:text-brand-600 transition font-medium">料金</a>
+        <a href="#faq"      class="text-sm text-gray-500 hover:text-brand-600 transition font-medium">FAQ</a>
+      </div>
+
+      <!-- CTA -->
+      <a href="/app-login"
+         class="gradient-bg text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:opacity-90 transition shadow-md">
+        1ヶ月無料ではじめる
+      </a>
+    </div>
+  </div>
+</nav>
+
+
+<!-- ======================================================
+     HERO
+====================================================== -->
+<section class="hero-bg pt-28 pb-24 overflow-hidden">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="grid lg:grid-cols-2 gap-12 items-center">
+
+      <!-- テキスト -->
+      <div>
+        <div class="inline-flex items-center gap-2 bg-brand-50 border border-brand-200 text-brand-700 text-xs font-bold px-4 py-1.5 rounded-full mb-6">
+          <span class="w-1.5 h-1.5 bg-brand-500 rounded-full animate-pulse"></span>
+          賃貸仲介会社専用の業務管理SaaS
+        </div>
+
+        <h1 class="text-4xl md:text-[2.8rem] font-black text-gray-900 leading-tight mb-6">
+          複数店舗の経営を、<br>
+          <span class="gradient-text">もっとシンプルに。</span>
+        </h1>
+
+        <p class="text-lg text-gray-500 leading-relaxed mb-8">
+          反響・日報・売上・スタッフKPIを<br>
+          本部からリアルタイムで一元管理。<br>
+          1〜5店舗の賃貸仲介会社のために<br>
+          作られた業務管理ツールです。
+        </p>
+
+        <a href="/app-login"
+           class="inline-block gradient-bg text-white px-9 py-4 rounded-xl text-base font-black hover:opacity-90 transition shadow-xl mb-3">
+          1ヶ月無料ではじめる &rarr;
+        </a>
+        <p class="text-xs text-gray-400">クレジットカード不要・いつでもキャンセル可能</p>
+      </div>
+
+      <!-- イラスト -->
+      <div class="flex justify-center lg:justify-end">
+        <img
+          src="https://soco-st.com/wp-content/themes/socost/upload/28079_paint.png"
+          alt="オフィスビル管理イメージ"
+          class="w-full max-w-md drop-shadow-xl"
+          loading="lazy"
+        />
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ======================================================
+     PAIN POINTS
+====================================================== -->
+<section class="py-20 bg-white">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="grid lg:grid-cols-2 gap-16 items-center">
+
+      <!-- イラスト（左） -->
+      <div class="flex justify-center order-2 lg:order-1">
+        <img
+          src="https://soco-st.com/wp-content/themes/socost/upload/16220_paint.png"
+          alt="不動産業務のイメージ"
+          class="w-full max-w-sm"
+          loading="lazy"
+        />
+      </div>
+
+      <!-- テキスト（右） -->
+      <div class="order-1 lg:order-2">
+        <div class="text-xs font-bold text-brand-600 tracking-widest mb-3">PROBLEM</div>
+        <h2 class="text-3xl font-black text-gray-900 mb-8">
+          こんなお悩み、<br>ありませんか？
+        </h2>
+
+        <div class="space-y-4">
+          <div class="flex gap-4 p-5 bg-red-50 rounded-2xl border border-red-100">
+            <div class="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span class="text-red-500 font-black text-sm">✕</span>
+            </div>
+            <div>
+              <div class="font-bold text-gray-800 mb-1">月末集計に毎月半日以上かかる</div>
+              <div class="text-sm text-gray-500 leading-relaxed">各店舗からExcelを集めてコピペで集計。ミスも多く時間の無駄になっている。</div>
+            </div>
+          </div>
+
+          <div class="flex gap-4 p-5 bg-red-50 rounded-2xl border border-red-100">
+            <div class="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span class="text-red-500 font-black text-sm">✕</span>
+            </div>
+            <div>
+              <div class="font-bold text-gray-800 mb-1">反響・対応状況が本部から見えない</div>
+              <div class="text-sm text-gray-500 leading-relaxed">問い合わせの対応漏れや進捗を確認するたびに電話で確認が必要。</div>
+            </div>
+          </div>
+
+          <div class="flex gap-4 p-5 bg-red-50 rounded-2xl border border-red-100">
+            <div class="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+              <span class="text-red-500 font-black text-sm">✕</span>
+            </div>
+            <div>
+              <div class="font-bold text-gray-800 mb-1">「今月どの店舗が何件？」が即答できない</div>
+              <div class="text-sm text-gray-500 leading-relaxed">店舗ごとの契約数・売上・経費が分散していて、比較や意思決定が遅れる。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ======================================================
+     FEATURES
+====================================================== -->
+<section id="features" class="py-20 bg-brand-50">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+    <div class="text-center mb-14">
+      <div class="text-xs font-bold text-brand-600 tracking-widest mb-3">SOLUTION</div>
+      <h2 class="text-3xl md:text-4xl font-black text-gray-900 mb-4">
+        IeAIがまるごと解決します
+      </h2>
+      <p class="text-gray-500 max-w-xl mx-auto leading-relaxed">
+        賃貸仲介業務に必要な6つの機能を1つのツールに集約。<br>
+        複数店舗をリアルタイムで一元管理できます。
+      </p>
+    </div>
+
+    <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+      <!-- 反響管理 -->
+      <div class="bg-white rounded-2xl p-7 shadow-sm card-hover">
+        <img
+          src="https://soco-st.com/wp-content/themes/socost/upload/16122_paint.png"
+          alt="反響管理"
+          class="w-20 h-20 object-contain mb-5"
+          loading="lazy"
+        />
+        <div class="text-xs font-bold text-brand-500 mb-1">01</div>
+        <h3 class="text-lg font-bold text-gray-900 mb-2">反響管理</h3>
+        <p class="text-sm text-gray-500 leading-relaxed">
+          問い合わせから内見・申込・成約まで全ステータスを管理。対応漏れをゼロにします。
+        </p>
+      </div>
+
+      <!-- 本部ダッシュボード -->
+      <div class="bg-white rounded-2xl p-7 shadow-sm card-hover">
+        <img
+          src="https://soco-st.com/wp-content/themes/socost/upload/9780_paint.png"
+          alt="本部ダッシュボード"
+          class="w-20 h-20 object-contain mb-5"
+          loading="lazy"
+        />
+        <div class="text-xs font-bold text-brand-500 mb-1">02</div>
+        <h3 class="text-lg font-bold text-gray-900 mb-2">本部ダッシュボード</h3>
+        <p class="text-sm text-gray-500 leading-relaxed">
+          全店舗の売上・反響数・KPIをリアルタイムで一覧比較。経営判断をスピードアップ。
+        </p>
+      </div>
+
+      <!-- 日報管理 -->
+      <div class="bg-white rounded-2xl p-7 shadow-sm card-hover">
+        <img
+          src="https://soco-st.com/wp-content/themes/socost/upload/20036_paint.png"
+          alt="日報管理"
+          class="w-20 h-20 object-contain mb-5"
+          loading="lazy"
+        />
+        <div class="text-xs font-bold text-brand-500 mb-1">03</div>
+        <h3 class="text-lg font-bold text-gray-900 mb-2">日報管理</h3>
+        <p class="text-sm text-gray-500 leading-relaxed">
+          スタッフの日々の活動を記録・閲覧。紙やLINEでの報告から卒業できます。
+        </p>
+      </div>
+
+      <!-- 営業KPI -->
+      <div class="bg-white rounded-2xl p-7 shadow-sm card-hover">
+        <img
+          src="https://soco-st.com/wp-content/themes/socost/upload/16918_paint.png"
+          alt="営業KPI・スタッフ管理"
+          class="w-20 h-20 object-contain mb-5"
+          loading="lazy"
+        />
+        <div class="text-xs font-bold text-brand-500 mb-1">04</div>
+        <h3 class="text-lg font-bold text-gray-900 mb-2">営業KPI・スタッフ管理</h3>
+        <p class="text-sm text-gray-500 leading-relaxed">
+          スタッフごとの契約件数・反響対応数を自動集計。公正な評価と育成に活用できます。
+        </p>
+      </div>
+
+      <!-- 会計・経費管理 -->
+      <div class="bg-white rounded-2xl p-7 shadow-sm card-hover">
+        <img
+          src="https://soco-st.com/wp-content/themes/socost/upload/16230_paint.png"
+          alt="売上・会計管理"
+          class="w-20 h-20 object-contain mb-5"
+          loading="lazy"
+        />
+        <div class="text-xs font-bold text-brand-500 mb-1">05</div>
+        <h3 class="text-lg font-bold text-gray-900 mb-2">売上・会計管理</h3>
+        <p class="text-sm text-gray-500 leading-relaxed">
+          家賃・光熱費などの固定費から売上まで店舗別に記録。月次レポートを自動生成します。
+        </p>
+      </div>
+
+      <!-- 契約・顧客管理 -->
+      <div class="bg-white rounded-2xl p-7 shadow-sm card-hover">
+        <img
+          src="https://soco-st.com/wp-content/themes/socost/upload/16203_paint.png"
+          alt="契約・顧客管理"
+          class="w-20 h-20 object-contain mb-5"
+          loading="lazy"
+        />
+        <div class="text-xs font-bold text-brand-500 mb-1">06</div>
+        <h3 class="text-lg font-bold text-gray-900 mb-2">契約・顧客管理</h3>
+        <p class="text-sm text-gray-500 leading-relaxed">
+          賃貸契約情報や顧客データを一元管理。更新・解約のフォローも漏れなく対応できます。
+        </p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ======================================================
+     BEFORE / AFTER
+====================================================== -->
+<section id="flow" class="py-20 bg-white">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+
+    <div class="text-center mb-14">
+      <div class="text-xs font-bold text-brand-600 tracking-widest mb-3">BEFORE / AFTER</div>
+      <h2 class="text-3xl font-black text-gray-900">導入前 vs 導入後</h2>
+    </div>
+
+    <div class="overflow-hidden rounded-2xl border border-gray-200 shadow-sm">
+      <table class="w-full text-sm">
+        <thead>
+          <tr>
+            <th class="w-1/2 bg-red-50 text-red-500 font-bold py-4 px-6 text-center border-b border-gray-200">
+              ❌ 導入前（今まで）
+            </th>
+            <th class="w-1/2 gradient-bg text-white font-bold py-4 px-6 text-center border-b border-gray-200">
+              ✅ 導入後（IeAI）
+            </th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <tr>
+            <td class="py-4 px-6 text-gray-500">各店舗からExcelを収集して月末に手集計</td>
+            <td class="py-4 px-6 text-brand-700 font-medium">本部ダッシュボードでリアルタイム確認</td>
+          </tr>
+          <tr class="bg-gray-50">
+            <td class="py-4 px-6 text-gray-500">スタッフの日報を紙やLINEで報告</td>
+            <td class="py-4 px-6 text-brand-700 font-medium">アプリで入力・本部が即時閲覧</td>
+          </tr>
+          <tr>
+            <td class="py-4 px-6 text-gray-500">反響の対応漏れを電話で確認</td>
+            <td class="py-4 px-6 text-brand-700 font-medium">ステータス管理で対応漏れをゼロに</td>
+          </tr>
+          <tr class="bg-gray-50">
+            <td class="py-4 px-6 text-gray-500">営業成績は会議で発表されるまで不明</td>
+            <td class="py-4 px-6 text-brand-700 font-medium">KPI・スタッフ実績をいつでも確認</td>
+          </tr>
+          <tr>
+            <td class="py-4 px-6 text-gray-500">経費管理がバラバラのノート・ファイル</td>
+            <td class="py-4 px-6 text-brand-700 font-medium">店舗別に自動集計・月次レポート生成</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+
+<!-- ======================================================
+     TARGET
+====================================================== -->
+<section class="py-20 bg-brand-700">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="grid lg:grid-cols-2 gap-16 items-center">
+
+      <!-- テキスト -->
+      <div>
+        <div class="text-xs font-bold text-blue-200 tracking-widest mb-3">TARGET</div>
+        <h2 class="text-3xl font-black text-white mb-8">
+          こんな会社に<br>ぴったりです
+        </h2>
+
+        <ul class="space-y-4">
+          <li class="flex items-start gap-3 text-blue-100">
+            <span class="w-6 h-6 bg-blue-400/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+              </svg>
+            </span>
+            <span>賃貸仲介会社（店舗数：1〜5店舗）</span>
+          </li>
+          <li class="flex items-start gap-3 text-blue-100">
+            <span class="w-6 h-6 bg-blue-400/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+              </svg>
+            </span>
+            <span>スタッフ規模：5名〜30名</span>
+          </li>
+          <li class="flex items-start gap-3 text-blue-100">
+            <span class="w-6 h-6 bg-blue-400/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+              </svg>
+            </span>
+            <span>ExcelやLINEでの管理から脱却したい</span>
+          </li>
+          <li class="flex items-start gap-3 text-blue-100">
+            <span class="w-6 h-6 bg-blue-400/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+              </svg>
+            </span>
+            <span>本部から全店舗をリアルタイムで把握したい</span>
+          </li>
+          <li class="flex items-start gap-3 text-blue-100">
+            <span class="w-6 h-6 bg-blue-400/30 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+              </svg>
+            </span>
+            <span>高額な専用システムなく低コストで導入したい</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- イラスト -->
+      <div class="flex justify-center">
+        <img
+          src="https://soco-st.com/wp-content/themes/socost/upload/27567_paint.png"
+          alt="チームミーティング"
+          class="w-full max-w-sm drop-shadow-lg"
+          loading="lazy"
+        />
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ======================================================
+     PRICING
+====================================================== -->
+<section id="pricing" class="py-20 bg-white">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+
+    <div class="text-center mb-14">
+      <div class="text-xs font-bold text-brand-600 tracking-widest mb-3">PRICING</div>
+      <h2 class="text-3xl font-black text-gray-900 mb-4">シンプルな料金プラン</h2>
+      <p class="text-gray-500">どのプランも初月は無料。費用はかかりません。</p>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-8 items-start">
+
+      <!-- FREE -->
+      <div class="bg-white rounded-2xl p-8 border-2 border-gray-100 shadow-sm">
+        <div class="text-xs font-black text-gray-400 tracking-widest mb-3">FREE</div>
+        <div class="text-5xl font-black text-gray-900 mb-1">¥0</div>
+        <div class="text-gray-400 text-sm mb-8">/ 月</div>
+        <ul class="space-y-3 text-sm text-gray-600 mb-8">
+          <li class="flex gap-2 items-center"><span class="text-green-500 font-bold">✓</span> 月10回まで利用</li>
+          <li class="flex gap-2 items-center"><span class="text-green-500 font-bold">✓</span> 全6機能が使える</li>
+          <li class="flex gap-2 items-center"><span class="text-gray-300">✗</span> 複数ユーザー</li>
+          <li class="flex gap-2 items-center"><span class="text-gray-300">✗</span> 優先サポート</li>
+        </ul>
+        <a href="/app-login"
+           class="block text-center border-2 border-gray-200 rounded-xl py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 transition">
+          無料ではじめる
+        </a>
+      </div>
+
+      <!-- STANDARD（推奨） -->
+      <div class="bg-brand-700 rounded-2xl p-8 shadow-2xl relative">
+        <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-orange-400 text-white text-xs font-black px-5 py-1.5 rounded-full shadow-lg whitespace-nowrap">
+          🏆 人気No.1
+        </div>
+        <div class="text-xs font-black text-blue-200 tracking-widest mb-3">STANDARD</div>
+        <div class="text-5xl font-black text-white mb-1">¥3,980</div>
+        <div class="text-blue-200 text-sm mb-8">/ 月（初月無料）</div>
+        <ul class="space-y-3 text-sm text-blue-100 mb-8">
+          <li class="flex gap-2 items-center"><span class="text-green-300 font-bold">✓</span> 月200回まで利用</li>
+          <li class="flex gap-2 items-center"><span class="text-green-300 font-bold">✓</span> 全6機能が使える</li>
+          <li class="flex gap-2 items-center"><span class="text-green-300 font-bold">✓</span> 複数ユーザー対応</li>
+          <li class="flex gap-2 items-center"><span class="text-green-300 font-bold">✓</span> 履歴保存（無制限）</li>
+        </ul>
+        <a href="/app-login"
+           class="block text-center bg-white text-brand-700 rounded-xl py-3 text-sm font-black hover:bg-blue-50 transition">
+          1ヶ月無料ではじめる &rarr;
+        </a>
+      </div>
+
+      <!-- BUSINESS -->
+      <div class="bg-white rounded-2xl p-8 border-2 border-gray-100 shadow-sm">
+        <div class="text-xs font-black text-gray-400 tracking-widest mb-3">BUSINESS</div>
+        <div class="text-5xl font-black text-gray-900 mb-1">¥9,800</div>
+        <div class="text-gray-400 text-sm mb-8">/ 月（初月無料）</div>
+        <ul class="space-y-3 text-sm text-gray-600 mb-8">
+          <li class="flex gap-2 items-center"><span class="text-green-500 font-bold">✓</span> 無制限利用</li>
+          <li class="flex gap-2 items-center"><span class="text-green-500 font-bold">✓</span> チームメンバー追加</li>
+          <li class="flex gap-2 items-center"><span class="text-green-500 font-bold">✓</span> 複数店舗・本社管理</li>
+          <li class="flex gap-2 items-center"><span class="text-green-500 font-bold">✓</span> 優先サポート</li>
+        </ul>
+        <a href="/app-login"
+           class="block text-center border-2 border-brand-600 rounded-xl py-3 text-sm font-bold text-brand-700 hover:bg-brand-50 transition">
+          1ヶ月無料ではじめる
+        </a>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ======================================================
+     FAQ
+====================================================== -->
+<section id="faq" class="py-20 bg-gray-50">
+  <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+
+    <div class="text-center mb-14">
+      <div class="text-xs font-bold text-brand-600 tracking-widest mb-3">FAQ</div>
+      <h2 class="text-3xl font-black text-gray-900">よくある質問</h2>
+    </div>
+
+    <div class="space-y-4">
+
+      <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        <button onclick="toggleFaq(this)" class="w-full flex justify-between items-center p-6 text-left font-bold text-gray-800 hover:bg-gray-50 transition gap-4">
+          <span>無料プランでどこまで使えますか？</span>
+          <svg class="faq-icon w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <div class="faq-content px-6 text-sm text-gray-500 leading-relaxed">
+          <div class="pb-6">無料プランでは月10回まで全機能をお試しいただけます。反響管理・日報・KPI・会計管理など全6機能が対象です。まずは機能の使い勝手をご確認ください。</div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        <button onclick="toggleFaq(this)" class="w-full flex justify-between items-center p-6 text-left font-bold text-gray-800 hover:bg-gray-50 transition gap-4">
+          <span>1ヶ月無料の後、自動で課金されますか？</span>
+          <svg class="faq-icon w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <div class="faq-content px-6 text-sm text-gray-500 leading-relaxed">
+          <div class="pb-6">無料トライアル期間中はクレジットカードの登録も不要です。継続利用の場合のみお支払い手続きをお願いします。自動課金は一切ありません。</div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        <button onclick="toggleFaq(this)" class="w-full flex justify-between items-center p-6 text-left font-bold text-gray-800 hover:bg-gray-50 transition gap-4">
+          <span>既存のExcel管理からの移行は大変ですか？</span>
+          <svg class="faq-icon w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <div class="faq-content px-6 text-sm text-gray-500 leading-relaxed">
+          <div class="pb-6">アカウントを作成すればすぐに利用開始できます。Excelデータのインポート機能も搭載しているため、既存データをそのまま移行しやすい設計です。</div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        <button onclick="toggleFaq(this)" class="w-full flex justify-between items-center p-6 text-left font-bold text-gray-800 hover:bg-gray-50 transition gap-4">
+          <span>複数店舗のスタッフ全員が使えますか？</span>
+          <svg class="faq-icon w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <div class="faq-content px-6 text-sm text-gray-500 leading-relaxed">
+          <div class="pb-6">STANDARDプラン以上で複数ユーザーに対応しています。店舗ごとにスタッフを登録し、権限（本部・店舗管理者・スタッフ）を設定できます。</div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+        <button onclick="toggleFaq(this)" class="w-full flex justify-between items-center p-6 text-left font-bold text-gray-800 hover:bg-gray-50 transition gap-4">
+          <span>データのセキュリティは大丈夫ですか？</span>
+          <svg class="faq-icon w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+        <div class="faq-content px-6 text-sm text-gray-500 leading-relaxed">
+          <div class="pb-6">データは会社ごとに完全に分離管理されています。SSL暗号化通信を採用しており、他社のデータが見えることは一切ありません。</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ======================================================
+     FINAL CTA
+====================================================== -->
+<section class="py-24 hero-bg">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="grid md:grid-cols-2 gap-12 items-center">
+
+      <!-- テキスト -->
+      <div>
+        <h2 class="text-3xl md:text-4xl font-black text-gray-900 mb-5">
+          まず1ヶ月、<br>
+          <span class="gradient-text">無料でお試しください。</span>
+        </h2>
+        <p class="text-gray-500 mb-8 leading-relaxed">
+          複雑な設定は不要です。<br>
+          アカウントを作るだけで、すぐに使えます。
+        </p>
+        <a href="/app-login"
+           class="inline-block gradient-bg text-white px-9 py-4 rounded-xl text-base font-black hover:opacity-90 transition shadow-xl">
+          無料で登録する &rarr;
+        </a>
+        <p class="text-xs text-gray-400 mt-3">クレジットカード不要・いつでもキャンセル可</p>
+      </div>
+
+      <!-- イラスト -->
+      <div class="flex justify-center">
+        <img
+          src="https://soco-st.com/wp-content/themes/socost/upload/16911_paint.png"
+          alt="売上アップイメージ"
+          class="w-full max-w-xs"
+          loading="lazy"
+        />
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ======================================================
+     FOOTER
+====================================================== -->
+<footer class="bg-gray-900 text-gray-400 py-12">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+
+      <!-- ロゴ -->
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 gradient-bg rounded-lg flex items-center justify-center">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+          </svg>
+        </div>
+        <span class="text-white font-bold text-lg">IeAI</span>
+      </div>
+
+      <!-- リンク -->
+      <div class="flex gap-6 text-sm">
+        <a href="#" class="hover:text-white transition">利用規約</a>
+        <a href="#" class="hover:text-white transition">プライバシーポリシー</a>
+        <a href="#" class="hover:text-white transition">お問い合わせ</a>
+      </div>
+
+      <!-- コピーライト -->
+      <div class="text-xs">© 2026 IeAI. All rights reserved.</div>
+    </div>
+  </div>
+</footer>
+
+
+<!-- ======================================================
+     SCRIPTS
+====================================================== -->
+<script>
+  function toggleFaq(btn) {
+    const content = btn.nextElementSibling;
+    const icon    = btn.querySelector('.faq-icon');
+    const isOpen  = content.classList.contains('open');
+
+    // 全て閉じる
+    document.querySelectorAll('.faq-content').forEach(el => el.classList.remove('open'));
+    document.querySelectorAll('.faq-icon').forEach(el => el.classList.remove('open'));
+
+    if (!isOpen) {
+      content.classList.add('open');
+      icon.classList.add('open');
+    }
+  }
+
+  // スムーズスクロール
+  document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    anchor.addEventListener('click', function (e) {
+      const target = document.querySelector(this.getAttribute('href'));
+      if (target) {
+        e.preventDefault();
+        const offset = 72; // ナビの高さ分
+        const top = target.getBoundingClientRect().top + window.pageYOffset - offset;
+        window.scrollTo({ top, behavior: 'smooth' });
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
