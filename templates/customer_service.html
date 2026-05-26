@@ -186,15 +186,17 @@
       <div class="form-grid">
         <div class="form-group">
           <label>カードNo</label>
-          <input type="text" id="f-card-no" placeholder="例：2401001">
+          <input type="text" id="f-card-no" placeholder="例：2401001" autocomplete="off">
         </div>
         <div class="form-group">
           <label>日付 <span style="color:#ef4444;">*</span></label>
           <input type="date" id="f-service-date">
         </div>
         <div class="form-group">
-          <label>反響媒体</label>
-          <input type="text" id="f-echo-media" placeholder="例：SUUMO、HOME'S">
+          <label style="display:flex;align-items:center;gap:6px;">反響媒体
+            <button type="button" onclick="openDropdownMgr('cs_media','f-echo-media')" style="font-size:11px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;padding:1px 6px;cursor:pointer;color:#374151;">⚙ 管理</button>
+          </label>
+          <select id="f-echo-media"><option value="">― 選択 ―</option></select>
         </div>
         <div class="form-group">
           <label>担当者</label>
@@ -210,19 +212,14 @@
           <input type="text" id="f-customer-name" placeholder="例：田中 太郎">
         </div>
         <div class="form-group">
-          <label>対応種別</label>
-          <select id="f-service-type">
-            <option value="来店">来店</option>
-            <option value="電話">電話</option>
-            <option value="メール">メール</option>
-            <option value="オンライン">オンライン</option>
-            <option value="LINE">LINE</option>
-            <option value="その他">その他</option>
-          </select>
+          <label style="display:flex;align-items:center;gap:6px;">対応種別
+            <button type="button" onclick="openDropdownMgr('cs_service_type','f-service-type')" style="font-size:11px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;padding:1px 6px;cursor:pointer;color:#374151;">⚙ 管理</button>
+          </label>
+          <select id="f-service-type"><option value="">― 選択 ―</option></select>
         </div>
         <div class="form-group">
           <label>来店数</label>
-          <input type="number" id="f-visit-count" min="0" value="0">
+          <input type="number" id="f-visit-count" min="0" placeholder="0">
         </div>
         <div class="form-group">
           <label>状況</label>
@@ -255,8 +252,65 @@ let currentMonth = {{ month }};
 let records = [];
 
 const STAFF_OPTIONS = [['','― 未選択 ―'], {% for s in staff_list %}[{{ s.id }}, '{{ s.name }}'],{% endfor %}];
-const SERVICE_TYPES = ['来店','電話','メール','オンライン','LINE','その他'];
+let SERVICE_TYPES = ['来店','電話','メール','オンライン','LINE','その他'];
 const STATUS_LIST   = ['追客中','申込','他決','キャンセル'];
+
+/* ── ドロップダウン管理 ──────────────────── */
+let CS_MEDIA_PAIRS   = [];
+let CS_STYPE_PAIRS   = [];
+let _dgrCategory = '', _dgrSelectId = '', _dgrOpts = [];
+
+async function loadDropdownOpts() {
+  const [r1, r2] = await Promise.all([
+    fetch('/api/dropdown/cs_media').then(r => r.json()),
+    fetch('/api/dropdown/cs_service_type').then(r => r.json()),
+  ]);
+  CS_MEDIA_PAIRS  = r1.map(o => [o.value, o.value]);
+  CS_STYPE_PAIRS  = r2.map(o => [o.value, o.value]);
+  SERVICE_TYPES   = r2.map(o => o.value);
+  fillSelect('f-echo-media',   r1);
+  fillSelect('f-service-type', r2);
+}
+function fillSelect(id, opts) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">― 選択 ―</option>' +
+    opts.map(o => `<option value="${o.value}">${o.value}</option>`).join('');
+  if (cur) sel.value = cur;
+}
+function openDropdownMgr(cat, selId) {
+  _dgrCategory = cat; _dgrSelectId = selId;
+  const titles = { cs_media:'反響媒体の選択肢管理', cs_service_type:'対応種別の選択肢管理' };
+  document.getElementById('dgr-title').textContent = titles[cat] || '選択肢の管理';
+  renderDgrList();
+  document.getElementById('dgr-modal').style.display = 'flex';
+}
+function closeDgr() { document.getElementById('dgr-modal').style.display = 'none'; }
+async function renderDgrList() {
+  const res = await fetch(`/api/dropdown/${_dgrCategory}`);
+  _dgrOpts = await res.json();
+  document.getElementById('dgr-list').innerHTML = _dgrOpts.length
+    ? _dgrOpts.map(o => `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f3f4f6;">
+        <span style="font-size:14px;">${o.value}</span>
+        <button onclick="delDgrOpt(${o.id})" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:12px;">削除</button>
+      </div>`).join('')
+    : '<p style="color:#9ca3af;font-size:13px;">選択肢がありません</p>';
+}
+async function addDgrOpt() {
+  const val = document.getElementById('dgr-input').value.trim();
+  if (!val) return;
+  await fetch(`/api/dropdown/${_dgrCategory}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value:val}) });
+  document.getElementById('dgr-input').value = '';
+  await renderDgrList();
+  await loadDropdownOpts();
+}
+async function delDgrOpt(id) {
+  if (!confirm('削除しますか？')) return;
+  await fetch(`/api/dropdown/item/${id}`, { method:'DELETE' });
+  await renderDgrList();
+  await loadDropdownOpts();
+}
 
 const STATUS_BADGE = {
   '申込':    'badge badge-apply',
@@ -526,7 +580,30 @@ async function deleteRecord(id) {
 
 document.addEventListener('DOMContentLoaded', () => {
   updateLabel();
+  loadDropdownOpts();
   loadRecords();
 });
 </script>
+
+<!-- ── ドロップダウン管理モーダル ── -->
+<div id="dgr-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:2000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;width:380px;max-width:95vw;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+      <h3 id="dgr-title" style="margin:0;font-size:15px;font-weight:700;">選択肢の管理</h3>
+      <button onclick="closeDgr()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+    <div style="padding:16px 20px;">
+      <div id="dgr-list" style="min-height:60px;"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <input id="dgr-input" type="text" placeholder="新しい選択肢を入力"
+          style="flex:1;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:14px;outline:none;"
+          onkeydown="if(event.key==='Enter'){addDgrOpt();}">
+        <button onclick="addDgrOpt()" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;">追加</button>
+      </div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #e5e7eb;text-align:right;">
+      <button onclick="closeDgr()" style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer;">閉じる</button>
+    </div>
+  </div>
+</div>
 {% endblock %}

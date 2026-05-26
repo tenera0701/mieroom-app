@@ -11,7 +11,6 @@ import tempfile
 from functools import wraps
 from flask import Flask, redirect, url_for, session, render_template, request, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
-from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
 import anthropic
 from datetime import datetime, date, timedelta
@@ -96,40 +95,10 @@ def inject_ui_context():
     }
 
 
-oauth = OAuth(app)
-
-google = oauth.register(
-    name="google",
-    client_id=os.getenv("GOOGLE_CLIENT_ID"),
-    client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
-    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-    client_kwargs={"scope": "openid email profile"},
-)
-
 anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 
 # ── 既存モデル ─────────────────────────────────────────────
-
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    google_id = db.Column(db.String(200), unique=True, nullable=False)
-    email = db.Column(db.String(200), nullable=False)
-    name = db.Column(db.String(200))
-    picture = db.Column(db.String(500))
-    plan = db.Column(db.String(50), default="free")
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    usage_count = db.Column(db.Integer, default=0)
-
-
-class AiHistory(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    feature = db.Column(db.String(100))
-    input_data = db.Column(db.Text)
-    output_data = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
 
 # ── 幹部向け管理ツール：追加モデル ────────────────────────
 
@@ -574,6 +543,16 @@ class CustomerServiceRecord(db.Model):
     status        = db.Column(db.String(20), default='追客中')  # 追客中/申込/他決/キャンセル
     memo          = db.Column(db.Text)
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class DropdownOption(db.Model):
+    """プルダウン選択肢マスタ（テナント別・カテゴリ別）"""
+    __tablename__ = 'dropdown_option'
+    id         = db.Column(db.Integer, primary_key=True)
+    tenant_id  = db.Column(db.Integer, nullable=True)          # NULL=全テナント共通デフォルト
+    category   = db.Column(db.String(50),  nullable=False)     # echo_media / echo_method / cs_media / cs_service_type / leads_media
+    value      = db.Column(db.String(100), nullable=False)
+    sort_order = db.Column(db.Integer, default=0)
 
 
 # ── Excel関連ヘルパー ─────────────────────────────────────
@@ -1081,6 +1060,28 @@ def migrate_postgres():
         print(f"migrate_postgres error: {e}")
 
 
+_DROPDOWN_DEFAULTS = {
+    'echo_media':      ['SUUMO', "HOME'S", 'アットホーム', 'カナリー', 'Instagram', 'TikTok', '自社HP', '電話', 'SNS', '紹介', 'その他'],
+    'echo_method':     ['メール', '電話', 'LINE', 'チャット', 'その他'],
+    'cs_media':        ['SUUMO', "HOME'S", 'アットホーム', 'カナリー', 'Instagram', 'TikTok', '自社HP', '電話', 'SNS', '紹介', 'その他'],
+    'cs_service_type': ['来店', '電話', 'メール', 'オンライン', 'LINE', 'その他'],
+    'leads_media':     ['SUUMO', "HOME'S", 'アットホーム', 'カナリー', 'Instagram', 'TikTok', '自社HP', '電話', 'SNS', '紹介', 'その他'],
+}
+
+
+def seed_dropdown_defaults():
+    """各カテゴリにデフォルト選択肢が無い場合のみ挿入"""
+    try:
+        for cat, values in _DROPDOWN_DEFAULTS.items():
+            if DropdownOption.query.filter_by(category=cat, tenant_id=None).count() == 0:
+                for i, v in enumerate(values):
+                    db.session.add(DropdownOption(tenant_id=None, category=cat, value=v, sort_order=i))
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"seed_dropdown_defaults error: {e}")
+
+
 def migrate_tenant_data():
     """既存データをデフォルトテナントに割り当てる（初回マイグレーション用）"""
     try:
@@ -1153,6 +1154,7 @@ with app.app_context():
     ensure_owner_account()
     ensure_super_admin()
     migrate_tenant_data()
+    seed_dropdown_defaults()
     # 無効なPLCustomItemテンプレートをクリーンアップ（数字のみの名前など）
     try:
         invalid_items = PLCustomItem.query.filter(
@@ -1259,12 +1261,6 @@ def is_premium_user():
 
 # ── ユーティリティ ─────────────────────────────────────────
 
-def get_current_user():
-    if "user_id" not in session:
-        return None
-    return User.query.get(session["user_id"])
-
-
 def current_ym():
     """現在の年・月をタプルで返す"""
     now = datetime.now()
@@ -1362,38 +1358,16 @@ def index():
     return redirect(url_for('app_login'))
 
 
-@app.route("/login")
-def login():
-    redirect_uri = url_for("auth_callback", _external=True)
-    return google.authorize_redirect(redirect_uri)
+@app.route("/lp")
+def lp():
+    """ランディングページ（旧IeAI名義）"""
+    return render_template("lp.html")
 
 
-@app.route("/auth/callback")
-def auth_callback():
-    token = google.authorize_access_token()
-    user_info = token.get("userinfo")
-    if not user_info:
-        return redirect(url_for("index"))
-
-    user = User.query.filter_by(google_id=user_info["sub"]).first()
-    if not user:
-        user = User(
-            google_id=user_info["sub"],
-            email=user_info["email"],
-            name=user_info.get("name", ""),
-            picture=user_info.get("picture", ""),
-        )
-        db.session.add(user)
-        db.session.commit()
-
-    session["user_id"] = user.id
-    return redirect(url_for("dashboard"))
-
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("index"))
+@app.route("/roompick-lp")
+def roompick_lp():
+    """ルームピック ランディングページ"""
+    return render_template("roompick_lp.html")
 
 
 @app.route("/app-login", methods=["GET", "POST"])
@@ -1444,165 +1418,6 @@ def app_logout():
     session.pop('app_user_role', None)
     session.pop('app_username', None)
     return redirect(url_for('app_login'))
-
-
-@app.route("/dev-login")
-def dev_login():
-    """開発用：Googleログインなしでテストユーザーとしてログイン"""
-    user = User.query.filter_by(google_id="dev-test-user").first()
-    if not user:
-        user = User(
-            google_id="dev-test-user",
-            email="demo@ieai.dev",
-            name="デモユーザー",
-            picture="",
-            plan="standard",
-            usage_count=12,
-        )
-        db.session.add(user)
-        db.session.commit()
-    session["user_id"] = user.id
-    # 開発用: app_user セッションも設定する
-    owner = AppUser.query.filter_by(username='owner').first()
-    if owner:
-        session['app_user_id'] = owner.id
-        session['app_user_role'] = owner.role
-        session['app_username'] = owner.username
-    return redirect(url_for("executive_dashboard"))
-
-
-@app.route("/dashboard")
-def dashboard():
-    user = get_current_user()
-    if not user:
-        return redirect(url_for("login"))
-    history = AiHistory.query.filter_by(user_id=user.id).order_by(AiHistory.created_at.desc()).limit(5).all()
-    return render_template("dashboard.html", user=user, history=history)
-
-
-# ── 既存AI機能 ────────────────────────────────────────────
-
-@app.route("/description", methods=["GET", "POST"])
-def description():
-    user = get_current_user()
-    if not user:
-        return redirect(url_for("login"))
-    result = None
-    if request.method == "POST":
-        data = request.form
-        prompt = f"""あなたは不動産会社のプロのコピーライターです。
-以下の物件情報をもとに、購買意欲を高める魅力的な物件紹介文を作成してください。
-
-【物件情報】
-- 種別: {data.get('type', '')}
-- 所在地: {data.get('location', '')}
-- 築年数: {data.get('age', '')}年
-- 間取り: {data.get('layout', '')}
-- 専有面積: {data.get('area', '')}㎡
-- 価格: {data.get('price', '')}万円
-- 特徴・設備: {data.get('features', '')}
-
-【出力形式】
-- キャッチコピー（1文）
-- 物件紹介文（200〜300文字）
-- おすすめポイント（箇条書き3点）
-
-読者は住宅購入を検討している一般の方です。専門用語は避け、温かみのある文章でお願いします。"""
-
-        message = anthropic_client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        result = message.content[0].text
-        history = AiHistory(user_id=user.id, feature="description", input_data=str(dict(data)), output_data=result)
-        db.session.add(history)
-        user.usage_count += 1
-        db.session.commit()
-
-    return render_template("description.html", user=user, result=result)
-
-
-@app.route("/inquiry", methods=["GET", "POST"])
-def inquiry():
-    user = get_current_user()
-    if not user:
-        return redirect(url_for("login"))
-    result = None
-    if request.method == "POST":
-        data = request.form
-        prompt = f"""あなたは不動産会社の丁寧なカスタマーサポート担当者です。
-以下のお客様からの問い合わせに対して、プロフェッショナルな返信メールを作成してください。
-
-【会社名】{data.get('company', '株式会社〇〇不動産')}
-【担当者名】{data.get('staff', '担当者')}
-【お客様のお問い合わせ内容】
-{data.get('inquiry', '')}
-
-【返信のポイント】
-- 丁寧で親切な文体
-- お客様の不安や疑問に寄り添う
-- 次のアクション（内見予約・電話相談など）を自然に促す
-- 署名を含める
-
-件名から本文まで完全なメール形式で作成してください。"""
-
-        message = anthropic_client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        result = message.content[0].text
-        history = AiHistory(user_id=user.id, feature="inquiry", input_data=str(dict(data)), output_data=result)
-        db.session.add(history)
-        user.usage_count += 1
-        db.session.commit()
-
-    return render_template("inquiry.html", user=user, result=result)
-
-
-@app.route("/assessment", methods=["GET", "POST"])
-def assessment():
-    user = get_current_user()
-    if not user:
-        return redirect(url_for("login"))
-    result = None
-    if request.method == "POST":
-        data = request.form
-        prompt = f"""あなたは不動産価格査定の専門家です。
-以下の物件情報をもとに、市場価格の査定レポートを作成してください。
-
-【物件情報】
-- 種別: {data.get('type', '')}
-- 所在地（市区町村まで）: {data.get('location', '')}
-- 最寄り駅・徒歩分数: {data.get('station', '')}
-- 築年数: {data.get('age', '')}年
-- 間取り: {data.get('layout', '')}
-- 専有面積 / 土地面積: {data.get('area', '')}㎡
-- 建物構造: {data.get('structure', '')}
-- リフォーム歴: {data.get('reform', '')}
-- 売主希望価格: {data.get('hope_price', '')}万円（参考）
-
-【出力形式】
-1. 査定価格レンジ（例：3,500万〜3,800万円）
-2. 査定根拠（立地・築年数・相場観などを説明）
-3. 価格アップのアドバイス（2〜3点）
-4. 売却戦略の提案
-
-※実際の査定はあくまで参考値です。正確な査定には現地調査が必要です。"""
-
-        message = anthropic_client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1500,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        result = message.content[0].text
-        history = AiHistory(user_id=user.id, feature="assessment", input_data=str(dict(data)), output_data=result)
-        db.session.add(history)
-        user.usage_count += 1
-        db.session.commit()
-
-    return render_template("assessment.html", user=user, result=result)
 
 
 # ── 幹部向け管理ツール：ページルート ─────────────────────
@@ -1781,6 +1596,57 @@ def customer_service():
                            year=year, month=month, store_id=store_id,
                            now=datetime.now())
 
+
+# ─── DropdownOption API ──────────────────────────────────────────────────
+
+def _get_tenant_id():
+    """現在ログイン中ユーザーのtenant_idを返す"""
+    uid = session.get('app_user_id')
+    if not uid:
+        return None
+    u = AppUser.query.get(uid)
+    return u.tenant_id if u else None
+
+
+@app.route("/api/dropdown/<category>", methods=["GET"])
+@login_required
+def api_dropdown_get(category):
+    """カテゴリのプルダウン選択肢を返す（テナント固有 + 共通デフォルト）"""
+    tenant_id = _get_tenant_id()
+    opts = DropdownOption.query.filter(
+        DropdownOption.category == category,
+        db.or_(DropdownOption.tenant_id == tenant_id, DropdownOption.tenant_id == None)
+    ).order_by(DropdownOption.sort_order, DropdownOption.id).all()
+    return jsonify([{'id': o.id, 'value': o.value} for o in opts])
+
+
+@app.route("/api/dropdown/<category>", methods=["POST"])
+@login_required
+def api_dropdown_add(category):
+    """選択肢を追加する"""
+    data = request.get_json() or {}
+    value = (data.get('value') or '').strip()
+    if not value:
+        return jsonify({'error': 'value required'}), 400
+    tenant_id = _get_tenant_id()
+    max_order = db.session.query(db.func.max(DropdownOption.sort_order)).filter_by(category=category).scalar() or 0
+    opt = DropdownOption(tenant_id=tenant_id, category=category, value=value, sort_order=max_order + 1)
+    db.session.add(opt)
+    db.session.commit()
+    return jsonify({'id': opt.id, 'value': opt.value})
+
+
+@app.route("/api/dropdown/item/<int:option_id>", methods=["DELETE"])
+@login_required
+def api_dropdown_delete(option_id):
+    """選択肢を削除する"""
+    opt = DropdownOption.query.get_or_404(option_id)
+    db.session.delete(opt)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+# ─────────────────────────────────────────────────────────────────────────
 
 @app.route("/api/customer-service-records", methods=["GET"])
 @login_required
