@@ -17,6 +17,11 @@
       <button onclick="nextMonth()" style="background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; color:#374151; cursor:pointer;">次月 &#8250;</button>
       <button onclick="goToday()" style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; color:#16a34a; cursor:pointer;">今月</button>
     </div>
+    <!-- 年月ジャンプ -->
+    <input type="month" id="exec-month-jump"
+      value="{{ year }}-{{ '%02d' % month }}"
+      style="border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; font-size:13px; outline:none; color:#111827;"
+      onchange="jumpMonthExec(this.value)">
     <!-- 入力ボタン -->
     <button onclick="openInputModal()" style="background:#16a34a; color:#fff; border:none; border-radius:6px; padding:8px 18px; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px;">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -471,6 +476,7 @@ function _navTo(y, m) {
 }
 function prevMonth() { _navTo(window._curYear, window._curMonth - 1); }
 function nextMonth() { _navTo(window._curYear, window._curMonth + 1); }
+function jumpMonthExec(val) { const [y,m] = val.split('-').map(Number); _navTo(y, m); }
 function goToday() {
   const n = new Date();
   _navTo(n.getFullYear(), n.getMonth() + 1);
