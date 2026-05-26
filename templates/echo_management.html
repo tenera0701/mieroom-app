@@ -74,6 +74,7 @@
       <button class="month-btn" onclick="navigate(-1)">&#8249; 前月</button>
       <span class="month-label" id="month-label"></span>
       <button class="month-btn" onclick="navigate(1)">次月 &#8250;</button>
+      <button class="month-btn" style="background:#f0fdf4;color:#16a34a;border-color:#86efac;" onclick="goToday()">今月</button>
       <input type="month" id="month-jump" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;" onchange="jumpMonth(this.value)">
       <select class="filter" id="filter-staff" onchange="loadRecords()">
         <option value="">全スタッフ</option>
@@ -243,6 +244,14 @@ function navigate(dir) {
   currentMonth += dir;
   if (currentMonth > 12) { currentMonth = 1;  currentYear++; }
   if (currentMonth < 1)  { currentMonth = 12; currentYear--; }
+  updateLabel();
+  loadRecords();
+}
+
+function goToday() {
+  const now = new Date();
+  currentYear = now.getFullYear();
+  currentMonth = now.getMonth() + 1;
   updateLabel();
   loadRecords();
 }
