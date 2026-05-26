@@ -14,31 +14,53 @@
   .btn-add  { background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 18px; font-size:13px; font-weight:700; cursor:pointer; }
   .btn-add:hover { background:var(--primary-dark); }
 
-  .summary-bar { display:flex; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
-  .summary-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px 20px; min-width:130px; }
+  .summary-bar { display:flex; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+  .summary-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:12px 18px; min-width:110px; }
   .summary-card .label { font-size:11px; font-weight:600; color:#6b7280; text-transform:uppercase; margin-bottom:4px; }
-  .summary-card .value { font-size:22px; font-weight:800; color:#111827; }
-  .summary-card .unit  { font-size:12px; color:#6b7280; margin-left:4px; }
+  .summary-card .value { font-size:20px; font-weight:800; color:#111827; }
+  .summary-card .unit  { font-size:11px; color:#6b7280; margin-left:3px; }
+  .summary-card.highlight { border-color:#86efac; background:#f0fdf4; }
+  .summary-card.highlight .value { color:#15803d; }
+
+  .media-stats { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px 18px; margin-bottom:14px; }
+  .media-stats h4 { font-size:13px; font-weight:700; color:#374151; margin:0 0 10px; }
+  .media-row { display:flex; align-items:center; gap:10px; padding:5px 0; border-bottom:1px solid #f3f4f6; font-size:12px; }
+  .media-row:last-child { border-bottom:none; }
+  .media-name { width:120px; color:#374151; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .media-bar-wrap { flex:1; background:#f3f4f6; border-radius:4px; height:8px; }
+  .media-bar-fill { height:8px; border-radius:4px; background:var(--primary); }
+  .media-nums { width:120px; text-align:right; color:#6b7280; }
 
   .table-wrap { overflow-x:auto; border-radius:10px; border:1px solid #e5e7eb; background:#fff; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
-  thead th { background:#f0fdf4; padding:10px 14px; text-align:left; font-weight:700; color:#374151;
+  thead th { background:#f0fdf4; padding:10px 12px; text-align:left; font-weight:700; color:#374151;
              border-bottom:2px solid #d1fae5; white-space:nowrap; }
   thead th.center { text-align:center; }
   tbody tr { border-bottom:1px solid #f3f4f6; }
-  tbody tr:hover { background:#f0fdf4; }
-  tbody td { padding:9px 14px; color:#111827; white-space:nowrap; }
+  tbody tr:hover { background:#fafffe; }
+  tbody td { padding:8px 12px; color:#111827; white-space:nowrap; cursor:pointer; }
   tbody td.center { text-align:center; }
+  tbody td:hover { background:#f0fdf4; }
+  tbody td.no-edit { cursor:default; }
+  tbody td.no-edit:hover { background:transparent; }
+
   .badge { display:inline-block; font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; }
-  .badge-visit  { background:#dcfce7; color:#15803d; }
-  .badge-phone  { background:#dbeafe; color:#1d4ed8; }
-  .badge-email  { background:#fef9c3; color:#92400e; }
-  .badge-online { background:#f3e8ff; color:#7c3aed; }
-  .badge-other  { background:#f3f4f6; color:#374151; }
+  .badge-visit   { background:#dcfce7; color:#15803d; }
+  .badge-phone   { background:#dbeafe; color:#1d4ed8; }
+  .badge-email   { background:#fef9c3; color:#92400e; }
+  .badge-online  { background:#f3e8ff; color:#7c3aed; }
+  .badge-other   { background:#f3f4f6; color:#374151; }
+  .badge-apply   { background:#dcfce7; color:#15803d; }
+  .badge-other-d { background:#f3f4f6; color:#6b7280; }
+  .badge-cancel  { background:#fee2e2; color:#b91c1c; }
+  .badge-follow  { background:#dbeafe; color:#1d4ed8; }
+
   .btn-sm  { padding:4px 10px; font-size:11px; border:1px solid #d1d5db; border-radius:4px; background:#fff; cursor:pointer; }
-  .btn-sm:hover { background:#f3f4f6; }
   .btn-del { border-color:#fca5a5; color:#ef4444; }
   .btn-del:hover { background:#fee2e2; }
+
+  .edit-input { width:100%; min-width:70px; border:1px solid #16a34a; border-radius:4px;
+                padding:2px 5px; font-size:12px; box-sizing:border-box; }
 
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center; }
   .modal-overlay.active { display:flex; }
@@ -64,16 +86,17 @@
   .alert-success { background:var(--primary-light); color:var(--primary-dark); border:1px solid #86efac; }
   .alert-error   { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
   .empty-row td  { text-align:center; color:#9ca3af; padding:40px; }
+  .hint { font-size:11px; color:#9ca3af; margin-top:4px; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div style="max-width:1200px; margin:0 auto;">
+<div style="max-width:1300px; margin:0 auto;">
 
   <div class="page-header">
     <div>
       <h1 class="page-title">接客管理表</h1>
-      <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">来店・電話・メール等の接客記録を管理します</p>
+      <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">セルをクリックして直接編集できます</p>
     </div>
     <div class="ctrl-bar">
       <button class="month-btn" onclick="navigate(-1)">&#8249; 前月</button>
@@ -93,31 +116,37 @@
   <div id="alert-msg" class="alert"></div>
 
   <!-- サマリーカード -->
-  <div class="summary-bar">
+  <div class="summary-bar" id="summary-bar">
     <div class="summary-card">
       <div class="label">総接客数</div>
       <div class="value" id="sum-total">0<span class="unit">件</span></div>
     </div>
-    <div class="summary-card">
-      <div class="label">来店</div>
-      <div class="value" id="sum-visit">0<span class="unit">件</span></div>
+    <div class="summary-card highlight">
+      <div class="label">申込数</div>
+      <div class="value" id="sum-apply">0<span class="unit">件</span></div>
+    </div>
+    <div class="summary-card highlight">
+      <div class="label">申込率</div>
+      <div class="value" id="sum-apply-rate">0<span class="unit">%</span></div>
     </div>
     <div class="summary-card">
-      <div class="label">電話</div>
-      <div class="value" id="sum-phone">0<span class="unit">件</span></div>
+      <div class="label">他決</div>
+      <div class="value" id="sum-other">0<span class="unit">件</span></div>
     </div>
     <div class="summary-card">
-      <div class="label">メール</div>
-      <div class="value" id="sum-email">0<span class="unit">件</span></div>
+      <div class="label">キャンセル</div>
+      <div class="value" id="sum-cancel">0<span class="unit">件</span></div>
     </div>
     <div class="summary-card">
-      <div class="label">オンライン</div>
-      <div class="value" id="sum-online">0<span class="unit">件</span></div>
+      <div class="label">追客中</div>
+      <div class="value" id="sum-follow">0<span class="unit">件</span></div>
     </div>
-    <div class="summary-card">
-      <div class="label">来店合計数</div>
-      <div class="value" id="sum-visit-count">0<span class="unit">回</span></div>
-    </div>
+  </div>
+
+  <!-- 媒体別申込率 -->
+  <div class="media-stats" id="media-stats" style="display:none;">
+    <h4>📊 媒体別 申込率</h4>
+    <div id="media-rows"></div>
   </div>
 
   <div class="table-wrap">
@@ -131,26 +160,27 @@
           <th>お客様名</th>
           <th class="center">対応</th>
           <th class="center">来店数</th>
+          <th class="center">状況</th>
           <th>メモ</th>
-          <th class="center">操作</th>
+          <th class="center no-edit">操作</th>
         </tr>
       </thead>
       <tbody id="cs-tbody">
-        <tr class="empty-row"><td colspan="9">読み込み中...</td></tr>
+        <tr class="empty-row"><td colspan="10">読み込み中...</td></tr>
       </tbody>
     </table>
   </div>
+  <p class="hint" style="margin-top:6px;">💡 各セルをクリックすると直接編集できます</p>
 </div>
 
-<!-- 追加/編集モーダル -->
+<!-- 新規追加モーダル -->
 <div class="modal-overlay" id="record-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3 id="modal-title">接客記録追加</h3>
+      <h3>接客記録追加</h3>
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body">
-      <input type="hidden" id="edit-id">
       <div class="form-grid">
         <div class="form-group">
           <label>カードNo</label>
@@ -162,7 +192,7 @@
         </div>
         <div class="form-group">
           <label>反響媒体</label>
-          <input type="text" id="f-echo-media" placeholder="例：SUUMO、HOME'S、直接来店">
+          <input type="text" id="f-echo-media" placeholder="例：SUUMO、HOME'S">
         </div>
         <div class="form-group">
           <label>担当者</label>
@@ -192,6 +222,15 @@
           <label>来店数</label>
           <input type="number" id="f-visit-count" min="0" value="0">
         </div>
+        <div class="form-group">
+          <label>状況</label>
+          <select id="f-status">
+            <option value="追客中">追客中</option>
+            <option value="申込">申込</option>
+            <option value="他決">他決</option>
+            <option value="キャンセル">キャンセル</option>
+          </select>
+        </div>
         <div class="form-group form-full">
           <label>メモ</label>
           <textarea id="f-memo" rows="2" placeholder="備考・特記事項"></textarea>
@@ -213,12 +252,22 @@ let currentYear  = {{ year }};
 let currentMonth = {{ month }};
 let records = [];
 
+const STAFF_OPTIONS = [['','― 未選択 ―'], {% for s in staff_list %}[{{ s.id }}, '{{ s.name }}'],{% endfor %}];
+const SERVICE_TYPES = ['来店','電話','メール','オンライン','LINE','その他'];
+const STATUS_LIST   = ['追客中','申込','他決','キャンセル'];
+
+const STATUS_BADGE = {
+  '申込':    'badge badge-apply',
+  '他決':    'badge badge-other-d',
+  'キャンセル': 'badge badge-cancel',
+  '追客中':  'badge badge-follow',
+};
 const SERVICE_BADGE = {
-  '来店':    'badge-visit',
-  '電話':    'badge-phone',
-  'メール':  'badge-email',
-  'オンライン': 'badge-online',
-  'LINE':    'badge-online',
+  '来店':      'badge badge-visit',
+  '電話':      'badge badge-phone',
+  'メール':    'badge badge-email',
+  'オンライン':'badge badge-online',
+  'LINE':      'badge badge-online',
 };
 
 function showAlert(msg, type='success') {
@@ -263,73 +312,157 @@ async function loadRecords() {
 }
 
 function updateSummary() {
-  const total = records.length;
-  const byType = t => records.filter(r => r.service_type === t).length;
-  const visitCount = records.reduce((s, r) => s + (r.visit_count || 0), 0);
-  document.getElementById('sum-total').innerHTML       = `${total}<span class="unit">件</span>`;
-  document.getElementById('sum-visit').innerHTML       = `${byType('来店')}<span class="unit">件</span>`;
-  document.getElementById('sum-phone').innerHTML       = `${byType('電話')}<span class="unit">件</span>`;
-  document.getElementById('sum-email').innerHTML       = `${byType('メール')}<span class="unit">件</span>`;
-  document.getElementById('sum-online').innerHTML      = `${byType('オンライン') + byType('LINE')}<span class="unit">件</span>`;
-  document.getElementById('sum-visit-count').innerHTML = `${visitCount}<span class="unit">回</span>`;
-}
+  const total  = records.length;
+  const apply  = records.filter(r => r.status === '申込').length;
+  const other  = records.filter(r => r.status === '他決').length;
+  const cancel = records.filter(r => r.status === 'キャンセル').length;
+  const follow = records.filter(r => !r.status || r.status === '追客中').length;
+  const rate   = total ? Math.round(apply / total * 100) : 0;
 
-function renderTable() {
-  const tbody = document.getElementById('cs-tbody');
-  if (!records.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">データがありません</td></tr>';
-    return;
+  document.getElementById('sum-total').innerHTML      = `${total}<span class="unit">件</span>`;
+  document.getElementById('sum-apply').innerHTML      = `${apply}<span class="unit">件</span>`;
+  document.getElementById('sum-apply-rate').innerHTML = `${rate}<span class="unit">%</span>`;
+  document.getElementById('sum-other').innerHTML      = `${other}<span class="unit">件</span>`;
+  document.getElementById('sum-cancel').innerHTML     = `${cancel}<span class="unit">件</span>`;
+  document.getElementById('sum-follow').innerHTML     = `${follow}<span class="unit">件</span>`;
+
+  // 媒体別集計
+  const mediaMap = {};
+  records.forEach(r => {
+    const m = r.echo_media || '不明';
+    if (!mediaMap[m]) mediaMap[m] = { total:0, apply:0 };
+    mediaMap[m].total++;
+    if (r.status === '申込') mediaMap[m].apply++;
+  });
+  const mediaEntries = Object.entries(mediaMap).sort((a,b) => b[1].total - a[1].total);
+  const statsEl = document.getElementById('media-stats');
+  const rowsEl  = document.getElementById('media-rows');
+  if (mediaEntries.length > 1) {
+    const maxTotal = Math.max(...mediaEntries.map(([,v]) => v.total));
+    rowsEl.innerHTML = mediaEntries.map(([name, v]) => {
+      const rate = v.total ? Math.round(v.apply / v.total * 100) : 0;
+      const w = Math.round(v.total / maxTotal * 100);
+      return `<div class="media-row">
+        <div class="media-name" title="${escHtml(name)}">${escHtml(name)}</div>
+        <div class="media-bar-wrap"><div class="media-bar-fill" style="width:${w}%"></div></div>
+        <div class="media-nums">接客${v.total}件 ／ 申込${v.apply}件 ／ <strong>${rate}%</strong></div>
+      </div>`;
+    }).join('');
+    statsEl.style.display = '';
+  } else {
+    statsEl.style.display = 'none';
   }
-  tbody.innerHTML = records.map(r => {
-    const badgeCls = SERVICE_BADGE[r.service_type] || 'badge-other';
-    return `<tr>
-      <td>${escHtml(r.card_no) || '—'}</td>
-      <td>${r.service_date || '—'}</td>
-      <td>${escHtml(r.echo_media) || '—'}</td>
-      <td>${escHtml(r.staff_name) || '—'}</td>
-      <td>${escHtml(r.customer_name) || '—'}</td>
-      <td class="center"><span class="badge ${badgeCls}">${escHtml(r.service_type)}</span></td>
-      <td class="center">${r.visit_count || 0}</td>
-      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(r.memo)}">${escHtml(r.memo) || ''}</td>
-      <td class="center" style="white-space:nowrap;">
-        <button class="btn-sm" onclick="openEditModal(${r.id})">編集</button>
-        <button class="btn-sm btn-del" onclick="deleteRecord(${r.id})" style="margin-left:4px;">削除</button>
-      </td>
-    </tr>`;
-  }).join('');
 }
 
 function escHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+/* ── インライン編集 ── */
+async function patchRecord(id, field, value) {
+  try {
+    const res = await fetch(`/api/customer-service-records/${id}`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({[field]: value})
+    });
+    if (!res.ok) throw new Error();
+    const rec = records.find(r => r.id === id);
+    if (rec) rec[field] = value;
+    updateSummary();
+  } catch(e) {
+    showAlert('保存に失敗しました', 'error');
+    loadRecords();
+  }
+}
+
+function editCell(td, id, field, type, curVal, options) {
+  if (td.querySelector('input,select')) return;
+  const prev = td.innerHTML;
+  let el;
+
+  if (type === 'select') {
+    el = document.createElement('select');
+    el.className = 'edit-input';
+    (options || []).forEach(([v, l]) => {
+      const o = new Option(l || v, v);
+      if (v === curVal) o.selected = true;
+      el.appendChild(o);
+    });
+    td.innerHTML = '';
+    td.appendChild(el);
+    el.focus();
+    el.addEventListener('change', async () => {
+      const val = el.value;
+      td.innerHTML = prev; // restore optimistically
+      await patchRecord(id, field, val);
+      renderTable();
+    });
+    el.addEventListener('blur', () => { if (td.querySelector('select')) renderTable(); });
+  } else {
+    el = document.createElement('input');
+    el.type = type;
+    el.value = curVal || '';
+    el.className = 'edit-input';
+    td.innerHTML = '';
+    td.appendChild(el);
+    el.focus();
+    if (type === 'text') el.select();
+
+    const save = async () => {
+      const val = el.value;
+      await patchRecord(id, field, val);
+      renderTable();
+    };
+    el.addEventListener('blur', save);
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') el.blur();
+      if (e.key === 'Escape') { td.innerHTML = prev; }
+    });
+  }
+}
+
+function staffName(sid) {
+  const s = STAFF_OPTIONS.find(([id]) => String(id) === String(sid));
+  return s ? s[1] : '―';
+}
+
+function renderTable() {
+  const tbody = document.getElementById('cs-tbody');
+  if (!records.length) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="10">データがありません</td></tr>';
+    return;
+  }
+  tbody.innerHTML = records.map(r => {
+    const svcBadge = SERVICE_BADGE[r.service_type] || 'badge badge-other';
+    const stsBadge = STATUS_BADGE[r.status] || 'badge badge-follow';
+    return `<tr>
+      <td onclick="editCell(this,${r.id},'card_no','text','${escHtml(r.card_no)}')">${escHtml(r.card_no)||'―'}</td>
+      <td onclick="editCell(this,${r.id},'service_date','date','${r.service_date||''}')">${r.service_date||'―'}</td>
+      <td onclick="editCell(this,${r.id},'echo_media','text','${escHtml(r.echo_media)}')">${escHtml(r.echo_media)||'―'}</td>
+      <td onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${escHtml(staffName(r.staff_id))}</td>
+      <td onclick="editCell(this,${r.id},'customer_name','text','${escHtml(r.customer_name)}')">${escHtml(r.customer_name)||'―'}</td>
+      <td class="center" onclick="editCell(this,${r.id},'service_type','select','${r.service_type||''}',SERVICE_TYPES.map(v=>[v,v]))">
+        <span class="${svcBadge}">${escHtml(r.service_type)||'―'}</span></td>
+      <td class="center" onclick="editCell(this,${r.id},'visit_count','number','${r.visit_count||0}')">${r.visit_count||0}</td>
+      <td class="center" onclick="editCell(this,${r.id},'status','select','${r.status||'追客中'}',STATUS_LIST.map(v=>[v,v]))">
+        <span class="${stsBadge}">${escHtml(r.status||'追客中')}</span></td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(r.memo)}"
+          onclick="editCell(this,${r.id},'memo','text','${escHtml(r.memo)}')">${escHtml(r.memo)||''}</td>
+      <td class="center no-edit" style="white-space:nowrap;">
+        <button class="btn-sm btn-del" onclick="deleteRecord(${r.id})">削除</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
 function openModal() {
-  document.getElementById('edit-id').value = '';
-  document.getElementById('modal-title').textContent = '接客記録追加';
   clearForm();
   document.getElementById('record-modal').classList.add('active');
 }
-
-function openEditModal(id) {
-  const r = records.find(x => x.id === id);
-  if (!r) return;
-  document.getElementById('edit-id').value = id;
-  document.getElementById('modal-title').textContent = '接客記録編集';
-  document.getElementById('f-card-no').value      = r.card_no || '';
-  document.getElementById('f-service-date').value = r.service_date || '';
-  document.getElementById('f-echo-media').value   = r.echo_media || '';
-  document.getElementById('f-staff').value        = r.staff_id || '';
-  document.getElementById('f-customer-name').value= r.customer_name || '';
-  document.getElementById('f-service-type').value = r.service_type || '来店';
-  document.getElementById('f-visit-count').value  = r.visit_count || 0;
-  document.getElementById('f-memo').value         = r.memo || '';
-  document.getElementById('record-modal').classList.add('active');
-}
-
 function closeModal() {
   document.getElementById('record-modal').classList.remove('active');
 }
-
 function clearForm() {
   document.getElementById('f-card-no').value       = '';
   document.getElementById('f-service-date').value  = '';
@@ -338,14 +471,13 @@ function clearForm() {
   document.getElementById('f-customer-name').value = '';
   document.getElementById('f-service-type').value  = '来店';
   document.getElementById('f-visit-count').value   = '0';
+  document.getElementById('f-status').value        = '追客中';
   document.getElementById('f-memo').value          = '';
 }
 
 async function saveRecord() {
-  const editId = document.getElementById('edit-id').value;
   const serviceDate = document.getElementById('f-service-date').value;
   if (!serviceDate) { showAlert('日付は必須です', 'error'); return; }
-
   const payload = {
     store_id:      STORE_ID,
     card_no:       document.getElementById('f-card-no').value.trim(),
@@ -355,16 +487,16 @@ async function saveRecord() {
     customer_name: document.getElementById('f-customer-name').value.trim(),
     service_type:  document.getElementById('f-service-type').value,
     visit_count:   parseInt(document.getElementById('f-visit-count').value) || 0,
+    status:        document.getElementById('f-status').value,
     memo:          document.getElementById('f-memo').value.trim(),
   };
-
-  const url    = editId ? `/api/customer-service-records/${editId}` : '/api/customer-service-records';
-  const method = editId ? 'PUT' : 'POST';
   try {
-    const res = await fetch(url, { method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
-    if (!res.ok) throw new Error('API error');
+    const res = await fetch('/api/customer-service-records', {
+      method: 'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error();
     closeModal();
-    showAlert(editId ? '更新しました' : '追加しました');
+    showAlert('追加しました');
     await loadRecords();
   } catch(e) {
     showAlert('保存に失敗しました', 'error');
@@ -374,8 +506,7 @@ async function saveRecord() {
 async function deleteRecord(id) {
   if (!confirm('このレコードを削除しますか？')) return;
   try {
-    const res = await fetch(`/api/customer-service-records/${id}`, { method:'DELETE' });
-    if (!res.ok) throw new Error('error');
+    await fetch(`/api/customer-service-records/${id}`, { method:'DELETE' });
     showAlert('削除しました');
     await loadRecords();
   } catch(e) {

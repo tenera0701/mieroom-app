@@ -571,6 +571,7 @@ class CustomerServiceRecord(db.Model):
     customer_name = db.Column(db.String(100))   # お客様名
     service_type  = db.Column(db.String(50))    # 対応種別
     visit_count   = db.Column(db.Integer, default=0)  # 来店数
+    status        = db.Column(db.String(20), default='追客中')  # 追客中/申込/他決/キャンセル
     memo          = db.Column(db.Text)
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -1024,6 +1025,16 @@ def migrate_db():
             except Exception as e:
                 print(f"  Skip application_record.{col_name}: {e}")
 
+    # customer_service_record の status カラムを追加
+    cursor.execute("PRAGMA table_info(customer_service_record)")
+    csr_cols = {r[1] for r in cursor.fetchall()}
+    if 'status' not in csr_cols:
+        try:
+            cursor.execute("ALTER TABLE customer_service_record ADD COLUMN status VARCHAR(20) DEFAULT '追客中'")
+            print("  Added column customer_service_record.status")
+        except Exception as e:
+            print(f"  Skip customer_service_record.status: {e}")
+
     # daily_report の store_id カラムを追加
     cursor.execute("PRAGMA table_info(daily_report)")
     dr_cols = {r[1] for r in cursor.fetchall()}
@@ -1054,8 +1065,9 @@ def migrate_postgres():
                 ("app_user",           "can_view_all_staff",      "BOOLEAN DEFAULT TRUE"),
                 ("app_user",           "can_edit_kpi",            "BOOLEAN DEFAULT TRUE"),
                 ("app_user",           "can_manage_uncollected",  "BOOLEAN DEFAULT TRUE"),
-                ("application_record", "option_amount",           "FLOAT DEFAULT 0"),
-                ("daily_report",       "store_id",                "INTEGER"),
+                ("application_record",        "option_amount", "FLOAT DEFAULT 0"),
+                ("daily_report",             "store_id",     "INTEGER"),
+                ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
             ]
             for tbl, col, typedef in new_cols:
                 try:
@@ -1801,6 +1813,7 @@ def api_cs_records_list():
         'customer_name': r.customer_name or '',
         'service_type': r.service_type or '',
         'visit_count': r.visit_count or 0,
+        'status': r.status or '追客中',
         'memo': r.memo or '',
     } for r in records])
 
@@ -1830,6 +1843,7 @@ def api_cs_records_add():
         customer_name=data.get('customer_name', ''),
         service_type=data.get('service_type', ''),
         visit_count=int(data.get('visit_count') or 0),
+        status=data.get('status', '追客中'),
         memo=data.get('memo', ''),
     )
     db.session.add(r)
@@ -1855,6 +1869,7 @@ def api_cs_records_update(rid):
     r.customer_name = data.get('customer_name', r.customer_name)
     r.service_type = data.get('service_type', r.service_type)
     r.visit_count  = int(data.get('visit_count') or 0)
+    r.status       = data.get('status', r.status)
     r.memo         = data.get('memo', r.memo)
     db.session.commit()
     return jsonify({'status': 'ok'})
