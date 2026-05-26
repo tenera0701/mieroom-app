@@ -488,40 +488,36 @@
 {% block content %}
 <div style="width:100%; padding:0 4px;">
 
-  <!-- ページヘッダー Row1: タイトル + アクションボタン -->
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+  <!-- ページヘッダー -->
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
     <div>
       <h1 style="font-size:22px; font-weight:800; color:#111827; margin:0;">営業管理</h1>
       <p style="font-size:13px; color:var(--text-muted); margin:4px 0 0;">スタッフ別KPI・月次推移・売上分析</p>
     </div>
-    <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+      <!-- 月ナビゲーション -->
+      <div class="month-nav">
+        <button class="month-nav-btn" onclick="navigateSalesMonth(-1)">&#8249; 前月</button>
+        <div class="month-nav-current" id="sales-month-label"></div>
+        <button class="month-nav-btn" onclick="navigateSalesMonth(1)">次月 &#8250;</button>
+        <button class="month-nav-btn" style="background:#f0fdf4;color:var(--primary);border-color:#86efac;" onclick="navigateSalesToday()">今月</button>
+      </div>
+      <!-- 年月ジャンプ -->
+      <input type="month" id="sales-month-jump"
+        style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;outline:none;color:#111827;"
+        onchange="jumpSalesMonth(this.value)">
+      <!-- スタッフフィルター -->
+      <select id="filter-staff"
+        style="border:1px solid #d1d5db;border-radius:6px;padding:7px 10px;font-size:13px;color:#111827;outline:none;"
+        onchange="syncStaffFilter()">
+        <option value="">全スタッフ</option>
+      </select>
       <button onclick="openSalesImportModal()" style="padding:8px 16px;font-size:13px;font-weight:700;background:#84cc16;color:#fff;border:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background 0.15s;" onmouseover="this.style.background='#65a30d'" onmouseout="this.style.background='#84cc16'">
         <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
         Excelインポート
       </button>
       <button class="btn-kpi-input" onclick="openKpiModal()">&#43; 新規入力</button>
     </div>
-  </div>
-
-  <!-- ページヘッダー Row2: フィルターバー -->
-  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:16px; background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px 16px;">
-    <!-- 月ナビゲーション -->
-    <div class="month-nav">
-      <button class="month-nav-btn" onclick="navigateSalesMonth(-1)">&#8249; 前月</button>
-      <div class="month-nav-current" id="sales-month-label"></div>
-      <button class="month-nav-btn" onclick="navigateSalesMonth(1)">次月 &#8250;</button>
-      <button class="month-nav-btn" style="background:#f0fdf4;color:var(--primary);border-color:#86efac;" onclick="navigateSalesToday()">今月</button>
-    </div>
-    <!-- 年月ジャンプ -->
-    <input type="month" id="sales-month-jump"
-      style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;outline:none;color:#111827;"
-      onchange="jumpSalesMonth(this.value)">
-    <!-- スタッフフィルター -->
-    <select id="filter-staff"
-      style="border:1px solid #d1d5db;border-radius:6px;padding:7px 10px;font-size:13px;color:#111827;outline:none;"
-      onchange="syncStaffFilter()">
-      <option value="">全スタッフ</option>
-    </select>
   </div>
 
   <!-- アラート -->
