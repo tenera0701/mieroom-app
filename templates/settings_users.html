@@ -9,7 +9,7 @@
     <p class="text-sm text-gray-500 mt-0.5">ログインユーザーの作成・編集・権限設定</p>
   </div>
   <button onclick="openCreateModal()"
-    class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+    class="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
     </svg>
@@ -18,10 +18,10 @@
 </div>
 
 <!-- ユーザー一覧 -->
-<div class="bg-white rounded-2xl shadow-sm border border-green-100 overflow-hidden">
+<div class="bg-white rounded-2xl shadow-sm border border-teal-100 overflow-hidden">
   <table class="w-full text-sm">
     <thead>
-      <tr class="bg-green-50 border-b border-green-100 text-xs text-green-700 font-semibold uppercase tracking-wide">
+      <tr class="bg-teal-50 border-b border-teal-100 text-xs text-teal-700 font-semibold uppercase tracking-wide">
         <th class="px-4 py-3 text-left">ユーザー名</th>
         <th class="px-4 py-3 text-left">メール</th>
         <th class="px-4 py-3 text-left">ロール</th>
@@ -36,11 +36,11 @@
     </thead>
     <tbody id="user-tbody">
       {% for u in users %}
-      <tr class="border-b border-gray-50 hover:bg-green-50/30 transition" id="row-{{ u.id }}">
+      <tr class="border-b border-gray-50 hover:bg-teal-50/30 transition" id="row-{{ u.id }}">
         <td class="px-4 py-3 font-medium text-gray-900">
           {{ u.username }}
           {% if u.id == session.get('app_user_id') %}
-          <span class="ml-1 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-semibold">あなた</span>
+          <span class="ml-1 text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-semibold">あなた</span>
           {% endif %}
         </td>
         <td class="px-4 py-3 text-gray-600">{{ u.email or '—' }}</td>
@@ -61,16 +61,16 @@
           {% else %}—{% endif %}
         </td>
         <td class="px-4 py-3 text-center">
-          {% if u.can_view_accounting %}<span class="text-green-600">✓</span>{% else %}<span class="text-gray-300">—</span>{% endif %}
+          {% if u.can_view_accounting %}<span class="text-teal-600">✓</span>{% else %}<span class="text-gray-300">—</span>{% endif %}
         </td>
         <td class="px-4 py-3 text-center">
-          {% if u.can_view_all_staff %}<span class="text-green-600">✓</span>{% else %}<span class="text-gray-300">—</span>{% endif %}
+          {% if u.can_view_all_staff %}<span class="text-teal-600">✓</span>{% else %}<span class="text-gray-300">—</span>{% endif %}
         </td>
         <td class="px-4 py-3 text-center">
-          {% if u.can_edit_kpi %}<span class="text-green-600">✓</span>{% else %}<span class="text-gray-300">—</span>{% endif %}
+          {% if u.can_edit_kpi %}<span class="text-teal-600">✓</span>{% else %}<span class="text-gray-300">—</span>{% endif %}
         </td>
         <td class="px-4 py-3 text-center">
-          {% if u.can_manage_uncollected %}<span class="text-green-600">✓</span>{% else %}<span class="text-gray-300">—</span>{% endif %}
+          {% if u.can_manage_uncollected %}<span class="text-teal-600">✓</span>{% else %}<span class="text-gray-300">—</span>{% endif %}
         </td>
         <td class="px-4 py-3 text-gray-500 text-xs">
           {{ u.last_login.strftime('%Y/%m/%d %H:%M') if u.last_login else '未ログイン' }}
@@ -78,7 +78,7 @@
         <td class="px-4 py-3 text-center">
           <div class="flex items-center justify-center gap-1">
             <button onclick="openEditModal({{ u.id }}, '{{ u.username }}', '{{ u.email or '' }}', '{{ u.role }}', {{ u.staff_id or 'null' }}, {{ u.can_view_accounting|lower }}, {{ u.can_view_all_staff|lower }}, {{ u.can_edit_kpi|lower }}, {{ u.can_manage_uncollected|lower }})"
-              class="p-1.5 text-green-600 hover:bg-green-100 rounded-lg transition" title="編集">
+              class="p-1.5 text-teal-600 hover:bg-teal-100 rounded-lg transition" title="編集">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
               </svg>
@@ -110,19 +110,19 @@
     <div class="space-y-4">
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-1">ユーザー名 <span class="text-red-500">*</span></label>
-        <input id="c-username" type="text" placeholder="半角英数字" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+        <input id="c-username" type="text" placeholder="半角英数字" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
       </div>
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-1">メールアドレス</label>
-        <input id="c-email" type="email" placeholder="example@company.com" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+        <input id="c-email" type="email" placeholder="example@company.com" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
       </div>
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-1">パスワード <span class="text-red-500">*</span></label>
-        <input id="c-password" type="password" placeholder="8文字以上" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+        <input id="c-password" type="password" placeholder="8文字以上" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
       </div>
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-1">ロール</label>
-        <select id="c-role" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+        <select id="c-role" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
           <option value="staff">スタッフ（営業マン）</option>
           <option value="store_manager">店長 / マネージャー</option>
           <option value="owner">オーナー</option>
@@ -130,7 +130,7 @@
       </div>
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-1">紐付けスタッフ</label>
-        <select id="c-staff" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+        <select id="c-staff" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
           <option value="">なし</option>
           {% for s in staff_list %}
           <option value="{{ s.id }}">{{ s.name }}</option>
@@ -142,19 +142,19 @@
         <div class="text-sm font-semibold text-gray-700 mb-3">権限設定</div>
         <div class="space-y-2">
           <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" id="c-accounting" checked class="w-4 h-4 accent-green-600">
+            <input type="checkbox" id="c-accounting" checked class="w-4 h-4 accent-teal-600">
             <span class="text-sm text-gray-700">経理・PL管理を閲覧できる</span>
           </label>
           <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" id="c-allstaff" checked class="w-4 h-4 accent-green-600">
+            <input type="checkbox" id="c-allstaff" checked class="w-4 h-4 accent-teal-600">
             <span class="text-sm text-gray-700">全スタッフのデータを閲覧できる</span>
           </label>
           <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" id="c-kpi" checked class="w-4 h-4 accent-green-600">
+            <input type="checkbox" id="c-kpi" checked class="w-4 h-4 accent-teal-600">
             <span class="text-sm text-gray-700">KPI・売上データを編集できる</span>
           </label>
           <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" id="c-uncollected" checked class="w-4 h-4 accent-green-600">
+            <input type="checkbox" id="c-uncollected" checked class="w-4 h-4 accent-teal-600">
             <span class="text-sm text-gray-700">未入金管理を操作できる</span>
           </label>
         </div>
@@ -163,7 +163,7 @@
 
     <div class="flex gap-3 mt-6">
       <button onclick="closeCreateModal()" class="flex-1 border border-gray-300 text-gray-600 font-semibold text-sm py-2.5 rounded-xl hover:bg-gray-50 transition">キャンセル</button>
-      <button onclick="submitCreate()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold text-sm py-2.5 rounded-xl transition">作成する</button>
+      <button onclick="submitCreate()" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm py-2.5 rounded-xl transition">作成する</button>
     </div>
   </div>
 </div>
@@ -181,15 +181,15 @@
     <div class="space-y-4">
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-1">メールアドレス</label>
-        <input id="e-email" type="email" placeholder="example@company.com" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+        <input id="e-email" type="email" placeholder="example@company.com" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
       </div>
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-1">新しいパスワード <span class="text-gray-400 font-normal text-xs">（変更する場合のみ）</span></label>
-        <input id="e-password" type="password" placeholder="空白のままで変更しない" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+        <input id="e-password" type="password" placeholder="空白のままで変更しない" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
       </div>
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-1">ロール</label>
-        <select id="e-role" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+        <select id="e-role" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
           <option value="staff">スタッフ（営業マン）</option>
           <option value="store_manager">店長 / マネージャー</option>
           <option value="owner">オーナー</option>
@@ -197,7 +197,7 @@
       </div>
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-1">紐付けスタッフ</label>
-        <select id="e-staff" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-100">
+        <select id="e-staff" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100">
           <option value="">なし</option>
           {% for s in staff_list %}
           <option value="{{ s.id }}">{{ s.name }}</option>
@@ -209,19 +209,19 @@
         <div class="text-sm font-semibold text-gray-700 mb-3">権限設定</div>
         <div class="space-y-2">
           <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" id="e-accounting" class="w-4 h-4 accent-green-600">
+            <input type="checkbox" id="e-accounting" class="w-4 h-4 accent-teal-600">
             <span class="text-sm text-gray-700">経理・PL管理を閲覧できる</span>
           </label>
           <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" id="e-allstaff" class="w-4 h-4 accent-green-600">
+            <input type="checkbox" id="e-allstaff" class="w-4 h-4 accent-teal-600">
             <span class="text-sm text-gray-700">全スタッフのデータを閲覧できる</span>
           </label>
           <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" id="e-kpi" class="w-4 h-4 accent-green-600">
+            <input type="checkbox" id="e-kpi" class="w-4 h-4 accent-teal-600">
             <span class="text-sm text-gray-700">KPI・売上データを編集できる</span>
           </label>
           <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" id="e-uncollected" class="w-4 h-4 accent-green-600">
+            <input type="checkbox" id="e-uncollected" class="w-4 h-4 accent-teal-600">
             <span class="text-sm text-gray-700">未入金管理を操作できる</span>
           </label>
         </div>
@@ -230,7 +230,7 @@
 
     <div class="flex gap-3 mt-6">
       <button onclick="closeEditModal()" class="flex-1 border border-gray-300 text-gray-600 font-semibold text-sm py-2.5 rounded-xl hover:bg-gray-50 transition">キャンセル</button>
-      <button onclick="submitEdit()" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold text-sm py-2.5 rounded-xl transition">保存する</button>
+      <button onclick="submitEdit()" class="flex-1 bg-teal-600 hover:bg-teal-700 text-white font-semibold text-sm py-2.5 rounded-xl transition">保存する</button>
     </div>
   </div>
 </div>

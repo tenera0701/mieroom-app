@@ -6,10 +6,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   :root {
-    --primary: #16a34a;
-    --primary-dark: #15803d;
-    --primary-light: #dcfce7;
-    --primary-mid: #86efac;
+    --primary: #0D9488;
+    --primary-dark: #0F766E;
+    --primary-light: #CCFBF1;
+    --primary-mid: #5EEAD4;
     --warning: #f59e0b;
     --danger: #ef4444;
     --text-muted: #6b7280;
@@ -34,7 +34,7 @@
   .media-card[data-media="スモッカ"]::before   { background: #00a0e9; }
   .media-card[data-media="HP"]::before         { background: #6366f1; }
   .media-card[data-media="SNS"]::before        { background: linear-gradient(90deg,#f09433,#dc2743,#bc1888); }
-  .media-card[data-media="リピート"]::before   { background: #16a34a; }
+  .media-card[data-media="リピート"]::before   { background: #0D9488; }
   .media-card[data-media="紹介"]::before       { background: #8b5cf6; }
   .media-card[data-media="飛び込み"]::before   { background: #ec4899; }
   .media-card[data-media="直電話問合せ"]::before { background: #0f9d58; }
@@ -103,13 +103,13 @@
   table.stat-table tbody td:first-child {
     text-align: left; font-weight: 600; position: sticky; left: 0; background: #fff; z-index: 1;
   }
-  table.stat-table tbody tr:hover td { background: #f0fdf4; }
-  table.stat-table tbody tr:hover td:first-child { background: #f0fdf4; }
+  table.stat-table tbody tr:hover td { background: #F0FDFA; }
+  table.stat-table tbody tr:hover td:first-child { background: #F0FDFA; }
   table.stat-table tfoot td {
-    padding: 11px 12px; text-align: right; background: #f0fdf4;
-    border-top: 2px solid #86efac; font-weight: 700; color: #111827;
+    padding: 11px 12px; text-align: right; background: #F0FDFA;
+    border-top: 2px solid #5EEAD4; font-weight: 700; color: #111827;
   }
-  table.stat-table tfoot td:first-child { text-align: left; position: sticky; left: 0; background: #f0fdf4; }
+  table.stat-table tfoot td:first-child { text-align: left; position: sticky; left: 0; background: #F0FDFA; }
   .badge-cvr {
     background: var(--primary-light); color: var(--primary-dark);
     border-radius: 4px; padding: 2px 6px; font-size: 11px; font-weight: 700;
@@ -169,7 +169,7 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: none;
     animation: slideIn 0.2s ease;
   }
-  #alert-msg.success { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+  #alert-msg.success { background: #CCFBF1; color: #0F766E; border: 1px solid #5EEAD4; }
   #alert-msg.error   { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
   @keyframes slideIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
 </style>
@@ -191,7 +191,7 @@
       <button class="month-nav-btn" onclick="navigateMonth(-1)">&#8249; 前月</button>
       <span class="month-nav-current" id="month-label">---</span>
       <button class="month-nav-btn" onclick="navigateMonth(1)">次月 &#8250;</button>
-      <button class="month-nav-btn" style="background:#f0fdf4;color:var(--primary);border-color:var(--primary-mid);" onclick="goToday()">今月</button>
+      <button class="month-nav-btn" style="background:#F0FDFA;color:var(--primary);border-color:var(--primary-mid);" onclick="goToday()">今月</button>
     </div>
     <!-- 年月ジャンプ -->
     <input type="month" id="leads-month-jump"
@@ -292,7 +292,7 @@
       <input type="month" id="trend-chart-from" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;">
       <span style="color:#9ca3af;">〜</span>
       <input type="month" id="trend-chart-to" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;">
-      <button onclick="applyTrendRange()" style="padding:4px 12px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">適用</button>
+      <button onclick="applyTrendRange()" style="padding:4px 12px;background:#0D9488;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">適用</button>
       <button onclick="resetTrendRange()" style="padding:4px 10px;background:#fff;color:#6b7280;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;">リセット</button>
     </div>
   </div>
@@ -515,7 +515,7 @@ async function loadStats() {
 /* ===== 前月比バッジ ===== */
 function momBadge(pct) {
   if (pct === null || pct === undefined) return '<span style="color:#9ca3af;font-size:10px;">-</span>';
-  const color = pct > 0 ? '#16a34a' : pct < 0 ? '#ef4444' : '#6b7280';
+  const color = pct > 0 ? '#0D9488' : pct < 0 ? '#ef4444' : '#6b7280';
   const sign  = pct > 0 ? '▲' : pct < 0 ? '▼' : '';
   return `<span style="color:${color};font-size:11px;font-weight:700;">${sign}${Math.abs(pct)}%</span>`;
 }
@@ -549,12 +549,12 @@ function renderMediaCards(stats) {
     <div class="media-card" data-media="${s.media}">
       <div class="media-card-name">${s.media}</div>
       <div class="media-card-main">${fmtNum(s.inquiries)}<span style="font-size:13px;font-weight:500;color:#6b7280;">件</span>
-        ${s.mom_inq !== null && s.mom_inq !== undefined ? `<span style="font-size:11px;margin-left:4px;color:${s.mom_inq>=0?'#16a34a':'#ef4444'}">${s.mom_inq>=0?'▲':'▼'}${Math.abs(s.mom_inq)}%</span>` : ''}
+        ${s.mom_inq !== null && s.mom_inq !== undefined ? `<span style="font-size:11px;margin-left:4px;color:${s.mom_inq>=0?'#0D9488':'#ef4444'}">${s.mom_inq>=0?'▲':'▼'}${Math.abs(s.mom_inq)}%</span>` : ''}
       </div>
       <div class="media-card-sub">
         <span>来店 ${fmtNum(s.visits)}件</span>
-        <span>申込 ${fmtNum(s.applications)}件 ${s.mom_app!==null&&s.mom_app!==undefined?`<span style="color:${s.mom_app>=0?'#16a34a':'#ef4444'};font-size:10px;">${s.mom_app>=0?'▲':'▼'}${Math.abs(s.mom_app)}%</span>`:''}</span>
-        <span>見込 ${fmtYen(s.estimated_sales)} ${s.mom_est!==null&&s.mom_est!==undefined?`<span style="color:${s.mom_est>=0?'#16a34a':'#ef4444'};font-size:10px;">${s.mom_est>=0?'▲':'▼'}${Math.abs(s.mom_est)}%</span>`:''}</span>
+        <span>申込 ${fmtNum(s.applications)}件 ${s.mom_app!==null&&s.mom_app!==undefined?`<span style="color:${s.mom_app>=0?'#0D9488':'#ef4444'};font-size:10px;">${s.mom_app>=0?'▲':'▼'}${Math.abs(s.mom_app)}%</span>`:''}</span>
+        <span>見込 ${fmtYen(s.estimated_sales)} ${s.mom_est!==null&&s.mom_est!==undefined?`<span style="color:${s.mom_est>=0?'#0D9488':'#ef4444'};font-size:10px;">${s.mom_est>=0?'▲':'▼'}${Math.abs(s.mom_est)}%</span>`:''}</span>
       </div>
       <div class="media-card-badge">CVR ${cvr}%</div>
     </div>`;
@@ -673,7 +673,7 @@ function renderTrendChart(trend) {
           label: '反響数',
           data: trend.map(t => t.inquiries),
           backgroundColor: 'rgba(22,163,74,0.2)',
-          borderColor: '#16a34a',
+          borderColor: '#0D9488',
           borderWidth: 2,
           borderRadius: 4,
           yAxisID: 'y',
@@ -945,7 +945,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <input id="dgr-input" type="text" placeholder="新しい選択肢を入力"
           style="flex:1;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:14px;outline:none;"
           onkeydown="if(event.key==='Enter'){addDgrOpt();}">
-        <button onclick="addDgrOpt()" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;">追加</button>
+        <button onclick="addDgrOpt()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;">追加</button>
       </div>
     </div>
     <div style="padding:12px 20px;border-top:1px solid #e5e7eb;text-align:right;">

@@ -11,7 +11,7 @@
       <p class="text-sm text-gray-500 mt-1">契約会社の追加・編集・状態管理</p>
     </div>
     <button onclick="openCreateModal()"
-      class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+      class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
       </svg>
@@ -27,7 +27,7 @@
       </svg>
       <input id="search-input" type="text" placeholder="会社名で検索..."
         oninput="renderTenants()"
-        class="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 bg-white">
+        class="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
     </div>
   </div>
 
@@ -47,11 +47,11 @@
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">会社名 <span class="text-red-500">*</span></label>
         <input id="c-name" type="text" placeholder="例：株式会社サンプル不動産"
-          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">プラン</label>
-        <select id="c-plan" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+        <select id="c-plan" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
           <option value="standard">スタンダード</option>
           <option value="premium">プレミアム</option>
         </select>
@@ -61,17 +61,17 @@
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">オーナーユーザー名 <span class="text-red-500">*</span></label>
         <input id="c-owner-username" type="text" placeholder="例：sample_owner"
-          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">オーナーメールアドレス</label>
         <input id="c-owner-email" type="email" placeholder="例：owner@sample.co.jp"
-          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">初期パスワード <span class="text-red-500">*</span></label>
         <input id="c-owner-password" type="password" placeholder="8文字以上推奨"
-          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
       </div>
       <div id="c-error" class="text-red-500 text-sm hidden"></div>
     </div>
@@ -79,7 +79,7 @@
       <button onclick="closeCreateModal()"
         class="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">キャンセル</button>
       <button onclick="createTenant()"
-        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium">作成</button>
+        class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-medium">作成</button>
     </div>
   </div>
 </div>
@@ -95,7 +95,7 @@
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">店舗名 <span class="text-red-500">*</span></label>
         <input id="s-name" type="text" placeholder="例：渋谷店"
-          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
       </div>
       <div id="s-error" class="text-red-500 text-sm hidden"></div>
     </div>
@@ -103,7 +103,7 @@
       <button onclick="closeStoreModal()"
         class="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">キャンセル</button>
       <button onclick="addStore()"
-        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium">追加</button>
+        class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-medium">追加</button>
     </div>
   </div>
 </div>
@@ -247,12 +247,12 @@
     <div class="p-5">
       <input type="hidden" id="es-store-id">
       <input id="es-name" type="text" placeholder="店舗名"
-        class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+        class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
       <div id="es-error" class="text-red-500 text-sm mt-2 hidden"></div>
     </div>
     <div class="p-5 border-t flex justify-end gap-3">
       <button onclick="closeEditStoreModal()" class="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">キャンセル</button>
-      <button onclick="saveStoreName()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium">保存</button>
+      <button onclick="saveStoreName()" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-medium">保存</button>
     </div>
   </div>
 </div>
@@ -268,17 +268,17 @@
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">会社名</label>
         <input id="e-name" type="text"
-          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">プラン</label>
-        <select id="e-plan" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+        <select id="e-plan" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
           <option value="standard">スタンダード</option>
           <option value="premium">プレミアム</option>
         </select>
       </div>
       <div class="flex items-center gap-2">
-        <input id="e-active" type="checkbox" class="w-4 h-4 accent-green-600">
+        <input id="e-active" type="checkbox" class="w-4 h-4 accent-teal-600">
         <label class="text-sm text-gray-700">有効</label>
       </div>
       <div id="e-error" class="text-red-500 text-sm hidden"></div>
@@ -287,7 +287,7 @@
       <button onclick="closeEditModal()"
         class="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">キャンセル</button>
       <button onclick="updateTenant()"
-        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium">保存</button>
+        class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-medium">保存</button>
     </div>
   </div>
 </div>
@@ -315,8 +315,8 @@ function renderTenants() {
     <div class="bg-white rounded-xl shadow-sm border ${t.is_active ? '' : 'opacity-60'} overflow-hidden">
       <div class="p-5 flex items-start justify-between gap-4">
         <div class="flex items-start gap-4">
-          <div class="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
-            <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div class="w-12 h-12 rounded-xl bg-teal-100 flex items-center justify-center flex-shrink-0">
+            <svg class="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
             </svg>
@@ -327,7 +327,7 @@ function renderTenants() {
               <span class="text-xs px-2 py-0.5 rounded-full ${t.plan === 'premium' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}">
                 ${t.plan === 'premium' ? 'プレミアム' : 'スタンダード'}
               </span>
-              <span class="text-xs px-2 py-0.5 rounded-full ${t.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}">
+              <span class="text-xs px-2 py-0.5 rounded-full ${t.is_active ? 'bg-teal-100 text-teal-700' : 'bg-red-100 text-red-600'}">
                 ${t.is_active ? '有効' : '無効'}
               </span>
             </div>
@@ -340,11 +340,11 @@ function renderTenants() {
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">
           <button onclick="openStoresModal(${t.id}, '${escHtml(t.name)}')"
-            class="text-xs px-3 py-1.5 border border-green-500 text-green-700 rounded-lg hover:bg-green-50">
+            class="text-xs px-3 py-1.5 border border-teal-500 text-teal-700 rounded-lg hover:bg-teal-50">
             店舗管理
           </button>
           <button onclick="openStoreModal(${t.id}, '${escHtml(t.name)}')"
-            class="text-xs px-3 py-1.5 border border-green-300 text-green-600 rounded-lg hover:bg-green-50">
+            class="text-xs px-3 py-1.5 border border-teal-300 text-teal-600 rounded-lg hover:bg-teal-50">
             店舗追加
           </button>
           <button onclick="openStaffModal(${t.id}, '${escHtml(t.name)}')"
@@ -365,7 +365,7 @@ function renderTenants() {
             無効化
           </button>` : `
           <button onclick="activateTenant(${t.id})"
-            class="text-xs px-3 py-1.5 border border-green-300 text-green-600 rounded-lg hover:bg-green-50">
+            class="text-xs px-3 py-1.5 border border-teal-300 text-teal-600 rounded-lg hover:bg-teal-50">
             有効化
           </button>`}
           <button onclick="deleteTenant(${t.id}, '${escHtml(t.name)}')"
@@ -584,7 +584,7 @@ async function loadTenantAccounts() {
               <td class="px-3 py-2 font-medium text-gray-800">${escHtml(u.username)}</td>
               <td class="px-3 py-2 text-gray-500">${escHtml(u.email) || '—'}</td>
               <td class="px-3 py-2">
-                <span class="text-xs px-2 py-0.5 rounded-full ${u.role === 'owner' ? 'bg-yellow-100 text-yellow-700' : u.role === 'store_manager' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}">
+                <span class="text-xs px-2 py-0.5 rounded-full ${u.role === 'owner' ? 'bg-yellow-100 text-yellow-700' : u.role === 'store_manager' ? 'bg-blue-100 text-blue-700' : 'bg-teal-100 text-teal-700'}">
                   ${ROLE_LABELS[u.role] || u.role}
                 </span>
               </td>
@@ -723,7 +723,7 @@ async function loadTenantStores() {
               <td class="px-3 py-2 font-medium text-gray-800">${escHtml(s.name)}</td>
               <td class="px-3 py-2 text-center whitespace-nowrap">
                 <button onclick="openEditStoreModal(${s.id}, '${escHtml(s.name)}')"
-                  class="text-xs px-2 py-1 border border-green-300 text-green-700 rounded hover:bg-green-50 mr-1">
+                  class="text-xs px-2 py-1 border border-teal-300 text-teal-700 rounded hover:bg-teal-50 mr-1">
                   編集
                 </button>
                 <button onclick="deleteStore(${s.id}, '${escHtml(s.name)}')"

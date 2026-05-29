@@ -8,29 +8,29 @@
   .section-title { font-size:15px; font-weight:700; color:#111827; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
   .task-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid #f3f4f6; }
   .task-row:last-child { border-bottom:none; }
-  .task-check { width:20px; height:20px; accent-color:#16a34a; cursor:pointer; }
+  .task-check { width:20px; height:20px; accent-color:#0D9488; cursor:pointer; }
   .task-label { font-size:14px; color:#374151; flex:1; }
   .task-sub { font-size:11px; color:#9ca3af; margin-top:2px; }
-  .badge-applied { background:#dcfce7; color:#15803d; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; }
+  .badge-applied { background:#CCFBF1; color:#0F766E; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; }
   .badge-not-applied { background:#fee2e2; color:#b91c1c; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; }
   .customer-card { border:1px solid #e5e7eb; border-radius:8px; padding:12px; margin-bottom:10px; background:#fafafa; }
-  .btn-add { background:#f0fdf4; border:1px solid #86efac; color:#15803d; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; cursor:pointer; }
-  .btn-add:hover { background:#dcfce7; }
+  .btn-add { background:#F0FDFA; border:1px solid #5EEAD4; color:#0F766E; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; cursor:pointer; }
+  .btn-add:hover { background:#CCFBF1; }
   .btn-remove { background:#fff; border:1px solid #fca5a5; color:#ef4444; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer; }
-  .btn-save { background:#16a34a; color:#fff; border:none; border-radius:8px; padding:12px 32px; font-size:15px; font-weight:700; cursor:pointer; width:100%; }
-  .btn-save:hover { background:#15803d; }
+  .btn-save { background:#0D9488; color:#fff; border:none; border-radius:8px; padding:12px 32px; font-size:15px; font-weight:700; cursor:pointer; width:100%; }
+  .btn-save:hover { background:#0F766E; }
   .report-row { background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:12px 16px; margin-bottom:8px; }
   .report-row .report-meta { font-size:12px; color:#9ca3af; margin-bottom:4px; }
-  .tag-ok { display:inline-block; background:#dcfce7; color:#15803d; border-radius:4px; padding:2px 6px; font-size:11px; font-weight:600; margin-right:4px; }
+  .tag-ok { display:inline-block; background:#CCFBF1; color:#0F766E; border-radius:4px; padding:2px 6px; font-size:11px; font-weight:600; margin-right:4px; }
   .tag-no { display:inline-block; background:#fee2e2; color:#b91c1c; border-radius:4px; padding:2px 6px; font-size:11px; font-weight:600; margin-right:4px; }
   .tab-btn { padding:8px 18px; border-radius:8px 8px 0 0; font-size:14px; font-weight:600; cursor:pointer; border:1px solid #e5e7eb; border-bottom:none; background:#f9fafb; color:#6b7280; }
-  .tab-btn.active { background:#fff; color:#16a34a; border-color:#d1fae5; }
+  .tab-btn.active { background:#fff; color:#0D9488; border-color:#d1fae5; }
   textarea.rp-input { width:100%; border:1px solid #d1d5db; border-radius:8px; padding:10px 12px; font-size:14px; resize:vertical; outline:none; }
-  textarea.rp-input:focus { border-color:#16a34a; box-shadow:0 0 0 2px rgba(22,163,74,0.15); }
+  textarea.rp-input:focus { border-color:#0D9488; box-shadow:0 0 0 2px rgba(22,163,74,0.15); }
   input.rp-input { width:100%; border:1px solid #d1d5db; border-radius:8px; padding:9px 12px; font-size:14px; outline:none; }
-  input.rp-input:focus { border-color:#16a34a; box-shadow:0 0 0 2px rgba(22,163,74,0.15); }
+  input.rp-input:focus { border-color:#0D9488; box-shadow:0 0 0 2px rgba(22,163,74,0.15); }
   select.rp-select { border:1px solid #d1d5db; border-radius:8px; padding:8px 12px; font-size:14px; outline:none; }
-  select.rp-select:focus { border-color:#16a34a; }
+  select.rp-select:focus { border-color:#0D9488; }
 </style>
 {% endblock %}
 
@@ -157,7 +157,7 @@
     <div id="task-template-list" style="margin-bottom:16px;"></div>
     <div style="display:flex; gap:8px;">
       <input type="text" id="new-task-name" class="rp-input" placeholder="新しいタスク名" style="flex:1;">
-      <button onclick="addTaskTemplate()" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;">追加</button>
+      <button onclick="addTaskTemplate()" style="background:#0D9488;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;">追加</button>
     </div>
   </div>
 
@@ -181,9 +181,9 @@ function switchReportTab(tab) {
 function showAlert(msg, type='success') {
   const box = document.getElementById('alert-box');
   box.style.display = 'block';
-  box.style.background = type === 'success' ? '#dcfce7' : '#fee2e2';
-  box.style.color = type === 'success' ? '#15803d' : '#b91c1c';
-  box.style.border = `1px solid ${type === 'success' ? '#86efac' : '#fca5a5'}`;
+  box.style.background = type === 'success' ? '#CCFBF1' : '#fee2e2';
+  box.style.color = type === 'success' ? '#0F766E' : '#b91c1c';
+  box.style.border = `1px solid ${type === 'success' ? '#5EEAD4' : '#fca5a5'}`;
   box.textContent = msg;
   setTimeout(() => { box.style.display = 'none'; }, 3000);
 }
@@ -350,7 +350,7 @@ async function loadReportList() {
         ${r.customers.map(c => `<div style="font-size:13px; color:#374151; margin-left:8px; margin-bottom:4px;">
           ・${c.customer_name} ${c.applied ? '<span class="badge-applied">申込</span>' : '<span class="badge-not-applied">未申込</span>'}
           ${!c.applied && c.no_apply_reason ? `<div style="margin-left:12px; margin-top:3px;"><span style="font-size:12px; font-weight:600; color:#6b7280;">理由：</span><span style="font-size:13px; color:#374151;">${c.no_apply_reason}</span></div>` : ''}
-          ${!c.applied && c.improvement ? `<div style="margin-left:12px; margin-top:2px;"><span style="font-size:12px; font-weight:600; color:#16a34a;">改善：</span><span style="font-size:13px; color:#374151;">${c.improvement}</span></div>` : ''}
+          ${!c.applied && c.improvement ? `<div style="margin-left:12px; margin-top:2px;"><span style="font-size:12px; font-weight:600; color:#0D9488;">改善：</span><span style="font-size:13px; color:#374151;">${c.improvement}</span></div>` : ''}
         </div>`).join('')}
         ${r.tomorrow_appointments ? `<div style="font-size:12px; color:#6b7280; margin-top:6px; padding-top:6px; border-top:1px solid #f3f4f6;">📅 明日: ${r.tomorrow_appointments.replace(/\n/g,'、')}</div>` : ''}
         <button onclick="deleteReport(${r.id})"
@@ -375,9 +375,9 @@ async function loadTaskTemplates() {
   el.innerHTML = tasks.map(t => `
     <div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #f3f4f6;" id="task-item-${t.id}">
       <span id="task-label-${t.id}" style="flex:1; font-size:14px; color:#374151;">${t.task_name}</span>
-      <input id="task-edit-${t.id}" type="text" value="${t.task_name}" style="flex:1;display:none;border:1px solid #16a34a;border-radius:6px;padding:4px 8px;font-size:13px;">
-      <button onclick="startEditTask(${t.id})" id="task-edit-btn-${t.id}" style="background:#f0fdf4;border:1px solid #86efac;color:#15803d;border-radius:4px;padding:2px 8px;font-size:12px;cursor:pointer;">編集</button>
-      <button onclick="saveTaskEdit(${t.id})" id="task-save-btn-${t.id}" style="display:none;background:#16a34a;border:none;color:#fff;border-radius:4px;padding:2px 8px;font-size:12px;cursor:pointer;">保存</button>
+      <input id="task-edit-${t.id}" type="text" value="${t.task_name}" style="flex:1;display:none;border:1px solid #0D9488;border-radius:6px;padding:4px 8px;font-size:13px;">
+      <button onclick="startEditTask(${t.id})" id="task-edit-btn-${t.id}" style="background:#F0FDFA;border:1px solid #5EEAD4;color:#0F766E;border-radius:4px;padding:2px 8px;font-size:12px;cursor:pointer;">編集</button>
+      <button onclick="saveTaskEdit(${t.id})" id="task-save-btn-${t.id}" style="display:none;background:#0D9488;border:none;color:#fff;border-radius:4px;padding:2px 8px;font-size:12px;cursor:pointer;">保存</button>
       ${t.is_default
         ? '<span style="font-size:11px; color:#9ca3af; background:#f3f4f6; padding:2px 6px; border-radius:4px;">デフォルト</span>'
         : `<button onclick="deleteTaskTemplate(${t.id})" style="background:none;border:none;color:#ef4444;font-size:12px;cursor:pointer;">削除</button>`}

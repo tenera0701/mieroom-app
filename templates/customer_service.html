@@ -4,12 +4,12 @@
 
 {% block extra_head %}
 <style>
-  :root { --primary:#16a34a; --primary-dark:#15803d; --primary-light:#dcfce7; }
+  :root { --primary:#0D9488; --primary-dark:#0F766E; --primary-light:#CCFBF1; }
   .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
   .page-title  { font-size:22px; font-weight:800; color:#111827; margin:0; }
   .ctrl-bar    { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .month-btn   { background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; }
-  .month-btn:hover { background:#f0fdf4; border-color:#86efac; }
+  .month-btn:hover { background:#F0FDFA; border-color:#5EEAD4; }
   .month-label { font-size:15px; font-weight:700; color:#111827; min-width:80px; text-align:center; }
   select.filter { border:1px solid #d1d5db; border-radius:6px; padding:7px 10px; font-size:13px; }
   .btn-add  { background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 18px; font-size:13px; font-weight:700; cursor:pointer; }
@@ -20,8 +20,8 @@
   .summary-card .label { font-size:11px; font-weight:600; color:#6b7280; text-transform:uppercase; margin-bottom:4px; }
   .summary-card .value { font-size:20px; font-weight:800; color:#111827; }
   .summary-card .unit  { font-size:11px; color:#6b7280; margin-left:3px; }
-  .summary-card.highlight { border-color:#86efac; background:#f0fdf4; }
-  .summary-card.highlight .value { color:#15803d; }
+  .summary-card.highlight { border-color:#5EEAD4; background:#F0FDFA; }
+  .summary-card.highlight .value { color:#0F766E; }
 
   .media-stats { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px 18px; margin-bottom:14px; }
   .media-stats h4 { font-size:13px; font-weight:700; color:#374151; margin:0 0 10px; }
@@ -34,24 +34,24 @@
 
   .table-wrap { overflow-x:auto; border-radius:10px; border:1px solid #e5e7eb; background:#fff; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
-  thead th { background:#f0fdf4; padding:10px 12px; text-align:left; font-weight:700; color:#374151;
+  thead th { background:#F0FDFA; padding:10px 12px; text-align:left; font-weight:700; color:#374151;
              border-bottom:2px solid #d1fae5; white-space:nowrap; }
   thead th.center { text-align:center; }
   tbody tr { border-bottom:1px solid #f3f4f6; }
   tbody tr:hover { background:#fafffe; }
   tbody td { padding:8px 12px; color:#111827; white-space:nowrap; cursor:pointer; }
   tbody td.center { text-align:center; }
-  tbody td:hover { background:#f0fdf4; }
+  tbody td:hover { background:#F0FDFA; }
   tbody td.no-edit { cursor:default; }
   tbody td.no-edit:hover { background:transparent; }
 
   .badge { display:inline-block; font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; }
-  .badge-visit   { background:#dcfce7; color:#15803d; }
+  .badge-visit   { background:#CCFBF1; color:#0F766E; }
   .badge-phone   { background:#dbeafe; color:#1d4ed8; }
   .badge-email   { background:#fef9c3; color:#92400e; }
   .badge-online  { background:#f3e8ff; color:#7c3aed; }
   .badge-other   { background:#f3f4f6; color:#374151; }
-  .badge-apply   { background:#dcfce7; color:#15803d; }
+  .badge-apply   { background:#CCFBF1; color:#0F766E; }
   .badge-other-d { background:#f3f4f6; color:#6b7280; }
   .badge-cancel  { background:#fee2e2; color:#b91c1c; }
   .badge-follow  { background:#dbeafe; color:#1d4ed8; }
@@ -60,7 +60,7 @@
   .btn-del { border-color:#fca5a5; color:#ef4444; }
   .btn-del:hover { background:#fee2e2; }
 
-  .edit-input { width:100%; min-width:70px; border:1px solid #16a34a; border-radius:4px;
+  .edit-input { width:100%; min-width:70px; border:1px solid #0D9488; border-radius:4px;
                 padding:2px 5px; font-size:12px; box-sizing:border-box; }
 
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center; }
@@ -84,7 +84,7 @@
   .btn-save:hover { background:var(--primary-dark); }
   .alert { padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
   .alert.show { display:block; }
-  .alert-success { background:var(--primary-light); color:var(--primary-dark); border:1px solid #86efac; }
+  .alert-success { background:var(--primary-light); color:var(--primary-dark); border:1px solid #5EEAD4; }
   .alert-error   { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
   .empty-row td  { text-align:center; color:#9ca3af; padding:40px; }
   .hint { font-size:11px; color:#9ca3af; margin-top:4px; }
@@ -103,7 +103,7 @@
       <button class="month-btn" onclick="navigate(-1)">&#8249; 前月</button>
       <span class="month-label" id="month-label"></span>
       <button class="month-btn" onclick="navigate(1)">次月 &#8250;</button>
-      <button class="month-btn" style="background:#f0fdf4;color:#16a34a;border-color:#86efac;" onclick="goToday()">今月</button>
+      <button class="month-btn" style="background:#F0FDFA;color:#0D9488;border-color:#5EEAD4;" onclick="goToday()">今月</button>
       <input type="month" id="month-jump" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;" onchange="jumpMonth(this.value)">
       <select class="filter" id="filter-staff" onchange="loadRecords()">
         <option value="">全スタッフ</option>
@@ -602,7 +602,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <input id="dgr-input" type="text" placeholder="新しい選択肢を入力"
           style="flex:1;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:14px;outline:none;"
           onkeydown="if(event.key==='Enter'){addDgrOpt();}">
-        <button onclick="addDgrOpt()" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;">追加</button>
+        <button onclick="addDgrOpt()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;">追加</button>
       </div>
     </div>
     <div style="padding:12px 20px;border-top:1px solid #e5e7eb;text-align:right;">

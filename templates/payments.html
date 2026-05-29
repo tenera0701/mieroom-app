@@ -5,40 +5,40 @@
 {% block content %}
 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
   <div>
-    <h1 class="text-2xl font-bold text-green-900">入金管理</h1>
-    <p class="text-green-700 text-sm mt-0.5">AD収入・仲介手数料の受領状況を管理します</p>
+    <h1 class="text-2xl font-bold text-teal-900">入金管理</h1>
+    <p class="text-teal-700 text-sm mt-0.5">AD収入・仲介手数料の受領状況を管理します</p>
   </div>
 
   <!-- 月ナビゲーション -->
-  <div class="flex items-center gap-2 bg-white border border-green-200 rounded-xl px-4 py-2 shadow-sm">
-    <button onclick="changeMonth(-1)" class="p-1 rounded hover:bg-green-100 text-green-700 transition">
+  <div class="flex items-center gap-2 bg-white border border-teal-200 rounded-xl px-4 py-2 shadow-sm">
+    <button onclick="changeMonth(-1)" class="p-1 rounded hover:bg-teal-100 text-teal-700 transition">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
       </svg>
     </button>
-    <span id="month-label" class="font-bold text-green-800 text-base w-24 text-center"></span>
-    <button onclick="changeMonth(1)" class="p-1 rounded hover:bg-green-100 text-green-700 transition">
+    <span id="month-label" class="font-bold text-teal-800 text-base w-24 text-center"></span>
+    <button onclick="changeMonth(1)" class="p-1 rounded hover:bg-teal-100 text-teal-700 transition">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
       </svg>
     </button>
-    <button onclick="goToday()" class="ml-2 text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 transition">今月</button>
+    <button onclick="goToday()" class="ml-2 text-xs bg-teal-600 text-white px-3 py-1 rounded-lg hover:bg-teal-700 transition">今月</button>
   </div>
 </div>
 
 <!-- サマリーカード -->
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-  <div class="bg-white rounded-2xl border border-green-100 shadow-sm p-5 card-hover">
+  <div class="bg-white rounded-2xl border border-teal-100 shadow-sm p-5 card-hover">
     <div class="flex items-center justify-between mb-2">
       <span class="text-sm text-gray-500 font-medium">仲介手数料（予定）</span>
-      <div class="w-9 h-9 rounded-xl bg-green-100 flex items-center justify-center">
-        <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div class="w-9 h-9 rounded-xl bg-teal-100 flex items-center justify-center">
+        <svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z"/>
         </svg>
       </div>
     </div>
-    <div id="card-commission" class="text-2xl font-bold text-green-800">-</div>
+    <div id="card-commission" class="text-2xl font-bold text-teal-800">-</div>
     <div class="text-xs text-gray-400 mt-1">契約件数 × 賃料 × 手数料%</div>
   </div>
 
@@ -54,7 +54,7 @@
     </div>
     <div id="card-ad" class="text-2xl font-bold text-blue-700">-</div>
     <div class="flex gap-3 mt-1 text-xs">
-      <span class="text-green-600">受領済: <span id="card-ad-received">-</span></span>
+      <span class="text-teal-600">受領済: <span id="card-ad-received">-</span></span>
       <span class="text-red-500">未収: <span id="card-ad-unreceived">-</span></span>
     </div>
   </div>
@@ -77,23 +77,23 @@
 <!-- 入金状況グラフ + テーブル -->
 <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 mb-6">
   <!-- グラフ -->
-  <div class="bg-white rounded-2xl border border-green-100 shadow-sm p-5">
-    <h3 class="font-bold text-green-800 mb-3 text-sm">月次AD入金推移（6ヶ月）</h3>
+  <div class="bg-white rounded-2xl border border-teal-100 shadow-sm p-5">
+    <h3 class="font-bold text-teal-800 mb-3 text-sm">月次AD入金推移（6ヶ月）</h3>
     <div style="height: 220px;">
       <canvas id="payment-chart"></canvas>
     </div>
   </div>
 
   <!-- 入金状況テーブル -->
-  <div class="xl:col-span-2 bg-white rounded-2xl border border-green-100 shadow-sm overflow-hidden">
-    <div class="px-5 py-4 border-b border-green-50 flex items-center justify-between">
-      <h3 class="font-bold text-green-800 text-sm">入金状況詳細</h3>
+  <div class="xl:col-span-2 bg-white rounded-2xl border border-teal-100 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-teal-50 flex items-center justify-between">
+      <h3 class="font-bold text-teal-800 text-sm">入金状況詳細</h3>
       <span id="payments-count" class="text-xs text-gray-400"></span>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-xs">
         <thead>
-          <tr class="bg-green-50 text-green-800">
+          <tr class="bg-teal-50 text-teal-800">
             <th class="px-3 py-2 text-left font-semibold">顧客名</th>
             <th class="px-3 py-2 text-left font-semibold">物件</th>
             <th class="px-3 py-2 text-left font-semibold">担当者</th>
@@ -109,7 +109,7 @@
         <tbody id="payments-tbody">
           <tr>
             <td colspan="10" class="py-10 text-center text-gray-400">
-              <div class="inline-block w-6 h-6 border-4 border-green-400 border-t-transparent rounded-full animate-spin mb-2"></div>
+              <div class="inline-block w-6 h-6 border-4 border-teal-400 border-t-transparent rounded-full animate-spin mb-2"></div>
               <div>読み込み中...</div>
             </td>
           </tr>
@@ -166,7 +166,7 @@ function adBadge(v, dateRaw) {
 async function loadPayments() {
   const tbody = document.getElementById('payments-tbody');
   tbody.innerHTML = `<tr><td colspan="10" class="py-10 text-center text-gray-400">
-    <div class="inline-block w-6 h-6 border-4 border-green-400 border-t-transparent rounded-full animate-spin mb-2"></div>
+    <div class="inline-block w-6 h-6 border-4 border-teal-400 border-t-transparent rounded-full animate-spin mb-2"></div>
     <div>読み込み中...</div></td></tr>`;
 
   try {
@@ -191,7 +191,7 @@ async function loadPayments() {
       let rows = '';
       for (const d of data.details) {
         rows += `
-          <tr class="border-b border-gray-50 hover:bg-green-50 transition">
+          <tr class="border-b border-gray-50 hover:bg-teal-50 transition">
             <td class="px-3 py-2 font-medium text-gray-800">${d.customer_name || '-'}</td>
             <td class="px-3 py-2">
               <div class="text-gray-700 truncate max-w-28">${d.property_name || '-'}</div>
@@ -205,7 +205,7 @@ async function loadPayments() {
             <td class="px-3 py-2 text-center text-gray-500 whitespace-nowrap">
               ${d.ad_income_date ? fmtDate(d.ad_income_date) : (d.ad_income_date_raw || '-')}
             </td>
-            <td class="px-3 py-2 text-right text-green-700 whitespace-nowrap">${fmtMoney(d.commission)}</td>
+            <td class="px-3 py-2 text-right text-teal-700 whitespace-nowrap">${fmtMoney(d.commission)}</td>
             <td class="px-3 py-2 text-center text-gray-500 whitespace-nowrap">${fmtDate(d.settlement_date)}</td>
           </tr>
         `;

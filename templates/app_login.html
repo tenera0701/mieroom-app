@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
-      background: linear-gradient(135deg, #14532d 0%, #166534 40%, #15803d 100%);
+      background: linear-gradient(135deg, #0D4A48 0%, #115E59 40%, #0D9488 100%);
       min-height: 100vh;
       font-family: system-ui, -apple-system, sans-serif;
     }
@@ -34,13 +34,13 @@
       box-sizing: border-box;
     }
     .input-field:focus {
-      border-color: #16a34a;
-      box-shadow: 0 0 0 3px rgba(22,163,74,0.15);
+      border-color: #0D9488;
+      box-shadow: 0 0 0 3px rgba(13,148,136,0.15);
       background: #fff;
     }
     .btn-login {
       width: 100%;
-      background: #16a34a;
+      background: #0D9488;
       color: #fff;
       border: none;
       border-radius: 10px;
@@ -54,7 +54,7 @@
       justify-content: center;
       gap: 8px;
     }
-    .btn-login:hover { background: #15803d; }
+    .btn-login:hover { background: #0F766E; }
     .btn-login:active { transform: scale(0.99); }
     .divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
     .divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid #e5e7eb; }
@@ -69,12 +69,12 @@
     <!-- ロゴ -->
     <div class="text-center mb-8">
       <img src="/static/logo_text.png" alt="ミエルーム"
-           style="height:90px; width:auto; max-width:280px; object-fit:contain; margin:0 auto;">
+           style="height:225px; width:auto; max-width:380px; object-fit:contain; margin:0 auto;">
     </div>
 
     <!-- パスワードリセット完了メッセージ -->
     {% if request.args.get('reset') %}
-    <div style="background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:12px 16px;margin-bottom:20px;color:#15803d;font-size:14px;text-align:center;display:flex;align-items:center;gap:8px;justify-content:center;">
+    <div style="background:#CCFBF1;border:1px solid #5EEAD4;border-radius:8px;padding:12px 16px;margin-bottom:20px;color:#0F766E;font-size:14px;text-align:center;display:flex;align-items:center;gap:8px;justify-content:center;">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
       パスワードを変更しました。新しいパスワードでログインしてください。
     </div>
@@ -135,7 +135,7 @@
 
       <!-- パスワードを忘れた -->
       <div class="text-right mb-6">
-        <a href="/forgot-password" class="text-sm text-green-700 hover:underline font-medium">パスワードを忘れた方</a>
+        <a href="/forgot-password" class="text-sm hover:underline font-medium" style="color:#0D9488;">パスワードを忘れた方</a>
       </div>
 
       <button type="submit" class="btn-login">

@@ -5,10 +5,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   :root {
-    --primary: #16a34a;
-    --primary-dark: #15803d;
-    --primary-light: #dcfce7;
-    --primary-mid: #86efac;
+    --primary: #0D9488;
+    --primary-dark: #0F766E;
+    --primary-light: #CCFBF1;
+    --primary-mid: #5EEAD4;
   }
   .btn-primary {
     background: var(--primary);
@@ -149,7 +149,7 @@
     color: #374151;
     vertical-align: middle;
   }
-  .rank-table tr:hover td { background: #f0fdf4; }
+  .rank-table tr:hover td { background: #F0FDFA; }
   .rank-badge {
     display: inline-flex;
     align-items: center;
@@ -165,7 +165,7 @@
   .rank-n { background: #f3f4f6; color: #6b7280; }
   .prog-bar-wrap { width: 100%; background: #f3f4f6; border-radius: 9999px; height: 8px; }
   .prog-bar { height: 8px; border-radius: 9999px; background: var(--primary); transition: width .4s; }
-  .diff-up   { color: #16a34a; font-size: .78rem; }
+  .diff-up   { color: #0D9488; font-size: .78rem; }
   .diff-down { color: #ef4444; font-size: .78rem; }
   .diff-flat { color: #9ca3af; font-size: .78rem; }
   /* スタッフカード */
@@ -206,8 +206,8 @@
   /* 成長率 */
   .growth-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
   .growth-card {
-    background: linear-gradient(135deg, var(--primary-light), #f0fdf4);
-    border: 1px solid #bbf7d0;
+    background: linear-gradient(135deg, var(--primary-light), #F0FDFA);
+    border: 1px solid #99F6E4;
     border-radius: 1rem;
     padding: 1.25rem;
     position: relative;
@@ -447,7 +447,7 @@ function renderRankingTable(staff, tabId) {
       <td>${rankBadge(idx + 1)}</td>
       <td style="font-weight:600;">${s.name}</td>
       <td>${s.store}</td>
-      <td style="font-weight:700;color:#15803d;">${val}${cfg.unit}</td>
+      <td style="font-weight:700;color:#0F766E;">${val}${cfg.unit}</td>
       <td>${diffBadge(val, prev)}</td>
       <td>
         <div class="prog-bar-wrap">
@@ -503,7 +503,7 @@ function renderStaffCards(staff) {
         labels: ['11月','12月','1月','2月','3月','4月'],
         datasets: [{
           data: s.trend,
-          borderColor: '#16a34a',
+          borderColor: '#0D9488',
           backgroundColor: 'rgba(22,163,74,.12)',
           fill: true,
           tension: 0.4,
@@ -548,8 +548,8 @@ function renderRadar(radarData) {
           label: store.label,
           data: store.values,
           backgroundColor: 'rgba(22,163,74,.2)',
-          borderColor: '#16a34a',
-          pointBackgroundColor: '#16a34a',
+          borderColor: '#0D9488',
+          pointBackgroundColor: '#0D9488',
           borderWidth: 2,
           pointRadius: 4
         }]
@@ -593,7 +593,7 @@ function renderGrowth(staff) {
       <div class="growth-rate">+${s.growthPct}%</div>
       <div class="growth-label">先月比 売上成長率</div>
       <div style="margin-top:.5rem;font-size:.8rem;color:#374151;">
-        ${s.prevSales}万 → <strong style="color:#15803d;">${s.sales}万</strong>円
+        ${s.prevSales}万 → <strong style="color:#0F766E;">${s.sales}万</strong>円
       </div>
     </div>`).join('');
 }

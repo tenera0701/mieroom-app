@@ -4,7 +4,7 @@
 
 {% block extra_head %}
 <style>
-  .status-badge-contract  { background:#dcfce7; color:#15803d; border-radius:9999px; padding:2px 10px; font-size:0.72rem; font-weight:700; }
+  .status-badge-contract  { background:#CCFBF1; color:#0F766E; border-radius:9999px; padding:2px 10px; font-size:0.72rem; font-weight:700; }
   .status-badge-apply     { background:#fef9c3; color:#92400e; border-radius:9999px; padding:2px 10px; font-size:0.72rem; font-weight:700; }
   .status-badge-cancel    { background:#fee2e2; color:#b91c1c; border-radius:9999px; padding:2px 10px; font-size:0.72rem; font-weight:700; }
   .status-badge-other     { background:#f3f4f6; color:#6b7280; border-radius:9999px; padding:2px 10px; font-size:0.72rem; font-weight:700; }
@@ -14,32 +14,32 @@
 {% block content %}
 <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
   <div>
-    <h1 class="text-2xl font-bold text-green-900">申込台帳</h1>
-    <p class="text-green-700 text-sm mt-0.5">Excelインポートデータの申込・契約一覧</p>
+    <h1 class="text-2xl font-bold text-teal-900">申込台帳</h1>
+    <p class="text-teal-700 text-sm mt-0.5">Excelインポートデータの申込・契約一覧</p>
   </div>
 
   <!-- 月ナビゲーション -->
-  <div class="flex items-center gap-2 bg-white border border-green-200 rounded-xl px-4 py-2 shadow-sm">
-    <button onclick="changeMonth(-1)" class="p-1 rounded hover:bg-green-100 text-green-700 transition">
+  <div class="flex items-center gap-2 bg-white border border-teal-200 rounded-xl px-4 py-2 shadow-sm">
+    <button onclick="changeMonth(-1)" class="p-1 rounded hover:bg-teal-100 text-teal-700 transition">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
       </svg>
     </button>
-    <span id="month-label" class="font-bold text-green-800 text-base w-24 text-center"></span>
-    <button onclick="changeMonth(1)" class="p-1 rounded hover:bg-green-100 text-green-700 transition">
+    <span id="month-label" class="font-bold text-teal-800 text-base w-24 text-center"></span>
+    <button onclick="changeMonth(1)" class="p-1 rounded hover:bg-teal-100 text-teal-700 transition">
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
       </svg>
     </button>
-    <button onclick="goToday()" class="ml-2 text-xs bg-green-600 text-white px-3 py-1 rounded-lg hover:bg-green-700 transition">今月</button>
+    <button onclick="goToday()" class="ml-2 text-xs bg-teal-600 text-white px-3 py-1 rounded-lg hover:bg-teal-700 transition">今月</button>
   </div>
 </div>
 
 <!-- フィルター -->
-<div class="bg-white rounded-xl border border-green-100 shadow-sm p-4 mb-4 flex flex-wrap items-end gap-3">
+<div class="bg-white rounded-xl border border-teal-100 shadow-sm p-4 mb-4 flex flex-wrap items-end gap-3">
   <div>
     <label class="block text-xs font-medium text-gray-600 mb-1">担当者</label>
-    <select id="filter-staff" onchange="loadContracts()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+    <select id="filter-staff" onchange="loadContracts()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400">
       <option value="">全員</option>
       {% for s in staff_list %}
         <option value="{{ s.id }}">{{ s.name }}</option>
@@ -48,7 +48,7 @@
   </div>
   <div>
     <label class="block text-xs font-medium text-gray-600 mb-1">状況</label>
-    <select id="filter-status" onchange="loadContracts()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+    <select id="filter-status" onchange="loadContracts()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400">
       <option value="">すべて</option>
       <option value="契約">契約</option>
       <option value="申込">申込</option>
@@ -60,11 +60,11 @@
 </div>
 
 <!-- テーブル -->
-<div class="bg-white rounded-2xl shadow-sm border border-green-100 overflow-hidden">
+<div class="bg-white rounded-2xl shadow-sm border border-teal-100 overflow-hidden">
   <div class="overflow-x-auto">
     <table class="w-full text-xs">
       <thead>
-        <tr class="bg-green-50 text-green-800 border-b border-green-100">
+        <tr class="bg-teal-50 text-teal-800 border-b border-teal-100">
           <th class="px-3 py-2.5 text-center font-semibold w-10">No</th>
           <th class="px-3 py-2.5 text-center font-semibold w-20">状況</th>
           <th class="px-3 py-2.5 text-left font-semibold">申込日</th>
@@ -86,7 +86,7 @@
       <tbody id="contracts-tbody">
         <tr>
           <td colspan="16" class="py-12 text-center text-gray-400">
-            <div class="inline-block w-6 h-6 border-4 border-green-400 border-t-transparent rounded-full animate-spin mb-2"></div>
+            <div class="inline-block w-6 h-6 border-4 border-teal-400 border-t-transparent rounded-full animate-spin mb-2"></div>
             <div>読み込み中...</div>
           </td>
         </tr>
@@ -96,15 +96,15 @@
 </div>
 
 <!-- サマリー -->
-<div id="summary-bar" class="mt-4 bg-white rounded-xl border border-green-100 shadow-sm p-4 hidden">
+<div id="summary-bar" class="mt-4 bg-white rounded-xl border border-teal-100 shadow-sm p-4 hidden">
   <div class="flex flex-wrap gap-6 text-sm">
     <div class="flex items-center gap-2">
       <span class="text-gray-600">合計件数:</span>
-      <span id="sum-total" class="font-bold text-green-800"></span>
+      <span id="sum-total" class="font-bold text-teal-800"></span>
     </div>
     <div class="flex items-center gap-2">
       <span class="text-gray-600">契約:</span>
-      <span id="sum-contracts" class="font-bold text-green-700"></span>
+      <span id="sum-contracts" class="font-bold text-teal-700"></span>
     </div>
     <div class="flex items-center gap-2">
       <span class="text-gray-600">申込:</span>
@@ -116,7 +116,7 @@
     </div>
     <div class="flex items-center gap-2 ml-auto">
       <span class="text-gray-600">契約金額合計:</span>
-      <span id="sum-amount" class="font-bold text-green-800 text-base"></span>
+      <span id="sum-amount" class="font-bold text-teal-800 text-base"></span>
     </div>
   </div>
 </div>
@@ -157,7 +157,7 @@ function statusBadge(status) {
 
 function circleBadge(v) {
   if (!v) return '<span class="text-gray-300">-</span>';
-  if (v.includes('○')) return '<span class="text-green-600 font-bold">○</span>';
+  if (v.includes('○')) return '<span class="text-teal-600 font-bold">○</span>';
   if (v.includes('×') || v.includes('✖')) return '<span class="text-red-400">×</span>';
   return `<span class="text-gray-500 text-xs">${v}</span>`;
 }
@@ -182,7 +182,7 @@ async function loadContracts() {
 
   const tbody = document.getElementById('contracts-tbody');
   tbody.innerHTML = `<tr><td colspan="16" class="py-10 text-center text-gray-400">
-    <div class="inline-block w-6 h-6 border-4 border-green-400 border-t-transparent rounded-full animate-spin mb-2"></div>
+    <div class="inline-block w-6 h-6 border-4 border-teal-400 border-t-transparent rounded-full animate-spin mb-2"></div>
     <div>読み込み中...</div></td></tr>`;
 
   try {
@@ -203,7 +203,7 @@ async function loadContracts() {
     let rows = '';
     for (const r of data.records) {
       rows += `
-        <tr class="border-b border-gray-50 hover:bg-green-50 transition" id="row-${r.id}">
+        <tr class="border-b border-gray-50 hover:bg-teal-50 transition" id="row-${r.id}">
           <td class="px-3 py-2 text-center text-gray-500">${r.seq_no || '-'}</td>
           <td class="px-3 py-2 text-center">${statusBadge(r.status)}</td>
           <td class="px-3 py-2 text-gray-600 whitespace-nowrap">${fmtDate(r.application_date)}</td>
@@ -224,7 +224,7 @@ async function loadContracts() {
           <td class="px-3 py-2 text-center">${circleBadge(r.lifeline)}</td>
           <td class="px-3 py-2 text-center">${circleBadge(r.moving)}</td>
           <td class="px-3 py-2 text-center">${circleBadge(r.fire_insurance)}</td>
-          <td class="px-3 py-2 text-right font-medium text-green-700 whitespace-nowrap">${r.contract_amount ? Number(r.contract_amount).toLocaleString() + '円' : '-'}</td>
+          <td class="px-3 py-2 text-right font-medium text-teal-700 whitespace-nowrap">${r.contract_amount ? Number(r.contract_amount).toLocaleString() + '円' : '-'}</td>
           <td class="px-3 py-2 text-center">
             <button onclick="deleteContract(${r.id})"
               class="p-1 rounded text-red-400 hover:bg-red-50 hover:text-red-600 transition" title="削除">

@@ -4,8 +4,8 @@
 
 {% block content %}
 <div class="mb-6">
-  <h1 class="text-2xl font-bold text-green-900">Excelインポート</h1>
-  <p class="text-green-700 text-sm mt-1">申込管理表（.xlsx）を読み込んで申込台帳・KPIを自動更新します</p>
+  <h1 class="text-2xl font-bold text-teal-900">Excelインポート</h1>
+  <p class="text-teal-700 text-sm mt-1">申込管理表（.xlsx）を読み込んで申込台帳・KPIを自動更新します</p>
 </div>
 
 <!-- 注意事項 -->
@@ -21,14 +21,14 @@
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
   <!-- アップロードフォーム -->
-  <div class="bg-white rounded-2xl shadow-sm border border-green-100 p-6">
-    <h2 class="text-lg font-bold text-green-800 mb-4">ファイルアップロード</h2>
+  <div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-6">
+    <h2 class="text-lg font-bold text-teal-800 mb-4">ファイルアップロード</h2>
 
     <!-- 年月選択 -->
     <div class="grid grid-cols-2 gap-3 mb-4">
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">年</label>
-        <select id="import-year" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+        <select id="import-year" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400">
           {% for y in range(now.year - 3, now.year + 2) %}
             <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}年</option>
           {% endfor %}
@@ -36,7 +36,7 @@
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">月</label>
-        <select id="import-month" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+        <select id="import-month" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400">
           {% for m in range(1, 13) %}
             <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ m }}月</option>
           {% endfor %}
@@ -46,27 +46,27 @@
 
     <!-- ドラッグ&ドロップエリア -->
     <div id="drop-zone"
-         class="border-2 border-dashed border-green-300 rounded-xl p-10 text-center cursor-pointer hover:border-green-500 hover:bg-green-50 transition-colors"
-         ondragover="event.preventDefault(); this.classList.add('border-green-500','bg-green-50')"
-         ondragleave="this.classList.remove('border-green-500','bg-green-50')"
+         class="border-2 border-dashed border-teal-300 rounded-xl p-10 text-center cursor-pointer hover:border-teal-500 hover:bg-teal-50 transition-colors"
+         ondragover="event.preventDefault(); this.classList.add('border-teal-500','bg-teal-50')"
+         ondragleave="this.classList.remove('border-teal-500','bg-teal-50')"
          ondrop="handleDrop(event)"
          onclick="document.getElementById('file-input').click()">
-      <div class="text-green-500 mb-3">
+      <div class="text-teal-500 mb-3">
         <svg class="w-14 h-14 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
             d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
         </svg>
       </div>
-      <p class="text-green-700 font-semibold text-base">クリックまたはドラッグ&ドロップ</p>
+      <p class="text-teal-700 font-semibold text-base">クリックまたはドラッグ&ドロップ</p>
       <p class="text-gray-500 text-sm mt-1">Excelファイル (.xlsx) を選択してください</p>
-      <div id="file-name" class="mt-3 text-sm text-green-800 font-medium hidden"></div>
+      <div id="file-name" class="mt-3 text-sm text-teal-800 font-medium hidden"></div>
     </div>
     <input type="file" id="file-input" accept=".xlsx,.xls" class="hidden" onchange="onFileSelected(this)">
 
     <!-- アップロードボタン -->
     <button id="upload-btn"
             onclick="uploadFile()"
-            class="w-full mt-4 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-xl transition flex items-center justify-center gap-2 disabled:opacity-50"
+            class="w-full mt-4 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-xl transition flex items-center justify-center gap-2 disabled:opacity-50"
             disabled>
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -77,8 +77,8 @@
   </div>
 
   <!-- 結果表示エリア -->
-  <div class="bg-white rounded-2xl shadow-sm border border-green-100 p-6">
-    <h2 class="text-lg font-bold text-green-800 mb-4">インポート結果</h2>
+  <div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-6">
+    <h2 class="text-lg font-bold text-teal-800 mb-4">インポート結果</h2>
     <div id="result-area" class="text-gray-500 text-sm text-center py-10">
       ファイルをアップロードすると結果がここに表示されます
     </div>
@@ -87,12 +87,12 @@
 
 <!-- インポート履歴 -->
 {% if history %}
-<div class="mt-6 bg-white rounded-2xl shadow-sm border border-green-100 p-6">
-  <h2 class="text-lg font-bold text-green-800 mb-4">過去のインポート履歴</h2>
+<div class="mt-6 bg-white rounded-2xl shadow-sm border border-teal-100 p-6">
+  <h2 class="text-lg font-bold text-teal-800 mb-4">過去のインポート履歴</h2>
   <div class="overflow-x-auto">
     <table class="w-full text-sm">
       <thead>
-        <tr class="bg-green-50 text-green-800">
+        <tr class="bg-teal-50 text-teal-800">
           <th class="px-4 py-2 text-left font-semibold rounded-l-lg">ファイル名</th>
           <th class="px-4 py-2 text-center font-semibold">対象年月</th>
           <th class="px-4 py-2 text-center font-semibold">件数</th>
@@ -101,7 +101,7 @@
       </thead>
       <tbody>
         {% for h in history %}
-        <tr class="border-b border-gray-50 hover:bg-green-50 transition">
+        <tr class="border-b border-gray-50 hover:bg-teal-50 transition">
           <td class="px-4 py-2 text-gray-700 truncate max-w-xs">{{ h.source_file or '(不明)' }}</td>
           <td class="px-4 py-2 text-center text-gray-600">{{ h.year }}年{{ h.month }}月</td>
           <td class="px-4 py-2 text-center">
@@ -135,7 +135,7 @@ function onFileSelected(input) {
 function handleDrop(e) {
   e.preventDefault();
   const zone = document.getElementById('drop-zone');
-  zone.classList.remove('border-green-500', 'bg-green-50');
+  zone.classList.remove('border-teal-500', 'bg-teal-50');
   const file = e.dataTransfer.files[0];
   if (!file) return;
   if (!file.name.match(/\.(xlsx|xls)$/i)) {
@@ -168,7 +168,7 @@ async function uploadFile() {
   formData.append('month', month);
 
   const resultArea = document.getElementById('result-area');
-  resultArea.innerHTML = '<div class="text-center py-8"><div class="inline-block w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></div><p class="mt-2 text-green-700">処理中...</p></div>';
+  resultArea.innerHTML = '<div class="text-center py-8"><div class="inline-block w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin"></div><p class="mt-2 text-teal-700">処理中...</p></div>';
 
   try {
     const res = await fetch('/api/import/excel', {
@@ -184,14 +184,14 @@ async function uploadFile() {
 
     // 結果表示
     let html = `
-      <div class="mb-4 p-4 bg-green-50 rounded-xl border border-green-200">
+      <div class="mb-4 p-4 bg-teal-50 rounded-xl border border-teal-200">
         <div class="flex items-center gap-2 mb-2">
-          <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
-          <span class="font-bold text-green-800 text-base">インポート完了</span>
+          <span class="font-bold text-teal-800 text-base">インポート完了</span>
         </div>
-        <div class="text-sm text-green-700">
+        <div class="text-sm text-teal-700">
           <strong>${data.year}年${data.month}月</strong> / ファイル: ${data.filename}
           <br>合計 <strong>${data.imported}件</strong> のレコードをインポートしました
         </div>
@@ -231,7 +231,7 @@ async function uploadFile() {
     setTimeout(() => {
       const reloadLink = document.createElement('a');
       reloadLink.href = '/import-excel';
-      reloadLink.className = 'block mt-3 text-center text-xs text-green-600 underline';
+      reloadLink.className = 'block mt-3 text-center text-xs text-teal-600 underline';
       reloadLink.textContent = 'ページを更新して履歴を確認';
       resultArea.appendChild(reloadLink);
     }, 500);

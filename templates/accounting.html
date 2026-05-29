@@ -7,10 +7,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   :root {
-    --primary: #16a34a;
-    --primary-dark: #15803d;
-    --primary-light: #dcfce7;
-    --primary-mid: #86efac;
+    --primary: #0D9488;
+    --primary-dark: #0F766E;
+    --primary-light: #CCFBF1;
+    --primary-mid: #5EEAD4;
     --danger: #ef4444;
     --danger-light: #fee2e2;
     --text-muted: #6b7280;
@@ -155,7 +155,7 @@
   .pl-table thead th:first-child { text-align: left; width: 200px; }
   .pl-table tbody tr { border-bottom: 1px solid #f3f4f6; }
   .pl-table tbody tr:nth-child(even) { background: #f9fafb; }
-  .pl-table tbody tr:hover { background: #f0fdf4; }
+  .pl-table tbody tr:hover { background: #F0FDFA; }
   .pl-table tbody td {
     padding: 9px 16px;
     text-align: right;
@@ -165,7 +165,7 @@
   .pl-table tbody td:first-child { text-align: left; padding-left: 24px; }
   /* カテゴリ行 */
   .pl-table tr.category-row td {
-    background: #14532d;
+    background: #0D4A48;
     color: #d1fae5;
     font-weight: 700;
     font-size: 12px;
@@ -176,9 +176,9 @@
   .pl-table tr.category-row td:first-child { padding-left: 16px; }
   /* 合計行 */
   .pl-table tr.total-row td {
-    background: #f0fdf4;
+    background: #F0FDFA;
     font-weight: 700;
-    border-top: 2px solid #bbf7d0;
+    border-top: 2px solid #99F6E4;
   }
   .pl-table .val-danger { color: #b91c1c; font-weight: 700; }
   .pl-table .val-good   { color: var(--primary-dark); font-weight: 700; }
@@ -319,7 +319,7 @@
         <div class="month-nav-current" id="current-month-label">{{ year }}年{{ month }}月</div>
         <button class="month-nav-btn" onclick="navigateMonth(1)">次月 &#8250;</button>
         <button class="month-nav-btn" onclick="navigateToday()"
-          style="background:#f0fdf4; color:var(--primary); border-color:var(--primary-mid);">今月</button>
+          style="background:#F0FDFA; color:var(--primary); border-color:var(--primary-mid);">今月</button>
       </div>
       <!-- 年月ジャンプ -->
       <input type="month" id="pl-month-jump"
@@ -401,7 +401,7 @@
         <input type="month" id="pl-chart-from" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;">
         <span style="color:#9ca3af;">〜</span>
         <input type="month" id="pl-chart-to" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;outline:none;">
-        <button onclick="applyPlChartRange()" style="padding:4px 12px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">適用</button>
+        <button onclick="applyPlChartRange()" style="padding:4px 12px;background:#0D9488;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;">適用</button>
         <button onclick="resetPlChartRange()" style="padding:4px 10px;background:#fff;color:#6b7280;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;">リセット</button>
       </div>
     </div>
@@ -429,15 +429,15 @@
         </div>
 
         <!-- 売上 -->
-        <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;">売上</div>
+        <div style="font-size:12px;font-weight:700;color:#0D9488;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #CCFBF1;">売上</div>
         <div class="form-grid" style="margin-bottom:16px;">
           <div class="form-group">
             <label>売上（円）</label>
             <input type="number" name="revenue" id="modal-revenue" min="0" placeholder="" oninput="calcGrossProfit()">
           </div>
           <div class="form-group">
-            <label style="color:#16a34a;">粗利（自動計算）</label>
-            <div id="gross-profit-display" style="border:1px solid #86efac;border-radius:6px;padding:7px 10px;font-size:14px;font-weight:700;color:#15803d;background:#f0fdf4;min-height:36px;">－</div>
+            <label style="color:#0D9488;">粗利（自動計算）</label>
+            <div id="gross-profit-display" style="border:1px solid #5EEAD4;border-radius:6px;padding:7px 10px;font-size:14px;font-weight:700;color:#0F766E;background:#F0FDFA;min-height:36px;">－</div>
           </div>
         </div>
 
@@ -447,19 +447,19 @@
           <option value="Instagram"><option value="TikTok"><option value="Google広告">
           <option value="LINE"><option value="HP"><option value="MEO"><option value="その他">
         </datalist>
-        <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:12px;font-weight:700;color:#0D9488;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #CCFBF1;display:flex;justify-content:space-between;align-items:center;">
           広告費（媒体別）
           <div style="display:flex;align-items:center;gap:10px;">
-            <span id="ad-total-label" style="font-weight:800;font-size:13px;color:#15803d;">合計: ―</span>
-            <button type="button" onclick="addAdRow()" style="padding:3px 10px;font-size:12px;border:1.5px dashed #86efac;border-radius:6px;background:#f0fdf4;color:#16a34a;cursor:pointer;font-weight:600;">＋ 追加</button>
+            <span id="ad-total-label" style="font-weight:800;font-size:13px;color:#0F766E;">合計: ―</span>
+            <button type="button" onclick="addAdRow()" style="padding:3px 10px;font-size:12px;border:1.5px dashed #5EEAD4;border-radius:6px;background:#F0FDFA;color:#0D9488;cursor:pointer;font-weight:600;">＋ 追加</button>
           </div>
         </div>
         <div id="ad-items-wrap" style="margin-bottom:16px;"></div>
 
         <!-- 人件費 -->
-        <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:12px;font-weight:700;color:#0D9488;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #CCFBF1;display:flex;justify-content:space-between;align-items:center;">
           人件費
-          <span id="labor-total-label" style="font-weight:800;font-size:13px;color:#15803d;">合計: ―</span>
+          <span id="labor-total-label" style="font-weight:800;font-size:13px;color:#0F766E;">合計: ―</span>
         </div>
         <div class="form-grid" style="margin-bottom:16px;">
           <div class="form-group"><label>正社員人件費（円）</label><input type="number" name="regular_salary" min="0" placeholder="" oninput="calcGrossProfit()"></div>
@@ -468,16 +468,16 @@
         </div>
 
         <!-- 固定費（自由入力） -->
-        <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:12px;font-weight:700;color:#0D9488;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #CCFBF1;display:flex;justify-content:space-between;align-items:center;">
           固定費
-          <button type="button" onclick="addCostRow('fixed')" style="padding:3px 10px;font-size:12px;border:1.5px dashed #86efac;border-radius:6px;background:#f0fdf4;color:#16a34a;cursor:pointer;font-weight:600;">＋ 追加</button>
+          <button type="button" onclick="addCostRow('fixed')" style="padding:3px 10px;font-size:12px;border:1.5px dashed #5EEAD4;border-radius:6px;background:#F0FDFA;color:#0D9488;cursor:pointer;font-weight:600;">＋ 追加</button>
         </div>
         <div id="fixed-items-wrap" style="margin-bottom:16px;"></div>
 
         <!-- 変動費（自由入力） -->
-        <div style="font-size:12px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #dcfce7;display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:12px;font-weight:700;color:#0D9488;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;padding-bottom:4px;border-bottom:2px solid #CCFBF1;display:flex;justify-content:space-between;align-items:center;">
           変動費
-          <button type="button" onclick="addCostRow('variable')" style="padding:3px 10px;font-size:12px;border:1.5px dashed #86efac;border-radius:6px;background:#f0fdf4;color:#16a34a;cursor:pointer;font-weight:600;">＋ 追加</button>
+          <button type="button" onclick="addCostRow('variable')" style="padding:3px 10px;font-size:12px;border:1.5px dashed #5EEAD4;border-radius:6px;background:#F0FDFA;color:#0D9488;cursor:pointer;font-weight:600;">＋ 追加</button>
         </div>
         <div id="variable-items-wrap" style="margin-bottom:16px;"></div>
       </form>
@@ -578,7 +578,7 @@ async function submitPlImport() {
     const res = await fetch('/api/import/excel', { method: 'POST', body: fd });
     const data = await res.json();
     if (data.error) { resEl.innerHTML = `<p style="color:#b91c1c;">${data.error}</p>`; return; }
-    resEl.innerHTML = `<p style="color:#15803d;font-weight:700;">✓ インポート完了：${data.imported}件</p>`;
+    resEl.innerHTML = `<p style="color:#0F766E;font-weight:700;">✓ インポート完了：${data.imported}件</p>`;
     loadPlData();
   } catch(e) { resEl.innerHTML = `<p style="color:#b91c1c;">失敗: ${e.message}</p>`; }
 }
@@ -758,7 +758,7 @@ function renderPlTable(cur, prev, prevYear) {
   const lb  = g(cur,'labor_cost'), pLb=g(prev,'labor_cost'), pyLb=g(prevYear,'labor_cost');
 
   const editBtn = currentPlId ? `
-    <button class="btn-cancel" style="padding:3px 10px;font-size:12px;color:#15803d;border-color:#86efac;margin-right:4px;" onclick="editPl()">編集</button>
+    <button class="btn-cancel" style="padding:3px 10px;font-size:12px;color:#0F766E;border-color:#5EEAD4;margin-right:4px;" onclick="editPl()">編集</button>
     <button class="btn-cancel" style="padding:3px 10px;font-size:12px;color:#b91c1c;border-color:#fca5a5;" onclick="deletePl(${currentPlId})">削除</button>
   ` : '';
 
@@ -856,7 +856,7 @@ function renderPlChart(data) {
         {
           label: '売上',
           data: revenue,
-          borderColor: '#16a34a',
+          borderColor: '#0D9488',
           backgroundColor: 'rgba(22,163,74,0.1)',
           tension: 0.3,
           fill: true,
@@ -866,7 +866,7 @@ function renderPlChart(data) {
         {
           label: '粗利',
           data: gross,
-          borderColor: '#4ade80',
+          borderColor: '#2DD4BF',
           backgroundColor: 'transparent',
           tension: 0.3,
           fill: false,
@@ -1065,7 +1065,7 @@ function calcGrossProfit() {
   const disp = document.getElementById('gross-profit-display');
   if (disp) {
     disp.textContent = revenue > 0 ? (Math.round(gross).toLocaleString('ja-JP') + '円') : '―';
-    disp.style.color = gross < 0 ? '#b91c1c' : '#15803d';
+    disp.style.color = gross < 0 ? '#b91c1c' : '#0F766E';
   }
   const adLabel = document.getElementById('ad-total-label');
   if (adLabel) adLabel.textContent = '合計: ' + Math.round(adTotal).toLocaleString('ja-JP') + '円';

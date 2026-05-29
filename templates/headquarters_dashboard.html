@@ -10,7 +10,7 @@
     --hq-primary: #1d4ed8;
     --hq-accent:  #f59e0b;
     --hq-danger:  #dc2626;
-    --hq-success: #16a34a;
+    --hq-success: #0D9488;
   }
 
   /* ─── KPIカード ─── */
@@ -296,7 +296,7 @@ async function loadSummary(year, month) {
       const ach = s.target > 0 ? Math.round(s.sales / s.target * 100) : null;
       const dotCls = !ach ? 'dot-warn' : ach >= 80 ? 'dot-ok' : ach >= 50 ? 'dot-warn' : 'dot-danger';
       const vstxt = s.vs_prev != null
-        ? (s.vs_prev >= 0 ? `<span style="color:#16a34a;">+${s.vs_prev}%</span>` : `<span style="color:#dc2626;">${s.vs_prev}%</span>`)
+        ? (s.vs_prev >= 0 ? `<span style="color:#0D9488;">+${s.vs_prev}%</span>` : `<span style="color:#dc2626;">${s.vs_prev}%</span>`)
         : '<span style="color:#9ca3af;">―</span>';
       const hasKpi = s.sales > 0 || s.apps > 0;
       return `<tr>
@@ -313,7 +313,7 @@ async function loadSummary(year, month) {
         <td>${vstxt}</td>
         <td>
           ${hasKpi
-            ? '<span style="color:#16a34a;font-size:11px;font-weight:700;">✓ 入力済</span>'
+            ? '<span style="color:#0D9488;font-size:11px;font-weight:700;">✓ 入力済</span>'
             : '<span style="color:#dc2626;font-size:11px;font-weight:700;">未入力</span>'}
         </td>
       </tr>`;

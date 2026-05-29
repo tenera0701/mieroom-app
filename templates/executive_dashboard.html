@@ -15,7 +15,7 @@
       <button onclick="prevMonth()" style="background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; color:#374151; cursor:pointer;">&#8249; 前月</button>
       <div style="font-size:18px; font-weight:800; color:#111827; min-width:120px; text-align:center;" id="current-period-label">{{ year }}年{{ month }}月</div>
       <button onclick="nextMonth()" style="background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; color:#374151; cursor:pointer;">次月 &#8250;</button>
-      <button onclick="goToday()" style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; color:#16a34a; cursor:pointer;">今月</button>
+      <button onclick="goToday()" style="background:#F0FDFA; border:1px solid #5EEAD4; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; color:#0D9488; cursor:pointer;">今月</button>
     </div>
     <!-- 年月ジャンプ -->
     <input type="month" id="exec-month-jump"
@@ -23,7 +23,7 @@
       style="border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; font-size:13px; outline:none; color:#111827;"
       onchange="jumpMonthExec(this.value)">
     <!-- 入力ボタン -->
-    <button onclick="openInputModal()" style="background:#16a34a; color:#fff; border:none; border-radius:6px; padding:8px 18px; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px;">
+    <button onclick="openInputModal()" style="background:#0D9488; color:#fff; border:none; border-radius:6px; padding:8px 18px; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px;">
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
       </svg>
@@ -36,11 +36,11 @@
 <div class="grid grid-cols-2 gap-5 mb-6">
 
   <!-- 今月の売上 -->
-  <div class="bg-white rounded-2xl shadow-sm border border-green-100 p-5 card-hover">
+  <div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-5 card-hover">
     <div class="flex items-center justify-between mb-2">
       <span class="text-sm font-semibold text-gray-500 tracking-wide">今月の売上</span>
-      <div class="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center">
-        <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div class="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center">
+        <svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
@@ -81,7 +81,7 @@
   </div>
 
   <!-- 今月の利益 -->
-  <div class="bg-white rounded-2xl shadow-sm border border-green-100 p-5 card-hover">
+  <div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-5 card-hover">
     <div class="flex items-center justify-between mb-2">
       <span class="text-sm font-semibold text-gray-500 tracking-wide">今月の利益</span>
       <div class="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -124,7 +124,7 @@
   </div>
 
   <!-- 今月の契約数 -->
-  <div class="bg-white rounded-2xl shadow-sm border border-green-100 p-5 card-hover">
+  <div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-5 card-hover">
     <div class="flex items-center justify-between mb-2">
       <span class="text-sm font-semibold text-gray-500 tracking-wide">今月の契約数</span>
       <div class="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center">
@@ -167,7 +167,7 @@
   </div>
 
   <!-- 広告ROI -->
-  <div class="bg-white rounded-2xl shadow-sm border border-green-100 p-5 card-hover">
+  <div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-5 card-hover">
     <div class="flex items-center justify-between mb-2">
       <span class="text-sm font-semibold text-gray-500 tracking-wide">広告ROI</span>
       <div class="w-9 h-9 rounded-full bg-lime-100 flex items-center justify-center">
@@ -212,26 +212,26 @@
 </div>
 
 <!-- 月次推移グラフ（大） -->
-<div class="bg-white rounded-2xl shadow-sm border border-green-100 p-6 mb-6">
+<div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-6 mb-6">
   <div class="flex items-center justify-between mb-3 flex-wrap gap-3">
     <h2 class="text-base font-bold text-gray-800">月次売上・利益・広告費 推移</h2>
     <div class="flex items-center gap-2 flex-wrap">
       <!-- 期間セレクター -->
       <div class="flex items-center gap-1.5 text-sm text-gray-600">
         <input type="month" id="chart-from"
-          class="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+          class="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
         <span class="text-gray-400">〜</span>
         <input type="month" id="chart-to"
-          class="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+          class="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
         <button onclick="applyChartRange()"
-          class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition">適用</button>
+          class="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg transition">適用</button>
         <button onclick="resetChartRange()"
           class="px-3 py-1.5 border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs font-medium rounded-lg transition">リセット</button>
       </div>
       <!-- 凡例 -->
       <div class="flex gap-3 text-xs text-gray-500">
-        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background:#16a34a;"></span>売上</span>
-        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background:#4ade80;"></span>利益</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background:#0D9488;"></span>売上</span>
+        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background:#2DD4BF;"></span>利益</span>
         <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background:#d1d5db;"></span>広告費</span>
       </div>
     </div>
@@ -243,7 +243,7 @@
 <div class="grid grid-cols-3 gap-5 mb-6">
 
   <!-- スタッフ別実績（2/3幅） -->
-  <div class="col-span-2 bg-white rounded-2xl shadow-sm border border-green-100 p-6">
+  <div class="col-span-2 bg-white rounded-2xl shadow-sm border border-teal-100 p-6">
     <h2 class="text-base font-bold text-gray-800 mb-4">スタッフ別今月実績</h2>
     <div class="overflow-x-auto">
       <table class="w-full text-sm">
@@ -269,7 +269,7 @@
   </div>
 
   <!-- 反響ファネル（1/3幅） -->
-  <div class="bg-white rounded-2xl shadow-sm border border-green-100 p-6">
+  <div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-6">
     <h2 class="text-base font-bold text-gray-800 mb-4">今月の反響ファネル</h2>
     <div id="funnel-wrap" class="space-y-3">
       <p class="text-sm text-gray-400 text-center py-6">読み込み中...</p>
@@ -285,7 +285,7 @@
     <!-- タブ -->
     <div class="flex border-b border-gray-100 flex-shrink-0">
       <button onclick="switchTab('kpi')" id="tab-kpi"
-        class="flex-1 py-3.5 text-sm font-semibold text-green-700 border-b-2 border-green-600 bg-green-50">
+        class="flex-1 py-3.5 text-sm font-semibold text-teal-700 border-b-2 border-teal-600 bg-teal-50">
         <span id="tab-kpi-label">営業KPI入力</span>
       </button>
       <button onclick="switchTab('pl')" id="tab-pl"
@@ -299,7 +299,7 @@
       <div class="grid grid-cols-2 gap-4 mb-4">
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">担当者</label>
-          <select id="kpi-staff" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+          <select id="kpi-staff" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
             {% for s in staff_list %}
             <option value="{{ s.id }}">{{ s.name }}</option>
             {% endfor %}
@@ -308,7 +308,7 @@
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">対象月</label>
           <input type="month" id="kpi-month"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none"
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none"
             value="{{ year }}-{{ '%02d' % month }}">
         </div>
       </div>
@@ -316,51 +316,51 @@
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">反響数</label>
           <input type="number" id="kpi-inquiries" min="0" placeholder="0"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">来店数</label>
           <input type="number" id="kpi-visits" min="0" placeholder="0"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">内見数</label>
           <input type="number" id="kpi-viewings" min="0" placeholder="0"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">申込数</label>
           <input type="number" id="kpi-apps" min="0" placeholder="0"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">契約数</label>
           <input type="number" id="kpi-contracts" min="0" placeholder="0"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">キャンセル数</label>
           <input type="number" id="kpi-cancel" min="0" placeholder="0"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
         </div>
       </div>
       <div class="grid grid-cols-2 gap-3 mb-5">
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">売上（円）</label>
           <input type="number" id="kpi-sales" min="0" placeholder="1500000"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">オプション売上（円）</label>
           <input type="number" id="kpi-options" min="0" placeholder="0"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
         </div>
       </div>
       <div class="flex gap-3">
         <button onclick="closeInputModal()"
           class="flex-1 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">キャンセル</button>
         <button onclick="submitKPI()"
-          class="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition">保存する</button>
+          class="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-semibold transition">保存する</button>
       </div>
     </div>
 
@@ -369,29 +369,29 @@
       <div class="mb-4">
         <label class="block text-xs font-medium text-gray-600 mb-1">対象月</label>
         <input type="month" id="pl-month"
-          class="w-48 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none"
+          class="w-48 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none"
           value="{{ year }}-{{ '%02d' % month }}">
       </div>
       <div class="grid grid-cols-2 gap-3 mb-2">
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">売上（円）</label>
           <input type="number" id="pl-revenue" min="0" placeholder="5000000"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">粗利（円）</label>
           <input type="number" id="pl-gross" min="0" placeholder="2000000"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">広告費（円）</label>
           <input type="number" id="pl-adcost" min="0" placeholder="800000"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
         </div>
         <div>
           <label class="block text-xs font-medium text-gray-600 mb-1">人件費（円）</label>
           <input type="number" id="pl-labor" min="0" placeholder="1200000"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
         </div>
       </div>
       <!-- 固定費 内訳 -->
@@ -401,50 +401,50 @@
           <div>
             <label class="block text-xs text-gray-500 mb-0.5">家賃</label>
             <input type="number" id="pl-rent" min="0" placeholder="0"
-              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-0.5">駐車場</label>
             <input type="number" id="pl-parking" min="0" placeholder="0"
-              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-0.5">複合機</label>
             <input type="number" id="pl-copier" min="0" placeholder="0"
-              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-0.5">ネット回線</label>
             <input type="number" id="pl-net" min="0" placeholder="0"
-              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-0.5">顧問料</label>
             <input type="number" id="pl-advisor" min="0" placeholder="0"
-              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-0.5">保険</label>
             <input type="number" id="pl-insurance" min="0" placeholder="0"
-              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
           </div>
           <div>
             <label class="block text-xs text-gray-500 mb-0.5">クラウド</label>
             <input type="number" id="pl-cloud" min="0" placeholder="0"
-              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+              class="w-full border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
           </div>
         </div>
       </div>
       <div class="mb-5">
         <label class="block text-xs font-medium text-gray-600 mb-1">変動費（円）</label>
         <input type="number" id="pl-variable" min="0" placeholder="0"
-          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-green-400 outline-none">
+          class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
       </div>
       <div class="flex gap-3">
         <button onclick="closeInputModal()"
           class="flex-1 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">キャンセル</button>
         <button onclick="submitPL()"
-          class="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold transition">保存する</button>
+          class="flex-1 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-semibold transition">保存する</button>
       </div>
     </div>
   </div>
@@ -453,7 +453,7 @@
 
 {% block scripts %}
 <style>
-  .diff-up   { color: #16a34a; font-weight: 700; }
+  .diff-up   { color: #0D9488; font-weight: 700; }
   .diff-down { color: #dc2626; font-weight: 700; }
   .diff-zero { color: #6b7280; font-weight: 600; }
 </style>
@@ -589,8 +589,8 @@ function renderMainChart(monthly) {
     data: {
       labels,
       datasets: [
-        { label: '売上',  data: sales,  backgroundColor: '#16a34a', borderRadius: 4 },
-        { label: '粗利',  data: grossP, backgroundColor: '#4ade80', borderRadius: 4 },
+        { label: '売上',  data: sales,  backgroundColor: '#0D9488', borderRadius: 4 },
+        { label: '粗利',  data: grossP, backgroundColor: '#2DD4BF', borderRadius: 4 },
         { label: '広告費',data: adCost, backgroundColor: '#d1d5db', borderRadius: 4 },
       ]
     },
@@ -615,7 +615,7 @@ function renderMainChart(monthly) {
             font: { size: 10 },
             callback: v => Math.round(v).toLocaleString('ja-JP') + '円'
           },
-          grid: { color: '#f0fdf4' }
+          grid: { color: '#F0FDFA' }
         }
       }
     }
@@ -645,7 +645,7 @@ function renderStaff(staff) {
     const salesVal = s.sales_amount || 0;
     const barW   = Math.round(salesVal / maxSales * 100);
     const momSales = s.mom_sales_diff;
-    return `<tr class="border-b border-gray-50 hover:bg-green-50/30 transition">
+    return `<tr class="border-b border-gray-50 hover:bg-teal-50/30 transition">
       <td class="py-2.5 pr-3">
         <span class="text-base mr-1">${rank}</span>
         <span class="font-medium text-gray-800">${s.staff_name}</span>
@@ -655,21 +655,21 @@ function renderStaff(staff) {
       <td class="text-right px-2 font-semibold text-gray-800">${ctrs}</td>
       <td class="text-right px-2">
         <span class="text-xs px-2 py-0.5 rounded-full
-          ${rate >= 30 ? 'bg-green-100 text-green-700' : rate >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-50 text-red-600'}">
+          ${rate >= 30 ? 'bg-teal-100 text-teal-700' : rate >= 15 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-50 text-red-600'}">
           ${rate}%
         </span>
       </td>
       <td class="text-right px-2">
         <div class="font-bold text-gray-900">${Math.round(salesVal / 10000)}万</div>
         <div class="w-full bg-gray-100 rounded-full h-1 mt-0.5">
-          <div class="bg-green-500 h-1 rounded-full" style="width:${barW}%"></div>
+          <div class="bg-teal-500 h-1 rounded-full" style="width:${barW}%"></div>
         </div>
       </td>
       <td class="text-right pl-2">${fmtDiff(momSales)}</td>
       <td class="text-right pl-2 whitespace-nowrap">
         ${s.kpi_id ? `
           <button onclick="editKpiEntry(${s.kpi_id})"
-            class="text-xs px-2 py-1 rounded border border-green-300 text-green-700 hover:bg-green-50 transition mr-1">編集</button>
+            class="text-xs px-2 py-1 rounded border border-teal-300 text-teal-700 hover:bg-teal-50 transition mr-1">編集</button>
           <button onclick="deleteKpiEntry(${s.kpi_id})"
             class="text-xs px-2 py-1 rounded border border-red-200 text-red-500 hover:bg-red-50 transition">削除</button>
         ` : '―'}
@@ -684,8 +684,8 @@ function renderStaff(staff) {
 function renderFunnel(d) {
   const wrap = document.getElementById('funnel-wrap');
   const steps = [
-    { label: '反響', val: d.total_inquiries     || 0, color: 'bg-green-600' },
-    { label: '来店', val: d.total_store_visits   || 0, color: 'bg-green-500' },
+    { label: '反響', val: d.total_inquiries     || 0, color: 'bg-teal-600' },
+    { label: '来店', val: d.total_store_visits   || 0, color: 'bg-teal-500' },
     { label: '内見', val: d.total_viewings        || 0, color: 'bg-teal-500'  },
     { label: '申込', val: d.total_applications    || 0, color: 'bg-teal-600'  },
     { label: '契約', val: d.total_contracts       || 0, color: 'bg-emerald-700'},
@@ -767,7 +767,7 @@ function renderKPI(sum, monthly) {
     const ctrsArr   = monthly.map(d => (d.contracts || 0) * 100000);
     const roiArr    = monthly.map(d => d.sales > 0 && d.ad_cost > 0 ? d.sales / d.ad_cost : 0);
 
-    sparkBar('spark-sales',     labels, salesArr,  '#16a34a');
+    sparkBar('spark-sales',     labels, salesArr,  '#0D9488');
     sparkBar('spark-profit',    labels, profitArr, '#34d399');
     sparkBar('spark-contracts', labels, ctrsArr,   '#0d9488');
     sparkBar('spark-roi',       labels, roiArr,    '#65a30d');
@@ -926,7 +926,7 @@ async function deleteKpiEntry(kpiId) {
 }
 
 function switchTab(t) {
-  const activeClass   = 'flex-1 py-3.5 text-sm font-semibold text-green-700 border-b-2 border-green-600 bg-green-50';
+  const activeClass   = 'flex-1 py-3.5 text-sm font-semibold text-teal-700 border-b-2 border-teal-600 bg-teal-50';
   const inactiveClass = 'flex-1 py-3.5 text-sm font-semibold text-gray-500 border-b-2 border-transparent hover:bg-gray-50';
   document.getElementById('form-kpi').classList.toggle('hidden', t !== 'kpi');
   document.getElementById('form-pl').classList.toggle('hidden',  t !== 'pl');

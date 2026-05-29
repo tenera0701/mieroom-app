@@ -7,10 +7,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   :root {
-    --primary: #16a34a;
-    --primary-dark: #15803d;
-    --primary-light: #dcfce7;
-    --primary-mid: #86efac;
+    --primary: #0D9488;
+    --primary-dark: #0F766E;
+    --primary-light: #CCFBF1;
+    --primary-mid: #5EEAD4;
     --warning: #f59e0b;
     --warning-light: #fef9c3;
     --danger: #ef4444;
@@ -199,8 +199,8 @@
     transition: background 0.1s;
     cursor: pointer;
   }
-  tbody tr:hover { background: #f0fdf4; }
-  tbody tr.row-expanded { background: #f0fdf4; }
+  tbody tr:hover { background: #F0FDFA; }
+  tbody tr.row-expanded { background: #F0FDFA; }
   tbody td {
     padding: 10px 12px;
     text-align: center;
@@ -441,8 +441,8 @@
   }
   .btn-settle  { background:#fef9c3; color:#92400e; border-color:#fde68a; }
   .btn-settle:hover { background:#fde68a; }
-  .btn-approve { background:#dcfce7; color:#15803d; border-color:#86efac; }
-  .btn-approve:hover { background:#86efac; }
+  .btn-approve { background:#CCFBF1; color:#0F766E; border-color:#5EEAD4; }
+  .btn-approve:hover { background:#5EEAD4; }
   .btn-settled-done { background:#f3f4f6; color:#9ca3af; border-color:#e5e7eb; cursor:default; }
   .btn-edit-app { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
   .btn-edit-app:hover { background:#bfdbfe; }
@@ -500,7 +500,7 @@
         <button class="month-nav-btn" onclick="navigateSalesMonth(-1)">&#8249; 前月</button>
         <div class="month-nav-current" id="sales-month-label"></div>
         <button class="month-nav-btn" onclick="navigateSalesMonth(1)">次月 &#8250;</button>
-        <button class="month-nav-btn" style="background:#f0fdf4;color:var(--primary);border-color:#86efac;" onclick="navigateSalesToday()">今月</button>
+        <button class="month-nav-btn" style="background:#F0FDFA;color:var(--primary);border-color:#5EEAD4;" onclick="navigateSalesToday()">今月</button>
       </div>
       <!-- 年月ジャンプ -->
       <input type="month" id="sales-month-jump"
@@ -633,7 +633,7 @@
         <button onclick="openColorModal()" style="padding:5px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#374151;">🎨 色設定</button>
         <button onclick="openMediaModal()" style="padding:5px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#374151;">📋 媒体管理</button>
         {% endif %}
-        <button onclick="openAppModal()" style="padding:6px 14px;font-size:12px;font-weight:700;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;">＋ 申込追加</button>
+        <button onclick="openAppModal()" style="padding:6px 14px;font-size:12px;font-weight:700;background:#0D9488;color:#fff;border:none;border-radius:6px;cursor:pointer;">＋ 申込追加</button>
       </div>
     </div>
     <div class="table-wrapper">
@@ -676,8 +676,8 @@
         <svg id="settled-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px;transition:transform .2s;">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
         </svg>
-        <h2 style="color:#16a34a;">✓ 入金済み一覧</h2>
-        <span id="settled-count" style="font-size:12px;background:#dcfce7;color:#15803d;border-radius:12px;padding:2px 10px;font-weight:700;">0件</span>
+        <h2 style="color:#0D9488;">✓ 入金済み一覧</h2>
+        <span id="settled-count" style="font-size:12px;background:#CCFBF1;color:#0F766E;border-radius:12px;padding:2px 10px;font-weight:700;">0件</span>
       </div>
     </div>
     <div id="settled-body-wrap" style="display:none;">
@@ -750,7 +750,7 @@
     <td colspan="14">
       <div class="detail-panel">
         <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;">
-          <button class="detail-edit-btn" style="padding:4px 14px;font-size:12px;border:1px solid #86efac;border-radius:6px;background:#f0fdf4;color:#15803d;cursor:pointer;font-weight:600;">編集</button>
+          <button class="detail-edit-btn" style="padding:4px 14px;font-size:12px;border:1px solid #5EEAD4;border-radius:6px;background:#F0FDFA;color:#0F766E;cursor:pointer;font-weight:600;">編集</button>
           <button class="detail-delete-btn" style="padding:4px 14px;font-size:12px;border:1px solid #fca5a5;border-radius:6px;background:#fff;color:#ef4444;cursor:pointer;font-weight:600;">削除</button>
         </div>
         <div class="detail-chart-wrap">
@@ -866,10 +866,10 @@
           <div id="inline-media-input" style="display:none;margin-top:6px;">
             <div style="display:flex;gap:6px;">
               <input type="text" id="inline-media-name" placeholder="新しい媒体名"
-                style="flex:1;border:1px solid #86efac;border-radius:6px;padding:6px 10px;font-size:13px;outline:none;"
+                style="flex:1;border:1px solid #5EEAD4;border-radius:6px;padding:6px 10px;font-size:13px;outline:none;"
                 onkeydown="if(event.key==='Enter'){event.preventDefault();confirmInlineMedia();}">
               <button type="button" onclick="confirmInlineMedia()"
-                style="padding:6px 12px;font-size:12px;font-weight:700;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;">追加</button>
+                style="padding:6px 12px;font-size:12px;font-weight:700;background:#0D9488;color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;">追加</button>
               <button type="button" onclick="cancelInlineMedia()"
                 style="padding:6px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;">✕</button>
             </div>
@@ -930,21 +930,21 @@
         <div class="form-group">
           <label>ライフライン</label>
           <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;">
-            <input type="checkbox" id="app-lifeline" style="width:16px;height:16px;accent-color:#16a34a;">
+            <input type="checkbox" id="app-lifeline" style="width:16px;height:16px;accent-color:#0D9488;">
             <span style="font-size:13px;">対象（●）</span>
           </label>
         </div>
         <div class="form-group">
           <label>引越し</label>
           <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;">
-            <input type="checkbox" id="app-moving" style="width:16px;height:16px;accent-color:#16a34a;">
+            <input type="checkbox" id="app-moving" style="width:16px;height:16px;accent-color:#0D9488;">
             <span style="font-size:13px;">対象（●）</span>
           </label>
         </div>
         <div class="form-group">
           <label>火災保険</label>
           <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;">
-            <input type="checkbox" id="app-fire_insurance" style="width:16px;height:16px;accent-color:#16a34a;">
+            <input type="checkbox" id="app-fire_insurance" style="width:16px;height:16px;accent-color:#0D9488;">
             <span style="font-size:13px;">対象（●）</span>
           </label>
         </div>
@@ -1245,7 +1245,7 @@ function renderStaffTable(data) {
     const target = s.target_sales || 0;
     const achvPct = target > 0 ? Math.round((s.revenue / target) * 100) : null;
     const achvHtml = target > 0
-      ? `<div style="font-size:12px;font-weight:700;color:${achvPct >= 100 ? '#15803d' : '#f59e0b'};">${achvPct}%</div>
+      ? `<div style="font-size:12px;font-weight:700;color:${achvPct >= 100 ? '#0F766E' : '#f59e0b'};">${achvPct}%</div>
          <div class="target-bar" style="width:80px;"><div class="target-bar-fill ${achvPct >= 100 ? 'over' : ''}" style="width:${Math.min(achvPct,100)}%;"></div></div>`
       : '<span style="color:#9ca3af;font-size:12px;">未設定</span>';
 
@@ -1268,7 +1268,7 @@ function renderStaffTable(data) {
       <td>${trendArrow(s.revenue, s.prev_revenue)}</td>
       <td onclick="event.stopPropagation();" style="white-space:nowrap;">
         ${s.kpi_id ? `
-          <button class="btn-cancel" style="padding:3px 10px;font-size:12px;color:#15803d;border-color:#86efac;margin-right:4px;" onclick="editKpi(${s.kpi_id}, ${JSON.stringify(s).replace(/"/g,'&quot;')})">編集</button>
+          <button class="btn-cancel" style="padding:3px 10px;font-size:12px;color:#0F766E;border-color:#5EEAD4;margin-right:4px;" onclick="editKpi(${s.kpi_id}, ${JSON.stringify(s).replace(/"/g,'&quot;')})">編集</button>
           <button class="btn-cancel" style="padding:3px 10px;font-size:12px;color:#b91c1c;border-color:#fca5a5;" onclick="deleteKpi(${s.kpi_id})">削除</button>
         ` : '―'}
       </td>
@@ -1366,7 +1366,7 @@ function toggleDetail(tr, staffObj) {
             {
               label: '契約数',
               data: history.map(h => h.contracts),
-              borderColor: '#16a34a',
+              borderColor: '#0D9488',
               backgroundColor: 'rgba(22,163,74,0.1)',
               yAxisID: 'y1', tension: 0.3, fill: true, pointRadius: 4,
             },
@@ -1443,7 +1443,7 @@ function renderMonthlyChart(data) {
         {
           label: '売上',
           data: revenues,
-          backgroundColor: '#16a34a',
+          backgroundColor: '#0D9488',
           borderRadius: 4,
           yAxisID: 'y',
         },
@@ -1778,7 +1778,7 @@ async function submitSalesImport() {
     const res = await fetch('/api/import/excel', { method: 'POST', body: fd });
     const data = await res.json();
     if (data.error) { resEl.innerHTML = `<p style="color:#b91c1c;">${data.error}</p>`; return; }
-    resEl.innerHTML = `<p style="color:#15803d;font-weight:700;">✓ インポート完了：${data.imported}件</p>
+    resEl.innerHTML = `<p style="color:#0F766E;font-weight:700;">✓ インポート完了：${data.imported}件</p>
       ${(data.staff_results||[]).map(s=>`<p style="font-size:12px;">${s.staff_name}：${s.imported}件</p>`).join('')}
       ${(data.errors||[]).map(e=>`<p style="font-size:12px;color:#b91c1c;">${e}</p>`).join('')}`;
     loadData();
@@ -1856,9 +1856,9 @@ function renderUncollectedTable(list) {
       <td>${p.management_company || '―'}</td>
       <td>${p.customer_name || '―'}</td>
       <td style="text-align:right;">${p.amount ? p.amount.toLocaleString() : '―'}</td>
-      <td>${isPaid ? '<span style="color:#16a34a;font-weight:700;">入金済</span>' : (isOverdue ? '<span style="color:#dc2626;font-weight:700;">期限超過</span>' : '<span style="color:#f59e0b;font-weight:700;">未入金</span>')}</td>
+      <td>${isPaid ? '<span style="color:#0D9488;font-weight:700;">入金済</span>' : (isOverdue ? '<span style="color:#dc2626;font-weight:700;">期限超過</span>' : '<span style="color:#f59e0b;font-weight:700;">未入金</span>')}</td>
       <td style="white-space:nowrap;">
-        ${!isPaid ? `<button onclick="markPaid(${p.id})" style="padding:3px 8px;font-size:11px;border:1px solid #86efac;border-radius:4px;background:#f0fdf4;color:#15803d;cursor:pointer;margin-right:4px;">入金済</button>` : ''}
+        ${!isPaid ? `<button onclick="markPaid(${p.id})" style="padding:3px 8px;font-size:11px;border:1px solid #5EEAD4;border-radius:4px;background:#F0FDFA;color:#0F766E;cursor:pointer;margin-right:4px;">入金済</button>` : ''}
         <button onclick="openUncollectedModal(${JSON.stringify(p).replace(/"/g,'&quot;')})" style="padding:3px 8px;font-size:11px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;margin-right:4px;">編集</button>
         <button onclick="deleteUncollected(${p.id})" style="padding:3px 8px;font-size:11px;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#ef4444;cursor:pointer;">削除</button>
       </td>`;
@@ -1980,7 +1980,7 @@ function buildAppRow(r, colors) {
     '申込':        { bg: '#ffffff', text: '#111827' },
     '契約':        { bg: '#fef9c3', text: '#92400e' },
     'キャンセル':   { bg: '#fee2e2', text: '#b91c1c' },
-    'キャンセル振替': { bg: '#dcfce7', text: '#15803d' },
+    'キャンセル振替': { bg: '#CCFBF1', text: '#0F766E' },
   };
   const sc = colors[r.status] || DEFAULT_COLORS[r.status] || { bg: '#fff', text: '#111827' };
   const tr = document.createElement('tr');
@@ -2047,7 +2047,7 @@ function renderApplications(list, colors) {
     settledTbody.innerHTML = '';
     settled.forEach(r => {
       const tr = buildAppRow(r, colors);
-      tr.style.background = '#f0fdf4';  // 薄いグリーン
+      tr.style.background = '#F0FDFA';  // 薄いグリーン
       settledTbody.appendChild(tr);
     });
   }
@@ -2062,7 +2062,7 @@ function renderApplications(list, colors) {
 
 function buildSettleCell(r, field, settled, approved, textColor) {
   if (approved) {
-    return '<span style="color:#16a34a;font-weight:700;font-size:11px;">✓ 承認済</span>';
+    return '<span style="color:#0D9488;font-weight:700;font-size:11px;">✓ 承認済</span>';
   }
   if (settled) {
     if (IS_MANAGER) {
@@ -2343,7 +2343,7 @@ const STATUS_DEFAULTS = {
   '申込':        { bg: '#ffffff', text: '#111827' },
   '契約':        { bg: '#fef9c3', text: '#92400e' },
   'キャンセル':   { bg: '#fee2e2', text: '#b91c1c' },
-  'キャンセル振替': { bg: '#dcfce7', text: '#15803d' },
+  'キャンセル振替': { bg: '#CCFBF1', text: '#0F766E' },
 };
 
 async function openColorModal() {

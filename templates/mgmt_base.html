@@ -12,10 +12,10 @@
         extend: {
           colors: {
             primary: {
-              DEFAULT: '#16a34a',
-              dark:    '#15803d',
-              light:   '#dcfce7',
-              bg:      '#f0fdf4',
+              DEFAULT: '#0D9488',
+              dark:    '#0F766E',
+              light:   '#CCFBF1',
+              bg:      '#F0FDFA',
             }
           }
         }
@@ -32,9 +32,9 @@
 
     /* スクロールバー */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #f0fdf4; }
-    ::-webkit-scrollbar-thumb { background: #86efac; border-radius: 3px; }
-    ::-webkit-scrollbar-thumb:hover { background: #16a34a; }
+    ::-webkit-scrollbar-track { background: #F0FDFA; }
+    ::-webkit-scrollbar-thumb { background: #5EEAD4; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #0D9488; }
 
     /* サイドバー */
     #sidebar {
@@ -46,7 +46,7 @@
       z-index: 50;
       display: flex;
       flex-direction: column;
-      background: #14532d;
+      background: #0D4A48;
       transition: width 0.2s ease;
       overflow-y: auto;
     }
@@ -69,7 +69,7 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      background: #f0fdf4;
+      background: #F0FDFA;
       transition: margin-left 0.2s ease;
     }
     #main-wrap.expanded { margin-left: 64px; }
@@ -81,22 +81,22 @@
       padding: 10px 16px;
       border-radius: 8px;
       margin: 2px 8px;
-      color: #bbf7d0;
+      color: #99F6E4;
       text-decoration: none;
       font-size: 0.875rem;
       font-weight: 500;
       transition: background 0.15s, color 0.15s;
       white-space: nowrap;
     }
-    .nav-item:hover { background: #166534; color: #fff; }
-    .nav-item.active { background: #16a34a; color: #fff; }
+    .nav-item:hover { background: #115E59; color: #fff; }
+    .nav-item.active { background: #0D9488; color: #fff; }
     .nav-item svg { flex-shrink: 0; width: 18px; height: 18px; }
 
     .nav-section-label {
       font-size: 0.65rem;
       font-weight: 700;
       letter-spacing: 0.1em;
-      color: #4ade80;
+      color: #2DD4BF;
       padding: 12px 24px 4px;
       text-transform: uppercase;
     }
@@ -105,7 +105,7 @@
     #topbar {
       height: var(--topbar-h);
       background: #fff;
-      border-bottom: 1px solid #dcfce7;
+      border-bottom: 1px solid #CCFBF1;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -113,7 +113,7 @@
       position: sticky;
       top: 0;
       z-index: 40;
-      box-shadow: 0 1px 4px rgba(22,163,74,0.07);
+      box-shadow: 0 1px 4px rgba(13,148,136,0.07);
     }
 
     /* カードアニメーション */
@@ -122,17 +122,17 @@
     }
     .card-hover:hover {
       transform: translateY(-2px);
-      box-shadow: 0 8px 24px rgba(22,163,74,0.12);
+      box-shadow: 0 8px 24px rgba(13,148,136,0.12);
     }
 
     /* バッジ */
-    .badge-green { background: #dcfce7; color: #15803d; border-radius: 9999px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; }
+    .badge-green { background: #CCFBF1; color: #0F766E; border-radius: 9999px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; }
     .badge-red   { background: #fee2e2; color: #b91c1c; border-radius: 9999px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; }
     .badge-yellow{ background: #fef9c3; color: #92400e; border-radius: 9999px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; }
 
     /* プログレスバー */
-    .progress-bar { height: 6px; border-radius: 3px; background: #dcfce7; overflow: hidden; }
-    .progress-bar-fill { height: 100%; border-radius: 3px; background: #16a34a; transition: width 0.5s; }
+    .progress-bar { height: 6px; border-radius: 3px; background: #CCFBF1; overflow: hidden; }
+    .progress-bar-fill { height: 100%; border-radius: 3px; background: #0D9488; transition: width 0.5s; }
     .progress-bar-fill.danger { background: #ef4444; }
     .progress-bar-fill.warning { background: #f59e0b; }
 
@@ -155,20 +155,20 @@
   </style>
   {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-green-50 min-h-screen flex">
+<body class="min-h-screen flex" style="background:#F0FDFA;">
 
   <!-- サイドバー -->
   <aside id="sidebar">
     <!-- ロゴ -->
-    <div class="logo-wrap flex items-center justify-center px-3 py-3 border-b border-green-800">
+    <div class="logo-wrap flex items-center justify-center px-3 py-3" style="border-bottom:1px solid #115E59;">
       <!-- 展開時: 文字ありロゴ -->
       <img src="/static/logo_text.png" alt="ミエルーム"
            class="logo-img-text"
-           style="height:52px; width:auto; max-width:180px; object-fit:contain;">
+           style="height:104px; width:auto; max-width:200px; object-fit:contain;">
       <!-- 折りたたみ時: 文字なしロゴ -->
       <img src="/static/logo_notext.png" alt="ミエルーム"
            class="logo-img-notext"
-           style="height:36px; width:auto; object-fit:contain;">
+           style="height:72px; width:auto; object-fit:contain;">
     </div>
 
     <!-- ナビゲーション -->
@@ -208,10 +208,10 @@
         {# owner: 店舗切替セレクト（2店舗以上ある場合） #}
         {% if role == 'owner' and sidebar_stores|length > 1 %}
         <div style="padding:6px 12px 4px;">
-          <div style="font-size:10px;color:#86efac;font-weight:600;letter-spacing:0.05em;margin-bottom:4px;">店舗切替</div>
+          <div style="font-size:10px;color:#5EEAD4;font-weight:600;letter-spacing:0.05em;margin-bottom:4px;">店舗切替</div>
           <select id="store-switcher"
             onchange="switchStore(this.value)"
-            style="width:100%;background:#166534;color:#dcfce7;border:1px solid #166534;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer;">
+            style="width:100%;background:#115E59;color:#CCFBF1;border:1px solid #115E59;border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer;">
             <option value="">全店舗</option>
             {% for s in sidebar_stores %}
             <option value="{{ s.id }}"
@@ -349,17 +349,17 @@
       }).then(() => location.reload());
     }
     </script>
-    <div class="px-3 py-4 border-t border-green-800">
+    <div class="px-3 py-4" style="border-top:1px solid #115E59;">
       <div class="nav-item" style="cursor:default; margin:0; padding:8px 8px;">
-        <div class="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+        <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style="background:#0D9488;">
           {{ session.get('app_username', 'G')[0] | upper }}
         </div>
         <div class="user-info min-w-0">
           <div class="text-white text-sm font-medium truncate">{{ session.get('app_username', 'ゲスト') }}</div>
-          <div class="text-green-400 text-xs truncate">{{ session.get('app_user_role', '--') }}</div>
+          <div class="text-xs truncate" style="color:#2DD4BF;">{{ session.get('app_user_role', '--') }}</div>
         </div>
       </div>
-      <a href="/app-logout" class="nav-item text-green-400 hover:text-red-300 text-xs mt-1">
+      <a href="/app-logout" class="nav-item text-xs mt-1" style="color:#2DD4BF;" onmouseover="this.style.color='#fca5a5'" onmouseout="this.style.color='#2DD4BF'">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
@@ -377,12 +377,12 @@
       <div class="flex items-center gap-3" style="flex:1; min-width:0; overflow:hidden;">
         <button id="sidebar-toggle"
           onclick="toggleSidebar()"
-          class="p-1.5 rounded-lg text-green-700 hover:bg-green-100 transition flex-shrink-0">
+          class="p-1.5 rounded-lg transition flex-shrink-0" style="color:#0F766E;" onmouseover="this.style.background='#CCFBF1'" onmouseout="this.style.background='transparent'">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
           </svg>
         </button>
-        <div class="text-sm text-green-700 font-semibold" id="topbar-breadcrumb"
+        <div class="text-sm font-semibold" id="topbar-breadcrumb" style="color:#0F766E;"
              style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
           {% block breadcrumb %}管理ポータル{% endblock %}
         </div>
@@ -392,7 +392,7 @@
         <div class="text-sm text-gray-500" id="topbar-datetime"></div>
 
         <!-- 通知ベル -->
-        <button id="topbar-notif" class="relative p-1.5 rounded-lg text-green-700 hover:bg-green-100 transition">
+        <button id="topbar-notif" class="relative p-1.5 rounded-lg transition" style="color:#0F766E;" onmouseover="this.style.background='#CCFBF1'" onmouseout="this.style.background='transparent'">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
@@ -402,7 +402,7 @@
 
         <!-- ユーザーアバター -->
         <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style="background:#0D9488;">
             {{ session.get('app_username', 'G')[0] | upper }}
           </div>
           <span id="topbar-username" class="text-sm text-gray-700 font-medium">{{ session.get('app_username', 'ゲスト') }}</span>
@@ -415,7 +415,7 @@
       {% block content %}{% endblock %}
     </main>
 
-    <footer class="px-6 py-3 text-xs text-green-600 border-t border-green-100 text-right">
+    <footer class="px-6 py-3 text-xs text-right" style="color:#0D9488; border-top:1px solid #CCFBF1;">
       © 2026 ミエルーム &nbsp;|&nbsp; 管理ポータル
     </footer>
   </div>

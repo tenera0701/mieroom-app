@@ -4,12 +4,12 @@
 
 {% block extra_head %}
 <style>
-  :root { --primary:#16a34a; --primary-dark:#15803d; --primary-light:#dcfce7; }
+  :root { --primary:#0D9488; --primary-dark:#0F766E; --primary-light:#CCFBF1; }
   .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
   .page-title  { font-size:22px; font-weight:800; color:#111827; margin:0; }
   .ctrl-bar    { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .month-btn   { background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; }
-  .month-btn:hover { background:#f0fdf4; border-color:#86efac; }
+  .month-btn:hover { background:#F0FDFA; border-color:#5EEAD4; }
   .month-label { font-size:15px; font-weight:700; color:#111827; min-width:80px; text-align:center; }
   select.filter { border:1px solid #d1d5db; border-radius:6px; padding:7px 10px; font-size:13px; }
   .btn-add  { background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 18px; font-size:13px; font-weight:700; cursor:pointer; }
@@ -17,19 +17,19 @@
 
   .table-wrap { overflow-x:auto; border-radius:10px; border:1px solid #e5e7eb; background:#fff; }
   table { width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap; }
-  thead th { background:#f0fdf4; padding:8px 10px; text-align:center; font-weight:700; color:#374151;
+  thead th { background:#F0FDFA; padding:8px 10px; text-align:center; font-weight:700; color:#374151;
              border-bottom:2px solid #d1fae5; position:sticky; top:0; z-index:1; }
   tbody tr { border-bottom:1px solid #f3f4f6; }
-  tbody tr:hover { background:#f0fdf4; }
+  tbody tr:hover { background:#F0FDFA; }
   tbody td { padding:7px 8px; text-align:center; color:#111827; max-width:120px; overflow:hidden; text-overflow:ellipsis; }
   td.left   { text-align:left; }
-  .chk-yes  { color:#16a34a; font-weight:700; }
+  .chk-yes  { color:#0D9488; font-weight:700; }
   .chk-no   { color:#d1d5db; }
   /* フラグ行カラー（優先順: LINE > 電話 > 返信） */
-  tbody tr.row-line  { background:#dcfce7 !important; }
+  tbody tr.row-line  { background:#CCFBF1 !important; }
   tbody tr.row-phone { background:#dbeafe !important; }
   tbody tr.row-reply { background:#fef9c3 !important; }
-  tbody tr.row-line:hover  { background:#bbf7d0 !important; }
+  tbody tr.row-line:hover  { background:#99F6E4 !important; }
   tbody tr.row-phone:hover { background:#bfdbfe !important; }
   tbody tr.row-reply:hover { background:#fde68a !important; }
   .btn-sm   { padding:3px 8px; font-size:11px; border:1px solid #d1d5db; border-radius:4px; background:#fff; cursor:pointer; }
@@ -63,7 +63,7 @@
   .btn-save:hover { background:var(--primary-dark); }
   .alert { padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
   .alert.show { display:block; }
-  .alert-success { background:var(--primary-light); color:var(--primary-dark); border:1px solid #86efac; }
+  .alert-success { background:var(--primary-light); color:var(--primary-dark); border:1px solid #5EEAD4; }
   .alert-error   { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
   .empty-row td  { text-align:center; color:#9ca3af; padding:40px; }
 </style>
@@ -81,7 +81,7 @@
       <button class="month-btn" onclick="navigate(-1)">&#8249; 前月</button>
       <span class="month-label" id="month-label"></span>
       <button class="month-btn" onclick="navigate(1)">次月 &#8250;</button>
-      <button class="month-btn" style="background:#f0fdf4;color:#16a34a;border-color:#86efac;" onclick="goToday()">今月</button>
+      <button class="month-btn" style="background:#F0FDFA;color:#0D9488;border-color:#5EEAD4;" onclick="goToday()">今月</button>
       <input type="month" id="month-jump" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;" onchange="jumpMonth(this.value)">
       <select class="filter" id="filter-staff" onchange="loadRecords()">
         <option value="">全スタッフ</option>
@@ -101,9 +101,9 @@
       <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin-bottom:4px;">総反響数</div>
       <div style="font-size:20px;font-weight:800;color:#111827;" id="sum-total">0<span style="font-size:11px;color:#6b7280;margin-left:3px;">件</span></div>
     </div>
-    <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:12px 18px;min-width:110px;">
+    <div style="background:#F0FDFA;border:1px solid #5EEAD4;border-radius:10px;padding:12px 18px;min-width:110px;">
       <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin-bottom:4px;">LINE追加率</div>
-      <div style="font-size:20px;font-weight:800;color:#15803d;" id="sum-line-rate">0<span style="font-size:11px;color:#6b7280;margin-left:3px;">%</span></div>
+      <div style="font-size:20px;font-weight:800;color:#0F766E;" id="sum-line-rate">0<span style="font-size:11px;color:#6b7280;margin-left:3px;">%</span></div>
     </div>
     <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 18px;min-width:110px;">
       <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin-bottom:4px;">LINE追加数</div>
@@ -393,7 +393,7 @@ function editCell(td, id, field, type, curVal, options) {
   let el;
   if (type === 'select') {
     el = document.createElement('select');
-    el.style.cssText = 'width:100%;min-width:70px;border:1px solid #16a34a;border-radius:4px;padding:2px;font-size:12px;';
+    el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px;font-size:12px;';
     (options || []).forEach(([v, l]) => {
       const o = new Option(l || v, v);
       if (v === curVal) o.selected = true;
@@ -409,7 +409,7 @@ function editCell(td, id, field, type, curVal, options) {
   } else {
     el = document.createElement('input');
     el.type = type; el.value = curVal || '';
-    el.style.cssText = 'width:100%;min-width:70px;border:1px solid #16a34a;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
+    el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
     td.innerHTML = ''; td.appendChild(el); el.focus();
     if (type === 'text') el.select();
     const save = async () => { await patchRecord(id, field, el.value); renderTable(); };
@@ -574,7 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <input id="dgr-input" type="text" placeholder="新しい選択肢を入力"
           style="flex:1;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:14px;outline:none;"
           onkeydown="if(event.key==='Enter'){addDgrOpt();}">
-        <button onclick="addDgrOpt()" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;">追加</button>
+        <button onclick="addDgrOpt()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;">追加</button>
       </div>
     </div>
     <div style="padding:12px 20px;border-top:1px solid #e5e7eb;text-align:right;">
