@@ -55,8 +55,13 @@
     #sidebar.collapsed .logo-text,
     #sidebar.collapsed .user-info { display: none; }
     #sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; }
-    #sidebar.collapsed .logo-wrap { justify-content: center; padding: 16px 0; }
+    #sidebar.collapsed .logo-wrap { justify-content: center; padding: 12px 0; }
     #sidebar.collapsed .nav-section-label { display: none; }
+    /* ロゴ切替: 展開=文字あり、折りたたみ=文字なし */
+    .logo-img-text    { display: block; }
+    .logo-img-notext  { display: none; }
+    #sidebar.collapsed .logo-img-text   { display: none; }
+    #sidebar.collapsed .logo-img-notext { display: block; }
 
     /* メインコンテンツ */
     #main-wrap {
@@ -155,17 +160,15 @@
   <!-- サイドバー -->
   <aside id="sidebar">
     <!-- ロゴ -->
-    <div class="logo-wrap flex items-center gap-3 px-4 py-5 border-b border-green-800">
-      <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style="background:#16a34a;">
-        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-        </svg>
-      </div>
-      <div class="logo-text">
-        <div class="text-white font-bold text-base leading-tight">ミエルーム</div>
-        <div class="text-green-400 text-xs">管理ポータル</div>
-      </div>
+    <div class="logo-wrap flex items-center justify-center px-3 py-3 border-b border-green-800">
+      <!-- 展開時: 文字ありロゴ -->
+      <img src="/static/logo_text.png" alt="ミエルーム"
+           class="logo-img-text"
+           style="height:52px; width:auto; max-width:180px; object-fit:contain;">
+      <!-- 折りたたみ時: 文字なしロゴ -->
+      <img src="/static/logo_notext.png" alt="ミエルーム"
+           class="logo-img-notext"
+           style="height:36px; width:auto; object-fit:contain;">
     </div>
 
     <!-- ナビゲーション -->
