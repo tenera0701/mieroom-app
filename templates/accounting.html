@@ -626,14 +626,14 @@ async function loadPlData() {
   try {
     const from = document.getElementById('pl-chart-from')?.value;
     const to   = document.getElementById('pl-chart-to')?.value;
-    let url = `/api/kpi/monthly?store_id=${STORE_ID}`;
+    let url = `/api/pl/monthly-chart?store_id=${STORE_ID}`;
     if (from && to) url += `&from=${from}&to=${to}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error('API error');
     const json = await res.json();
     renderPlChart(json);
   } catch(e) {
-    console.warn('Monthly KPI API unavailable:', e);
+    console.warn('PL chart API unavailable:', e);
     renderPlChart(null);
   }
 }
@@ -654,7 +654,7 @@ async function applyPlChartRange() {
   const to   = document.getElementById('pl-chart-to').value;
   if (!from || !to) return;
   try {
-    const res = await fetch(`/api/kpi/monthly?store_id=${STORE_ID}&from=${from}&to=${to}`);
+    const res = await fetch(`/api/pl/monthly-chart?store_id=${STORE_ID}&from=${from}&to=${to}`);
     if (!res.ok) throw new Error();
     renderPlChart(await res.json());
   } catch(e) { renderPlChart(null); }
@@ -845,8 +845,9 @@ function renderPlChart(data) {
 
   const months12 = Array.isArray(data) ? data : [];
   const labels   = months12.map(d => d.label);
-  const revenue  = months12.map(d => d.sales || 0);
-  const gross    = months12.map(d => d.gross_profit || 0);
+  const revenue  = months12.map(d => d.revenue  || 0);
+  const expenses = months12.map(d => d.expenses || 0);
+  const profit   = months12.map(d => d.profit   || 0);
 
   plChart = new Chart(ctx, {
     type: 'line',
@@ -857,15 +858,26 @@ function renderPlChart(data) {
           label: '売上',
           data: revenue,
           borderColor: '#0D9488',
-          backgroundColor: 'rgba(22,163,74,0.1)',
+          backgroundColor: 'rgba(13,148,136,0.08)',
           tension: 0.3,
           fill: true,
           pointRadius: 4,
           yAxisID: 'y',
         },
         {
-          label: '粗利',
-          data: gross,
+          label: '経費合計',
+          data: expenses,
+          borderColor: '#f59e0b',
+          backgroundColor: 'transparent',
+          tension: 0.3,
+          fill: false,
+          pointRadius: 4,
+          borderDash: [4, 3],
+          yAxisID: 'y',
+        },
+        {
+          label: '利益',
+          data: profit,
           borderColor: '#2DD4BF',
           backgroundColor: 'transparent',
           tension: 0.3,

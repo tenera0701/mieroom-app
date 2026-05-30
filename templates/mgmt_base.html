@@ -468,6 +468,33 @@
       }
     })();
 
+    // 承認待ちバッジ更新（店長以上のみ有効）
+    async function updateApprovalBadge() {
+      try {
+        const res = await fetch('/api/pending-approvals');
+        if (!res.ok) return;
+        const { count } = await res.json();
+        const badge = document.getElementById('notif-badge');
+        if (!badge) return;
+        if (count > 0) {
+          badge.textContent = count > 9 ? '9+' : String(count);
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      } catch(e) {}
+    }
+    updateApprovalBadge();
+    setInterval(updateApprovalBadge, 60000); // 1分ごとに更新
+
+    // 鈴クリックで営業管理ページへ
+    const notifBtn = document.getElementById('topbar-notif');
+    if (notifBtn) {
+      notifBtn.addEventListener('click', function() {
+        window.location.href = '/sales';
+      });
+    }
+
     // ウィンドウリサイズ対応
     let _resizeTimer;
     window.addEventListener('resize', function() {

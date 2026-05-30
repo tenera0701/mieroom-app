@@ -2926,6 +2926,61 @@ def _apply_pl_fields(pl, data):
         pl.labor_cost = labor_total
 
 
+@app.route("/api/pl/monthly-chart")
+@login_required
+def api_pl_monthly_chart():
+    """経理専用月次グラフ（PLRecordのみ・営業KPIを含まない）"""
+    store_id   = request.args.get('store_id', type=int)
+    from_param = request.args.get('from')
+    to_param   = request.args.get('to')
+    today      = date.today()
+    allowed_ids = get_allowed_store_ids()
+    filter_ids  = [store_id] if (store_id and store_id in allowed_ids) else allowed_ids
+
+    if from_param and to_param:
+        try:
+            fy, fm = int(from_param[:4]), int(from_param[5:7])
+            ty, tm = int(to_param[:4]),   int(to_param[5:7])
+            base   = fy * 12 + fm - 1
+            end    = ty  * 12 + tm  - 1
+            periods = [(t // 12, t % 12 + 1) for t in range(base, end + 1)]
+        except Exception:
+            periods = None
+    else:
+        periods = None
+    if not periods:
+        base = today.year * 12 + today.month - 1
+        periods = [(t // 12, t % 12 + 1) for t in range(base - 11, base + 1)]
+
+    result = []
+    for y, m in periods:
+        pls = PLRecord.query.filter_by(year=y, month=m).filter(PLRecord.store_id.in_(filter_ids)).all()
+        total_revenue  = sum(p.revenue or 0 for p in pls)
+        total_expenses = 0
+        for p in pls:
+            cv = PLCustomValue.query.filter_by(store_id=p.store_id, year=y, month=m).all()
+            ad_cvs    = [c for c in cv if c.item_type == '広告費']
+            fixed_cvs = [c for c in cv if c.item_type == '固定費']
+            var_cvs   = [c for c in cv if c.item_type == '変動費']
+            ad_t = sum(c.amount for c in ad_cvs) if ad_cvs else (
+                (p.ad_cost or 0) or sum(getattr(p, col, 0) or 0 for col in [
+                    'suumo_cost','homes_cost','athome_cost','instagram_cost','tiktok_cost',
+                    'google_ads_cost','line_cost','hp_cost','meo_cost','other_ad_cost']))
+            lb_t = (p.labor_cost or 0) or ((p.regular_salary or 0)+(p.parttime_salary or 0)+(p.commission_pay or 0))
+            ft   = sum(c.amount for c in fixed_cvs)
+            vt   = sum(c.amount for c in var_cvs)
+            total_expenses += ad_t + lb_t + ft + vt
+        result.append({
+            'label':    f'{y}/{m:02d}',
+            'year':     y,
+            'month':    m,
+            'revenue':  total_revenue,
+            'expenses': total_expenses,
+            'profit':   total_revenue - total_expenses,
+        })
+    return jsonify(result)
+
+
 @app.route("/api/pl/input", methods=["POST"])
 def api_pl_input():
     """PLデータを入力・更新する"""

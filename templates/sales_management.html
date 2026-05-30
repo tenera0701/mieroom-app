@@ -1546,6 +1546,8 @@ async function populateStaffSelect() {
     const res = await fetch('/api/staff');
     if (!res.ok) throw new Error('API error');
     const staffList = await res.json();
+    // インライン編集用スタッフペア（[id, name]）
+    _APP_STAFF_PAIRS = staffList.map(s => [s.id, s.name]);
 
     const uncSel    = document.getElementById('unc-staff');
     const appSel    = document.getElementById('app-staff_id');
@@ -1848,20 +1850,34 @@ function renderUncollectedTable(list) {
     const isPaid = p.is_paid;
     tr.style.cssText = isPaid ? 'opacity:0.5;' : (isOverdue ? 'background:#fff7ed;' : '');
     tr.innerHTML = `
-      <td style="${isOverdue ? 'color:#dc2626;font-weight:700;' : ''}">${p.expected_payment_date || '―'}</td>
-      <td>${p.staff_name || '―'}</td>
-      <td>${p.property_name || '―'}</td>
-      <td>${p.room_number || '―'}</td>
-      <td>${p.application_date || '―'}</td>
-      <td>${p.management_company || '―'}</td>
-      <td>${p.customer_name || '―'}</td>
-      <td style="text-align:right;">${p.amount ? p.amount.toLocaleString() : '―'}</td>
+      <td data-uf="expected_payment_date" data-uv="${p.expected_payment_date||''}" style="${isOverdue?'color:#dc2626;font-weight:700;':''}">${p.expected_payment_date || '―'}</td>
+      <td data-uf="staff_id" data-ut="staff" data-uv="${p.staff_id||''}">${p.staff_name || '―'}</td>
+      <td data-uf="property_name"    data-uv="${escApp(p.property_name)}"   >${p.property_name || '―'}</td>
+      <td data-uf="room_number"      data-uv="${escApp(p.room_number)}"     >${p.room_number || '―'}</td>
+      <td data-uf="application_date" data-ut="date" data-uv="${p.application_date||''}">${p.application_date || '―'}</td>
+      <td data-uf="management_company" data-uv="${escApp(p.management_company)}">${p.management_company || '―'}</td>
+      <td data-uf="customer_name"    data-uv="${escApp(p.customer_name)}"   >${p.customer_name || '―'}</td>
+      <td data-uf="amount"           data-ut="number" data-uv="${p.amount||0}" style="text-align:right;">${p.amount ? p.amount.toLocaleString() : '―'}</td>
       <td>${isPaid ? '<span style="color:#0D9488;font-weight:700;">入金済</span>' : (isOverdue ? '<span style="color:#dc2626;font-weight:700;">期限超過</span>' : '<span style="color:#f59e0b;font-weight:700;">未入金</span>')}</td>
       <td style="white-space:nowrap;">
         ${!isPaid ? `<button onclick="markPaid(${p.id})" style="padding:3px 8px;font-size:11px;border:1px solid #5EEAD4;border-radius:4px;background:#F0FDFA;color:#0F766E;cursor:pointer;margin-right:4px;">入金済</button>` : ''}
-        <button onclick="openUncollectedModal(${JSON.stringify(p).replace(/"/g,'&quot;')})" style="padding:3px 8px;font-size:11px;border:1px solid #d1d5db;border-radius:4px;background:#fff;cursor:pointer;margin-right:4px;">編集</button>
         <button onclick="deleteUncollected(${p.id})" style="padding:3px 8px;font-size:11px;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#ef4444;cursor:pointer;">削除</button>
       </td>`;
+
+    // インライン編集（未入金行のみ）
+    if (!isPaid) {
+      tr.querySelectorAll('td[data-uf]').forEach(td => {
+        const field = td.dataset.uf;
+        const type  = td.dataset.ut || 'text';
+        const val   = td.dataset.uv;
+        if (field === 'staff_id') return; // スタッフ変更は除外
+        td.style.cursor = 'pointer';
+        td.title = 'クリックで編集';
+        td.addEventListener('click', function() {
+          editCellUnc(td, p.id, field, type, val);
+        });
+      });
+    }
     tbody.appendChild(tr);
   });
 }
@@ -1974,8 +1990,11 @@ function toggleSettledSection() {
   chevron.style.transform = open ? 'rotate(-90deg)' : '';
 }
 
-/** 申込行を1つ描画してtbodyに追加（pending/settled両方で使用） */
-function buildAppRow(r, colors) {
+/** スタッフ選択肢（インライン編集用・loadApplications後に設定） */
+let _APP_STAFF_PAIRS = [];
+
+/** 申込行を1つ描画（isSettled=trueのとき入金済みで編集不可） */
+function buildAppRow(r, colors, isSettled = false) {
   const DEFAULT_COLORS = {
     '申込':        { bg: '#ffffff', text: '#111827' },
     '契約':        { bg: '#fef9c3', text: '#92400e' },
@@ -1999,27 +2018,57 @@ function buildAppRow(r, colors) {
        <button onclick="deleteApp(${r.id})" style="padding:3px 8px;font-size:11px;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#ef4444;cursor:pointer;">削除</button>`
     : '';
 
+  // data-* 属性で編集情報を埋め込む
   tr.innerHTML = `
-    <td style="white-space:nowrap;">${r.application_date || '―'}</td>
-    <td>${r.staff_name || '―'}</td>
-    <td>${r.media || '―'}</td>
-    <td>${r.property_name || '―'}</td>
-    <td>${r.room_number || '―'}</td>
-    <td>${r.customer_name || '―'}</td>
-    <td style="text-align:right;white-space:nowrap;">${r.rent ? '¥' + r.rent.toLocaleString() : '―'}</td>
-    <td style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
-    <td style="text-align:right;white-space:nowrap;">${r.brokerage_fee ? '¥' + r.brokerage_fee.toLocaleString() : '―'}</td>
-    <td style="text-align:right;white-space:nowrap;">${adLabel}</td>
-    <td style="white-space:nowrap;">${r.ad_payment_date || '―'}</td>
-    <td style="text-align:right;white-space:nowrap;">${r.option_amount ? '¥' + r.option_amount.toLocaleString() : '―'}</td>
-    <td style="text-align:center;">${r.lifeline ? '●' : '×'}</td>
-    <td style="text-align:center;">${r.moving ? '●' : '×'}</td>
-    <td style="text-align:center;">${r.fire_insurance ? '●' : '×'}</td>
-    <td style="white-space:nowrap;"><span class="app-status-badge" style="background:${sc.bg};color:${sc.text};border:1px solid ${sc.text}30;">${r.status}</span></td>
+    <td data-f="application_date" data-t="date"   data-v="${r.application_date||''}"   style="white-space:nowrap;">${r.application_date || '―'}</td>
+    <td data-f="staff_id"         data-t="staff"  data-v="${r.staff_id||''}"            data-mgr="1">${r.staff_name || '―'}</td>
+    <td data-f="media"            data-t="text"   data-v="${escApp(r.media)}"           >${r.media || '―'}</td>
+    <td data-f="property_name"    data-t="text"   data-v="${escApp(r.property_name)}"   >${r.property_name || '―'}</td>
+    <td data-f="room_number"      data-t="text"   data-v="${escApp(r.room_number)}"     >${r.room_number || '―'}</td>
+    <td data-f="customer_name"    data-t="text"   data-v="${escApp(r.customer_name)}"   >${r.customer_name || '―'}</td>
+    <td data-f="rent"             data-t="number" data-v="${r.rent||0}"                  style="text-align:right;white-space:nowrap;">${r.rent ? '¥'+r.rent.toLocaleString() : '―'}</td>
+    <td data-f="contract_start_date" data-t="date" data-v="${r.contract_start_date||''}" style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
+    <td data-f="brokerage_fee"    data-t="number" data-v="${r.brokerage_fee||0}"         style="text-align:right;white-space:nowrap;">${r.brokerage_fee ? '¥'+r.brokerage_fee.toLocaleString() : '―'}</td>
+    <td data-f="ad_amount"        data-t="number" data-v="${r.ad_amount||0}"             style="text-align:right;white-space:nowrap;">${adLabel}</td>
+    <td data-f="ad_payment_date"  data-t="date"   data-v="${r.ad_payment_date||''}"      style="white-space:nowrap;">${r.ad_payment_date || '―'}</td>
+    <td data-f="option_amount"    data-t="number" data-v="${r.option_amount||0}"         style="text-align:right;white-space:nowrap;">${r.option_amount ? '¥'+r.option_amount.toLocaleString() : '―'}</td>
+    <td data-f="lifeline"         data-t="bool"   data-v="${!!r.lifeline}"               style="text-align:center;">${r.lifeline ? '●' : '×'}</td>
+    <td data-f="moving"           data-t="bool"   data-v="${!!r.moving}"                 style="text-align:center;">${r.moving ? '●' : '×'}</td>
+    <td data-f="fire_insurance"   data-t="bool"   data-v="${!!r.fire_insurance}"         style="text-align:center;">${r.fire_insurance ? '●' : '×'}</td>
+    <td data-f="status"           data-t="status" data-v="${escApp(r.status)}"           style="white-space:nowrap;"><span class="app-status-badge" style="background:${sc.bg};color:${sc.text};border:1px solid ${sc.text}30;">${r.status}</span></td>
     <td style="text-align:center;white-space:nowrap;">${brokerageCell}</td>
     <td style="text-align:center;white-space:nowrap;">${adCell}</td>
     <td style="white-space:nowrap;">${opBtns}</td>`;
+
+  // 入金済み（settled）以外はインライン編集を有効化
+  if (!isSettled && canEdit) {
+    tr.querySelectorAll('td[data-f]').forEach(td => {
+      const field = td.dataset.f;
+      const type  = td.dataset.t;
+      const val   = td.dataset.v;
+      if (field === 'staff_id' && !IS_MANAGER) return; // staff変更はmanagerのみ
+
+      td.style.cursor = 'pointer';
+      td.title = 'クリックで編集';
+      td.addEventListener('click', function(e) {
+        if (e.target.tagName === 'BUTTON') return;
+        if (type === 'bool') {
+          editCellApp(td, r.id, field, 'checkbox', val === 'true');
+        } else if (type === 'status') {
+          editCellApp(td, r.id, field, 'select', val, STATUS_KEYS.map(k => [k, k]));
+        } else if (type === 'staff') {
+          editCellApp(td, r.id, field, 'select', val, _APP_STAFF_PAIRS);
+        } else {
+          editCellApp(td, r.id, field, type, val);
+        }
+      });
+    });
+  }
   return tr;
+}
+
+function escApp(s) {
+  return String(s || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function renderApplications(list, colors) {
@@ -2046,8 +2095,8 @@ function renderApplications(list, colors) {
   } else {
     settledTbody.innerHTML = '';
     settled.forEach(r => {
-      const tr = buildAppRow(r, colors);
-      tr.style.background = '#F0FDFA';  // 薄いグリーン
+      const tr = buildAppRow(r, colors, true);  // isSettled=true → 編集不可
+      tr.style.background = '#F0FDFA';
       settledTbody.appendChild(tr);
     });
   }
@@ -2202,6 +2251,79 @@ async function approvePayment(rid, field) {
     loadApplications();
     loadData();
   } catch(e) { showAlert('承認に失敗しました。', 'error'); }
+}
+
+/* =====================================================
+   インライン編集ユーティリティ
+===================================================== */
+function editCellApp(td, id, field, type, curVal, opts) {
+  if (td.querySelector('input,select')) return;
+  const prev = td.innerHTML;
+  let el;
+  if (type === 'select') {
+    el = document.createElement('select');
+    el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px;font-size:12px;';
+    (opts || []).forEach(([v, l]) => {
+      const o = new Option(l || v, v);
+      if (String(v) === String(curVal)) o.selected = true;
+      el.appendChild(o);
+    });
+    td.innerHTML = ''; td.appendChild(el); el.focus();
+    el.addEventListener('change', async () => {
+      await patchApp(id, field, el.value);
+      loadApplications();
+    });
+    el.addEventListener('blur', () => { if (td.querySelector('select')) loadApplications(); });
+  } else if (type === 'checkbox') {
+    patchApp(id, field, !curVal).then(() => loadApplications());
+  } else {
+    el = document.createElement('input');
+    el.type = type; el.value = curVal || '';
+    el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
+    td.innerHTML = ''; td.appendChild(el); el.focus();
+    if (type === 'text' || type === 'number') el.select();
+    const save = async () => { await patchApp(id, field, el.value); loadApplications(); };
+    el.addEventListener('blur', save);
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') el.blur();
+      if (e.key === 'Escape') { td.innerHTML = prev; }
+    });
+  }
+}
+
+async function patchApp(id, field, value) {
+  try {
+    await fetch(`/api/applications/${id}`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ [field]: value }),
+    });
+  } catch(e) { showAlert('更新に失敗しました。', 'error'); }
+}
+
+function editCellUnc(td, id, field, type, curVal) {
+  if (td.querySelector('input')) return;
+  const prev = td.innerHTML;
+  const el = document.createElement('input');
+  el.type = type; el.value = curVal || '';
+  el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
+  td.innerHTML = ''; td.appendChild(el); el.focus();
+  if (type === 'text' || type === 'number') el.select();
+  const save = async () => {
+    try {
+      await fetch(`/api/uncollected/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ [field]: el.value }),
+      });
+      loadUncollected();
+    } catch(e) { showAlert('更新に失敗しました。', 'error'); }
+  };
+  el.addEventListener('blur', save);
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter') el.blur();
+    if (e.key === 'Escape') { td.innerHTML = prev; }
+  });
 }
 
 async function loadPendingApprovals() {
