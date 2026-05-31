@@ -166,18 +166,18 @@
     </div>
   </div>
 
-  <!-- 広告ROI -->
+  <!-- 経費合計 -->
   <div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-5 card-hover">
     <div class="flex items-center justify-between mb-2">
-      <span class="text-sm font-semibold text-gray-500 tracking-wide">広告ROI</span>
-      <div class="w-9 h-9 rounded-full bg-lime-100 flex items-center justify-center">
-        <svg class="w-5 h-5 text-lime-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <span class="text-sm font-semibold text-gray-500 tracking-wide">経費合計</span>
+      <div class="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center">
+        <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+            d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
         </svg>
       </div>
     </div>
-    <div class="text-4xl font-bold text-gray-900 mb-3" id="val-roi">-</div>
+    <div class="text-4xl font-bold text-gray-900 mb-3" id="val-expenses">-</div>
     <div class="border-t border-gray-100 pt-3 mb-3">
       <table class="w-full text-xs">
         <thead>
@@ -190,22 +190,22 @@
         </thead>
         <tbody>
           <tr>
-            <td class="text-gray-500 py-0.5">ROI</td>
-            <td class="text-right font-semibold text-gray-800" id="tbl-roi-cur">-</td>
-            <td class="text-right text-gray-500" id="tbl-roi-prev">-</td>
-            <td class="text-right text-gray-500" id="tbl-roi-yoy">-</td>
+            <td class="text-gray-500 py-0.5">経費</td>
+            <td class="text-right font-semibold text-gray-800" id="tbl-expenses-cur">-</td>
+            <td class="text-right text-gray-500" id="tbl-expenses-prev">-</td>
+            <td class="text-right text-gray-500" id="tbl-expenses-yoy">-</td>
           </tr>
           <tr>
             <td class="text-gray-500 py-0.5">比較</td>
             <td class="text-right text-gray-400">基準</td>
-            <td class="text-right" id="diff-roi-prev">--</td>
-            <td class="text-right" id="diff-roi-yoy">--</td>
+            <td class="text-right" id="diff-expenses-prev">--</td>
+            <td class="text-right" id="diff-expenses-yoy">--</td>
           </tr>
         </tbody>
       </table>
     </div>
     <div style="height:52px;position:relative;">
-      <canvas id="spark-roi"></canvas>
+      <canvas id="spark-expenses"></canvas>
     </div>
   </div>
 
@@ -746,14 +746,17 @@ function renderKPI(sum, monthly) {
   document.getElementById('diff-contracts-prev').innerHTML  = fmtDiff(sum.mom_contracts);
   document.getElementById('diff-contracts-yoy').innerHTML   = fmtDiff(sum.yoy_contracts);
 
-  // 広告ROI
-  const rv = sum.roi;
-  document.getElementById('val-roi').textContent    = fmtRoi(rv);
-  document.getElementById('tbl-roi-cur').textContent  = fmtRoi(rv);
-  document.getElementById('tbl-roi-prev').textContent = fmtRoi(sum.prev_roi);
-  document.getElementById('tbl-roi-yoy').textContent  = fmtRoi(sum.yoy_roi);
-  document.getElementById('diff-roi-prev').innerHTML  = fmtDiff(sum.mom_roi);
-  document.getElementById('diff-roi-yoy').innerHTML   = fmtDiff(sum.yoy_roi);
+  // 経費合計
+  const fmtExp = v => (v != null && v !== undefined) ? Math.round(v / 10000).toLocaleString() + '万円' : '-';
+  const ev = sum.total_expenses;
+  const evPrev = sum.prev_month_expenses;
+  document.getElementById('val-expenses').textContent      = fmtExp(ev);
+  document.getElementById('tbl-expenses-cur').textContent  = fmtExp(ev);
+  document.getElementById('tbl-expenses-prev').textContent = fmtExp(evPrev);
+  document.getElementById('tbl-expenses-yoy').textContent  = '-';
+  const expDiff = (ev != null && evPrev != null) ? (ev - evPrev) / 10000 : null;
+  document.getElementById('diff-expenses-prev').innerHTML  = expDiff !== null ? fmtDiff(expDiff) : '--';
+  document.getElementById('diff-expenses-yoy').innerHTML   = '--';
 
   // スパークライン（12ヶ月分）
   if (monthly && monthly.length > 0) {
@@ -765,12 +768,12 @@ function renderKPI(sum, monthly) {
     const salesArr  = monthly.map(d => d.sales || 0);
     const profitArr = monthly.map(d => d.gross_profit || 0);
     const ctrsArr   = monthly.map(d => (d.contracts || 0) * 100000);
-    const roiArr    = monthly.map(d => d.sales > 0 && d.ad_cost > 0 ? d.sales / d.ad_cost : 0);
+    const expArr    = monthly.map(d => Math.max(0, (d.sales || 0) - (d.gross_profit || 0)));
 
     sparkBar('spark-sales',     labels, salesArr,  '#0D9488');
     sparkBar('spark-profit',    labels, profitArr, '#34d399');
     sparkBar('spark-contracts', labels, ctrsArr,   '#0d9488');
-    sparkBar('spark-roi',       labels, roiArr,    '#65a30d');
+    sparkBar('spark-expenses',  labels, expArr,    '#f97316');
   }
 }
 

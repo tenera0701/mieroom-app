@@ -1339,7 +1339,7 @@ function toggleDetail(tr, staffObj) {
       yoyItems.innerHTML = '';
       const yoyDefs = [
         { key: 'inquiries', label: '反響数', unit: '' },
-        { key: 'contracts', label: '契約数', unit: '' },
+        { key: 'applications', label: '申込数', unit: '' },
         { key: 'revenue',   label: '売上',   unit: '万円' },
       ];
       yoyDefs.forEach(({ key, label, unit }) => {
@@ -1364,8 +1364,8 @@ function toggleDetail(tr, staffObj) {
           labels: history.map(h => h.label),
           datasets: [
             {
-              label: '契約数',
-              data: history.map(h => h.contracts),
+              label: '申込数',
+              data: history.map(h => h.applications),
               borderColor: '#0D9488',
               backgroundColor: 'rgba(22,163,74,0.1)',
               yAxisID: 'y1', tension: 0.3, fill: true, pointRadius: 4,
@@ -1384,7 +1384,7 @@ function toggleDetail(tr, staffObj) {
           interaction: { mode: 'index', intersect: false },
           plugins: { legend: { labels: { font: { size: 11 } } } },
           scales: {
-            y1: { position: 'left',  title: { display: true, text: '契約数',    font: { size: 11 } }, beginAtZero: true },
+            y1: { position: 'left',  title: { display: true, text: '申込数',    font: { size: 11 } }, beginAtZero: true },
             y2: { position: 'right', title: { display: true, text: '売上(万円)', font: { size: 11 } }, beginAtZero: true, grid: { drawOnChartArea: false } },
           }
         }

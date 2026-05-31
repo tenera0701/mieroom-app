@@ -38,6 +38,17 @@
   .btn-del:hover { background:#fee2e2; }
   .followup-date { font-size:11px; color:#059669; font-weight:600; }
   .followup-empty { color:#e5e7eb; font-size:11px; }
+  /* 追客未対応行（3日超） */
+  tbody tr.row-no-followup { background:#fff1f2 !important; }
+  tbody tr.row-no-followup:hover { background:#ffe4e6 !important; }
+  /* 追客列の表示制御 */
+  .followup-extra { display:none; }
+  .followup-extra.visible { display:table-cell; }
+  .th-followup-extra { display:none; }
+  .th-followup-extra.visible { display:table-cell; }
+  /* 追客列追加ボタン */
+  th.th-expand-btn { cursor:pointer; color:#0D9488; font-size:16px; font-weight:900; padding:4px 10px; }
+  th.th-expand-btn:hover { color:#0F766E; background:#F0FDFA; }
 
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center; }
   .modal-overlay.active { display:flex; }
@@ -134,11 +145,12 @@
           <th title="追客③">追③</th>
           <th title="追客④">追④</th>
           <th title="追客⑤">追⑤</th>
-          <th title="追客⑥">追⑥</th>
-          <th title="追客⑦">追⑦</th>
-          <th title="追客⑧">追⑧</th>
-          <th title="追客⑨">追⑨</th>
-          <th title="追客⑩">追⑩</th>
+          <th class="th-followup-extra" id="th-fu-6" title="追客⑥">追⑥</th>
+          <th class="th-followup-extra" id="th-fu-7" title="追客⑦">追⑦</th>
+          <th class="th-followup-extra" id="th-fu-8" title="追客⑧">追⑧</th>
+          <th class="th-followup-extra" id="th-fu-9" title="追客⑨">追⑨</th>
+          <th class="th-followup-extra" id="th-fu-10" title="追客⑩">追⑩</th>
+          <th class="th-expand-btn" id="th-expand" onclick="expandFollowupCol()" title="追客列を追加">＋</th>
           <th>返信</th>
           <th>電話</th>
           <th>LINE</th>
@@ -147,7 +159,7 @@
         </tr>
       </thead>
       <tbody id="echo-tbody">
-        <tr class="empty-row"><td colspan="21">読み込み中...</td></tr>
+        <tr class="empty-row"><td colspan="22">読み込み中...</td></tr>
       </tbody>
     </table>
   </div>
@@ -429,11 +441,14 @@ async function toggleFlag(id, field, curVal) {
 function renderTable() {
   const tbody = document.getElementById('echo-tbody');
   if (!records.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="21">データがありません</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="22">データがありません</td></tr>';
     return;
   }
   tbody.innerHTML = records.map(r => {
-    const rowCls = r.has_line ? 'row-line' : r.has_phone ? 'row-phone' : r.has_reply ? 'row-reply' : '';
+    const flagCls = r.has_line ? 'row-line' : r.has_phone ? 'row-phone' : r.has_reply ? 'row-reply' : '';
+    const nfCls   = needsFollowup(r) ? 'row-no-followup' : '';
+    // flag class takes priority over no-followup for color; combine if no flag
+    const rowCls  = flagCls ? flagCls : nfCls;
     return `
     <tr class="${rowCls}">
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${escHtml(r.staff_name || '―')}</td>
@@ -442,7 +457,8 @@ function renderTable() {
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'media','select','${escHtml(r.media)}',ECHO_MEDIA_PAIRS)">${escHtml(r.media) || '―'}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'method','select','${escHtml(r.method)}',ECHO_METHOD_PAIRS)">${escHtml(r.method) || '―'}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'first_contact_date','date','${r.first_contact_date||''}')">${r.first_contact_date ? fmtMD(r.first_contact_date) : '―'}</td>
-      ${[1,2,3,4,5,6,7,8,9,10].map(i => `<td style="cursor:pointer;" onclick="editCell(this,${r.id},'followup_${i}','date','${r['followup_'+i]||''}')">${r['followup_'+i] ? `<span class="followup-date">${shortDate(r['followup_'+i])}</span>` : '<span class="followup-empty">—</span>'}</td>`).join('')}
+      ${[1,2,3,4,5].map(i => `<td style="cursor:pointer;" onclick="editCell(this,${r.id},'followup_${i}','date','${r['followup_'+i]||''}')">${r['followup_'+i] ? `<span class="followup-date">${shortDate(r['followup_'+i])}</span>` : '<span class="followup-empty">—</span>'}</td>`).join('')}
+      ${[6,7,8,9,10].map(i => `<td class="followup-extra${_visibleFollowups >= i ? ' visible' : ''}" style="cursor:pointer;" onclick="editCell(this,${r.id},'followup_${i}','date','${r['followup_'+i]||''}')">${r['followup_'+i] ? `<span class="followup-date">${shortDate(r['followup_'+i])}</span>` : '<span class="followup-empty">—</span>'}</td>`).join('')}
       <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_reply',${!!r.has_reply})">${r.has_reply ? '<span class="chk-yes">✓</span>' : '<span class="chk-no">—</span>'}</td>
       <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_phone',${!!r.has_phone})">${r.has_phone ? '<span class="chk-yes">✓</span>' : '<span class="chk-no">—</span>'}</td>
       <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_line',${!!r.has_line})">${r.has_line ? '<span class="chk-yes">✓</span>' : '<span class="chk-no">—</span>'}</td>
@@ -457,6 +473,59 @@ function renderTable() {
 
 function escHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* 追客未対応チェック（3日以上追客なし） */
+function needsFollowup(r) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const threshold = new Date(today);
+  threshold.setDate(threshold.getDate() - 3);
+
+  let lastDate = null;
+  for (let i = 1; i <= 10; i++) {
+    const d = r['followup_' + i];
+    if (d) {
+      const dt = new Date(d);
+      if (!lastDate || dt > lastDate) lastDate = dt;
+    }
+  }
+
+  if (!lastDate) {
+    // 一度も追客していない → 反響日から3日超ならアラート
+    if (r.echo_date) {
+      return new Date(r.echo_date) <= threshold;
+    }
+    return false;
+  }
+  // 最後の追客から3日超ならアラート
+  return lastDate <= threshold;
+}
+
+/* 追客列の表示管理 */
+let _visibleFollowups = 5; // 初期は5列まで表示
+
+function expandFollowupCol() {
+  if (_visibleFollowups >= 10) return;
+  _visibleFollowups++;
+  const idx = _visibleFollowups;
+
+  // ヘッダー列を表示
+  const th = document.getElementById('th-fu-' + idx);
+  if (th) th.classList.add('visible');
+
+  // 全行のセルを表示
+  document.querySelectorAll(`.followup-extra`).forEach(td => {
+    // onclick属性から列番号を取得
+    const match = td.getAttribute('onclick')?.match(/'followup_(\d+)'/);
+    if (match && parseInt(match[1]) === idx) td.classList.add('visible');
+  });
+
+  // 10列全部表示したら「＋」ボタンを非表示
+  if (_visibleFollowups >= 10) {
+    const btn = document.getElementById('th-expand');
+    if (btn) btn.style.display = 'none';
+  }
 }
 
 function openModal(id) {

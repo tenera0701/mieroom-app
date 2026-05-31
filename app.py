@@ -2024,6 +2024,9 @@ def api_kpi_summary():
         'prev_year_roi':       roi_yoy,
         'mom_roi':             diff_pct(roi_now, roi_prev),
         'yoy_roi':             diff_pct(roi_now, roi_yoy),
+        # 経費合計（売上 - 利益）
+        'total_expenses':      max(0, sales_now  - profit_now),
+        'prev_month_expenses': max(0, sales_prev - profit_prev),
         # 契約数
         'month_contracts':     contracts_now,
         'prev_month_contracts':contracts_prev,
@@ -3692,10 +3695,11 @@ def api_kpi_staff_history():
             query = query.filter_by(staff_id=staff_id)
         kpis = query.all()
         history.append({
-            'label':     f'{y}/{m:02d}',
-            'contracts': sum(k.contracts for k in kpis),
-            'revenue':   sum(k.sales_amount for k in kpis),
-            'inquiries': sum(k.inquiries for k in kpis),
+            'label':        f'{y}/{m:02d}',
+            'contracts':    sum(k.contracts    or 0 for k in kpis),
+            'applications': sum(k.applications or 0 for k in kpis),
+            'revenue':      sum(k.sales_amount or 0 for k in kpis),
+            'inquiries':    sum(k.inquiries    or 0 for k in kpis),
         })
         # 現在月のみ前年比を計算
         if i == 0:
@@ -3704,9 +3708,10 @@ def api_kpi_staff_history():
                 prev_y_kpis = prev_y_kpis.filter_by(staff_id=staff_id)
             prev_y_kpis = prev_y_kpis.all()
             yoy_data = {
-                'inquiries':  {'cur': sum(k.inquiries for k in kpis),   'yoy': sum(k.inquiries for k in prev_y_kpis)},
-                'contracts':  {'cur': sum(k.contracts for k in kpis),   'yoy': sum(k.contracts for k in prev_y_kpis)},
-                'revenue':    {'cur': sum(k.sales_amount for k in kpis),'yoy': sum(k.sales_amount for k in prev_y_kpis)},
+                'inquiries':    {'cur': sum(k.inquiries    or 0 for k in kpis),   'yoy': sum(k.inquiries    or 0 for k in prev_y_kpis)},
+                'applications': {'cur': sum(k.applications or 0 for k in kpis),   'yoy': sum(k.applications or 0 for k in prev_y_kpis)},
+                'contracts':    {'cur': sum(k.contracts    or 0 for k in kpis),   'yoy': sum(k.contracts    or 0 for k in prev_y_kpis)},
+                'revenue':      {'cur': sum(k.sales_amount or 0 for k in kpis),   'yoy': sum(k.sales_amount or 0 for k in prev_y_kpis)},
             }
 
     return jsonify({'history': history, 'yoy': yoy_data})
