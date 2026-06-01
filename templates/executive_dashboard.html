@@ -747,14 +747,13 @@ function renderKPI(sum, monthly) {
   document.getElementById('diff-contracts-yoy').innerHTML   = fmtDiff(sum.yoy_contracts);
 
   // 経費合計
-  const fmtExp = v => (v != null && v !== undefined) ? Math.round(v / 10000).toLocaleString() + '万円' : '-';
   const ev = sum.total_expenses;
   const evPrev = sum.prev_month_expenses;
-  document.getElementById('val-expenses').textContent      = fmtExp(ev);
-  document.getElementById('tbl-expenses-cur').textContent  = fmtExp(ev);
-  document.getElementById('tbl-expenses-prev').textContent = fmtExp(evPrev);
+  document.getElementById('val-expenses').textContent      = fmtYen(ev);
+  document.getElementById('tbl-expenses-cur').textContent  = fmtYen(ev);
+  document.getElementById('tbl-expenses-prev').textContent = fmtYen(evPrev);
   document.getElementById('tbl-expenses-yoy').textContent  = '-';
-  const expDiff = (ev != null && evPrev != null) ? (ev - evPrev) / 10000 : null;
+  const expDiff = (ev != null && evPrev != null) ? ((ev - evPrev) / (evPrev || 1)) * 100 : null;
   document.getElementById('diff-expenses-prev').innerHTML  = expDiff !== null ? fmtDiff(expDiff) : '--';
   document.getElementById('diff-expenses-yoy').innerHTML   = '--';
 
