@@ -379,6 +379,32 @@
         <label class="text-sm text-gray-700">有効</label>
       </div>
       <div id="e-error" class="text-red-500 text-sm hidden"></div>
+      <!-- オーナーアカウント設定 -->
+      <div class="border-t pt-4">
+        <p class="text-xs font-semibold text-gray-400 mb-2">オーナーアカウント</p>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">ユーザー名</label>
+            <input id="eo-username" type="text" placeholder="変更する場合のみ入力"
+              class="w-full border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-400">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">メールアドレス</label>
+            <input id="eo-email" type="email" placeholder="変更する場合のみ入力"
+              class="w-full border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-400">
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-medium text-gray-600 mb-1">パスワード</label>
+            <input id="eo-password" type="password" placeholder="変更する場合のみ入力（8文字以上）"
+              class="w-full border rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-teal-400">
+          </div>
+        </div>
+        <p id="eo-error" class="text-red-500 text-xs mt-1 hidden"></p>
+        <button onclick="saveOwnerAccount()"
+          class="mt-2 text-xs px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-semibold">
+          オーナー情報を保存
+        </button>
+      </div>
       <!-- アクション -->
       <div class="border-t pt-4">
         <p class="text-xs font-semibold text-gray-400 mb-2">アクション</p>
@@ -505,10 +531,8 @@ function renderSection(listId, filtered, label) {
           </div>
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">
-          ${IS_SUPER_ADMIN ? `<button onclick="openStoresModal(${t.id}, '${escHtml(t.name)}')"
-            class="text-xs px-3 py-1.5 border border-teal-500 text-teal-700 rounded-lg hover:bg-teal-50">🏢 店舗管理</button>` : ''}
-          <button onclick="openAccountsModal(${t.id}, '${escHtml(t.name)}')"
-            class="text-xs px-3 py-1.5 border border-purple-500 text-purple-700 rounded-lg hover:bg-purple-50">👤 アカウント管理</button>
+          <button onclick="openStoresModal(${t.id}, '${escHtml(t.name)}')"
+            class="text-xs px-3 py-1.5 border border-teal-500 text-teal-700 rounded-lg hover:bg-teal-50">🏢 店舗管理</button>
           <button onclick="openEditModal(${t.id})"
             class="text-xs px-3 py-1.5 border rounded-lg hover:bg-gray-50 text-gray-700">⚙ 編集</button>
         </div>
@@ -603,6 +627,9 @@ function openEditModal(tid) {
   document.getElementById('e-contract-start').value = t.contract_start_date || '';
   document.getElementById('e-active').checked = t.is_active;
   document.getElementById('e-error').classList.add('hidden');
+  // オーナーフィールドをクリア
+  ['eo-username','eo-email','eo-password'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  const eoErr = document.getElementById('eo-error'); if(eoErr) eoErr.classList.add('hidden');
   // ボタン表示制御
   const isTrial  = (t.subscription_status || 'trial') === 'trial';
   const isLocked = t.subscription_status === 'locked';
@@ -627,6 +654,33 @@ async function activateFromEdit() {
     closeEditModal();
     loadTenants();
   }
+}
+
+async function saveOwnerAccount() {
+  const tid = document.getElementById('e-id').value;
+  const errEl = document.getElementById('eo-error');
+  errEl.classList.add('hidden');
+  const username = document.getElementById('eo-username').value.trim();
+  const email    = document.getElementById('eo-email').value.trim();
+  const password = document.getElementById('eo-password').value;
+  if (!username && !email && !password) {
+    errEl.textContent = '変更する項目を入力してください';
+    errEl.classList.remove('hidden'); return;
+  }
+  const body = {};
+  if (username) body.username = username;
+  if (email)    body.email    = email;
+  if (password) body.password = password;
+  const res = await fetch(`/api/tenants/${tid}/owner`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  const json = await res.json();
+  if (!res.ok) { errEl.textContent = json.error || 'エラーが発生しました'; errEl.classList.remove('hidden'); return; }
+  document.getElementById('eo-username').value = '';
+  document.getElementById('eo-email').value    = '';
+  document.getElementById('eo-password').value = '';
+  alert('オーナー情報を更新しました。');
+  loadTenants();
 }
 
 // 編集モーダルからのアクション
@@ -931,6 +985,16 @@ async function openStoresModal(tid, tname) {
   await loadTenantStores();
 }
 
+async function updateStore(sid, data) {
+  const tid = currentStoresTenantId;
+  const res = await fetch(`/api/tenants/${tid}/stores/${sid}`, {
+    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data)
+  });
+  if (!res.ok) { alert('更新に失敗しました'); return; }
+  await loadTenantStores();
+  loadTenants();
+}
+
 async function addStoreFromModal() {
   const name = document.getElementById('sm-new-store-name').value.trim();
   const errEl = document.getElementById('sm-add-error');
@@ -962,30 +1026,38 @@ async function loadTenantStores() {
       return;
     }
     wrap.innerHTML = `
-      <p class="text-xs text-gray-400 mb-2">店舗数: <strong class="text-gray-600">${stores.length}</strong></p>
-      <table class="w-full text-sm border-collapse">
-        <thead>
-          <tr class="bg-gray-50 text-xs text-gray-500 font-semibold">
-            <th class="px-3 py-2 text-left">店舗名</th>
-            <th class="px-3 py-2 text-left">追加日</th>
-            <th class="px-3 py-2 text-center">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${stores.map(s => `
-            <tr class="border-t border-gray-100 hover:bg-gray-50" id="store-row-${s.id}">
-              <td class="px-3 py-2 font-medium text-gray-800">${escHtml(s.name)}</td>
-              <td class="px-3 py-2 text-gray-500 text-xs">${s.created_at || '—'}</td>
-              <td class="px-3 py-2 text-center whitespace-nowrap">
-                <button onclick="openEditStoreModal(${s.id}, '${escHtml(s.name)}')"
-                  class="text-xs px-2 py-1 border border-teal-300 text-teal-700 rounded hover:bg-teal-50 mr-1">編集</button>
-                <button onclick="deleteStore(${s.id}, '${escHtml(s.name)}')"
-                  class="text-xs px-2 py-1 border border-red-300 text-red-600 rounded hover:bg-red-50">削除</button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>`;
+      <p class="text-xs text-gray-400 mb-3">店舗数: <strong class="text-gray-600">${stores.length}</strong></p>
+      <div class="space-y-3">
+        ${stores.map(s => `
+          <div class="border rounded-lg p-3 ${s.is_locked ? 'border-red-200 bg-red-50/30' : 'border-gray-200'}" id="store-row-${s.id}">
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-semibold text-gray-800">${escHtml(s.name)}</span>
+              ${s.is_locked ? '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">🔒 ロック中</span>' : '<span class="text-xs bg-teal-100 text-teal-700 px-2 py-0.5 rounded">有効</span>'}
+            </div>
+            <div class="grid grid-cols-2 gap-2 mb-2">
+              <div>
+                <label class="text-xs text-gray-500 font-semibold">契約開始日</label>
+                <input type="date" value="${s.contract_start_date || ''}"
+                  onchange="updateStore(${s.id}, {contract_start_date: this.value})"
+                  class="w-full border rounded px-2 py-1 text-xs mt-1 focus:outline-none focus:ring-1 focus:ring-teal-400">
+              </div>
+              <div>
+                <label class="text-xs text-gray-500 font-semibold">追加日</label>
+                <p class="text-xs text-gray-400 mt-2">${s.created_at || '—'}</p>
+              </div>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+              <button onclick="openEditStoreModal(${s.id}, '${escHtml(s.name)}')"
+                class="text-xs px-2 py-1 border border-teal-300 text-teal-700 rounded hover:bg-teal-50">✏ 店舗名変更</button>
+              ${s.is_locked
+                ? `<button onclick="updateStore(${s.id}, {is_locked:false})" class="text-xs px-2 py-1 border border-teal-400 text-teal-700 rounded hover:bg-teal-50 font-bold">🔓 解除</button>`
+                : `<button onclick="updateStore(${s.id}, {is_locked:true})" class="text-xs px-2 py-1 border border-orange-300 text-orange-600 rounded hover:bg-orange-50 font-bold">🔒 ロック</button>`}
+              <button onclick="deleteStore(${s.id}, '${escHtml(s.name)}')"
+                class="text-xs px-2 py-1 border border-red-300 text-red-600 rounded hover:bg-red-50">🗑 削除</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>`;
   } catch(e) {
     wrap.innerHTML = '<div class="text-center py-4 text-red-400 text-sm">読み込みエラー</div>';
   }

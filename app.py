@@ -146,6 +146,8 @@ class Store(db.Model):
     insurance_fee = db.Column(db.Float, default=0)  # 保険料
     cloud_fee = db.Column(db.Float, default=0)      # クラウド・SaaS
     is_active = db.Column(db.Boolean, default=True)
+    is_locked = db.Column(db.Boolean, default=False)           # 店舗ロック
+    contract_start_date = db.Column(db.Date, nullable=True)    # 店舗契約開始日
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -1087,6 +1089,8 @@ def migrate_postgres():
         ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
         ("tenant", "contract_start_date",     "DATE"),
         ("store",  "created_at",             "TIMESTAMP"),
+        ("store",  "is_locked",              "BOOLEAN DEFAULT FALSE"),
+        ("store",  "contract_start_date",    "DATE"),
         ("app_user", "admin_can_add_tenant",    "BOOLEAN DEFAULT FALSE"),
         ("app_user", "admin_can_manage_stores", "BOOLEAN DEFAULT FALSE"),
         ("app_user", "admin_can_delete_tenant", "BOOLEAN DEFAULT FALSE"),
@@ -5042,6 +5046,8 @@ def api_tenant_stores(tid):
     return jsonify([{
         'id': s.id,
         'name': s.name,
+        'is_locked': bool(getattr(s, 'is_locked', False)),
+        'contract_start_date': s.contract_start_date.strftime('%Y-%m-%d') if getattr(s, 'contract_start_date', None) else None,
         'created_at': s.created_at.strftime('%Y-%m-%d') if s.created_at else None
     } for s in stores])
 
@@ -5066,15 +5072,46 @@ def api_tenant_store_add(tid):
 @app.route("/api/tenants/<int:tid>/stores/<int:sid>", methods=["PUT"])
 @super_admin_required
 def api_tenant_store_update(tid, sid):
-    """店舗名を変更"""
+    """店舗情報を更新（名前・ロック・契約開始日）"""
     store = Store.query.filter_by(id=sid, tenant_id=tid).first_or_404()
     data = request.get_json() or {}
-    name = (data.get('name') or '').strip()
-    if not name:
-        return jsonify({'error': '店舗名は必須です'}), 400
-    store.name = name
+    if 'name' in data:
+        name = (data['name'] or '').strip()
+        if name: store.name = name
+    if 'is_locked' in data:
+        store.is_locked = bool(data['is_locked'])
+        store.is_active = not bool(data['is_locked'])
+    if 'contract_start_date' in data:
+        from datetime import datetime as _dt
+        try:
+            store.contract_start_date = _dt.strptime(data['contract_start_date'], '%Y-%m-%d').date() if data['contract_start_date'] else None
+        except Exception:
+            pass
     db.session.commit()
     return jsonify({'status': 'ok'})
+
+
+@app.route("/api/tenants/<int:tid>/owner", methods=["PUT"])
+@super_admin_required
+def api_tenant_owner_update(tid):
+    """テナントのオーナーアカウント情報を更新（ユーザー名/パスワード/メール）"""
+    owner = AppUser.query.filter_by(tenant_id=tid, role='owner', is_active=True).first()
+    if not owner:
+        return jsonify({'error': 'オーナーアカウントが見つかりません'}), 404
+    data = request.get_json() or {}
+    if 'username' in data and data['username'].strip():
+        new_name = data['username'].strip()
+        if AppUser.query.filter(AppUser.username == new_name, AppUser.id != owner.id).first():
+            return jsonify({'error': 'そのユーザー名は既に使われています'}), 400
+        owner.username = new_name
+    if 'email' in data:
+        owner.email = (data['email'] or '').strip() or None
+    if 'password' in data and data['password']:
+        if len(data['password']) < 8:
+            return jsonify({'error': 'パスワードは8文字以上にしてください'}), 400
+        owner.password_hash = generate_password_hash(data['password'])
+    db.session.commit()
+    return jsonify({'status': 'ok', 'username': owner.username, 'email': owner.email or ''})
 
 
 @app.route("/api/tenants/<int:tid>/stores/<int:sid>", methods=["DELETE"])
