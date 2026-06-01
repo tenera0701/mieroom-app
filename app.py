@@ -4530,6 +4530,7 @@ def settings_users():
         ).order_by(AppUser.created_at).all()
         return render_template("settings_admin_perms.html",
                                sys_admins=sys_admins,
+                               current_user=app_user,
                                is_super_admin=(app_user.role == 'super_admin'))
     stores      = get_allowed_stores(ignore_active=True)
     allowed_ids = [s.id for s in stores]
