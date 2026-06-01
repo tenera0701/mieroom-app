@@ -331,26 +331,22 @@
             <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="radio" name="app-status" value="キャンセル振替"> キャンセル振替</label>
           </div>
         </div>
-        <div class="form-group">
-          <label>ライフライン</label>
-          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;">
-            <input type="checkbox" id="app-lifeline" style="width:16px;height:16px;accent-color:#0D9488;">
-            <span style="font-size:13px;">対象（●）</span>
-          </label>
-        </div>
-        <div class="form-group">
-          <label>引越し</label>
-          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;">
-            <input type="checkbox" id="app-moving" style="width:16px;height:16px;accent-color:#0D9488;">
-            <span style="font-size:13px;">対象（●）</span>
-          </label>
-        </div>
-        <div class="form-group">
-          <label>火災保険</label>
-          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;">
-            <input type="checkbox" id="app-fire_insurance" style="width:16px;height:16px;accent-color:#0D9488;">
-            <span style="font-size:13px;">対象（●）</span>
-          </label>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label>オプション</label>
+          <div style="display:flex;gap:28px;align-items:center;flex-wrap:wrap;margin-top:8px;">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+              <input type="checkbox" id="app-lifeline" style="width:16px;height:16px;accent-color:#0D9488;">
+              ライフライン 対象（●）
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+              <input type="checkbox" id="app-moving" style="width:16px;height:16px;accent-color:#0D9488;">
+              引越し 対象（●）
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+              <input type="checkbox" id="app-fire_insurance" style="width:16px;height:16px;accent-color:#0D9488;">
+              火災保険 対象（●）
+            </label>
+          </div>
         </div>
       </div>
     </div>

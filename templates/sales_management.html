@@ -572,10 +572,10 @@
             <th onclick="sortTable(5)">接客率</th>
             <th onclick="sortTable(6)">申込率</th>
             <th onclick="sortTable(7)">契約率</th>
-            <th onclick="sortTable(8)">売上(万円)</th>
-            <th onclick="sortTable(9)">目標(万円)</th>
+            <th onclick="sortTable(8)">売上(円)</th>
+            <th onclick="sortTable(9)">目標(円)</th>
             <th onclick="sortTable(10)">達成率</th>
-            <th onclick="sortTable(11)">オプション(万円)</th>
+            <th onclick="sortTable(11)">オプション(円)</th>
             <th onclick="sortTable(12)">前月比</th>
             <th>操作</th>
           </tr>
@@ -893,10 +893,10 @@ function renderStaffTable(data) {
       <td class="${colorClass(visitRate, 70, 50)}">${visitRate}%</td>
       <td class="${colorClass(appRate, 40, 25)}">${appRate}%</td>
       <td class="${colorClass(closeRate, 70, 50)}">${closeRate}%</td>
-      <td>${s.revenue.toLocaleString()}</td>
-      <td>${target > 0 ? (target/10000).toFixed(1)+'万' : '―'}</td>
+      <td>${s.revenue.toLocaleString()}円</td>
+      <td>${target > 0 ? target.toLocaleString()+'円' : '―'}</td>
       <td>${achvHtml}</td>
-      <td>${(s.option || 0).toLocaleString()}</td>
+      <td>${(s.option || 0).toLocaleString()}円</td>
       <td>${trendArrow(s.revenue, s.prev_revenue)}</td>
       <td onclick="event.stopPropagation();" style="white-space:nowrap;">
         ${s.kpi_id ? `

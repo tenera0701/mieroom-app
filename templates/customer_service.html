@@ -92,7 +92,7 @@
 {% endblock %}
 
 {% block content %}
-<div style="max-width:1300px; margin:0 auto;">
+<div style="max-width:1600px; margin:0 auto;">
 
   <div class="page-header">
     <div>
@@ -116,6 +116,20 @@
   </div>
 
   <div id="alert-msg" class="alert"></div>
+
+  <!-- 検索バー -->
+  <div style="margin-bottom:12px;">
+    <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #5EEAD4;border-radius:10px;padding:8px 14px;box-shadow:0 2px 8px rgba(13,148,136,0.08);">
+      <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="#0D9488" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+      <input id="cs-search" type="text" placeholder="お客様名・担当・媒体で検索"
+        style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;"
+        oninput="applySearch(this.value)">
+      <button onclick="document.getElementById('cs-search').value='';applySearch('');"
+        style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:0 2px;">✕</button>
+    </div>
+  </div>
 
   <!-- サマリーカード -->
   <div class="summary-bar" id="summary-bar">
@@ -420,6 +434,16 @@ function updateSummary() {
   } else {
     statsEl.style.display = 'none';
   }
+}
+
+function applySearch(q) {
+  const kw = (q || '').trim().toLowerCase();
+  const tbody = document.getElementById('records-tbody') || document.querySelector('tbody');
+  if (!tbody) return;
+  tbody.querySelectorAll('tr').forEach(tr => {
+    if (tr.querySelector('td[colspan]')) return;
+    tr.style.display = (!kw || tr.textContent.toLowerCase().includes(kw)) ? '' : 'none';
+  });
 }
 
 function escHtml(s) {
