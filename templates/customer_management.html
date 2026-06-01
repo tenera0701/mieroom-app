@@ -214,6 +214,12 @@
       </div>
     </div>
     <div id="unc-body-wrap">
+      <!-- 色凡例 -->
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;">
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#dbeafe;display:inline-block;border:1px solid #93c5fd;"></span>仲介入金済（AD未入金）</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>AD入金済（仲介未入金）</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fff;display:inline-block;border:1px solid #e5e7eb;"></span>未入金</span>
+      </div>
       <div class="table-wrapper">
         <table id="uncollected-table">
           <thead>
@@ -615,6 +621,9 @@ function renderUncollectedTable(list) {
   tbody.innerHTML = '';
   list.forEach(r => {
     const tr = document.createElement('tr');
+    // 申込一覧と同じ色分けロジック
+    const payBg = paymentRowBg(r);
+    if (payBg) tr.style.background = payBg;
     const adYen = adAmountYen(r);
     const adDisp = r.ad_type === 'percent'
       ? `${r.ad_amount ?? 0}% (¥${Math.round(adYen).toLocaleString()})`
