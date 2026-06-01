@@ -48,17 +48,17 @@
       <!-- ログイン中のアカウント（自分）を先頭に表示 -->
       <tr class="border-b border-teal-100 bg-teal-50/30">
         <td class="px-4 py-3 font-medium text-gray-900">
-          {{ current_user.username }}
+          {{ me.username }}
           <span class="ml-1 text-xs bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded font-semibold">あなた</span>
           <span class="ml-1 text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">スーパー管理者</span>
-          <div class="text-xs text-gray-400 font-normal">{{ current_user.email or '未設定' }}</div>
+          <div class="text-xs text-gray-400 font-normal">{{ me.email or '未設定' }}</div>
         </td>
         <!-- スーパー管理者は全権限あり -->
         <td class="px-4 py-3 text-center"><span style="font-size:13px;color:#0D9488;font-weight:700;">✓</span></td>
         <td class="px-4 py-3 text-center"><span style="font-size:13px;color:#0D9488;font-weight:700;">✓</span></td>
         <td class="px-4 py-3 text-center"><span style="font-size:13px;color:#0D9488;font-weight:700;">✓</span></td>
         <td class="px-4 py-3 text-center"><span style="font-size:13px;color:#0D9488;font-weight:700;">✓</span></td>
-        <td class="px-4 py-3 text-gray-400 text-xs">{{ current_user.created_at.strftime('%Y/%m/%d') if current_user.created_at else '—' }}</td>
+        <td class="px-4 py-3 text-gray-400 text-xs">{{ me.created_at.strftime('%Y/%m/%d') if me.created_at else '—' }}</td>
         {% if is_super_admin %}
         <td class="px-4 py-3 text-center">
           <button onclick="openMyAccountModal()"
