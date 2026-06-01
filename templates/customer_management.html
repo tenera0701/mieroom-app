@@ -261,23 +261,14 @@
           </select>
         </div>
         <div class="form-group">
-          <label>媒体</label>
-          <div style="display:flex;gap:6px;align-items:center;">
-            <select id="app-media" style="flex:1;">
-              <option value="">― 選択 ―</option>
-              {% for m in media_types %}<option value="{{ m.name }}">{{ m.name }}</option>{% endfor %}
-            </select>
-            <button type="button" onclick="toggleInlineMediaInput()" style="padding:6px 10px;font-size:15px;border:1px solid #d1d5db;border-radius:6px;background:#f9fafb;cursor:pointer;font-weight:700;color:#374151;line-height:1;">＋</button>
-          </div>
-          <div id="inline-media-input" style="display:none;margin-top:6px;">
-            <div style="display:flex;gap:6px;">
-              <input type="text" id="inline-media-name" placeholder="新しい媒体名"
-                style="flex:1;border:1px solid #5EEAD4;border-radius:6px;padding:6px 10px;font-size:13px;outline:none;"
-                onkeydown="if(event.key==='Enter'){event.preventDefault();confirmInlineMedia();}">
-              <button type="button" onclick="confirmInlineMedia()" style="padding:6px 12px;font-size:12px;font-weight:700;background:#0D9488;color:#fff;border:none;border-radius:6px;cursor:pointer;">追加</button>
-              <button type="button" onclick="cancelInlineMedia()" style="padding:6px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;">✕</button>
-            </div>
-          </div>
+          <label style="display:flex;align-items:center;gap:6px;">媒体
+            <button type="button" onclick="openMediaModal()"
+              style="font-size:11px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;padding:1px 6px;cursor:pointer;color:#374151;">⚙ 管理</button>
+          </label>
+          <select id="app-media">
+            <option value="">― 選択 ―</option>
+            {% for m in media_types %}<option value="{{ m.name }}">{{ m.name }}</option>{% endfor %}
+          </select>
         </div>
         <div class="form-group">
           <label>物件名</label>
