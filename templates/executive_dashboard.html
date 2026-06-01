@@ -537,11 +537,14 @@ function sparkBar(id, labels, data, color) {
         tooltip: {
           enabled: true,
           callbacks: {
+            title: function(items) {
+              return items[0].label + '月';
+            },
             label: function(ctx) {
               const v = ctx.parsed.y;
               if (!v && v !== 0) return '';
-              if (v >= 10000) return Math.round(v).toLocaleString('ja-JP') + '円';
-              return v.toLocaleString('ja-JP');
+              if (v >= 10000) return ' ' + Math.round(v).toLocaleString('ja-JP') + '円';
+              return ' ' + v.toLocaleString('ja-JP');
             }
           }
         }

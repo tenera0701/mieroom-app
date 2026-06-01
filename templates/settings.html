@@ -201,16 +201,25 @@
             </span>
             {% endif %}
           </div>
+          {% set role_rank = {'staff': 1, 'store_manager': 2, 'owner': 3} %}
+          {% set my_rank  = role_rank.get(current_user.role, 0) if current_user else 0 %}
+          {% set tgt_rank = role_rank.get(acc.role, 0) %}
+          {% set can_edit = is_me or (my_rank > tgt_rank) %}
           <div style="display:flex;gap:6px;">
+            {% if can_edit %}
             <button class="btn-sm" onclick="openEditUserModal({{ acc.id }}, '{{ acc.username }}', '{{ acc.email or '' }}', '{{ acc.role }}', {{ acc.staff_id or 'null' }}, {{ acc.can_view_accounting|lower }}, {{ acc.can_view_all_staff|lower }}, {{ acc.can_edit_kpi|lower }}, {{ acc.can_manage_uncollected|lower }}, {{ acc.can_view_executive|lower }}, {{ acc.can_view_leads_page|lower }}, {{ acc.can_view_daily_report|lower }}, {{ acc.can_view_leave|lower }})">編集</button>
             {% if not is_me %}
             <button class="btn-sm btn-danger" onclick="deleteUser({{ acc.id }})">削除</button>
             {% endif %}
+            {% else %}
+            <span style="font-size:11px;color:#d1d5db;padding:3px 8px;">編集不可</span>
+            {% endif %}
           </div>
         </div>
-        <!-- 下段：権限トグル -->
+        <!-- 下段：権限トグル（上位ロールは読み取り専用） -->
         <div style="display:flex;flex-wrap:wrap;gap:6px;">
           {% macro ptoggle(uid, field, val, label) %}
+          {% if can_edit and not is_me %}
           <button onclick="toggleUserPerm({{ uid }},'{{ field }}',{{ val|lower }})"
             id="up-{{ uid }}-{{ field }}"
             title="{{ label }}"
@@ -218,6 +227,12 @@
               {% if val %}background:#F0FDFA;color:#0D9488;border-color:#5EEAD4;{% else %}background:#f9fafb;color:#9ca3af;border-color:#e5e7eb;{% endif %}">
             {% if val %}✓{% else %}—{% endif %} {{ label }}
           </button>
+          {% else %}
+          <span style="padding:3px 10px;border-radius:6px;border:1px solid;font-size:11px;font-weight:600;
+            {% if val %}background:#F0FDFA;color:#0D9488;border-color:#5EEAD4;{% else %}background:#f9fafb;color:#d1d5db;border-color:#f3f4f6;{% endif %}">
+            {% if val %}✓{% else %}—{% endif %} {{ label }}
+          </span>
+          {% endif %}
           {% endmacro %}
           {{ ptoggle(acc.id, 'can_view_accounting',    acc.can_view_accounting,    '経理') }}
           {{ ptoggle(acc.id, 'can_view_all_staff',     acc.can_view_all_staff,     '全スタッフ') }}
