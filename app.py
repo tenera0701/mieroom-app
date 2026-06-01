@@ -4842,7 +4842,7 @@ def api_admin_users_delete(uid):
 @super_admin_only
 def api_tenant_lock(tid):
     """テナントをロック（アクセス不可）"""
-        err = _check_admin_perm("admin_can_lock_tenant")
+    err = _check_admin_perm("admin_can_lock_tenant")
     if err: return err
     tenant = Tenant.query.get_or_404(tid)
     tenant.subscription_status = 'locked'
@@ -4855,7 +4855,7 @@ def api_tenant_lock(tid):
 @super_admin_only
 def api_tenant_unlock(tid):
     """テナントを有効化（ロック解除）"""
-        err = _check_admin_perm("admin_can_lock_tenant")
+    err = _check_admin_perm("admin_can_lock_tenant")
     if err: return err
     from datetime import date as _date
     tenant = Tenant.query.get_or_404(tid)
@@ -4894,7 +4894,7 @@ def trial_expired_page():
 @super_admin_only
 def api_tenant_delete(tid):
     """テナント物理削除（関連データを全てカスケード削除）"""
-        err = _check_admin_perm("admin_can_delete_tenant")
+    err = _check_admin_perm("admin_can_delete_tenant")
     if err: return err
     tenant = Tenant.query.get_or_404(tid)
 
@@ -4981,7 +4981,7 @@ def api_tenant_stores(tid):
 @super_admin_only
 def api_tenant_store_add(tid):
     """テナントに店舗を追加"""
-        err = _check_admin_perm("admin_can_manage_stores")
+    err = _check_admin_perm("admin_can_manage_stores")
     if err: return err
     Tenant.query.get_or_404(tid)
     data = request.get_json() or {}
@@ -5012,7 +5012,7 @@ def api_tenant_store_update(tid, sid):
 @super_admin_only
 def api_tenant_store_delete(tid, sid):
     """店舗を論理削除"""
-        err = _check_admin_perm("admin_can_manage_stores")
+    err = _check_admin_perm("admin_can_manage_stores")
     if err: return err
     store = Store.query.filter_by(id=sid, tenant_id=tid).first_or_404()
     store.is_active = False
