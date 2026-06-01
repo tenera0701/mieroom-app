@@ -180,73 +180,58 @@
       <h2>ログインアカウント管理</h2>
       <button class="btn-primary" onclick="openCreateUserModal()">＋ アカウント追加</button>
     </div>
-    <p style="font-size:11px;color:#9ca3af;margin-bottom:6px;">権限の ✓/— はクリックで直接切り替えできます</p>
-    <div style="overflow-x: auto; position:relative;">
-      <table>
-        <thead>
-          <tr>
-            <th style="position:sticky;left:0;background:#F0FDFA;z-index:2;">ユーザー名</th>
-            <th>役割</th>
-            <th>担当スタッフ</th>
-            <th style="text-align:center;">経理閲覧</th>
-            <th style="text-align:center;">全スタッフ</th>
-            <th style="text-align:center;">KPI編集</th>
-            <th style="text-align:center;">未入金管理</th>
-            <th style="text-align:center;">売上管理</th>
-            <th style="text-align:center;">反響管理</th>
-            <th style="text-align:center;">日報</th>
-            <th style="position:sticky;right:0;background:#F0FDFA;z-index:2;white-space:nowrap;">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for acc in accounts %}
-          {% set is_me = (acc.id == session.get('app_user_id')) %}
-          <tr id="account-row-{{ acc.id }}">
-            <td style="font-weight:600;position:sticky;left:0;background:#fff;z-index:1;">
-              {{ acc.username }}
-              {% if is_me %}
-              <span style="font-size:10px;background:#CCFBF1;color:#0D9488;padding:1px 6px;border-radius:999px;font-weight:700;margin-left:4px;">あなた</span>
-              {% endif %}
-            </td>
-            <td>
-              <span class="badge-role {% if acc.role == 'owner' %}badge-owner{% elif acc.role == 'store_manager' %}badge-owner{% else %}badge-staff{% endif %}">
-                {{ 'オーナー' if acc.role == 'owner' else ('店長' if acc.role == 'store_manager' else 'スタッフ') }}
-              </span>
-            </td>
-            <td>
-              {% if acc.staff_id %}
-                {% for s in staff_list %}{% if s.id == acc.staff_id %}{{ s.name }}{% endif %}{% endfor %}
-              {% else %}—{% endif %}
-            </td>
-            {% macro ptoggle(uid, field, val) %}
-            <td style="text-align:center;">
-              <button onclick="toggleUserPerm({{ uid }},'{{ field }}',{{ val|lower }})"
-                id="up-{{ uid }}-{{ field }}"
-                style="padding:1px 10px;border-radius:999px;border:none;cursor:pointer;font-size:12px;font-weight:700;transition:all .15s;
-                  {% if val %}background:#0D9488;color:#fff;{% else %}background:#e5e7eb;color:#9ca3af;{% endif %}">
-                {{ '✓' if val else '✗' }}
-              </button>
-            </td>
-            {% endmacro %}
-            {{ ptoggle(acc.id, 'can_view_accounting',    acc.can_view_accounting) }}
-            {{ ptoggle(acc.id, 'can_view_all_staff',     acc.can_view_all_staff) }}
-            {{ ptoggle(acc.id, 'can_edit_kpi',           acc.can_edit_kpi) }}
-            {{ ptoggle(acc.id, 'can_manage_uncollected', acc.can_manage_uncollected) }}
-            {{ ptoggle(acc.id, 'can_view_executive',     acc.can_view_executive) }}
-            {{ ptoggle(acc.id, 'can_view_leads_page',    acc.can_view_leads_page) }}
-            {{ ptoggle(acc.id, 'can_view_daily_report',  acc.can_view_daily_report) }}
-            <td style="position:sticky;right:0;background:#fff;z-index:1;white-space:nowrap;">
-              <button class="btn-sm" onclick="openEditUserModal({{ acc.id }}, '{{ acc.username }}', '{{ acc.email or '' }}', '{{ acc.role }}', {{ acc.staff_id or 'null' }}, {{ acc.can_view_accounting|lower }}, {{ acc.can_view_all_staff|lower }}, {{ acc.can_edit_kpi|lower }}, {{ acc.can_manage_uncollected|lower }}, {{ acc.can_view_executive|lower }}, {{ acc.can_view_leads_page|lower }}, {{ acc.can_view_daily_report|lower }}, {{ acc.can_view_leave|lower }})">編集</button>
-              {% if not is_me %}
-              <button class="btn-sm btn-danger" onclick="deleteUser({{ acc.id }})" style="margin-left:4px;">削除</button>
-              {% endif %}
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-muted);">アカウントがありません</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      {% for acc in accounts %}
+      {% set is_me = (acc.id == session.get('app_user_id')) %}
+      <div id="account-row-{{ acc.id }}"
+        style="border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;background:#fff;">
+        <!-- 上段：名前・役割・ボタン -->
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span style="font-weight:700;font-size:14px;color:#111827;">{{ acc.username }}</span>
+            {% if is_me %}
+            <span style="font-size:10px;background:#CCFBF1;color:#0D9488;padding:1px 6px;border-radius:999px;font-weight:700;">あなた</span>
+            {% endif %}
+            <span class="badge-role {% if acc.role == 'owner' %}badge-owner{% elif acc.role == 'store_manager' %}badge-owner{% else %}badge-staff{% endif %}">
+              {{ 'オーナー' if acc.role == 'owner' else ('店長' if acc.role == 'store_manager' else 'スタッフ') }}
+            </span>
+            {% if acc.staff_id %}
+            <span style="font-size:12px;color:#6b7280;">
+              （{% for s in staff_list %}{% if s.id == acc.staff_id %}{{ s.name }}{% endif %}{% endfor %}）
+            </span>
+            {% endif %}
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn-sm" onclick="openEditUserModal({{ acc.id }}, '{{ acc.username }}', '{{ acc.email or '' }}', '{{ acc.role }}', {{ acc.staff_id or 'null' }}, {{ acc.can_view_accounting|lower }}, {{ acc.can_view_all_staff|lower }}, {{ acc.can_edit_kpi|lower }}, {{ acc.can_manage_uncollected|lower }}, {{ acc.can_view_executive|lower }}, {{ acc.can_view_leads_page|lower }}, {{ acc.can_view_daily_report|lower }}, {{ acc.can_view_leave|lower }})">編集</button>
+            {% if not is_me %}
+            <button class="btn-sm btn-danger" onclick="deleteUser({{ acc.id }})">削除</button>
+            {% endif %}
+          </div>
+        </div>
+        <!-- 下段：権限トグル -->
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          {% macro ptoggle(uid, field, val, label) %}
+          <button onclick="toggleUserPerm({{ uid }},'{{ field }}',{{ val|lower }})"
+            id="up-{{ uid }}-{{ field }}"
+            title="{{ label }}"
+            style="padding:3px 10px;border-radius:6px;border:1px solid;cursor:pointer;font-size:11px;font-weight:600;transition:all .15s;
+              {% if val %}background:#F0FDFA;color:#0D9488;border-color:#5EEAD4;{% else %}background:#f9fafb;color:#9ca3af;border-color:#e5e7eb;{% endif %}">
+            {% if val %}✓{% else %}—{% endif %} {{ label }}
+          </button>
+          {% endmacro %}
+          {{ ptoggle(acc.id, 'can_view_accounting',    acc.can_view_accounting,    '経理') }}
+          {{ ptoggle(acc.id, 'can_view_all_staff',     acc.can_view_all_staff,     '全スタッフ') }}
+          {{ ptoggle(acc.id, 'can_edit_kpi',           acc.can_edit_kpi,           'KPI編集') }}
+          {{ ptoggle(acc.id, 'can_manage_uncollected', acc.can_manage_uncollected, '未入金') }}
+          {{ ptoggle(acc.id, 'can_view_executive',     acc.can_view_executive,     '売上管理') }}
+          {{ ptoggle(acc.id, 'can_view_leads_page',    acc.can_view_leads_page,    '反響管理') }}
+          {{ ptoggle(acc.id, 'can_view_daily_report',  acc.can_view_daily_report,  '日報') }}
+          {{ ptoggle(acc.id, 'can_view_leave',         acc.can_view_leave,         '有給') }}
+        </div>
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:30px;color:var(--text-muted);">アカウントがありません</div>
+      {% endfor %}
     </div>
   </div>
   {% endif %}
