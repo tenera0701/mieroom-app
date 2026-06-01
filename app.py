@@ -5076,6 +5076,12 @@ def api_tenant_store_add(tid):
         return jsonify({'error': '店舗名は必須です'}), 400
     store = Store(name=name, is_active=True, tenant_id=tid)
     db.session.add(store)
+    db.session.flush()  # IDを確定させる
+    # 新店舗のIDに紐づく万が一の既存データを削除（まっさらを保証）
+    SalesKPI.query.filter_by(store_id=store.id).delete()
+    PLRecord.query.filter_by(store_id=store.id).delete()
+    Staff.query.filter_by(store_id=store.id).update({'is_active': False})
+    ApplicationRecord.query.filter_by(store_id=store.id).delete()
     db.session.commit()
     return jsonify({'status': 'ok', 'id': store.id})
 
