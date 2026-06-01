@@ -13,6 +13,13 @@
       </p>
     </div>
     <div class="flex gap-2">
+      <button onclick="openMyAccountModal()"
+        class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>
+        アカウント設定
+      </button>
       <button onclick="openCreateModal()"
         class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1030,6 +1037,66 @@ async function deleteStore(sid, sname) {
 
 document.addEventListener('DOMContentLoaded', loadTenants);
 
+// ===== アカウント設定 =====
+function openMyAccountModal() {
+  document.getElementById('my-email').value = '';
+  document.getElementById('my-pw').value = '';
+  document.getElementById('my-pw2').value = '';
+  document.getElementById('my-account-error').classList.add('hidden');
+  document.getElementById('my-account-success').classList.add('hidden');
+  document.getElementById('my-account-modal').classList.remove('hidden');
+}
+function closeMyAccountModal() {
+  document.getElementById('my-account-modal').classList.add('hidden');
+}
+async function saveMyAccount() {
+  const errEl  = document.getElementById('my-account-error');
+  const succEl = document.getElementById('my-account-success');
+  errEl.classList.add('hidden');
+  succEl.classList.add('hidden');
+
+  const email = document.getElementById('my-email').value.trim();
+  const pw    = document.getElementById('my-pw').value;
+  const pw2   = document.getElementById('my-pw2').value;
+
+  if (pw && pw !== pw2) {
+    errEl.textContent = 'パスワードが一致しません';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  if (pw && pw.length < 8) {
+    errEl.textContent = 'パスワードは8文字以上にしてください';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const body = {};
+  if (email) body.email = email;
+  if (pw)    body.password = pw;
+
+  if (!Object.keys(body).length) {
+    errEl.textContent = '変更する項目を入力してください';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  const res = await fetch('/api/my-account', {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body)
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    errEl.textContent = json.error || '更新に失敗しました';
+    errEl.classList.remove('hidden');
+    return;
+  }
+  succEl.textContent = '更新しました！';
+  succEl.classList.remove('hidden');
+  document.getElementById('my-pw').value = '';
+  document.getElementById('my-pw2').value = '';
+}
+
 // ===== 管理者ユーザー管理 =====
 async function openAdminUsersModal() {
   document.getElementById('admin-users-modal').classList.remove('hidden');
@@ -1090,6 +1157,36 @@ async function deleteAdminUser(id, name) {
   await loadAdminUsers();
 }
 </script>
+
+<!-- アカウント設定モーダル -->
+<div id="my-account-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
+  <div class="bg-white rounded-xl shadow-xl w-full max-w-sm">
+    <div class="p-5 border-b flex items-center justify-between">
+      <h2 class="text-base font-bold text-gray-800">アカウント設定</h2>
+      <button onclick="closeMyAccountModal()" class="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+    </div>
+    <div class="p-5 space-y-4">
+      <div id="my-account-error" class="hidden text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2"></div>
+      <div id="my-account-success" class="hidden text-sm text-teal-700 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2"></div>
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">メールアドレス変更</label>
+        <input id="my-email" type="email" placeholder="新しいメールアドレス（任意）"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+      </div>
+      <div class="border-t pt-4">
+        <label class="block text-sm font-semibold text-gray-700 mb-1">パスワード変更</label>
+        <input id="my-pw" type="password" placeholder="新しいパスワード（8文字以上）"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 mb-2">
+        <input id="my-pw2" type="password" placeholder="パスワード確認"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+      </div>
+    </div>
+    <div class="p-5 border-t flex justify-end gap-3">
+      <button onclick="closeMyAccountModal()" class="px-4 py-2 border rounded-lg text-sm text-gray-700 hover:bg-gray-50">キャンセル</button>
+      <button onclick="saveMyAccount()" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-medium">保存する</button>
+    </div>
+  </div>
+</div>
 
 <!-- 管理者ユーザー管理モーダル -->
 <div id="admin-users-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">

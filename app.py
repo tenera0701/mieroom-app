@@ -4827,6 +4827,24 @@ def api_admin_users_update(uid):
     return jsonify({'status': 'ok'})
 
 
+@app.route("/api/my-account", methods=["PUT"])
+@login_required
+def api_my_account_update():
+    """ログイン中のアカウント情報を更新（メール・パスワード）"""
+    user = AppUser.query.get(session.get('app_user_id'))
+    if not user:
+        return jsonify({'error': '認証エラー'}), 401
+    data = request.get_json() or {}
+    if 'email' in data and data['email']:
+        user.email = data['email'].strip().lower()
+    if 'password' in data and data['password']:
+        if len(data['password']) < 8:
+            return jsonify({'error': 'パスワードは8文字以上にしてください'}), 400
+        user.password_hash = generate_password_hash(data['password'])
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
 @app.route("/api/admin-users/<int:uid>", methods=["DELETE"])
 @super_admin_required
 def api_admin_users_delete(uid):
