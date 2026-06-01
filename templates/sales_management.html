@@ -626,9 +626,15 @@
 
   <!-- ===== 申込一覧表 ===== -->
   <div class="table-section" id="application-section" style="margin-top:8px;">
-    <div class="table-section-header" style="flex-wrap:wrap;gap:8px;">
-      <h2>申込一覧表</h2>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto;">
+    <div class="table-section-header" style="flex-wrap:wrap;gap:8px;cursor:pointer;user-select:none;"
+         onclick="toggleAppSection()">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <svg id="app-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px;transition:transform .2s;">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+        <h2>申込一覧表</h2>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto;" onclick="event.stopPropagation()">
         {% if is_manager %}
         <select id="app-filter-staff" onchange="loadApplications()"
           style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;color:#111827;background:#fff;">
@@ -651,6 +657,7 @@
         <button onclick="openAppModal()" style="padding:6px 14px;font-size:12px;font-weight:700;background:#0D9488;color:#fff;border:none;border-radius:6px;cursor:pointer;">＋ 申込追加</button>
       </div>
     </div>
+    <div id="app-body-wrap">
     <!-- 入金状況カラー凡例 -->
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;">
       <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d1fae5;display:inline-block;border:1px solid #6ee7b7;"></span>全入金済</span>
@@ -687,6 +694,7 @@
         </tbody>
       </table>
     </div>
+    </div><!-- /app-body-wrap -->
   </div>
 
   <!-- 入金済み一覧（承認完了案件） -->
@@ -723,12 +731,16 @@
 
   <!-- 未入金一覧 -->
   <div class="table-section" id="uncollected-section" style="margin-top:24px;">
-    <div class="table-section-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+    <div class="table-section-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;cursor:pointer;user-select:none;"
+         onclick="toggleUncSection()">
       <div style="display:flex;align-items:center;gap:10px;">
+        <svg id="unc-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px;transition:transform .2s;">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
         <h2>未入金一覧</h2>
         <span id="unc-count" style="font-size:12px;background:#fef3c7;color:#92400e;border-radius:12px;padding:2px 10px;font-weight:700;">0件</span>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;" onclick="event.stopPropagation()">
         {% if is_manager %}
         <select id="unc-filter-staff" onchange="loadUncollected()"
           style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;color:#111827;background:#fff;min-width:110px;">
@@ -740,6 +752,7 @@
         {% endif %}
       </div>
     </div>
+    <div id="unc-body-wrap">
     <div class="table-wrapper">
       <table id="uncollected-table">
         <thead>
@@ -765,6 +778,7 @@
         </tbody>
       </table>
     </div>
+    </div><!-- /unc-body-wrap -->
   </div>
 
 </div>
@@ -2008,11 +2022,27 @@ function paymentRowBg(r) {
   return null; // 色なし（ステータス色を使う）
 }
 
+function toggleAppSection() {
+  const wrap    = document.getElementById('app-body-wrap');
+  const chevron = document.getElementById('app-chevron');
+  const open = wrap.style.display !== 'none';
+  wrap.style.display      = open ? 'none' : '';
+  chevron.style.transform = open ? 'rotate(-90deg)' : '';
+}
+
 function toggleSettledSection() {
   const wrap    = document.getElementById('settled-body-wrap');
   const chevron = document.getElementById('settled-chevron');
   const open = wrap.style.display !== 'none';
   wrap.style.display    = open ? 'none' : '';
+  chevron.style.transform = open ? 'rotate(-90deg)' : '';
+}
+
+function toggleUncSection() {
+  const wrap    = document.getElementById('unc-body-wrap');
+  const chevron = document.getElementById('unc-chevron');
+  const open = wrap.style.display !== 'none';
+  wrap.style.display      = open ? 'none' : '';
   chevron.style.transform = open ? 'rotate(-90deg)' : '';
 }
 

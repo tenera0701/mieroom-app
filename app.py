@@ -1485,6 +1485,28 @@ def sales_management():
                            store_id=store_id)
 
 
+@app.route("/customer-management")
+@login_required
+@block_super_admin
+def customer_management():
+    """顧客管理表ページ：申込・入金管理に特化"""
+    stores = get_allowed_stores()
+    allowed_ids = [s.id for s in stores]
+    staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all()
+    year, month = current_ym()
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    cur_role = cur_user.role if cur_user else 'staff'
+    cur_staff_id = cur_user.staff_id if cur_user else None
+    is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
+    store_id = allowed_ids[0] if allowed_ids else None
+    media_types = MediaType.query.filter_by(store_id=store_id, is_active=True).order_by(MediaType.sort_order, MediaType.name).all() if store_id else []
+    return render_template("customer_management.html", stores=stores, staff_list=staff_list,
+                           year=year, month=month, now=datetime.now(),
+                           cur_role=cur_role, cur_staff_id=cur_staff_id,
+                           is_manager=is_manager, media_types=media_types,
+                           store_id=store_id)
+
+
 @app.route("/echo-management")
 @login_required
 @block_super_admin

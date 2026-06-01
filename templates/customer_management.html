@@ -1,0 +1,1060 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}顧客管理表 | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}顧客管理表{% endblock %}
+
+{% block extra_head %}
+<style>
+  :root { --primary:#0D9488; --primary-dark:#0F766E; --primary-light:#CCFBF1; --primary-bg:#F0FDFA; }
+
+  .page-title  { font-size:22px; font-weight:800; color:#111827; margin:0; }
+  .month-nav   { display:flex; align-items:center; gap:6px; }
+  .month-nav-btn { background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:7px 13px; font-size:13px; font-weight:600; color:#374151; cursor:pointer; }
+  .month-nav-btn:hover { background:#f3f4f6; }
+  .month-nav-current { font-size:17px; font-weight:800; color:#111827; min-width:110px; text-align:center; }
+
+  .table-section { background:#fff; border-radius:12px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,0.06); border:1px solid #e5e7eb; }
+  .table-section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .table-section-header h2 { font-size:15px; font-weight:800; color:#111827; margin:0; border-left:4px solid var(--primary); padding-left:10px; }
+  .table-wrapper { overflow-x:auto; border-radius:8px; border:1px solid #e5e7eb; }
+  table { width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap; }
+  thead th { background:#F0FDFA; padding:8px 10px; text-align:center; font-weight:700; color:#374151; border-bottom:2px solid #d1fae5; position:sticky; top:0; z-index:1; }
+  tbody tr { border-bottom:1px solid #f3f4f6; }
+  tbody tr:hover { filter:brightness(0.97); }
+  tbody td { padding:7px 8px; text-align:center; color:#111827; max-width:140px; overflow:hidden; text-overflow:ellipsis; }
+
+  .app-status-badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:700; }
+  .btn-sm { padding:3px 8px; font-size:11px; border-radius:4px; cursor:pointer; border:1px solid; }
+  .btn-edit-app  { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+  .btn-delete-app { background:#fff; color:#ef4444; border-color:#fca5a5; }
+
+  /* アラート */
+  .alert { padding:10px 16px; border-radius:8px; font-size:13px; margin-bottom:14px; display:none; }
+  .alert.show { display:block; }
+  .alert-success { background:var(--primary-light); color:var(--primary-dark); border:1px solid #5EEAD4; }
+  .alert-error   { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+
+  /* モーダル */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center; }
+  .modal-overlay.active { display:flex; }
+  .modal { background:#fff; border-radius:14px; width:700px; max-width:96vw; max-height:92vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.22); }
+  .modal-header { padding:16px 24px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; }
+  .modal-header h3 { font-size:16px; font-weight:700; margin:0; }
+  .modal-close { background:none; border:none; font-size:22px; color:#9ca3af; cursor:pointer; }
+  .modal-body   { padding:20px 24px; }
+  .modal-footer { padding:14px 24px; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:10px; }
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .form-group { display:flex; flex-direction:column; gap:5px; }
+  .form-group label { font-size:12px; font-weight:600; color:#374151; }
+  .form-group input, .form-group select, .form-group textarea { border:1px solid #d1d5db; border-radius:6px; padding:7px 10px; font-size:13px; }
+  .form-group input:focus, .form-group select:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 2px rgba(13,148,136,0.15); }
+  .btn-cancel { background:#fff; color:#374151; border:1px solid #d1d5db; border-radius:6px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; }
+  .btn-submit { background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 20px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-submit:hover { background:var(--primary-dark); }
+  .btn-primary { background:var(--primary); color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:12px; font-weight:700; cursor:pointer; }
+  .btn-primary:hover { background:var(--primary-dark); }
+
+  /* 承認通知 */
+  #approval-notice { display:none; background:#fef9c3; border:1px solid #fde68a; border-radius:8px; padding:10px 16px; margin-bottom:12px; align-items:center; gap:10px; font-size:13px; color:#92400e; }
+
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+  input[type=number] { -moz-appearance:textfield; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1600px; margin:0 auto;">
+
+  <!-- アラート -->
+  <div id="alert-msg" class="alert"></div>
+
+  <!-- ページヘッダー -->
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+    <div>
+      <h1 class="page-title">顧客管理表</h1>
+      <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">申込・入金状況の管理</p>
+    </div>
+    <div class="month-nav">
+      <button class="month-nav-btn" onclick="navigate(-1)">&#8249; 前月</button>
+      <span class="month-nav-current" id="month-label"></span>
+      <button class="month-nav-btn" onclick="navigate(1)">次月 &#8250;</button>
+      <button class="month-nav-btn" style="background:#F0FDFA;color:#0D9488;border-color:#5EEAD4;" onclick="goToday()">今月</button>
+    </div>
+  </div>
+
+  <!-- 承認通知 -->
+  <div id="approval-notice">
+    <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+    </svg>
+    <span id="approval-notice-text"></span>
+    <button onclick="scrollToApproval()" style="margin-left:auto;padding:3px 10px;font-size:12px;border:1px solid #fde68a;border-radius:6px;background:#fff;color:#92400e;cursor:pointer;font-weight:600;">確認する</button>
+  </div>
+
+  <!-- 一括検索バー -->
+  <div style="margin-bottom:12px;">
+    <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #5EEAD4;border-radius:10px;padding:8px 14px;box-shadow:0 2px 8px rgba(13,148,136,0.08);">
+      <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="#0D9488" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+      <input id="global-search" type="text" placeholder="全期間横断検索（物件名・お客様名・担当・媒体）"
+        style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;"
+        oninput="scheduleGlobalSearch(this.value)">
+      <span id="search-mode-badge" style="display:none;background:#fef3c7;color:#92400e;border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap;">全期間検索中</span>
+      <button onclick="clearGlobalSearch()" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:0 2px;" title="クリア">✕</button>
+    </div>
+  </div>
+
+  <!-- ===== 申込一覧 ===== -->
+  <div class="table-section" id="application-section">
+    <div class="table-section-header" style="cursor:pointer;user-select:none;" onclick="toggleSection('app')">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <svg id="app-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px;transition:transform .2s;">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+        <h2>申込一覧表</h2>
+        <span id="app-count" style="font-size:12px;background:#CCFBF1;color:#0F766E;border-radius:12px;padding:2px 10px;font-weight:700;">0件</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;" onclick="event.stopPropagation()">
+        {% if is_manager %}
+        <select id="app-filter-staff" onchange="loadApplications()"
+          style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;color:#111827;background:#fff;">
+          <option value="">全スタッフ</option>
+          {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+        </select>
+        {% endif %}
+        <select id="app-filter-status" onchange="loadApplications()"
+          style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;color:#111827;background:#fff;">
+          <option value="">全ステータス</option>
+          <option value="申込">申込</option>
+          <option value="契約">契約</option>
+          <option value="キャンセル">キャンセル</option>
+          <option value="キャンセル振替">キャンセル振替</option>
+        </select>
+        {% if is_manager %}
+        <button onclick="openColorModal()" style="padding:5px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#374151;">🎨 色設定</button>
+        <button onclick="openMediaModal()" style="padding:5px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#374151;">📋 媒体管理</button>
+        {% endif %}
+        <button onclick="openAppModal()" class="btn-primary">＋ 申込追加</button>
+      </div>
+    </div>
+    <div id="app-body-wrap">
+      <!-- 色凡例 -->
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;">
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d1fae5;display:inline-block;border:1px solid #6ee7b7;"></span>全入金済</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#dbeafe;display:inline-block;border:1px solid #93c5fd;"></span>仲介入金済</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>AD入金済</span>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>申込日</th><th>担当</th><th>媒体</th><th>物件名</th><th>号室</th>
+              <th>お客様名</th><th>賃料</th><th>契約開始日</th><th>仲介手数料</th>
+              <th>AD</th><th>AD入金日</th><th>オプション</th>
+              <th>LL</th><th>引越</th><th>火保</th><th>ステータス</th>
+              <th>仲介入金</th><th>AD入金</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="app-tbody">
+            <tr><td colspan="19" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 入金済み一覧 ===== -->
+  <div class="table-section" id="settled-section" style="margin-top:16px;">
+    <div class="table-section-header" style="cursor:pointer;user-select:none;" onclick="toggleSection('settled')">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <svg id="settled-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px;transition:transform .2s;">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+        <h2 style="color:#0D9488;">✓ 入金済み一覧</h2>
+        <span id="settled-count" style="font-size:12px;background:#CCFBF1;color:#0F766E;border-radius:12px;padding:2px 10px;font-weight:700;">0件</span>
+      </div>
+    </div>
+    <div id="settled-body-wrap">
+      <div class="table-wrapper">
+        <table style="opacity:0.85;">
+          <thead>
+            <tr>
+              <th>申込日</th><th>担当</th><th>媒体</th><th>物件名</th><th>号室</th>
+              <th>客名</th><th>賃料</th><th>契約開始日</th><th>仲介手数料</th>
+              <th>AD</th><th>AD入金日</th><th>オプション</th>
+              <th>LL</th><th>引越</th><th>火保</th><th>ステータス</th>
+              <th>仲介入金</th><th>AD入金</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="settled-tbody">
+            <tr><td colspan="19" style="text-align:center;color:#9ca3af;padding:16px;">承認済み案件なし</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 未入金一覧 ===== -->
+  <div class="table-section" id="uncollected-section" style="margin-top:16px;">
+    <div class="table-section-header" style="cursor:pointer;user-select:none;" onclick="toggleSection('unc')">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <svg id="unc-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px;transition:transform .2s;">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+        <h2>未入金一覧</h2>
+        <span id="unc-count" style="font-size:12px;background:#fef3c7;color:#92400e;border-radius:12px;padding:2px 10px;font-weight:700;">0件</span>
+      </div>
+      <div onclick="event.stopPropagation()">
+        {% if is_manager %}
+        <select id="unc-filter-staff" onchange="loadUncollected()"
+          style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;color:#111827;background:#fff;min-width:110px;">
+          <option value="">全スタッフ</option>
+          {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+        </select>
+        {% endif %}
+      </div>
+    </div>
+    <div id="unc-body-wrap">
+      <div class="table-wrapper">
+        <table id="uncollected-table">
+          <thead>
+            <tr>
+              <th>申込日</th><th>担当</th><th>物件名</th><th>号室</th><th>お客様名</th>
+              <th>賃料</th><th>契約開始日</th><th>仲介手数料</th><th>オプション</th>
+              <th>AD</th><th>AD入金日</th><th>仲介入金</th><th>AD入金</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="uncollected-tbody">
+            <tr><td colspan="14" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== 申込追加/編集モーダル ===== -->
+<div class="modal-overlay" id="app-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="app-modal-title">申込追加</h3>
+      <button class="modal-close" onclick="closeAppModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="app-editing-id">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>申込日 <span style="color:#ef4444;">*</span></label>
+          <input type="date" id="app-application_date" required>
+        </div>
+        <div class="form-group">
+          <label>担当スタッフ</label>
+          <select id="app-staff_id">
+            <option value="">― 選択 ―</option>
+            {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>媒体</label>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <select id="app-media" style="flex:1;">
+              <option value="">― 選択 ―</option>
+              {% for m in media_types %}<option value="{{ m.name }}">{{ m.name }}</option>{% endfor %}
+            </select>
+            <button type="button" onclick="toggleInlineMediaInput()" style="padding:6px 10px;font-size:15px;border:1px solid #d1d5db;border-radius:6px;background:#f9fafb;cursor:pointer;font-weight:700;color:#374151;line-height:1;">＋</button>
+          </div>
+          <div id="inline-media-input" style="display:none;margin-top:6px;">
+            <div style="display:flex;gap:6px;">
+              <input type="text" id="inline-media-name" placeholder="新しい媒体名"
+                style="flex:1;border:1px solid #5EEAD4;border-radius:6px;padding:6px 10px;font-size:13px;outline:none;"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();confirmInlineMedia();}">
+              <button type="button" onclick="confirmInlineMedia()" style="padding:6px 12px;font-size:12px;font-weight:700;background:#0D9488;color:#fff;border:none;border-radius:6px;cursor:pointer;">追加</button>
+              <button type="button" onclick="cancelInlineMedia()" style="padding:6px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;">✕</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>物件名</label>
+          <input type="text" id="app-property_name" placeholder="例: グランドパレス新宿">
+        </div>
+        <div class="form-group">
+          <label>号室</label>
+          <input type="text" id="app-room_number" placeholder="例: 301">
+        </div>
+        <div class="form-group">
+          <label>お客様名</label>
+          <input type="text" id="app-customer_name" placeholder="例: 山田 太郎">
+        </div>
+        <div class="form-group">
+          <label>賃料（円）</label>
+          <input type="number" id="app-rent" min="0" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>契約開始日</label>
+          <input type="date" id="app-contract_start_date">
+        </div>
+        <div class="form-group">
+          <label>AD入金日</label>
+          <input type="date" id="app-ad_payment_date">
+        </div>
+        <div class="form-group">
+          <label>仲介手数料（円）</label>
+          <input type="number" id="app-brokerage_fee" min="0" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>AD種別</label>
+          <select id="app-ad_type" onchange="updateAdLabel()">
+            <option value="amount">金額（円）</option>
+            <option value="percent">割合（%）</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label id="app-ad-label">AD金額（円）</label>
+          <input type="number" id="app-ad_amount" min="0" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label>オプション金額（円）</label>
+          <input type="number" id="app-option_amount" min="0" placeholder="0">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label>ステータス</label>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="radio" name="app-status" value="申込" checked> 申込</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="radio" name="app-status" value="契約"> 契約</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="radio" name="app-status" value="キャンセル"> キャンセル</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;"><input type="radio" name="app-status" value="キャンセル振替"> キャンセル振替</label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>ライフライン</label>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;">
+            <input type="checkbox" id="app-lifeline" style="width:16px;height:16px;accent-color:#0D9488;">
+            <span style="font-size:13px;">対象（●）</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label>引越し</label>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;">
+            <input type="checkbox" id="app-moving" style="width:16px;height:16px;accent-color:#0D9488;">
+            <span style="font-size:13px;">対象（●）</span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label>火災保険</label>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:6px;cursor:pointer;">
+            <input type="checkbox" id="app-fire_insurance" style="width:16px;height:16px;accent-color:#0D9488;">
+            <span style="font-size:13px;">対象（●）</span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeAppModal()">キャンセル</button>
+      <button class="btn-submit" onclick="submitApp()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ステータス色設定モーダル ===== -->
+<div class="modal-overlay" id="color-modal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <h3>ステータス色設定</h3>
+      <button class="modal-close" onclick="closeColorModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="color-settings"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeColorModal()">キャンセル</button>
+      <button class="btn-submit" onclick="saveColors()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 媒体管理モーダル ===== -->
+<div class="modal-overlay" id="media-modal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <h3>媒体管理</h3>
+      <button class="modal-close" onclick="closeMediaModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
+        <input type="text" id="new-media-name" placeholder="新しい媒体名"
+          style="flex:1;border:1px solid #d1d5db;border-radius:6px;padding:7px 10px;font-size:13px;"
+          onkeydown="if(event.key==='Enter')addMedia()">
+        <button onclick="addMedia()" class="btn-submit" style="padding:7px 16px;">追加</button>
+      </div>
+      <div id="media-list" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeMediaModal()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+/* ===================================================
+   定数・状態
+=================================================== */
+const IS_MANAGER   = {{ 'true' if is_manager else 'false' }};
+const CUR_STAFF_ID = {{ cur_staff_id if cur_staff_id else 'null' }};
+const STORE_ID     = {{ store_id or 0 }};
+const STATUS_KEYS  = ['申込','契約','キャンセル','キャンセル振替'];
+const STATUS_DEFAULTS = {
+  '申込':          { bg: '#ffffff', text: '#111827' },
+  '契約':          { bg: '#fef9c3', text: '#92400e' },
+  'キャンセル':     { bg: '#fee2e2', text: '#b91c1c' },
+  'キャンセル振替': { bg: '#CCFBF1', text: '#0F766E' },
+};
+
+let appData = [];
+let statusColors = {};
+let _APP_STAFF_PAIRS = [];
+let _isSearchMode = false;
+let _searchTimer = null;
+let salesYear  = {{ year }};
+let salesMonth = {{ month }};
+
+/* ===================================================
+   月ナビ
+=================================================== */
+function updateMonthLabel() {
+  document.getElementById('month-label').textContent = `${salesYear}年 ${salesMonth}月`;
+}
+function navigate(dir) {
+  salesMonth += dir;
+  if (salesMonth > 12) { salesMonth = 1;  salesYear++; }
+  if (salesMonth <  1) { salesMonth = 12; salesYear--; }
+  updateMonthLabel();
+  loadApplications();
+  loadUncollected();
+}
+function goToday() {
+  const now = new Date();
+  salesYear  = now.getFullYear();
+  salesMonth = now.getMonth() + 1;
+  updateMonthLabel();
+  loadApplications();
+  loadUncollected();
+}
+
+/* ===================================================
+   折りたたみ
+=================================================== */
+function toggleSection(id) {
+  const wrap    = document.getElementById(id + '-body-wrap');
+  const chevron = document.getElementById(id + '-chevron');
+  if (!wrap) return;
+  const open = wrap.style.display !== 'none';
+  wrap.style.display      = open ? 'none' : '';
+  chevron.style.transform = open ? 'rotate(-90deg)' : '';
+}
+
+/* ===================================================
+   アラート
+=================================================== */
+function showAlert(msg, type = 'success') {
+  const el = document.getElementById('alert-msg');
+  el.textContent = msg;
+  el.className = `alert alert-${type} show`;
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+/* ===================================================
+   計算ヘルパー
+=================================================== */
+function adAmountYen(r) {
+  if ((r.ad_type || 'amount') === 'percent') return (r.rent || 0) * (r.ad_amount || 0) / 100;
+  return r.ad_amount || 0;
+}
+
+function isFullyApproved(r) {
+  const needAd        = adAmountYen(r) > 0;
+  const needBrokerage = (r.brokerage_fee || 0) > 0;
+  if (!needAd && !needBrokerage) return false;
+  return (!needAd || r.ad_approved) && (!needBrokerage || r.brokerage_approved);
+}
+
+function paymentRowBg(r) {
+  const hasBrokerage = (r.brokerage_fee || 0) > 0;
+  const hasAd        = adAmountYen(r) > 0;
+  const bOk = !hasBrokerage || r.brokerage_approved;
+  const aOk = !hasAd        || r.ad_approved;
+  if (hasBrokerage || hasAd) {
+    if (bOk && aOk) return '#d1fae5';
+    if (bOk && !aOk && hasBrokerage) return '#dbeafe';
+    if (aOk && !bOk && hasAd)        return '#fef3c7';
+  }
+  return null;
+}
+
+function escApp(s) {
+  return String(s || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/* ===================================================
+   行ビルダー
+=================================================== */
+function buildSettleCell(r, field, settled, approved) {
+  if (approved) return '<span style="color:#0D9488;font-weight:700;font-size:11px;">✓ 承認済</span>';
+  if (settled) {
+    if (IS_MANAGER) return `<button onclick="approvePayment(${r.id},'${field}')" style="padding:3px 8px;font-size:11px;border:none;border-radius:4px;background:#2563eb;color:#fff;cursor:pointer;font-weight:700;">承認</button>`;
+    return '<span style="color:#f59e0b;font-weight:700;font-size:11px;">承認待ち</span>';
+  }
+  const canReport = IS_MANAGER || r.staff_id === CUR_STAFF_ID;
+  if (canReport) return `<button onclick="settlePayment(${r.id},'${field}')" style="padding:3px 8px;font-size:11px;border:1px solid #d1d5db;border-radius:4px;background:#fff;color:#374151;cursor:pointer;">報告</button>`;
+  return '<span style="color:#9ca3af;font-size:11px;">未報告</span>';
+}
+
+function buildAppRow(r, colors, isSettled = false) {
+  const sc = colors[r.status] || STATUS_DEFAULTS[r.status] || { bg: '#fff', text: '#111827' };
+  const tr = document.createElement('tr');
+  const payBg = paymentRowBg(r);
+  tr.style.cssText = `background:${payBg || sc.bg};color:${sc.text};`;
+
+  const adYen = adAmountYen(r);
+  const adLabel = r.ad_type === 'percent'
+    ? `${r.ad_amount ?? 0}% (¥${Math.round(adYen).toLocaleString()})`
+    : `¥${(r.ad_amount || 0).toLocaleString()}`;
+
+  const brokerageCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved);
+  const adCell        = buildSettleCell(r, 'ad',        r.ad_settled,        r.ad_approved);
+
+  const canEdit = IS_MANAGER || r.staff_id === CUR_STAFF_ID;
+  const opBtns  = canEdit
+    ? `<button onclick="editApp(${r.id})" style="padding:3px 8px;font-size:11px;border:1px solid #bfdbfe;border-radius:4px;background:#eff6ff;color:#1d4ed8;cursor:pointer;margin-right:3px;">編集</button>
+       <button onclick="deleteApp(${r.id})" style="padding:3px 8px;font-size:11px;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#ef4444;cursor:pointer;">削除</button>` : '';
+
+  tr.innerHTML = `
+    <td data-f="application_date" data-t="date"   data-v="${r.application_date||''}"   style="white-space:nowrap;">${r.application_date || '―'}</td>
+    <td data-f="staff_id"         data-t="staff"  data-v="${r.staff_id||''}"            data-mgr="1">${r.staff_name || '―'}</td>
+    <td data-f="media"            data-t="text"   data-v="${escApp(r.media)}"           >${r.media || '―'}</td>
+    <td data-f="property_name"    data-t="text"   data-v="${escApp(r.property_name)}"   >${r.property_name || '―'}</td>
+    <td data-f="room_number"      data-t="text"   data-v="${escApp(r.room_number)}"     >${r.room_number || '―'}</td>
+    <td data-f="customer_name"    data-t="text"   data-v="${escApp(r.customer_name)}"   >${r.customer_name || '―'}</td>
+    <td data-f="rent"             data-t="number" data-v="${r.rent||0}"                  style="text-align:right;">${r.rent ? '¥'+r.rent.toLocaleString() : '―'}</td>
+    <td data-f="contract_start_date" data-t="date" data-v="${r.contract_start_date||''}" style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
+    <td data-f="brokerage_fee"    data-t="number" data-v="${r.brokerage_fee||0}"         style="text-align:right;">${r.brokerage_fee ? '¥'+r.brokerage_fee.toLocaleString() : '―'}</td>
+    <td data-f="ad_amount"        data-t="number" data-v="${r.ad_amount||0}"             style="text-align:right;">${adLabel}</td>
+    <td data-f="ad_payment_date"  data-t="date"   data-v="${r.ad_payment_date||''}"      style="white-space:nowrap;">${r.ad_payment_date || '―'}</td>
+    <td data-f="option_amount"    data-t="number" data-v="${r.option_amount||0}"         style="text-align:right;">${r.option_amount ? '¥'+r.option_amount.toLocaleString() : '―'}</td>
+    <td data-f="lifeline"         data-t="bool"   data-v="${!!r.lifeline}"               style="text-align:center;">${r.lifeline ? '●' : '×'}</td>
+    <td data-f="moving"           data-t="bool"   data-v="${!!r.moving}"                 style="text-align:center;">${r.moving ? '●' : '×'}</td>
+    <td data-f="fire_insurance"   data-t="bool"   data-v="${!!r.fire_insurance}"         style="text-align:center;">${r.fire_insurance ? '●' : '×'}</td>
+    <td data-f="status"           data-t="status" data-v="${escApp(r.status)}"           style="white-space:nowrap;"><span class="app-status-badge" style="background:${sc.bg};color:${sc.text};border:1px solid ${sc.text}30;">${r.status}</span></td>
+    <td style="text-align:center;white-space:nowrap;">${brokerageCell}</td>
+    <td style="text-align:center;white-space:nowrap;">${adCell}</td>
+    <td style="white-space:nowrap;">${opBtns}</td>`;
+
+  if (!isSettled && canEdit) {
+    tr.querySelectorAll('td[data-f]').forEach(td => {
+      const field = td.dataset.f, type = td.dataset.t, val = td.dataset.v;
+      if (field === 'staff_id' && !IS_MANAGER) return;
+      td.style.cursor = 'pointer'; td.title = 'クリックで編集';
+      td.addEventListener('click', e => {
+        if (e.target.tagName === 'BUTTON') return;
+        if (type === 'bool') editCellApp(td, r.id, field, 'checkbox', val === 'true');
+        else if (type === 'status') editCellApp(td, r.id, field, 'select', val, STATUS_KEYS.map(k => [k, k]));
+        else if (type === 'staff')  editCellApp(td, r.id, field, 'select', val, _APP_STAFF_PAIRS);
+        else editCellApp(td, r.id, field, type, val);
+      });
+    });
+  }
+  return tr;
+}
+
+function renderApplications(list, colors) {
+  const tbody        = document.getElementById('app-tbody');
+  const settledTbody = document.getElementById('settled-tbody');
+
+  const cntEl = document.getElementById('app-count');
+  if (cntEl) cntEl.textContent = list.length + '件';
+
+  tbody.innerHTML = '';
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="19" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>';
+  } else {
+    list.forEach(r => tbody.appendChild(buildAppRow(r, colors, false)));
+  }
+
+  const settled = list.filter(isFullyApproved);
+  const countEl = document.getElementById('settled-count');
+  if (countEl) countEl.textContent = settled.length + '件';
+  if (!settled.length) {
+    settledTbody.innerHTML = '<tr><td colspan="19" style="text-align:center;color:#9ca3af;padding:16px;">承認済み案件なし</td></tr>';
+  } else {
+    settledTbody.innerHTML = '';
+    settled.forEach(r => settledTbody.appendChild(buildAppRow(r, colors, true)));
+  }
+}
+
+function renderUncollectedTable(list) {
+  const tbody = document.getElementById('uncollected-tbody');
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:#9ca3af;padding:24px;">未入金データなし</td></tr>';
+    return;
+  }
+  tbody.innerHTML = '';
+  list.forEach(r => {
+    const tr = document.createElement('tr');
+    const adYen = adAmountYen(r);
+    const adDisp = r.ad_type === 'percent'
+      ? `${r.ad_amount ?? 0}% (¥${Math.round(adYen).toLocaleString()})`
+      : (r.ad_amount ? `¥${r.ad_amount.toLocaleString()}` : '―');
+    const bCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved);
+    const aCell = buildSettleCell(r, 'ad',        r.ad_settled,        r.ad_approved);
+    tr.innerHTML = `
+      <td style="white-space:nowrap;">${r.application_date || '―'}</td>
+      <td>${r.staff_name || '―'}</td>
+      <td>${r.property_name || '―'}</td>
+      <td>${r.room_number || '―'}</td>
+      <td>${r.customer_name || '―'}</td>
+      <td style="text-align:right;">${r.rent ? '¥'+r.rent.toLocaleString() : '―'}</td>
+      <td style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
+      <td style="text-align:right;">${r.brokerage_fee ? '¥'+r.brokerage_fee.toLocaleString() : '―'}</td>
+      <td style="text-align:right;">${r.option_amount ? '¥'+r.option_amount.toLocaleString() : '―'}</td>
+      <td style="text-align:right;">${adDisp}</td>
+      <td style="white-space:nowrap;">${r.ad_payment_date || '―'}</td>
+      <td style="text-align:center;white-space:nowrap;">${bCell}</td>
+      <td style="text-align:center;white-space:nowrap;">${aCell}</td>
+      <td style="white-space:nowrap;">
+        <button onclick="editApp(${r.id})" style="padding:3px 8px;font-size:11px;border:1px solid #bfdbfe;border-radius:4px;background:#eff6ff;color:#1d4ed8;cursor:pointer;">詳細</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+/* ===================================================
+   データ読み込み
+=================================================== */
+async function loadApplications() {
+  if (_isSearchMode) return;
+  const params = new URLSearchParams({ year: salesYear, month: salesMonth, store_id: STORE_ID });
+  const staffSel  = document.getElementById('app-filter-staff');
+  const statusSel = document.getElementById('app-filter-status');
+  if (staffSel && staffSel.value)   params.set('staff_id', staffSel.value);
+  if (statusSel && statusSel.value) params.set('status',   statusSel.value);
+  if (!IS_MANAGER && CUR_STAFF_ID)  params.set('staff_id', CUR_STAFF_ID);
+  try {
+    const [appsRes, colorsRes] = await Promise.all([
+      fetch(`/api/applications?${params}`),
+      fetch('/api/status-colors'),
+    ]);
+    appData      = appsRes.ok   ? await appsRes.json()   : [];
+    statusColors = colorsRes.ok ? await colorsRes.json() : {};
+    window._appColors = statusColors;
+    // スタッフペア更新
+    try {
+      const sr = await fetch('/api/staff');
+      if (sr.ok) _APP_STAFF_PAIRS = (await sr.json()).map(s => [s.id, s.name]);
+    } catch(_) {}
+    renderApplications(appData, statusColors);
+  } catch(e) { appData = []; renderApplications([], {}); }
+  if (IS_MANAGER) loadPendingApprovals();
+}
+
+async function loadUncollected() {
+  if (_isSearchMode) return;
+  const staffId = document.getElementById('unc-filter-staff')?.value;
+  const params  = new URLSearchParams({ store_id: STORE_ID });
+  if (staffId) params.set('staff_id', staffId);
+  try {
+    const res = await fetch(`/api/applications/unpaid?${params}`);
+    if (!res.ok) return;
+    const list = await res.json();
+    const cntEl = document.getElementById('unc-count');
+    if (cntEl) cntEl.textContent = list.length + '件';
+    renderUncollectedTable(list);
+  } catch(e) { console.warn('loadUncollected error', e); }
+}
+
+async function loadPendingApprovals() {
+  const noticeEl = document.getElementById('approval-notice');
+  if (!noticeEl) return;
+  try {
+    const res = await fetch('/api/pending-approvals');
+    if (!res.ok) return;
+    const { count } = await res.json();
+    if (count > 0) {
+      document.getElementById('approval-notice-text').textContent = `承認待ちの入金報告が ${count} 件あります`;
+      noticeEl.style.display = 'flex';
+    } else {
+      noticeEl.style.display = 'none';
+    }
+  } catch(_) {}
+}
+
+function scrollToApproval() {
+  document.getElementById('application-section')?.scrollIntoView({ behavior: 'smooth' });
+}
+
+/* ===================================================
+   入金ワークフロー
+=================================================== */
+async function settlePayment(rid, field) {
+  const label = field === 'brokerage' ? '仲介手数料' : 'AD';
+  if (!confirm(`${label}の入金を報告しますか？`)) return;
+  try {
+    const res = await fetch(`/api/applications/${rid}/settle`, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ field }),
+    });
+    if (!res.ok) throw new Error();
+    showAlert('入金を報告しました。店長の承認をお待ちください。');
+    loadApplications();
+  } catch(_) { showAlert('処理に失敗しました。', 'error'); }
+}
+
+async function approvePayment(rid, field) {
+  const label = field === 'brokerage' ? '仲介手数料' : 'AD';
+  if (!confirm(`${label}の入金を承認しますか？承認すると売上に反映されます。`)) return;
+  try {
+    const res = await fetch(`/api/applications/${rid}/approve`, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ field }),
+    });
+    if (!res.ok) throw new Error();
+    showAlert('承認しました。売上に反映されました。');
+    await Promise.all([loadApplications(), loadUncollected()]);
+  } catch(_) { showAlert('承認に失敗しました。', 'error'); }
+}
+
+/* ===================================================
+   申込モーダル
+=================================================== */
+let editingAppId = null;
+
+function openAppModal(existing) {
+  editingAppId = existing?.id || null;
+  document.getElementById('app-modal-title').textContent = existing ? '申込編集' : '申込追加';
+  document.getElementById('app-editing-id').value = existing?.id || '';
+
+  const fields = ['application_date','property_name','room_number','customer_name',
+    'rent','contract_start_date','ad_payment_date','brokerage_fee','ad_amount','option_amount'];
+  fields.forEach(f => { const el = document.getElementById(`app-${f}`); if (el) el.value = existing?.[f] ?? ''; });
+
+  const staffSel = document.getElementById('app-staff_id');
+  if (staffSel) { staffSel.value = existing?.staff_id || (CUR_STAFF_ID || ''); staffSel.disabled = !IS_MANAGER; }
+
+  const mediaSel = document.getElementById('app-media');
+  if (mediaSel) mediaSel.value = existing?.media || '';
+
+  const adTypeSel = document.getElementById('app-ad_type');
+  if (adTypeSel) { adTypeSel.value = existing?.ad_type || 'amount'; updateAdLabel(); }
+
+  ['lifeline','moving','fire_insurance'].forEach(f => {
+    const el = document.getElementById(`app-${f}`);
+    if (el) el.checked = !!existing?.[f];
+  });
+
+  const statusVal = existing?.status || '申込';
+  document.querySelectorAll('input[name="app-status"]').forEach(r => { r.checked = (r.value === statusVal); });
+
+  document.getElementById('app-modal').classList.add('active');
+  cancelInlineMedia();
+  refreshMediaSelect().then(() => { if (existing?.media) document.getElementById('app-media').value = existing.media; });
+}
+
+function closeAppModal() {
+  document.getElementById('app-modal').classList.remove('active');
+  cancelInlineMedia();
+  editingAppId = null;
+}
+
+async function submitApp() {
+  const dateEl = document.getElementById('app-application_date');
+  if (!dateEl.value) { showAlert('申込日は必須です。', 'error'); return; }
+
+  const statusEl = document.querySelector('input[name="app-status"]:checked');
+  const payload = {
+    store_id:            STORE_ID,
+    application_date:    document.getElementById('app-application_date').value,
+    staff_id:            document.getElementById('app-staff_id')?.value || null,
+    media:               document.getElementById('app-media')?.value || '',
+    property_name:       document.getElementById('app-property_name').value,
+    room_number:         document.getElementById('app-room_number').value,
+    customer_name:       document.getElementById('app-customer_name').value,
+    rent:                parseFloat(document.getElementById('app-rent').value) || 0,
+    contract_start_date: document.getElementById('app-contract_start_date').value || null,
+    ad_payment_date:     document.getElementById('app-ad_payment_date').value || null,
+    brokerage_fee:       parseFloat(document.getElementById('app-brokerage_fee').value) || 0,
+    ad_type:             document.getElementById('app-ad_type').value,
+    ad_amount:           parseFloat(document.getElementById('app-ad_amount').value) || 0,
+    option_amount:       parseFloat(document.getElementById('app-option_amount').value) || 0,
+    lifeline:            document.getElementById('app-lifeline').checked,
+    moving:              document.getElementById('app-moving').checked,
+    fire_insurance:      document.getElementById('app-fire_insurance').checked,
+    status:              statusEl?.value || '申込',
+  };
+  try {
+    const url    = editingAppId ? `/api/applications/${editingAppId}` : '/api/applications';
+    const method = editingAppId ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if (!res.ok) throw new Error();
+    closeAppModal();
+    showAlert(editingAppId ? '申込を更新しました。' : '申込を追加しました。');
+    loadApplications(); loadUncollected();
+  } catch(_) { showAlert('保存に失敗しました。', 'error'); }
+}
+
+async function editApp(id) {
+  const record = appData.find(r => r.id === id);
+  if (record) { openAppModal(record); return; }
+  try {
+    const res = await fetch(`/api/applications/${id}`);
+    if (res.ok) openAppModal(await res.json());
+  } catch(_) { showAlert('データ取得に失敗しました。', 'error'); }
+}
+
+async function deleteApp(id) {
+  if (!confirm('この申込データを削除しますか？')) return;
+  try {
+    const res = await fetch(`/api/applications/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error();
+    showAlert('削除しました。');
+    loadApplications(); loadUncollected();
+  } catch(_) { showAlert('削除に失敗しました。', 'error'); }
+}
+
+/* ===================================================
+   インライン編集
+=================================================== */
+function editCellApp(td, id, field, type, curVal, opts) {
+  if (td.querySelector('input,select')) return;
+  const prev = td.innerHTML;
+  let el;
+  if (type === 'select') {
+    el = document.createElement('select');
+    el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px;font-size:12px;';
+    (opts || []).forEach(([v, l]) => {
+      const o = new Option(l || v, v);
+      if (String(v) === String(curVal)) o.selected = true;
+      el.appendChild(o);
+    });
+    td.innerHTML = ''; td.appendChild(el); el.focus();
+    el.addEventListener('change', async () => { await patchApp(id, field, el.value); loadApplications(); });
+    el.addEventListener('blur',   () => { if (td.querySelector('select')) loadApplications(); });
+  } else if (type === 'checkbox') {
+    patchApp(id, field, !curVal).then(() => loadApplications());
+  } else {
+    el = document.createElement('input');
+    el.type = type; el.value = curVal || '';
+    el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
+    td.innerHTML = ''; td.appendChild(el); el.focus();
+    if (type === 'text' || type === 'number') el.select();
+    const save = async () => { await patchApp(id, field, el.value); loadApplications(); };
+    el.addEventListener('blur', save);
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') el.blur(); if (e.key === 'Escape') td.innerHTML = prev; });
+  }
+}
+
+async function patchApp(id, field, value) {
+  try {
+    await fetch(`/api/applications/${id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ [field]: value }),
+    });
+  } catch(_) { showAlert('更新に失敗しました。', 'error'); }
+}
+
+/* ===================================================
+   全期間横断検索
+=================================================== */
+function scheduleGlobalSearch(val) {
+  clearTimeout(_searchTimer);
+  const q = (val || '').trim();
+  if (!q) { clearGlobalSearch(); return; }
+  _searchTimer = setTimeout(() => runGlobalSearch(q), 350);
+}
+
+async function runGlobalSearch(q) {
+  const badge = document.getElementById('search-mode-badge');
+  if (badge) badge.style.display = '';
+  _isSearchMode = true;
+  try {
+    const res = await fetch(`/api/applications/search?q=${encodeURIComponent(q)}`);
+    if (!res.ok) return;
+    const list = await res.json();
+    const colors = window._appColors || {};
+
+    const cntEl = document.getElementById('app-count');
+    if (cntEl) cntEl.textContent = list.length + '件';
+    renderApplications(list, colors);
+    appData = list;
+
+    const unpaid = list.filter(r => {
+      const needB = (r.brokerage_fee || 0) > 0 && !r.brokerage_approved;
+      const needA = adAmountYen(r) > 0 && !r.ad_approved;
+      return needB || needA;
+    });
+    const unc = document.getElementById('unc-count');
+    if (unc) unc.textContent = unpaid.length + '件';
+    renderUncollectedTable(unpaid);
+  } catch(e) { console.warn('search error', e); }
+}
+
+function clearGlobalSearch() {
+  const input = document.getElementById('global-search');
+  if (input) input.value = '';
+  const badge = document.getElementById('search-mode-badge');
+  if (badge) badge.style.display = 'none';
+  _isSearchMode = false;
+  loadApplications(); loadUncollected();
+}
+
+/* ===================================================
+   色設定
+=================================================== */
+async function openColorModal() {
+  document.getElementById('color-modal').classList.add('active');
+  await loadColors();
+}
+function closeColorModal() { document.getElementById('color-modal').classList.remove('active'); }
+
+async function loadColors() {
+  let colors = {};
+  try { const r = await fetch('/api/status-colors'); if (r.ok) colors = await r.json(); } catch(_) {}
+  const container = document.getElementById('color-settings');
+  container.innerHTML = '';
+  STATUS_KEYS.forEach(key => {
+    const c = colors[key] || STATUS_DEFAULTS[key] || { bg: '#ffffff', text: '#111827' };
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f3f4f6;';
+    row.innerHTML = `
+      <span style="font-size:13px;font-weight:600;min-width:90px;">${key}</span>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;">背景色
+        <input type="color" data-status="${key}" data-type="bg" value="${c.bg}" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;"></label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;">文字色
+        <input type="color" data-status="${key}" data-type="text" value="${c.text}" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;"></label>
+      <span class="app-status-badge cp-${key.replace(/[^a-z]/gi,'')}" style="background:${c.bg};color:${c.text};border:1px solid ${c.text}30;">${key}</span>`;
+    container.appendChild(row);
+    row.querySelectorAll('input[type="color"]').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const s = inp.dataset.status;
+        const bgV = container.querySelector(`input[data-status="${s}"][data-type="bg"]`).value;
+        const txV = container.querySelector(`input[data-status="${s}"][data-type="text"]`).value;
+        const pv  = container.querySelector(`.cp-${s.replace(/[^a-z]/gi,'')}`);
+        if (pv) { pv.style.background = bgV; pv.style.color = txV; pv.style.borderColor = txV + '30'; }
+      });
+    });
+  });
+}
+
+async function saveColors() {
+  const container = document.getElementById('color-settings');
+  const colors = {};
+  STATUS_KEYS.forEach(key => {
+    const bgEl = container.querySelector(`input[data-status="${key}"][data-type="bg"]`);
+    const txEl = container.querySelector(`input[data-status="${key}"][data-type="text"]`);
+    if (bgEl && txEl) colors[key] = { bg: bgEl.value, text: txEl.value };
+  });
+  try {
+    const res = await fetch('/api/status-colors', {
+      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ store_id: STORE_ID, colors }),
+    });
+    if (!res.ok) throw new Error();
+    closeColorModal(); showAlert('色設定を保存しました。'); loadApplications();
+  } catch(_) { showAlert('保存に失敗しました。', 'error'); }
+}
+
+/* ===================================================
+   媒体管理
+=================================================== */
+function toggleInlineMediaInput() {
+  const el = document.getElementById('inline-media-input');
+  const hidden = el.style.display === 'none' || !el.style.display;
+  el.style.display = hidden ? 'block' : 'none';
+  if (hidden) document.getElementById('inline-media-name').focus();
+}
+function cancelInlineMedia() {
+  document.getElementById('inline-media-input').style.display = 'none';
+  document.getElementById('inline-media-name').value = '';
+}
+async function confirmInlineMedia() {
+  const input = document.getElementById('inline-media-name');
+  const name  = input.value.trim();
+  if (!name) { input.focus(); return; }
+  try {
+    const res = await fetch('/api/media-types', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, store_id: STORE_ID }),
+    });
+    if (!res.ok) throw new Error();
+    cancelInlineMedia(); await refreshMediaSelect();
+    document.getElementById('app-media').value = name;
+    showAlert(`「${name}」を追加しました。`);
+  } catch(_) { showAlert('追加に失敗しました。', 'error'); }
+}
+
+async function openMediaModal() {
+  document.getElementById('media-modal').classList.add('active');
+  await loadMedia();
+}
+function closeMediaModal() { document.getElementById('media-modal').classList.remove('active'); }
+
+async function loadMedia() {
+  try {
+    const res = await fetch('/api/media-types');
+    if (!res.ok) return;
+    const list = await res.json();
+    const container = document.getElementById('media-list');
+    if (!list.length) { container.innerHTML = '<p style="font-size:13px;color:#9ca3af;">媒体が登録されていません</p>'; return; }
+    container.innerHTML = '';
+    list.forEach(m => {
+      const tag = document.createElement('div');
+      tag.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:#f3f4f6;border-radius:20px;font-size:13px;';
+      tag.innerHTML = `<span>${m.name}</span><button onclick="deleteMedia(${m.id})" style="border:none;background:none;cursor:pointer;color:#ef4444;font-size:14px;line-height:1;">×</button>`;
+      container.appendChild(tag);
+    });
+    await refreshMediaSelect();
+  } catch(_) {}
+}
+async function addMedia() {
+  const input = document.getElementById('new-media-name');
+  const name  = input.value.trim();
+  if (!name) return;
+  try {
+    const res = await fetch('/api/media-types', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ name, store_id: STORE_ID }),
+    });
+    if (!res.ok) throw new Error();
+    input.value = ''; await loadMedia();
+  } catch(_) { showAlert('追加に失敗しました。', 'error'); }
+}
+async function deleteMedia(id) {
+  if (!confirm('この媒体を削除しますか？')) return;
+  try { await fetch(`/api/media-types/${id}`, { method: 'DELETE' }); await loadMedia(); } catch(_) {}
+}
+async function refreshMediaSelect() {
+  try {
+    const res = await fetch('/api/media-types');
+    if (!res.ok) return;
+    const list = await res.json();
+    const sel  = document.getElementById('app-media');
+    if (!sel) return;
+    const cur  = sel.value;
+    sel.innerHTML = '<option value="">― 選択 ―</option>';
+    list.forEach(m => { const o = new Option(m.name, m.name); sel.appendChild(o); });
+    sel.value = cur;
+  } catch(_) {}
+}
+
+function updateAdLabel() {
+  const sel = document.getElementById('app-ad_type');
+  const lbl = document.getElementById('app-ad-label');
+  if (sel && lbl) lbl.textContent = sel.value === 'percent' ? 'AD割合（%）' : 'AD金額（円）';
+}
+
+/* ===================================================
+   初期ロード
+=================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  updateMonthLabel();
+  loadApplications();
+  loadUncollected();
+});
+</script>
+{% endblock %}
