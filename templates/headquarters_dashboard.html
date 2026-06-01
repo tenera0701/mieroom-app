@@ -124,6 +124,29 @@
     </div>
   </div>
 
+  <!-- 各店舗の実績テーブル（メイン） -->
+  <div class="hq-section" style="margin-bottom:20px;">
+    <div class="hq-section-title" style="margin-bottom:12px;">📊 各店舗 今月の実績</div>
+    <div style="overflow-x:auto;">
+      <table class="mgr-table">
+        <thead>
+          <tr>
+            <th>店舗</th>
+            <th>売上</th>
+            <th>利益</th>
+            <th>経費</th>
+            <th>反響数</th>
+            <th>申込数</th>
+            <th>契約数</th>
+          </tr>
+        </thead>
+        <tbody id="mgr-tbody">
+          <tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:20px;">読込中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- ② 危険アラート -->
   <div id="hq-alerts-section" class="hq-section" style="display:none;">
     <div class="hq-section-title">⚠️ アラート</div>
@@ -170,31 +193,6 @@
     <canvas id="comparison-chart" style="max-height:320px;"></canvas>
   </div>
 
-  <!-- ⑤ 店長管理 -->
-  <div class="hq-section">
-    <div class="hq-section-title">👔 店長・KPI入力状況 <span class="badge-pro">PRO</span></div>
-    <div style="overflow-x:auto;">
-      <table class="mgr-table">
-        <thead>
-          <tr>
-            <th>店舗</th>
-            <th>売上</th>
-            <th>利益</th>
-            <th>経費</th>
-            <th>反響数</th>
-            <th>申込数</th>
-            <th>契約数</th>
-            <th>成約率</th>
-            <th>達成率</th>
-            <th>前月比</th>
-          </tr>
-        </thead>
-        <tbody id="mgr-tbody">
-          <tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:20px;">読込中...</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
 
 
 </div>
@@ -284,28 +282,16 @@ async function loadSummary(year, month) {
       return;
     }
     const fmtY = v => v != null ? '¥' + Math.round(v).toLocaleString() : '―';
-    const fmtN = v => v != null ? v.toLocaleString() + '件' : '―';
     tbody.innerHTML = d.stores.map(s => {
-      const ach = s.target > 0 ? Math.round(s.sales / s.target * 100) : null;
-      const dotCls = !ach ? 'dot-warn' : ach >= 80 ? 'dot-ok' : ach >= 50 ? 'dot-warn' : 'dot-danger';
-      const vstxt = s.vs_prev != null
-        ? (s.vs_prev >= 0 ? `<span style="color:#0D9488;font-weight:700;">+${s.vs_prev}%</span>` : `<span style="color:#dc2626;font-weight:700;">${s.vs_prev}%</span>`)
-        : '<span style="color:#9ca3af;">―</span>';
       const profitColor = s.profit == null ? '#9ca3af' : s.profit >= 0 ? '#059669' : '#dc2626';
       return `<tr>
         <td style="font-weight:700;color:#111827;">${s.store_name}</td>
         <td style="color:#0D9488;font-weight:600;">${fmtY(s.sales)}</td>
         <td style="color:${profitColor};font-weight:600;">${fmtY(s.profit)}</td>
         <td style="color:#f59e0b;">${fmtY(s.expenses)}</td>
-        <td>${s.inquiries || 0}件</td>
-        <td>${s.apps}件</td>
-        <td>${s.contracts}件</td>
-        <td>${s.close_rate}%</td>
-        <td>
-          <span class="status-dot ${dotCls}"></span>
-          ${ach != null ? ach + '%' : '―'}
-        </td>
-        <td>${vstxt}</td>
+        <td style="text-align:right;">${s.inquiries || 0}件</td>
+        <td style="text-align:right;">${s.apps}件</td>
+        <td style="text-align:right;">${s.contracts}件</td>
       </tr>`;
     }).join('');
   } catch(e) {
