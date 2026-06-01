@@ -146,6 +146,7 @@ class Store(db.Model):
     insurance_fee = db.Column(db.Float, default=0)  # 保険料
     cloud_fee = db.Column(db.Float, default=0)      # クラウド・SaaS
     is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class Staff(db.Model):
@@ -1078,6 +1079,7 @@ def migrate_postgres():
                 ("tenant", "trial_ends_at",        "TIMESTAMP"),
                 ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
                 ("tenant", "contract_start_date",  "DATE"),
+                ("store",  "created_at",            "TIMESTAMP"),
             ]
             for tbl, col, typedef in new_cols:
                 try:
@@ -4820,8 +4822,12 @@ def api_tenant_delete(tid):
 @super_admin_required
 def api_tenant_stores(tid):
     """テナント内の店舗一覧"""
-    stores = Store.query.filter_by(tenant_id=tid, is_active=True).all()
-    return jsonify([{'id': s.id, 'name': s.name} for s in stores])
+    stores = Store.query.filter_by(tenant_id=tid, is_active=True).order_by(Store.created_at.asc()).all()
+    return jsonify([{
+        'id': s.id,
+        'name': s.name,
+        'created_at': s.created_at.strftime('%Y-%m-%d') if s.created_at else None
+    } for s in stores])
 
 
 @app.route("/api/tenants/<int:tid>/stores", methods=["POST"])
