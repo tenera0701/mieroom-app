@@ -2001,6 +2001,50 @@ def _pl_ad_for(pls, y, m):
     return total
 
 
+@app.route("/api/kpi/by-store")
+@login_required
+def api_kpi_by_store():
+    """店舗別KPIサマリー（売上/契約数/申込数/反響数/利益/経費）"""
+    year  = request.args.get('year',  type=int) or current_ym()[0]
+    month = request.args.get('month', type=int) or current_ym()[1]
+    stores = get_allowed_stores()
+    result = []
+    for store in stores:
+        kpis = SalesKPI.query.filter_by(store_id=store.id, year=year, month=month).all()
+        sales       = sum(k.sales_amount or 0 for k in kpis)
+        contracts   = sum(k.contracts    or 0 for k in kpis)
+        applications= sum(k.applications or 0 for k in kpis)
+        inquiries   = sum(k.inquiries    or 0 for k in kpis)
+        # 利益・経費はPLRecordから
+        pl = PLRecord.query.filter_by(store_id=store.id, year=year, month=month).first()
+        profit   = pl.net_profit if pl else None
+        # 経費 = sales - profit (KPIベース)
+        expenses = max(0, sales - (profit or 0)) if profit is not None else None
+        # 入金済み申込件数
+        from sqlalchemy import extract as _ex
+        approved_cnt = ApplicationRecord.query.filter(
+            ApplicationRecord.store_id == store.id,
+            ApplicationRecord.status != 'キャンセル',
+            _ex('year',  ApplicationRecord.application_date) == year,
+            _ex('month', ApplicationRecord.application_date) == month,
+            db.or_(ApplicationRecord.ad_amount > 0, ApplicationRecord.brokerage_fee > 0),
+            db.or_(ApplicationRecord.ad_amount <= 0, ApplicationRecord.ad_approved == True),
+            db.or_(ApplicationRecord.brokerage_fee <= 0, ApplicationRecord.brokerage_approved == True),
+        ).count()
+        result.append({
+            'store_id':    store.id,
+            'store_name':  store.name,
+            'sales':       sales,
+            'contracts':   contracts,
+            'applications': applications,
+            'inquiries':   inquiries,
+            'approved_apps': approved_cnt,
+            'profit':      profit,
+            'expenses':    expenses,
+        })
+    return jsonify(result)
+
+
 @app.route("/api/kpi/summary")
 def api_kpi_summary():
     """KPIサマリを返す（year/monthパラメータで任意月指定可）"""

@@ -30,222 +30,30 @@
 </div>
 
 <!-- KPIカード 4枚（2×2グリッド） -->
-<div class="grid grid-cols-2 gap-5 mb-6">
-
-  <!-- 今月の売上 -->
-  <div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-5 card-hover">
-    <div class="flex items-center justify-between mb-2">
-      <span class="text-sm font-semibold text-gray-500 tracking-wide">今月の売上</span>
-      <div class="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center">
-        <svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-      </div>
-    </div>
-    <div class="text-4xl font-bold text-gray-900 mb-3" id="val-sales">-</div>
-    <!-- 比較テーブル -->
-    <div class="border-t border-gray-100 pt-3 mb-3">
-      <table class="w-full text-xs">
-        <thead>
-          <tr class="text-gray-400">
-            <th class="text-left font-medium pb-1"></th>
-            <th class="text-right font-medium pb-1">今月</th>
-            <th class="text-right font-medium pb-1">前月</th>
-            <th class="text-right font-medium pb-1">前年同月</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="text-gray-500 py-0.5">売上</td>
-            <td class="text-right font-semibold text-gray-800" id="tbl-sales-cur">-</td>
-            <td class="text-right text-gray-500" id="tbl-sales-prev">-</td>
-            <td class="text-right text-gray-500" id="tbl-sales-yoy">-</td>
-          </tr>
-          <tr>
-            <td class="text-gray-500 py-0.5">比較</td>
-            <td class="text-right text-gray-400">基準</td>
-            <td class="text-right" id="diff-sales-prev">--</td>
-            <td class="text-right" id="diff-sales-yoy">--</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <!-- スパークライン -->
-    <div style="height:110px;position:relative;">
-      <canvas id="spark-sales"></canvas>
-    </div>
+<!-- 店舗別KPIテーブル -->
+<div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-5 mb-6">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+    <h2 style="font-size:15px;font-weight:800;color:#111827;margin:0;">店舗別 今月実績</h2>
+    <span style="font-size:12px;color:#9ca3af;">マウスオーバーでグラフ表示</span>
   </div>
-
-  <!-- 今月の利益 -->
-  <div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-5 card-hover">
-    <div class="flex items-center justify-between mb-2">
-      <span class="text-sm font-semibold text-gray-500 tracking-wide">今月の利益</span>
-      <div class="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center">
-        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-        </svg>
-      </div>
-    </div>
-    <div class="text-4xl font-bold text-gray-900 mb-3" id="val-profit">-</div>
-    <div class="border-t border-gray-100 pt-3 mb-3">
-      <table class="w-full text-xs">
-        <thead>
-          <tr class="text-gray-400">
-            <th class="text-left font-medium pb-1"></th>
-            <th class="text-right font-medium pb-1">今月</th>
-            <th class="text-right font-medium pb-1">前月</th>
-            <th class="text-right font-medium pb-1">前年同月</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="text-gray-500 py-0.5">利益</td>
-            <td class="text-right font-semibold text-gray-800" id="tbl-profit-cur">-</td>
-            <td class="text-right text-gray-500" id="tbl-profit-prev">-</td>
-            <td class="text-right text-gray-500" id="tbl-profit-yoy">-</td>
-          </tr>
-          <tr>
-            <td class="text-gray-500 py-0.5">比較</td>
-            <td class="text-right text-gray-400">基準</td>
-            <td class="text-right" id="diff-profit-prev">--</td>
-            <td class="text-right" id="diff-profit-yoy">--</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <div style="height:110px;position:relative;">
-      <canvas id="spark-profit"></canvas>
-    </div>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="border-bottom:2px solid #d1fae5;background:#F0FDFA;">
+          <th style="padding:10px 12px;text-align:left;font-weight:700;color:#374151;">店舗名</th>
+          <th style="padding:10px 12px;text-align:right;font-weight:700;color:#374151;">売上</th>
+          <th style="padding:10px 12px;text-align:right;font-weight:700;color:#374151;">利益</th>
+          <th style="padding:10px 12px;text-align:right;font-weight:700;color:#374151;">経費</th>
+          <th style="padding:10px 12px;text-align:right;font-weight:700;color:#374151;">反響数</th>
+          <th style="padding:10px 12px;text-align:right;font-weight:700;color:#374151;">申込数</th>
+          <th style="padding:10px 12px;text-align:right;font-weight:700;color:#374151;">入金済み</th>
+        </tr>
+      </thead>
+      <tbody id="store-kpi-tbody">
+        <tr><td colspan="7" style="text-align:center;padding:32px;color:#9ca3af;">読み込み中...</td></tr>
+      </tbody>
+    </table>
   </div>
-
-  <!-- 今月の契約数 -->
-  <div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-5 card-hover">
-    <div class="flex items-center justify-between mb-2">
-      <span class="text-sm font-semibold text-gray-500 tracking-wide">今月の契約数</span>
-      <div class="w-9 h-9 rounded-full bg-teal-100 flex items-center justify-center">
-        <svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-      </div>
-    </div>
-    <div class="text-4xl font-bold text-gray-900 mb-3" id="val-contracts">-</div>
-    <div class="border-t border-gray-100 pt-3 mb-3">
-      <table class="w-full text-xs">
-        <thead>
-          <tr class="text-gray-400">
-            <th class="text-left font-medium pb-1"></th>
-            <th class="text-right font-medium pb-1">今月</th>
-            <th class="text-right font-medium pb-1">前月</th>
-            <th class="text-right font-medium pb-1">前年同月</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="text-gray-500 py-0.5">件数</td>
-            <td class="text-right font-semibold text-gray-800" id="tbl-contracts-cur">-</td>
-            <td class="text-right text-gray-500" id="tbl-contracts-prev">-</td>
-            <td class="text-right text-gray-500" id="tbl-contracts-yoy">-</td>
-          </tr>
-          <tr>
-            <td class="text-gray-500 py-0.5">比較</td>
-            <td class="text-right text-gray-400">基準</td>
-            <td class="text-right" id="diff-contracts-prev">--</td>
-            <td class="text-right" id="diff-contracts-yoy">--</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <div style="height:110px;position:relative;">
-      <canvas id="spark-contracts"></canvas>
-    </div>
-  </div>
-
-  <!-- 経費合計 -->
-  <div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-5 card-hover">
-    <div class="flex items-center justify-between mb-2">
-      <span class="text-sm font-semibold text-gray-500 tracking-wide">経費合計</span>
-      <div class="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center">
-        <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-        </svg>
-      </div>
-    </div>
-    <div class="text-4xl font-bold text-gray-900 mb-3" id="val-expenses">-</div>
-    <div class="border-t border-gray-100 pt-3 mb-3">
-      <table class="w-full text-xs">
-        <thead>
-          <tr class="text-gray-400">
-            <th class="text-left font-medium pb-1"></th>
-            <th class="text-right font-medium pb-1">今月</th>
-            <th class="text-right font-medium pb-1">前月</th>
-            <th class="text-right font-medium pb-1">前年同月</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="text-gray-500 py-0.5">経費</td>
-            <td class="text-right font-semibold text-gray-800" id="tbl-expenses-cur">-</td>
-            <td class="text-right text-gray-500" id="tbl-expenses-prev">-</td>
-            <td class="text-right text-gray-500" id="tbl-expenses-yoy">-</td>
-          </tr>
-          <tr>
-            <td class="text-gray-500 py-0.5">比較</td>
-            <td class="text-right text-gray-400">基準</td>
-            <td class="text-right" id="diff-expenses-prev">--</td>
-            <td class="text-right" id="diff-expenses-yoy">--</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <div style="height:110px;position:relative;">
-      <canvas id="spark-expenses"></canvas>
-    </div>
-  </div>
-
-</div>
-
-
-<!-- 下段：スタッフ実績 ＋ 反響ファネル -->
-<div class="grid grid-cols-3 gap-5 mb-6">
-
-  <!-- スタッフ別実績（2/3幅） -->
-  <div class="col-span-2 bg-white rounded-2xl shadow-sm border border-teal-100 p-6">
-    <h2 class="text-base font-bold text-gray-800 mb-4">スタッフ別今月実績</h2>
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-gray-100">
-            <th class="text-left py-2 pr-3 text-xs text-gray-400 font-medium">氏名</th>
-            <th class="text-right py-2 px-2 text-xs text-gray-400 font-medium">反響</th>
-            <th class="text-right py-2 px-2 text-xs text-gray-400 font-medium">来店</th>
-            <th class="text-right py-2 px-2 text-xs text-gray-400 font-medium">契約</th>
-            <th class="text-right py-2 px-2 text-xs text-gray-400 font-medium">成約率</th>
-            <th class="text-right py-2 px-2 text-xs text-gray-400 font-medium">売上</th>
-            <th class="text-right py-2 pl-2 text-xs text-gray-400 font-medium">前月比売上</th>
-            <th class="text-right py-2 pl-2 text-xs text-gray-400 font-medium">操作</th>
-          </tr>
-        </thead>
-        <tbody id="staff-tbody">
-          <tr>
-            <td colspan="8" class="py-8 text-center text-gray-400 text-sm">読み込み中...</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- 反響ファネル（1/3幅） -->
-  <div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-6">
-    <h2 class="text-base font-bold text-gray-800 mb-4">今月の反響ファネル</h2>
-    <div id="funnel-wrap" class="space-y-3">
-      <p class="text-sm text-gray-400 text-center py-6">読み込み中...</p>
-    </div>
-  </div>
-
 </div>
 
 <!-- ===== データ入力モーダル ===== -->
@@ -835,37 +643,72 @@ async function load() {
   if (plMonthEl)  plMonthEl.value  = y + '-' + m;
 
   try {
-    const [sum, monthly, staff, approvedSum] = await Promise.all([
-      fetch(`/api/kpi/summary?year=${y}&month=${m}&store_id=${STORE_ID}`).then(r => r.ok ? r.json() : {}),
+    const [byStore, monthly] = await Promise.all([
+      fetch(`/api/kpi/by-store?year=${y}&month=${parseInt(m)}`).then(r => r.ok ? r.json() : []),
       fetch(`/api/kpi/monthly?store_id=${STORE_ID}`).then(r => r.ok ? r.json() : []),
-      fetch(`/api/kpi/staff?year=${y}&month=${m}&store_id=${STORE_ID}`).then(r => r.ok ? r.json() : []),
-      fetch(`/api/applications/approved-sum?year=${y}&month=${parseInt(m)}`).then(r => r.ok ? r.json() : {count:0}),
     ]);
 
-    // 契約数を入金済み申込件数（approved-sum）で上書き
-    if (sum && approvedSum) sum._approved_count = approvedSum.count || 0;
-
-    renderKPI(sum || {}, monthly || []);
+    renderStoreKPI(byStore || []);
 
     // スパークライン期間（選択範囲 or デフォルト）
     const chartFrom = document.getElementById('chart-from')?.value;
     const chartTo   = document.getElementById('chart-to')?.value;
     if (chartFrom && chartTo) {
       await loadChart(chartFrom, chartTo);
-    } else {
-      renderSparklines(monthly || []);
     }
-
-    renderStaff(staff || []);
-    renderFunnel(sum || {});
 
   } catch(e) {
     console.error('load error:', e);
-    renderKPI({}, []);
-    renderMainChart([]);
-    renderStaff([]);
-    renderFunnel({});
+    renderStoreKPI([]);
   }
+}
+
+// ==============================
+// 店舗別KPIテーブル
+// ==============================
+function renderStoreKPI(stores) {
+  const tbody = document.getElementById('store-kpi-tbody');
+  if (!tbody) return;
+  if (!stores.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:#9ca3af;">データなし</td></tr>';
+    return;
+  }
+  const fmt = v => v != null ? Math.round(v).toLocaleString('ja-JP') + '円' : '-';
+  const fmtN = v => v != null ? v.toLocaleString('ja-JP') + '件' : '-';
+
+  // 合計行
+  const totSales    = stores.reduce((s,r) => s + (r.sales || 0), 0);
+  const totProfit   = stores.every(r => r.profit != null) ? stores.reduce((s,r) => s + (r.profit || 0), 0) : null;
+  const totExpenses = stores.every(r => r.expenses != null) ? stores.reduce((s,r) => s + (r.expenses || 0), 0) : null;
+  const totInq      = stores.reduce((s,r) => s + (r.inquiries || 0), 0);
+  const totApp      = stores.reduce((s,r) => s + (r.applications || 0), 0);
+  const totApproved = stores.reduce((s,r) => s + (r.approved_apps || 0), 0);
+
+  const rows = stores.map(r => `
+    <tr style="border-bottom:1px solid #f3f4f6;transition:background .1s;" onmouseover="this.style.background='#F0FDFA'" onmouseout="this.style.background=''">
+      <td style="padding:12px 12px;font-weight:700;color:#111827;">${r.store_name}</td>
+      <td style="padding:12px 12px;text-align:right;color:#0D9488;font-weight:600;">${fmt(r.sales)}</td>
+      <td style="padding:12px 12px;text-align:right;color:${(r.profit||0)>=0?'#059669':'#dc2626'};font-weight:600;">${fmt(r.profit)}</td>
+      <td style="padding:12px 12px;text-align:right;color:#f59e0b;">${fmt(r.expenses)}</td>
+      <td style="padding:12px 12px;text-align:right;color:#374151;">${fmtN(r.inquiries)}</td>
+      <td style="padding:12px 12px;text-align:right;color:#374151;">${fmtN(r.applications)}</td>
+      <td style="padding:12px 12px;text-align:right;color:#0D9488;font-weight:600;">${fmtN(r.approved_apps)}</td>
+    </tr>
+  `).join('');
+
+  const totalRow = stores.length > 1 ? `
+    <tr style="border-top:2px solid #d1fae5;background:#F0FDFA;font-weight:700;">
+      <td style="padding:10px 12px;color:#374151;">合計</td>
+      <td style="padding:10px 12px;text-align:right;color:#0D9488;">${fmt(totSales)}</td>
+      <td style="padding:10px 12px;text-align:right;color:${(totProfit||0)>=0?'#059669':'#dc2626'};">${fmt(totProfit)}</td>
+      <td style="padding:10px 12px;text-align:right;color:#f59e0b;">${fmt(totExpenses)}</td>
+      <td style="padding:10px 12px;text-align:right;">${fmtN(totInq)}</td>
+      <td style="padding:10px 12px;text-align:right;">${fmtN(totApp)}</td>
+      <td style="padding:10px 12px;text-align:right;color:#0D9488;">${fmtN(totApproved)}</td>
+    </tr>
+  ` : '';
+
+  tbody.innerHTML = rows + totalRow;
 }
 
 // ==============================

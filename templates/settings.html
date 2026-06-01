@@ -155,14 +155,21 @@
           </tr>
         </thead>
         <tbody id="staff-tbody">
+          {% set high_staff_roles = ['店長', 'マネージャー'] %}
           {% for s in staff_list %}
+          {% set staff_is_high = s.role in high_staff_roles %}
+          {% set can_edit_this_staff = is_owner or (is_manager and not staff_is_high) %}
           <tr id="staff-row-{{ s.id }}">
             <td style="font-weight: 600;">{{ s.name }}</td>
             <td>{{ s.role or '-' }}</td>
             <td>{{ s.hired_at.strftime('%Y-%m-%d') if s.hired_at else '-' }}</td>
             <td>
+              {% if can_edit_this_staff %}
               <button class="btn-sm" onclick="openEditStaffModal({{ s.id }}, '{{ s.name }}', '{{ s.role or '' }}', '{{ s.hired_at.strftime('%Y-%m-%d') if s.hired_at else '' }}')">編集</button>
               <button class="btn-sm btn-danger" onclick="deleteStaff({{ s.id }})" style="margin-left: 6px;">削除</button>
+              {% else %}
+              <span style="font-size:11px;color:#d1d5db;">編集不可</span>
+              {% endif %}
             </td>
           </tr>
           {% else %}
