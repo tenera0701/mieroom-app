@@ -74,11 +74,20 @@
       <h1 class="page-title">顧客管理表</h1>
       <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">申込・入金状況の管理</p>
     </div>
-    <div class="month-nav">
-      <button class="month-nav-btn" onclick="navigate(-1)">&#8249; 前月</button>
-      <span class="month-nav-current" id="month-label"></span>
-      <button class="month-nav-btn" onclick="navigate(1)">次月 &#8250;</button>
-      <button class="month-nav-btn" style="background:#F0FDFA;color:#0D9488;border-color:#5EEAD4;" onclick="goToday()">今月</button>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div class="month-nav">
+        <button class="month-nav-btn" onclick="navigate(-1)">&#8249; 前月</button>
+        <span class="month-nav-current" id="month-label"></span>
+        <button class="month-nav-btn" onclick="navigate(1)">次月 &#8250;</button>
+        <button class="month-nav-btn" style="background:#F0FDFA;color:#0D9488;border-color:#5EEAD4;" onclick="goToday()">今月</button>
+      </div>
+      {% if is_manager %}
+      <select id="header-filter-staff" onchange="onHeaderStaffChange()"
+        style="border:1px solid #d1d5db;border-radius:6px;padding:7px 12px;font-size:13px;color:#111827;background:#fff;min-width:130px;">
+        <option value="">全スタッフ</option>
+        {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+      </select>
+      {% endif %}
     </div>
   </div>
 
@@ -441,6 +450,19 @@ function goToday() {
   salesYear  = now.getFullYear();
   salesMonth = now.getMonth() + 1;
   updateMonthLabel();
+  loadApplications();
+  loadUncollected();
+}
+
+/** ヘッダースタッフフィルター変更 → 申込/未入金フィルターに連動 */
+function onHeaderStaffChange() {
+  const staffId = document.getElementById('header-filter-staff')?.value || '';
+  // 申込一覧のスタッフフィルターに同期
+  const appStaff = document.getElementById('app-filter-staff');
+  if (appStaff) appStaff.value = staffId;
+  // 未入金のスタッフフィルターに同期
+  const uncStaff = document.getElementById('unc-filter-staff');
+  if (uncStaff) uncStaff.value = staffId;
   loadApplications();
   loadUncollected();
 }
