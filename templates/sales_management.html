@@ -615,10 +615,11 @@
       <svg style="width:18px;height:18px;color:#0D9488;flex-shrink:0;" fill="none" stroke="#0D9488" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
       </svg>
-      <input id="global-search" type="text" placeholder="申込一覧・入金済み・未入金を一括検索（物件名・お客様名・担当）"
+      <input id="global-search" type="text" placeholder="全期間横断検索（物件名・お客様名・担当・媒体）"
         style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;"
-        oninput="applyGlobalSearch(this.value)">
-      <button onclick="document.getElementById('global-search').value='';applyGlobalSearch('');"
+        oninput="scheduleGlobalSearch(this.value)">
+      <span id="search-mode-badge" style="display:none;background:#fef3c7;color:#92400e;border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap;">全期間検索中</span>
+      <button onclick="clearGlobalSearch()"
         style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:0 2px;" title="クリア">✕</button>
     </div>
   </div>
@@ -1968,6 +1969,7 @@ async function loadApplications() {
     ]);
     appData = appsRes.ok ? await appsRes.json() : [];
     statusColors = colorsRes.ok ? await colorsRes.json() : {};
+    window._appColors = statusColors; // 検索モードでも使えるよう保存
     renderApplications(appData, statusColors);
   } catch(e) {
     console.warn('loadApplications error', e);
@@ -2097,19 +2099,82 @@ function escApp(s) {
   return String(s || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-/** 申込一覧・入金済み・未入金を横断検索 */
-function applyGlobalSearch(q) {
-  const kw = (q || '').trim().toLowerCase();
-  // テキストで検索対象セルを含む行をフィルタ
-  ['app-tbody', 'settled-tbody', 'uncollected-tbody'].forEach(id => {
-    const tbody = document.getElementById(id);
-    if (!tbody) return;
-    tbody.querySelectorAll('tr').forEach(tr => {
-      if (tr.querySelector('td[colspan]')) return; // empty row
-      const text = tr.textContent.toLowerCase();
-      tr.style.display = (!kw || text.includes(kw)) ? '' : 'none';
+/** 全期間横断検索（デバウンス付き） */
+let _searchTimer = null;
+let _isSearchMode = false;
+
+function scheduleGlobalSearch(val) {
+  clearTimeout(_searchTimer);
+  const q = (val || '').trim();
+  if (!q) { clearGlobalSearch(); return; }
+  _searchTimer = setTimeout(() => runGlobalSearch(q), 350);
+}
+
+async function runGlobalSearch(q) {
+  const badge = document.getElementById('search-mode-badge');
+  if (badge) badge.style.display = '';
+  _isSearchMode = true;
+
+  try {
+    const res = await fetch(`/api/applications/search?q=${encodeURIComponent(q)}`);
+    if (!res.ok) return;
+    const list = await res.json();
+
+    // カラー設定を引き継ぎ
+    const colors = window._appColors || {};
+
+    // 申込一覧：全件表示（月フィルタなし）
+    const tbody = document.getElementById('app-tbody');
+    if (tbody) {
+      if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="19" style="text-align:center;color:#9ca3af;padding:24px;">該当なし</td></tr>';
+      } else {
+        tbody.innerHTML = '';
+        list.forEach(r => tbody.appendChild(buildAppRow(r, colors, false)));
+      }
+    }
+
+    // 入金済み一覧
+    const settled = list.filter(r => isFullyApproved(r));
+    const settledTbody = document.getElementById('settled-tbody');
+    const countEl = document.getElementById('settled-count');
+    if (countEl) countEl.textContent = settled.length + '件';
+    if (settledTbody) {
+      if (!settled.length) {
+        settledTbody.innerHTML = '<tr><td colspan="19" style="text-align:center;color:#9ca3af;padding:16px;">承認済み案件なし</td></tr>';
+      } else {
+        settledTbody.innerHTML = '';
+        settled.forEach(r => {
+          const tr = buildAppRow(r, colors, true);
+          settledTbody.appendChild(tr);
+        });
+      }
+    }
+
+    // 未入金一覧：未承認がある行
+    const unpaid = list.filter(r => {
+      const needB = (r.brokerage_fee || 0) > 0 && !r.brokerage_approved;
+      const needA = adAmountYen(r) > 0 && !r.ad_approved;
+      return needB || needA;
     });
-  });
+    const cntEl = document.getElementById('unc-count');
+    if (cntEl) cntEl.textContent = unpaid.length + '件';
+    renderUncollectedTable(unpaid);
+
+    // appData を更新して editApp などが動くようにする
+    window.appData = list;
+  } catch(e) { console.warn('search error', e); }
+}
+
+function clearGlobalSearch() {
+  const input = document.getElementById('global-search');
+  if (input) input.value = '';
+  const badge = document.getElementById('search-mode-badge');
+  if (badge) badge.style.display = 'none';
+  _isSearchMode = false;
+  // 通常の月次表示に戻す
+  loadApplications();
+  loadUncollected();
 }
 
 function renderApplications(list, colors) {

@@ -4981,6 +4981,42 @@ def api_applications_approved_sum():
     return jsonify({'total': total, 'count': len(recs)})
 
 
+@app.route("/api/applications/search")
+@login_required
+def api_applications_search():
+    """全期間を横断して申込レコードをキーワード検索"""
+    q = request.args.get('q', '').strip()
+    if not q or len(q) < 1:
+        return jsonify([])
+
+    allowed_ids = get_allowed_store_ids()
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    like = f'%{q}%'
+
+    # スタッフ名検索のためのID収集
+    matching_staff_ids = [s.id for s in Staff.query.filter(Staff.name.ilike(like)).all()]
+
+    conditions = [
+        ApplicationRecord.property_name.ilike(like),
+        ApplicationRecord.customer_name.ilike(like),
+        ApplicationRecord.room_number.ilike(like),
+        ApplicationRecord.media.ilike(like),
+    ]
+    if matching_staff_ids:
+        conditions.append(ApplicationRecord.staff_id.in_(matching_staff_ids))
+
+    query = ApplicationRecord.query.filter(
+        ApplicationRecord.store_id.in_(allowed_ids),
+        db.or_(*conditions)
+    )
+    if cur_user and cur_user.role == 'staff' and cur_user.staff_id:
+        query = query.filter(ApplicationRecord.staff_id == cur_user.staff_id)
+
+    records = query.order_by(ApplicationRecord.application_date.desc()).limit(200).all()
+    staff_map = {s.id: s.name for s in Staff.query.all()}
+    return jsonify([_app_record_to_dict(r, staff_map) for r in records])
+
+
 @app.route("/api/applications", methods=["GET"])
 @login_required
 def api_applications_list():
@@ -5161,17 +5197,15 @@ def api_applications_approve(rid):
     need_brokerage = (rec.brokerage_fee or 0) > 0
 
     # 今回承認したフィールドの金額を加算
+    # オプション金額は仲介入金承認時に一緒に反映する
     approved_amount = 0
     if field == 'brokerage' and need_brokerage:
-        approved_amount += (rec.brokerage_fee or 0)
+        approved_amount += (rec.brokerage_fee or 0) + (rec.option_amount or 0)
     if field == 'ad' and need_ad:
         approved_amount += ad_yen
-
-    # 全項目承認済みになった場合のみオプション金額も加算
-    fully_approved = ((not need_ad or rec.ad_approved) and
-                      (not need_brokerage or rec.brokerage_approved))
-    if fully_approved:
-        approved_amount += (rec.option_amount or 0)
+        # 仲介がない場合（AD単独）はオプションもAD承認時に反映
+        if not need_brokerage:
+            approved_amount += (rec.option_amount or 0)
 
     if approved_amount > 0:
         ref_date = rec.application_date or date.today()
