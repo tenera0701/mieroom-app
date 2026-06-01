@@ -4706,6 +4706,42 @@ def api_user_list():
 
 # ── テナント管理（super_admin専用） ────────────────────────
 
+@app.route("/api/admin/store-data-check")
+@super_admin_required
+def api_admin_store_data_check():
+    """全店舗のデータ件数を返す（デバッグ用）"""
+    stores = Store.query.filter_by(is_active=True).all()
+    result = []
+    for s in stores:
+        tenant = Tenant.query.get(s.tenant_id) if s.tenant_id else None
+        kpi_count  = SalesKPI.query.filter_by(store_id=s.id).count()
+        staff_count = Staff.query.filter_by(store_id=s.id, is_active=True).count()
+        app_count  = ApplicationRecord.query.filter_by(store_id=s.id).count()
+        result.append({
+            'store_id': s.id,
+            'store_name': s.name,
+            'tenant_name': tenant.name if tenant else 'なし',
+            'kpi_records': kpi_count,
+            'staff_count': staff_count,
+            'application_count': app_count,
+        })
+    return jsonify(result)
+
+
+@app.route("/api/admin/clear-store-data/<int:sid>", methods=["POST"])
+@super_admin_required
+def api_admin_clear_store_data(sid):
+    """指定店舗のデータを強制クリア"""
+    store = Store.query.get_or_404(sid)
+    kpi_del  = SalesKPI.query.filter_by(store_id=sid).delete()
+    pl_del   = PLRecord.query.filter_by(store_id=sid).delete()
+    app_del  = ApplicationRecord.query.filter_by(store_id=sid).delete()
+    Staff.query.filter_by(store_id=sid).update({'is_active': False})
+    db.session.commit()
+    return jsonify({'status': 'ok', 'store_name': store.name,
+                    'deleted_kpi': kpi_del, 'deleted_app': app_del})
+
+
 @app.route("/admin/tenants")
 @super_admin_required
 def admin_tenants():
