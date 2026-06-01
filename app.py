@@ -340,6 +340,11 @@ class AppUser(db.Model):
     can_view_leads_page = db.Column(db.Boolean, default=True)     # 反響管理
     can_view_daily_report = db.Column(db.Boolean, default=True)   # 日報
     can_view_leave = db.Column(db.Boolean, default=True)          # 有給管理
+    # クライアント管理画面の操作権限（sys_admin向け）
+    admin_can_add_tenant    = db.Column(db.Boolean, default=False)  # 新規テナント追加
+    admin_can_manage_stores = db.Column(db.Boolean, default=False)  # 店舗管理
+    admin_can_delete_tenant = db.Column(db.Boolean, default=False)  # 削除
+    admin_can_lock_tenant   = db.Column(db.Boolean, default=False)  # ロック・解除
 
 
 class PasswordResetToken(db.Model):
@@ -1078,8 +1083,12 @@ def migrate_postgres():
                 ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
                 ("tenant", "trial_ends_at",        "TIMESTAMP"),
                 ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
-                ("tenant", "contract_start_date",  "DATE"),
-                ("store",  "created_at",            "TIMESTAMP"),
+                ("tenant", "contract_start_date",     "DATE"),
+                ("store",  "created_at",             "TIMESTAMP"),
+                ("app_user", "admin_can_add_tenant",    "BOOLEAN DEFAULT FALSE"),
+                ("app_user", "admin_can_manage_stores", "BOOLEAN DEFAULT FALSE"),
+                ("app_user", "admin_can_delete_tenant", "BOOLEAN DEFAULT FALSE"),
+                ("app_user", "admin_can_lock_tenant",   "BOOLEAN DEFAULT FALSE"),
             ]
             for tbl, col, typedef in new_cols:
                 try:
@@ -1273,8 +1282,23 @@ def super_admin_required(f):
     return decorated
 
 
+def _check_admin_perm(perm_field):
+    """sys_admin の場合、指定したadmin権限フィールドを確認して403を返す（持てばOK）"""
+    role = session.get('app_user_role')
+    if role == 'super_admin':
+        return None  # super_adminは常にOK
+    if role == 'sys_admin':
+        user = AppUser.query.get(session.get('app_user_id'))
+        if user and getattr(user, perm_field, False):
+            return None  # 権限あり
+        from flask import jsonify as _j
+        return _j({'error': 'この操作の権限がありません'}), 403
+    from flask import jsonify as _j
+    return _j({'error': 'この操作の権限がありません'}), 403
+
+
 def super_admin_only(f):
-    """破壊的操作：super_admin のみ（ロック・削除・店舗管理など）"""
+    """破壊的操作：super_admin のみ（後方互換のため残す）"""
     @wraps(f)
     def decorated(*args, **kwargs):
         if 'app_user_id' not in session:
@@ -4490,18 +4514,23 @@ def reset_password(token):
 @app.route("/settings/users")
 @login_required
 def settings_users():
-    """ユーザー管理ページ（super_admin専用。owner/store_managerは/settingsにリダイレクト）"""
+    """ユーザー管理ページ（super_admin: 管理者権限管理 / owner等: テナント内ユーザー管理）"""
     app_user = AppUser.query.get(session.get('app_user_id'))
-    if not app_user or app_user.role not in ('owner', 'store_manager', 'super_admin'):
+    if not app_user or app_user.role not in ('owner', 'store_manager', 'super_admin', 'sys_admin'):
         return redirect(url_for('executive_dashboard'))
     if app_user.role in ('owner', 'store_manager'):
         return redirect(url_for('settings'))
+    if app_user.role in ('super_admin', 'sys_admin'):
+        # super_admin / sys_admin: クライアント管理画面の権限管理
+        sys_admins = AppUser.query.filter(
+            AppUser.role == 'sys_admin', AppUser.is_active == True
+        ).order_by(AppUser.created_at).all()
+        return render_template("settings_admin_perms.html",
+                               sys_admins=sys_admins,
+                               is_super_admin=(app_user.role == 'super_admin'))
     stores      = get_allowed_stores(ignore_active=True)
     allowed_ids = [s.id for s in stores]
-    q = AppUser.query.filter_by(is_active=True)
-    if app_user.role == 'owner':
-        q = q.filter_by(tenant_id=app_user.tenant_id)
-    users = q.order_by(AppUser.created_at).all()
+    users = AppUser.query.filter_by(is_active=True, tenant_id=app_user.tenant_id).order_by(AppUser.created_at).all()
     staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all()
     return render_template("settings_users.html", stores=stores, users=users, staff_list=staff_list)
 
@@ -4651,6 +4680,8 @@ def api_tenants_get():
 @super_admin_required
 def api_tenants_post():
     """テナント新規作成（デフォルト店舗+オーナーアカウントも作成）"""
+    err = _check_admin_perm('admin_can_add_tenant')
+    if err: return err
     data = request.get_json() or {}
     name = (data.get('name') or '').strip()
     if not name:
@@ -4739,7 +4770,11 @@ def api_admin_users_list():
     return jsonify([{
         'id': u.id, 'username': u.username,
         'email': u.email or '',
-        'created_at': u.created_at.strftime('%Y-%m-%d') if u.created_at else None
+        'created_at': u.created_at.strftime('%Y-%m-%d') if u.created_at else None,
+        'admin_can_add_tenant':    bool(getattr(u, 'admin_can_add_tenant',    False)),
+        'admin_can_manage_stores': bool(getattr(u, 'admin_can_manage_stores', False)),
+        'admin_can_delete_tenant': bool(getattr(u, 'admin_can_delete_tenant', False)),
+        'admin_can_lock_tenant':   bool(getattr(u, 'admin_can_lock_tenant',   False)),
     } for u in users])
 
 
@@ -4764,10 +4799,29 @@ def api_admin_users_create():
         role='sys_admin',
         tenant_id=None,
         is_active=True,
+        admin_can_add_tenant=bool(data.get('admin_can_add_tenant', False)),
+        admin_can_manage_stores=bool(data.get('admin_can_manage_stores', False)),
+        admin_can_delete_tenant=bool(data.get('admin_can_delete_tenant', False)),
+        admin_can_lock_tenant=bool(data.get('admin_can_lock_tenant', False)),
     )
     db.session.add(user)
     db.session.commit()
     return jsonify({'status': 'ok', 'id': user.id})
+
+
+@app.route("/api/admin-users/<int:uid>", methods=["PUT"])
+@super_admin_required
+def api_admin_users_update(uid):
+    """sys_admin の権限更新（super_admin のみ）"""
+    if session.get('app_user_role') != 'super_admin':
+        return jsonify({'error': 'スーパー管理者のみ変更できます'}), 403
+    user = AppUser.query.get_or_404(uid)
+    data = request.get_json() or {}
+    for field in ['admin_can_add_tenant','admin_can_manage_stores','admin_can_delete_tenant','admin_can_lock_tenant']:
+        if field in data:
+            setattr(user, field, bool(data[field]))
+    db.session.commit()
+    return jsonify({'status': 'ok'})
 
 
 @app.route("/api/admin-users/<int:uid>", methods=["DELETE"])
@@ -4788,6 +4842,8 @@ def api_admin_users_delete(uid):
 @super_admin_only
 def api_tenant_lock(tid):
     """テナントをロック（アクセス不可）"""
+        err = _check_admin_perm("admin_can_lock_tenant")
+    if err: return err
     tenant = Tenant.query.get_or_404(tid)
     tenant.subscription_status = 'locked'
     tenant.is_active = False
@@ -4799,6 +4855,8 @@ def api_tenant_lock(tid):
 @super_admin_only
 def api_tenant_unlock(tid):
     """テナントを有効化（ロック解除）"""
+        err = _check_admin_perm("admin_can_lock_tenant")
+    if err: return err
     from datetime import date as _date
     tenant = Tenant.query.get_or_404(tid)
     tenant.subscription_status = 'active'
@@ -4836,6 +4894,8 @@ def trial_expired_page():
 @super_admin_only
 def api_tenant_delete(tid):
     """テナント物理削除（関連データを全てカスケード削除）"""
+        err = _check_admin_perm("admin_can_delete_tenant")
+    if err: return err
     tenant = Tenant.query.get_or_404(tid)
 
     # 対象の店舗・スタッフIDを収集
@@ -4921,6 +4981,8 @@ def api_tenant_stores(tid):
 @super_admin_only
 def api_tenant_store_add(tid):
     """テナントに店舗を追加"""
+        err = _check_admin_perm("admin_can_manage_stores")
+    if err: return err
     Tenant.query.get_or_404(tid)
     data = request.get_json() or {}
     name = (data.get('name') or '').strip()
@@ -4950,6 +5012,8 @@ def api_tenant_store_update(tid, sid):
 @super_admin_only
 def api_tenant_store_delete(tid, sid):
     """店舗を論理削除"""
+        err = _check_admin_perm("admin_can_manage_stores")
+    if err: return err
     store = Store.query.filter_by(id=sid, tenant_id=tid).first_or_404()
     store.is_active = False
     db.session.commit()
