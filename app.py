@@ -3462,7 +3462,8 @@ def api_import_excel():
 @login_required
 def contracts():
     """申込台帳ページ"""
-    staff_list = Staff.query.filter_by(is_active=True).all()
+    _active = get_allowed_store_ids()
+    staff_list = Staff.query.filter(Staff.store_id.in_(_active), Staff.is_active == True).all() if _active else []
     year, month = current_ym()
     return render_template("contracts.html",
                            staff_list=staff_list, year=year, month=month,
@@ -4108,10 +4109,10 @@ def api_uncollected_sync_from_applications():
 @login_required
 @manager_or_above_required
 def leave_management():
-    stores     = get_allowed_stores(ignore_active=True)
-    allowed_ids = [s.id for s in stores]
+    stores     = get_allowed_stores(ignore_active=True)   # サイドバー用
+    active_ids = get_allowed_store_ids()                   # アクティブ店舗のみ
     staff_list = Staff.query.filter(
-        Staff.store_id.in_(allowed_ids), Staff.is_active == True
+        Staff.store_id.in_(active_ids), Staff.is_active == True
     ).order_by(Staff.name).all()
     year = request.args.get('year', type=int) or date.today().year
     return render_template("leave_management.html", stores=stores, staff_list=staff_list, year=year)
@@ -4136,13 +4137,20 @@ def api_set_active_store():
 def api_leave_list():
     year     = request.args.get('year',     type=int) or date.today().year
     staff_id = request.args.get('staff_id', type=int)
+    # アクティブ店舗のスタッフのみ対象
+    _allowed_store_ids = get_allowed_store_ids()
+    _allowed_staff_ids = [s.id for s in Staff.query.filter(
+        Staff.store_id.in_(_allowed_store_ids), Staff.is_active == True
+    ).all()] if _allowed_store_ids else []
     q = LeaveRecord.query.filter(
-        db.extract('year', LeaveRecord.leave_date) == year
+        db.extract('year', LeaveRecord.leave_date) == year,
+        LeaveRecord.staff_id.in_(_allowed_staff_ids) if _allowed_staff_ids else db.false()
     )
     if staff_id:
         q = q.filter_by(staff_id=staff_id)
     records = q.order_by(LeaveRecord.leave_date.desc()).all()
-    staff_map = {s.id: s.name for s in Staff.query.all()}
+    _allowed = get_allowed_store_ids()
+    staff_map = {s.id: s.name for s in Staff.query.filter(Staff.store_id.in_(_allowed)).all() if _allowed}
     return jsonify([{
         'id':         r.id,
         'staff_id':   r.staff_id,
