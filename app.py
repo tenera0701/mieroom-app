@@ -3650,8 +3650,11 @@ def api_payments_summary():
 def settings():
     """設定ページ（スタッフ以上）"""
     stores     = get_allowed_stores(ignore_active=True)
-    allowed_ids = [s.id for s in stores]
-    staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all() if allowed_ids else Staff.query.filter_by(is_active=True).all()
+    # スタッフ表示はアクティブ店舗のみ（店舗ごとに分離）
+    active_store_ids = get_allowed_store_ids(ignore_active=False)
+    staff_list = Staff.query.filter(Staff.store_id.in_(active_store_ids), Staff.is_active == True).order_by(Staff.name).all() if active_store_ids else []
+    # 担当店舗名マップ
+    store_name_map = {s.id: s.name for s in stores}
     # アカウント一覧はオーナー・店長のみ表示（自テナントのみ）
     user = AppUser.query.get(session['app_user_id'])
     is_owner = user and user.role == 'owner'
@@ -3662,6 +3665,7 @@ def settings():
         accounts = []
     return render_template("settings.html",
                            stores=stores, staff_list=staff_list, accounts=accounts,
+                           store_name_map=store_name_map,
                            is_owner=is_owner, is_manager=is_manager,
                            current_user=user,
                            now=datetime.now())
@@ -5119,6 +5123,23 @@ def api_tenant_owner_update(tid):
         owner.password_hash = generate_password_hash(data['password'])
     db.session.commit()
     return jsonify({'status': 'ok', 'username': owner.username, 'email': owner.email or ''})
+
+
+@app.route("/api/tenants/<int:tid>/stores/<int:sid>/reset-data", methods=["POST"])
+@super_admin_required
+def api_tenant_store_reset_data(tid, sid):
+    """店舗のKPIデータをすべてリセット（空の状態に戻す）"""
+    store = Store.query.filter_by(id=sid, tenant_id=tid).first_or_404()
+    # SalesKPI を削除
+    SalesKPI.query.filter_by(store_id=sid).delete()
+    # PLRecord を削除
+    PLRecord.query.filter_by(store_id=sid).delete()
+    # Staff を論理削除（is_active=False）
+    Staff.query.filter_by(store_id=sid).update({'is_active': False})
+    # ApplicationRecord を削除
+    ApplicationRecord.query.filter_by(store_id=sid).delete()
+    db.session.commit()
+    return jsonify({'status': 'ok', 'store_name': store.name})
 
 
 @app.route("/api/tenants/<int:tid>/stores/<int:sid>", methods=["DELETE"])

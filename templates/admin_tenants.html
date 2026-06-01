@@ -985,6 +985,15 @@ async function openStoresModal(tid, tname) {
   await loadTenantStores();
 }
 
+async function resetStoreData(sid, name) {
+  if (!confirm(`「${name}」の全データ（KPI・申込・スタッフ）をリセットしますか？\nこの操作は元に戻せません。`)) return;
+  const tid = currentStoresTenantId;
+  const res = await fetch(`/api/tenants/${tid}/stores/${sid}/reset-data`, { method: 'POST' });
+  const json = await res.json();
+  if (res.ok) { alert(`「${name}」のデータをリセットしました。`); await loadTenantStores(); loadTenants(); }
+  else { alert('リセットに失敗しました: ' + (json.error || '')); }
+}
+
 async function updateStore(sid, data) {
   const tid = currentStoresTenantId;
   const res = await fetch(`/api/tenants/${tid}/stores/${sid}`, {
@@ -1052,8 +1061,10 @@ async function loadTenantStores() {
               ${s.is_locked
                 ? `<button onclick="updateStore(${s.id}, {is_locked:false})" class="text-xs px-2 py-1 border border-teal-400 text-teal-700 rounded hover:bg-teal-50 font-bold">🔓 解除</button>`
                 : `<button onclick="updateStore(${s.id}, {is_locked:true})" class="text-xs px-2 py-1 border border-orange-300 text-orange-600 rounded hover:bg-orange-50 font-bold">🔒 ロック</button>`}
+              <button onclick="resetStoreData(${s.id}, '${escHtml(s.name)}')"
+                class="text-xs px-2 py-1 border border-red-200 text-red-500 rounded hover:bg-red-50">🗑 データリセット</button>
               <button onclick="deleteStore(${s.id}, '${escHtml(s.name)}')"
-                class="text-xs px-2 py-1 border border-red-300 text-red-600 rounded hover:bg-red-50">🗑 削除</button>
+                class="text-xs px-2 py-1 border border-red-500 bg-red-50 text-red-700 rounded hover:bg-red-100 font-bold">✕ 店舗削除</button>
             </div>
           </div>
         `).join('')}

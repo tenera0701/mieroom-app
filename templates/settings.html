@@ -150,6 +150,7 @@
           <tr>
             <th>氏名</th>
             <th>役職</th>
+            <th>担当店舗</th>
             <th>入社日</th>
             <th>操作</th>
           </tr>
@@ -162,6 +163,7 @@
           <tr id="staff-row-{{ s.id }}">
             <td style="font-weight: 600;">{{ s.name }}</td>
             <td>{{ s.role or '-' }}</td>
+            <td style="font-size:12px;color:#6b7280;">{{ store_name_map.get(s.store_id, '未設定') if s.store_id else '未設定' }}</td>
             <td>{{ s.hired_at.strftime('%Y-%m-%d') if s.hired_at else '-' }}</td>
             <td>
               {% if can_edit_this_staff %}

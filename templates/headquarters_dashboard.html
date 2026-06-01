@@ -145,34 +145,19 @@
       <table class="mgr-table">
         <thead>
           <tr>
-            <th>店舗</th>
-            <th>売上</th>
-            <th>利益</th>
-            <th>経費</th>
-            <th>反響数</th>
-            <th>申込数</th>
-            <th>契約数</th>
+            <th style="text-align:left;">店舗</th>
+            <th style="text-align:right;">売上</th>
+            <th style="text-align:right;">利益</th>
+            <th style="text-align:right;">経費</th>
+            <th style="text-align:right;">反響数</th>
+            <th style="text-align:right;">申込数</th>
+            <th style="text-align:right;">契約数</th>
           </tr>
         </thead>
         <tbody id="mgr-tbody">
           <tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:20px;">読込中...</td></tr>
         </tbody>
       </table>
-    </div>
-  </div>
-
-  <!-- ② 危険アラート -->
-  <div id="hq-alerts-section" class="hq-section" style="display:none;">
-    <div class="hq-section-title">⚠️ アラート</div>
-    <div class="alert-grid">
-      <div class="alert-card" id="danger-stores-card">
-        <div class="alert-card-title">🚨 危険店舗（目標50%未達）</div>
-        <div id="danger-stores-list"><span style="color:#9ca3af;font-size:12px;">なし</span></div>
-      </div>
-      <div class="alert-card warning" id="drop-stores-card">
-        <div class="alert-card-title" style="color:#92400e;">📉 売上急落アラート（前月比-20%以下）</div>
-        <div id="drop-stores-list"><span style="color:#9ca3af;font-size:12px;">なし</span></div>
-      </div>
     </div>
   </div>
 
@@ -212,6 +197,21 @@
     </div>
     <canvas id="comparison-chart" style="max-height:320px;"></canvas>
   </div>
+  <!-- ② 危険アラート -->
+  <div id="hq-alerts-section" class="hq-section" style="display:none;">
+    <div class="hq-section-title">⚠️ アラート</div>
+    <div class="alert-grid">
+      <div class="alert-card" id="danger-stores-card">
+        <div class="alert-card-title">🚨 危険店舗（目標50%未達）</div>
+        <div id="danger-stores-list"><span style="color:#9ca3af;font-size:12px;">なし</span></div>
+      </div>
+      <div class="alert-card warning" id="drop-stores-card">
+        <div class="alert-card-title" style="color:#92400e;">📉 売上急落アラート（前月比-20%以下）</div>
+        <div id="drop-stores-list"><span style="color:#9ca3af;font-size:12px;">なし</span></div>
+      </div>
+    </div>
+  </div>
+
 
 
 
