@@ -1491,6 +1491,13 @@ def app_login():
             session['tenant_id'] = user.tenant_id
             user.last_login = datetime.utcnow()
             db.session.commit()
+            # ログイン時に店舗を自動選択（複数店舗でも混在しないように）
+            if user.role in ('owner', 'store_manager') and user.tenant_id:
+                first_store = Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).order_by(Store.id).first()
+                if first_store:
+                    session['active_store_id'] = first_store.id
+            elif user.role == 'staff' and user.store_id:
+                session['active_store_id'] = user.store_id
             # super_admin はテナント管理へ、それ以外は売上管理ダッシュボードへ
             if user.role == 'super_admin':
                 dashboard_url = url_for('admin_tenants')
