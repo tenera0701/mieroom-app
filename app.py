@@ -5768,6 +5768,11 @@ def api_hq_summary():
         total_apps     += apps
         total_contracts += contracts
 
+        # 利益・経費はPLRecordから取得
+        pl = PLRecord.query.filter_by(store_id=sid, year=year, month=month).first()
+        profit   = pl.net_profit if pl else None
+        expenses = max(0, sales - (profit or 0)) if profit is not None else None
+
         result.append({
             'store_id':   sid,
             'store_name': store.name,
@@ -5780,6 +5785,8 @@ def api_hq_summary():
             'close_rate': close_rate,
             'vs_prev':    vs_prev,
             'prev_sales': prev_sales,
+            'profit':     profit,
+            'expenses':   expenses,
             'is_danger':  (target > 0 and sales < target * 0.5),
             'is_drop':    (vs_prev is not None and vs_prev <= -20),
         })

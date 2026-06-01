@@ -110,18 +110,8 @@
     </div>
   </div>
 
-  <!-- ① KPIカード -->
-  <div class="hq-cards" id="hq-kpi-cards">
-    <div class="hq-card">
-      <div class="hq-card-label">今月の全店舗売上合計</div>
-      <div class="hq-card-value" id="kpi-total-sales">―</div>
-      <div class="hq-card-sub" id="kpi-total-sales-sub">読込中...</div>
-    </div>
-    <div class="hq-card">
-      <div class="hq-card-label">今月の着地予測</div>
-      <div class="hq-card-value" id="kpi-forecast">―</div>
-      <div class="hq-card-sub" id="kpi-forecast-sub">現在ペース × 残日数</div>
-    </div>
+  <!-- ① KPIカード（申込数・成約率のみ残す） -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
     <div class="hq-card">
       <div class="hq-card-label">全店舗 総申込数</div>
       <div class="hq-card-value" id="kpi-total-apps">―</div>
@@ -189,17 +179,18 @@
           <tr>
             <th>店舗</th>
             <th>売上</th>
-            <th>目標</th>
-            <th>達成率</th>
+            <th>利益</th>
+            <th>経費</th>
+            <th>反響数</th>
             <th>申込数</th>
-            <th>成約数</th>
+            <th>契約数</th>
             <th>成約率</th>
+            <th>達成率</th>
             <th>前月比</th>
-            <th>KPI入力</th>
           </tr>
         </thead>
         <tbody id="mgr-tbody">
-          <tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:20px;">読込中...</td></tr>
+          <tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:20px;">読込中...</td></tr>
         </tbody>
       </table>
     </div>
@@ -292,30 +283,29 @@ async function loadSummary(year, month) {
       tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:20px;">店舗データなし</td></tr>';
       return;
     }
+    const fmtY = v => v != null ? '¥' + Math.round(v).toLocaleString() : '―';
+    const fmtN = v => v != null ? v.toLocaleString() + '件' : '―';
     tbody.innerHTML = d.stores.map(s => {
       const ach = s.target > 0 ? Math.round(s.sales / s.target * 100) : null;
       const dotCls = !ach ? 'dot-warn' : ach >= 80 ? 'dot-ok' : ach >= 50 ? 'dot-warn' : 'dot-danger';
       const vstxt = s.vs_prev != null
-        ? (s.vs_prev >= 0 ? `<span style="color:#0D9488;">+${s.vs_prev}%</span>` : `<span style="color:#dc2626;">${s.vs_prev}%</span>`)
+        ? (s.vs_prev >= 0 ? `<span style="color:#0D9488;font-weight:700;">+${s.vs_prev}%</span>` : `<span style="color:#dc2626;font-weight:700;">${s.vs_prev}%</span>`)
         : '<span style="color:#9ca3af;">―</span>';
-      const hasKpi = s.sales > 0 || s.apps > 0;
+      const profitColor = s.profit == null ? '#9ca3af' : s.profit >= 0 ? '#059669' : '#dc2626';
       return `<tr>
-        <td style="font-weight:600;">${s.store_name}</td>
-        <td>¥${Math.round(s.sales).toLocaleString()}</td>
-        <td style="color:#9ca3af;">${s.target > 0 ? '¥'+Math.round(s.target).toLocaleString() : '―'}</td>
+        <td style="font-weight:700;color:#111827;">${s.store_name}</td>
+        <td style="color:#0D9488;font-weight:600;">${fmtY(s.sales)}</td>
+        <td style="color:${profitColor};font-weight:600;">${fmtY(s.profit)}</td>
+        <td style="color:#f59e0b;">${fmtY(s.expenses)}</td>
+        <td>${s.inquiries || 0}件</td>
+        <td>${s.apps}件</td>
+        <td>${s.contracts}件</td>
+        <td>${s.close_rate}%</td>
         <td>
           <span class="status-dot ${dotCls}"></span>
           ${ach != null ? ach + '%' : '―'}
         </td>
-        <td>${s.apps}</td>
-        <td>${s.contracts}</td>
-        <td>${s.close_rate}%</td>
         <td>${vstxt}</td>
-        <td>
-          ${hasKpi
-            ? '<span style="color:#0D9488;font-size:11px;font-weight:700;">✓ 入力済</span>'
-            : '<span style="color:#dc2626;font-size:11px;font-weight:700;">未入力</span>'}
-        </td>
       </tr>`;
     }).join('');
   } catch(e) {
