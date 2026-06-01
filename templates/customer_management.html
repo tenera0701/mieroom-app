@@ -59,6 +59,14 @@
   input[type=number]::-webkit-inner-spin-button,
   input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
   input[type=number] { -moz-appearance:textfield; }
+  /* ctrl-bar スタイル（反響管理表と統一） */
+  .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+  .ctrl-bar    { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .month-btn   { background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; }
+  .month-btn:hover { background:#F0FDFA; border-color:#5EEAD4; }
+  .month-label { font-size:15px; font-weight:700; color:#111827; min-width:80px; text-align:center; }
+  .filter      { border:1px solid #d1d5db; border-radius:6px; padding:7px 10px; font-size:13px; }
+  .btn-add     { background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 18px; font-size:13px; font-weight:700; cursor:pointer; }
 </style>
 {% endblock %}
 
@@ -69,32 +77,26 @@
   <div id="alert-msg" class="alert"></div>
 
   <!-- ページヘッダー -->
-  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+  <div class="page-header">
     <div>
       <h1 class="page-title">顧客管理表</h1>
       <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">申込・入金状況の管理</p>
     </div>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      <div class="month-nav">
-        <button class="month-nav-btn" onclick="navigate(-1)">&#8249; 前月</button>
-        <span class="month-nav-current" id="month-label"></span>
-        <button class="month-nav-btn" onclick="navigate(1)">次月 &#8250;</button>
-        <button class="month-nav-btn" style="background:#F0FDFA;color:#0D9488;border-color:#5EEAD4;" onclick="goToday()">今月</button>
-      </div>
+    <div class="ctrl-bar">
+      <button class="month-btn" onclick="navigate(-1)">&#8249; 前月</button>
+      <span class="month-label" id="month-label"></span>
+      <button class="month-btn" onclick="navigate(1)">次月 &#8250;</button>
+      <button class="month-btn" style="background:#F0FDFA;color:#0D9488;border-color:#5EEAD4;" onclick="goToday()">今月</button>
+      <input type="month" id="month-jump-cm"
+        style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;"
+        onchange="jumpMonth(this.value)">
       {% if is_manager %}
-      <select id="header-filter-staff" onchange="onHeaderStaffChange()"
-        style="border:1px solid #d1d5db;border-radius:6px;padding:7px 12px;font-size:13px;color:#111827;background:#fff;min-width:130px;">
+      <select id="header-filter-staff" onchange="onHeaderStaffChange()" class="filter">
         <option value="">全スタッフ</option>
         {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
       </select>
       {% endif %}
-      <button onclick="openAppModal()"
-        style="padding:8px 20px;font-size:13px;font-weight:700;background:#0D9488;color:#fff;border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 6px rgba(13,148,136,0.3);">
-        <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-        </svg>
-        新規入力
-      </button>
+      <button class="btn-add" onclick="openAppModal()">＋ 新規入力</button>
     </div>
   </div>
 
@@ -417,7 +419,9 @@ let salesMonth = {{ month }};
    月ナビ
 =================================================== */
 function updateMonthLabel() {
-  document.getElementById('month-label').textContent = `${salesYear}年 ${salesMonth}月`;
+  document.getElementById('month-label').textContent = `${salesYear}年${salesMonth}月`;
+  const jmp = document.getElementById('month-jump-cm');
+  if (jmp) jmp.value = `${salesYear}-${String(salesMonth).padStart(2,'0')}`;
 }
 function navigate(dir) {
   salesMonth += dir;
@@ -431,6 +435,15 @@ function goToday() {
   const now = new Date();
   salesYear  = now.getFullYear();
   salesMonth = now.getMonth() + 1;
+  updateMonthLabel();
+  loadApplications();
+  loadUncollected();
+}
+
+function jumpMonth(val) {
+  if (!val) return;
+  salesYear  = parseInt(val.slice(0, 4));
+  salesMonth = parseInt(val.slice(5, 7));
   updateMonthLabel();
   loadApplications();
   loadUncollected();
