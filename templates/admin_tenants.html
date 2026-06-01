@@ -286,6 +286,12 @@
           <option value="premium">プレミアム</option>
         </select>
       </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">契約開始日</label>
+        <input id="e-contract-start" type="date"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+        <p class="text-xs text-gray-400 mt-1">「🔓 解除」ボタンで有効化すると自動で今日の日付がセットされます</p>
+      </div>
       <div class="flex items-center gap-2">
         <input id="e-active" type="checkbox" class="w-4 h-4 accent-teal-600">
         <label class="text-sm text-gray-700">有効</label>
@@ -372,6 +378,7 @@ function renderTenants() {
               <span>店舗数：<strong class="text-gray-700">${t.store_count}</strong></span>
               <span>オーナー：<strong class="text-gray-700">${escHtml(t.owner_username || '未設定')}</strong>${t.owner_email ? ` (${escHtml(t.owner_email)})` : ''}</span>
               <span>登録日：<strong class="text-gray-700">${t.created_at || '—'}</strong></span>
+              <span>契約開始日：<strong class="${t.contract_start_date ? 'text-teal-700' : 'text-gray-400'}">${t.contract_start_date || '未設定'}</strong></span>
               ${t.trial_ends_at ? `<span>${trialEndLabel(t)}</span>` : ''}
             </div>
           </div>
@@ -478,6 +485,7 @@ function openEditModal(tid) {
   document.getElementById('e-id').value = tid;
   document.getElementById('e-name').value = t.name;
   document.getElementById('e-plan').value = t.plan;
+  document.getElementById('e-contract-start').value = t.contract_start_date || '';
   document.getElementById('e-active').checked = t.is_active;
   document.getElementById('e-error').classList.add('hidden');
   document.getElementById('edit-modal').classList.remove('hidden');
@@ -492,6 +500,7 @@ async function updateTenant() {
     name: document.getElementById('e-name').value.trim(),
     plan: document.getElementById('e-plan').value,
     is_active: document.getElementById('e-active').checked,
+    contract_start_date: document.getElementById('e-contract-start').value || null,
   };
   if (!body.name) { errEl.textContent = '会社名を入力してください'; errEl.classList.remove('hidden'); return; }
   const res = await fetch(`/api/tenants/${tid}`, {

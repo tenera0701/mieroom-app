@@ -127,6 +127,7 @@ class Tenant(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     trial_ends_at = db.Column(db.DateTime, nullable=True)  # トライアル終了日時
     subscription_status = db.Column(db.String(20), default='trial')  # trial / active / locked / cancelled
+    contract_start_date = db.Column(db.Date, nullable=True)  # 契約開始日
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -1076,6 +1077,7 @@ def migrate_postgres():
                 ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
                 ("tenant", "trial_ends_at",        "TIMESTAMP"),
                 ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
+                ("tenant", "contract_start_date",  "DATE"),
             ]
             for tbl, col, typedef in new_cols:
                 try:
@@ -4617,6 +4619,7 @@ def api_tenants_get():
             'is_active': t.is_active,
             'subscription_status': t.subscription_status or 'trial',
             'trial_ends_at': t.trial_ends_at.strftime('%Y-%m-%dT%H:%M:%S') if t.trial_ends_at else None,
+            'contract_start_date': t.contract_start_date.strftime('%Y-%m-%d') if t.contract_start_date else None,
             'store_count': len(stores),
             'owner_username': owner.username if owner else None,
             'owner_email': owner.email if owner else None,
@@ -4682,6 +4685,12 @@ def api_tenant_update(tid):
         tenant.plan = data['plan']
     if 'is_active' in data:
         tenant.is_active = bool(data['is_active'])
+    if 'contract_start_date' in data:
+        from datetime import datetime as _dt
+        try:
+            tenant.contract_start_date = _dt.strptime(data['contract_start_date'], '%Y-%m-%d').date() if data['contract_start_date'] else None
+        except Exception:
+            pass
     db.session.commit()
     return jsonify({'status': 'ok'})
 
@@ -4701,9 +4710,13 @@ def api_tenant_lock(tid):
 @super_admin_required
 def api_tenant_unlock(tid):
     """テナントを有効化（ロック解除）"""
+    from datetime import date as _date
     tenant = Tenant.query.get_or_404(tid)
     tenant.subscription_status = 'active'
     tenant.is_active = True
+    # 契約開始日が未設定なら今日をセット
+    if not tenant.contract_start_date:
+        tenant.contract_start_date = _date.today()
     db.session.commit()
     return jsonify({'status': 'ok'})
 
