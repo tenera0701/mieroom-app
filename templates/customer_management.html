@@ -74,7 +74,7 @@
       <h1 class="page-title">顧客管理表</h1>
       <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">申込・入金状況の管理</p>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       <div class="month-nav">
         <button class="month-nav-btn" onclick="navigate(-1)">&#8249; 前月</button>
         <span class="month-nav-current" id="month-label"></span>
@@ -88,6 +88,13 @@
         {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
       </select>
       {% endif %}
+      <button onclick="openAppModal()"
+        style="padding:8px 20px;font-size:13px;font-weight:700;background:#0D9488;color:#fff;border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;gap:6px;box-shadow:0 2px 6px rgba(13,148,136,0.3);">
+        <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+        </svg>
+        新規入力
+      </button>
     </div>
   </div>
 
@@ -144,7 +151,7 @@
         <button onclick="openColorModal()" style="padding:5px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#374151;">🎨 色設定</button>
         <button onclick="openMediaModal()" style="padding:5px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#374151;">📋 媒体管理</button>
         {% endif %}
-        <button onclick="openAppModal()" class="btn-primary">＋ 申込追加</button>
+        <button onclick="openAppModal()" class="btn-primary">＋ 新規入力</button>
       </div>
     </div>
     <div id="app-body-wrap">
@@ -244,11 +251,11 @@
 
 </div>
 
-<!-- ===== 申込追加/編集モーダル ===== -->
+<!-- ===== 新規入力/編集モーダル ===== -->
 <div class="modal-overlay" id="app-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3 id="app-modal-title">申込追加</h3>
+      <h3 id="app-modal-title">新規入力</h3>
       <button class="modal-close" onclick="closeAppModal()">✕</button>
     </div>
     <div class="modal-body">
@@ -753,7 +760,7 @@ let editingAppId = null;
 
 function openAppModal(existing) {
   editingAppId = existing?.id || null;
-  document.getElementById('app-modal-title').textContent = existing ? '申込編集' : '申込追加';
+  document.getElementById('app-modal-title').textContent = existing ? '編集' : '新規入力';
   document.getElementById('app-editing-id').value = existing?.id || '';
 
   const fields = ['application_date','property_name','room_number','customer_name',
@@ -819,7 +826,7 @@ async function submitApp() {
     const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     if (!res.ok) throw new Error();
     closeAppModal();
-    showAlert(editingAppId ? '申込を更新しました。' : '申込を追加しました。');
+    showAlert(editingAppId ? '更新しました。' : '新規入力しました。');
     loadApplications(); loadUncollected();
   } catch(_) { showAlert('保存に失敗しました。', 'error'); }
 }
