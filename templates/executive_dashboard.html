@@ -4,31 +4,44 @@
 
 {% block content %}
 <!-- ページヘッダー -->
-<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
-  <div>
-    <h1 style="font-size:22px; font-weight:800; color:#111827; margin:0;">売上管理</h1>
-    <p style="font-size:13px; color:#6b7280; margin:4px 0 0;">月次売上・KPIサマリー管理</p>
-  </div>
-  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-    <!-- 月ナビゲーション -->
-    <div style="display:flex; align-items:center; gap:4px;">
-      <button onclick="prevMonth()" style="background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; color:#374151; cursor:pointer;">&#8249; 前月</button>
-      <div style="font-size:18px; font-weight:800; color:#111827; min-width:120px; text-align:center;" id="current-period-label">{{ year }}年{{ month }}月</div>
-      <button onclick="nextMonth()" style="background:#fff; border:1px solid #d1d5db; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; color:#374151; cursor:pointer;">次月 &#8250;</button>
-      <button onclick="goToday()" style="background:#F0FDFA; border:1px solid #5EEAD4; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; color:#0D9488; cursor:pointer;">今月</button>
+<div style="margin-bottom:16px;">
+  <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+    <div>
+      <h1 style="font-size:22px; font-weight:800; color:#111827; margin:0;">売上管理</h1>
+      <p style="font-size:13px; color:#6b7280; margin:4px 0 0;">月次売上・KPIサマリー管理</p>
     </div>
-    <!-- 年月ジャンプ -->
-    <input type="month" id="exec-month-jump"
-      value="{{ year }}-{{ '%02d' % month }}"
-      style="border:1px solid #d1d5db; border-radius:6px; padding:6px 10px; font-size:13px; outline:none; color:#111827;"
-      onchange="jumpMonthExec(this.value)">
-    <!-- 入力ボタン -->
     <button onclick="openInputModal()" style="background:#0D9488; color:#fff; border:none; border-radius:6px; padding:8px 18px; font-size:14px; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:6px;">
-      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
       </svg>
       &#43; 数字を入力する
     </button>
+  </div>
+  <!-- コントロールバー：月ナビ ＋ グラフ期間 -->
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px 16px;">
+    <!-- 月ナビゲーション -->
+    <div style="display:flex; align-items:center; gap:4px;">
+      <button onclick="prevMonth()" style="background:#f9fafb; border:1px solid #d1d5db; border-radius:6px; padding:6px 12px; font-size:13px; font-weight:600; color:#374151; cursor:pointer;">&#8249; 前月</button>
+      <div style="font-size:17px; font-weight:800; color:#111827; min-width:110px; text-align:center;" id="current-period-label">{{ year }}年{{ month }}月</div>
+      <button onclick="nextMonth()" style="background:#f9fafb; border:1px solid #d1d5db; border-radius:6px; padding:6px 12px; font-size:13px; font-weight:600; color:#374151; cursor:pointer;">次月 &#8250;</button>
+      <button onclick="goToday()" style="background:#F0FDFA; border:1px solid #5EEAD4; border-radius:6px; padding:6px 12px; font-size:13px; font-weight:600; color:#0D9488; cursor:pointer;">今月</button>
+      <input type="month" id="exec-month-jump" value="{{ year }}-{{ '%02d' % month }}"
+        style="border:1px solid #d1d5db; border-radius:6px; padding:5px 8px; font-size:13px; outline:none; color:#111827;"
+        onchange="jumpMonthExec(this.value)">
+    </div>
+    <!-- 区切り -->
+    <div style="width:1px; height:24px; background:#e5e7eb; flex-shrink:0;"></div>
+    <!-- グラフ期間（スパークライン表示範囲） -->
+    <div style="display:flex; align-items:center; gap:6px; font-size:12px; color:#6b7280;">
+      <span style="font-weight:600;">グラフ表示期間</span>
+      <input type="month" id="chart-from"
+        style="border:1px solid #d1d5db; border-radius:6px; padding:4px 8px; font-size:12px; outline:none; color:#374151;">
+      <span style="color:#9ca3af;">〜</span>
+      <input type="month" id="chart-to"
+        style="border:1px solid #d1d5db; border-radius:6px; padding:4px 8px; font-size:12px; outline:none; color:#374151;">
+      <button onclick="applyChartRange()" style="background:#0D9488; color:#fff; border:none; border-radius:6px; padding:4px 10px; font-size:12px; font-weight:600; cursor:pointer;">適用</button>
+      <button onclick="resetChartRange()" style="background:#f9fafb; border:1px solid #d1d5db; color:#6b7280; border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer;">リセット</button>
+    </div>
   </div>
 </div>
 
@@ -75,7 +88,7 @@
       </table>
     </div>
     <!-- スパークライン -->
-    <div style="height:52px;position:relative;">
+    <div style="height:110px;position:relative;">
       <canvas id="spark-sales"></canvas>
     </div>
   </div>
@@ -118,7 +131,7 @@
         </tbody>
       </table>
     </div>
-    <div style="height:52px;position:relative;">
+    <div style="height:110px;position:relative;">
       <canvas id="spark-profit"></canvas>
     </div>
   </div>
@@ -161,7 +174,7 @@
         </tbody>
       </table>
     </div>
-    <div style="height:52px;position:relative;">
+    <div style="height:110px;position:relative;">
       <canvas id="spark-contracts"></canvas>
     </div>
   </div>
@@ -204,40 +217,13 @@
         </tbody>
       </table>
     </div>
-    <div style="height:52px;position:relative;">
+    <div style="height:110px;position:relative;">
       <canvas id="spark-expenses"></canvas>
     </div>
   </div>
 
 </div>
 
-<!-- 月次推移グラフ（大） -->
-<div class="bg-white rounded-2xl shadow-sm border border-teal-100 p-6 mb-6">
-  <div class="flex items-center justify-between mb-3 flex-wrap gap-3">
-    <h2 class="text-base font-bold text-gray-800">月次売上・利益・広告費 推移</h2>
-    <div class="flex items-center gap-2 flex-wrap">
-      <!-- 期間セレクター -->
-      <div class="flex items-center gap-1.5 text-sm text-gray-600">
-        <input type="month" id="chart-from"
-          class="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
-        <span class="text-gray-400">〜</span>
-        <input type="month" id="chart-to"
-          class="border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-teal-400 outline-none">
-        <button onclick="applyChartRange()"
-          class="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold rounded-lg transition">適用</button>
-        <button onclick="resetChartRange()"
-          class="px-3 py-1.5 border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs font-medium rounded-lg transition">リセット</button>
-      </div>
-      <!-- 凡例 -->
-      <div class="flex gap-3 text-xs text-gray-500">
-        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background:#0D9488;"></span>売上</span>
-        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background:#2DD4BF;"></span>利益</span>
-        <span class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded" style="background:#d1d5db;"></span>広告費</span>
-      </div>
-    </div>
-  </div>
-  <div style="height:280px;"><canvas id="mainChart"></canvas></div>
-</div>
 
 <!-- 下段：スタッフ実績 ＋ 反響ファネル -->
 <div class="grid grid-cols-3 gap-5 mb-6">
@@ -546,7 +532,20 @@ function sparkBar(id, labels, data, color) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          enabled: true,
+          callbacks: {
+            label: function(ctx) {
+              const v = ctx.parsed.y;
+              if (!v && v !== 0) return '';
+              if (v >= 10000) return Math.round(v).toLocaleString('ja-JP') + '円';
+              return v.toLocaleString('ja-JP');
+            }
+          }
+        }
+      },
       scales: {
         x: {
           display: true,
@@ -569,7 +568,17 @@ function sparkBar(id, labels, data, color) {
 // メインチャート
 // ==============================
 let mainChartInst = null;
+/** スパークラインのみ更新（大チャートなし） */
+function renderSparklines(monthly) {
+  renderKPISparklines(monthly);
+}
+
 function renderMainChart(monthly) {
+  // 大チャートは削除済み - スパークラインのみ更新
+  renderKPISparklines(monthly);
+}
+
+function renderMainChartOLD(monthly) {
   const ctx = document.getElementById('mainChart');
   if (!ctx) return;
   if (mainChartInst) mainChartInst.destroy();
@@ -737,14 +746,14 @@ function renderKPI(sum, monthly) {
   document.getElementById('diff-profit-prev').innerHTML  = fmtDiff(sum.mom_profit);
   document.getElementById('diff-profit-yoy').innerHTML   = fmtDiff(sum.yoy_profit);
 
-  // 契約数
-  const cv = sum.month_contracts;
-  document.getElementById('val-contracts').textContent    = fmtContracts(cv);
-  document.getElementById('tbl-contracts-cur').textContent  = cv != null ? cv + '件' : '-';
-  document.getElementById('tbl-contracts-prev').textContent = sum.prev_month_contracts != null ? sum.prev_month_contracts + '件' : '-';
-  document.getElementById('tbl-contracts-yoy').textContent  = sum.yoy_month_contracts  != null ? sum.yoy_month_contracts  + '件' : '-';
-  document.getElementById('diff-contracts-prev').innerHTML  = fmtDiff(sum.mom_contracts);
-  document.getElementById('diff-contracts-yoy').innerHTML   = fmtDiff(sum.yoy_contracts);
+  // 契約数（入金済み申込件数 = approved_count）
+  const cv = sum._approved_count != null ? sum._approved_count : (sum.month_contracts || 0);
+  document.getElementById('val-contracts').textContent      = cv + '件';
+  document.getElementById('tbl-contracts-cur').textContent  = cv + '件';
+  document.getElementById('tbl-contracts-prev').textContent = '-';
+  document.getElementById('tbl-contracts-yoy').textContent  = '-';
+  document.getElementById('diff-contracts-prev').innerHTML  = '--';
+  document.getElementById('diff-contracts-yoy').innerHTML   = '--';
 
   // 経費合計
   const ev = sum.total_expenses;
@@ -757,23 +766,25 @@ function renderKPI(sum, monthly) {
   document.getElementById('diff-expenses-prev').innerHTML  = expDiff !== null ? fmtDiff(expDiff) : '--';
   document.getElementById('diff-expenses-yoy').innerHTML   = '--';
 
-  // スパークライン（12ヶ月分）
-  if (monthly && monthly.length > 0) {
-    const labels    = monthly.map(d => {
-      // "2025/05" → "5" のように月番号だけ表示
-      const parts = String(d.label || '').split('/');
-      return parts.length === 2 ? parseInt(parts[1]) : d.label;
-    });
-    const salesArr  = monthly.map(d => d.sales || 0);
-    const profitArr = monthly.map(d => d.gross_profit || 0);
-    const ctrsArr   = monthly.map(d => (d.contracts || 0) * 100000);
-    const expArr    = monthly.map(d => Math.max(0, (d.sales || 0) - (d.gross_profit || 0)));
+  // スパークライン
+  renderKPISparklines(monthly);
+}
 
-    sparkBar('spark-sales',     labels, salesArr,  '#0D9488');
-    sparkBar('spark-profit',    labels, profitArr, '#34d399');
-    sparkBar('spark-contracts', labels, ctrsArr,   '#0d9488');
-    sparkBar('spark-expenses',  labels, expArr,    '#f97316');
-  }
+function renderKPISparklines(monthly) {
+  if (!monthly || !monthly.length) return;
+  const labels = monthly.map(d => {
+    const parts = String(d.label || '').split('/');
+    return parts.length === 2 ? parseInt(parts[1]) : d.label;
+  });
+  const salesArr  = monthly.map(d => d.sales || 0);
+  const profitArr = monthly.map(d => d.gross_profit || 0);
+  const ctrsArr   = monthly.map(d => (d.contracts || 0));
+  const expArr    = monthly.map(d => Math.max(0, (d.sales || 0) - (d.gross_profit || 0)));
+
+  sparkBar('spark-sales',     labels, salesArr,  '#0D9488');
+  sparkBar('spark-profit',    labels, profitArr, '#34d399');
+  sparkBar('spark-contracts', labels, ctrsArr,   '#0d9488');
+  sparkBar('spark-expenses',  labels, expArr,    '#f97316');
 }
 
 // ==============================
@@ -837,21 +848,25 @@ async function load() {
   if (plMonthEl)  plMonthEl.value  = y + '-' + m;
 
   try {
-    const [sum, monthly, staff] = await Promise.all([
+    const [sum, monthly, staff, approvedSum] = await Promise.all([
       fetch(`/api/kpi/summary?year=${y}&month=${m}&store_id=${STORE_ID}`).then(r => r.ok ? r.json() : {}),
       fetch(`/api/kpi/monthly?store_id=${STORE_ID}`).then(r => r.ok ? r.json() : []),
       fetch(`/api/kpi/staff?year=${y}&month=${m}&store_id=${STORE_ID}`).then(r => r.ok ? r.json() : []),
+      fetch(`/api/applications/approved-sum?year=${y}&month=${parseInt(m)}`).then(r => r.ok ? r.json() : {count:0}),
     ]);
+
+    // 契約数を入金済み申込件数（approved-sum）で上書き
+    if (sum && approvedSum) sum._approved_count = approvedSum.count || 0;
 
     renderKPI(sum || {}, monthly || []);
 
-    // グラフ：選択中の範囲があればそちら、なければ12ヶ月デフォルト
+    // スパークライン期間（選択範囲 or デフォルト）
     const chartFrom = document.getElementById('chart-from')?.value;
     const chartTo   = document.getElementById('chart-to')?.value;
     if (chartFrom && chartTo) {
       await loadChart(chartFrom, chartTo);
     } else {
-      renderMainChart(monthly || []);
+      renderSparklines(monthly || []);
     }
 
     renderStaff(staff || []);
