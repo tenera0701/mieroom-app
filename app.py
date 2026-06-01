@@ -4916,6 +4916,7 @@ def _app_record_to_dict(r, staff_map):
         'option_amount': r.option_amount or 0,
         'ad_type': r.ad_type or 'amount',
         'ad_amount': r.ad_amount or 0,
+        'ad_amount_yen': round((r.rent or 0) * (r.ad_amount or 0) / 100) if (r.ad_type or 'amount') == 'percent' else (r.ad_amount or 0),
         'lifeline': bool(r.lifeline),
         'moving': bool(r.moving),
         'fire_insurance': bool(r.fire_insurance),
@@ -4926,6 +4927,33 @@ def _app_record_to_dict(r, staff_map):
         'brokerage_approved': bool(r.brokerage_approved),
         'created_at': r.created_at.isoformat() if r.created_at else None,
     }
+
+
+@app.route("/api/applications/unpaid")
+@login_required
+def api_applications_unpaid():
+    """未入金一覧：仲介またはADが未承認の申込レコードを返す"""
+    allowed_ids = get_allowed_store_ids()
+    store_id = request.args.get('store_id', type=int)
+    staff_id = request.args.get('staff_id', type=int)
+
+    q = ApplicationRecord.query.filter(
+        ApplicationRecord.store_id.in_(allowed_ids),
+        ApplicationRecord.status != 'キャンセル',
+        db.or_(
+            db.and_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.brokerage_approved == False),
+            db.and_(ApplicationRecord.ad_amount > 0,     ApplicationRecord.ad_approved == False),
+        )
+    )
+    if store_id and store_id in allowed_ids:
+        q = q.filter(ApplicationRecord.store_id == store_id)
+    if staff_id:
+        q = q.filter(ApplicationRecord.staff_id == staff_id)
+
+    recs = q.order_by(ApplicationRecord.application_date.asc()).all()
+    staff_ids = list({r.staff_id for r in recs if r.staff_id})
+    staff_map = {s.id: s.name for s in Staff.query.filter(Staff.id.in_(staff_ids)).all()} if staff_ids else {}
+    return jsonify([_app_record_to_dict(r, staff_map) for r in recs])
 
 
 @app.route("/api/applications/approved-sum")
@@ -5127,15 +5155,25 @@ def api_applications_approve(rid):
     else:
         return jsonify({'error': 'invalid field or already approved'}), 400
 
-    # 全項目承認済み判定（仲介手数料・ADそれぞれ必要な場合のみ要求）
-    need_ad        = (rec.ad_amount or 0) > 0
+    # 承認されたフィールド分だけ即座に売上に反映（部分承認対応）
+    ad_yen = round((rec.rent or 0) * (rec.ad_amount or 0) / 100) if (rec.ad_type or 'amount') == 'percent' else (rec.ad_amount or 0)
+    need_ad        = ad_yen > 0
     need_brokerage = (rec.brokerage_fee or 0) > 0
+
+    # 今回承認したフィールドの金額を加算
+    approved_amount = 0
+    if field == 'brokerage' and need_brokerage:
+        approved_amount += (rec.brokerage_fee or 0)
+    if field == 'ad' and need_ad:
+        approved_amount += ad_yen
+
+    # 全項目承認済みになった場合のみオプション金額も加算
     fully_approved = ((not need_ad or rec.ad_approved) and
                       (not need_brokerage or rec.brokerage_approved))
+    if fully_approved:
+        approved_amount += (rec.option_amount or 0)
 
-    if fully_approved and (need_ad or need_brokerage):
-        # 売上 = 仲介手数料 + AD金額 + オプション金額
-        total_sales = (rec.brokerage_fee or 0) + (rec.ad_amount or 0) + (rec.option_amount or 0)
+    if approved_amount > 0:
         ref_date = rec.application_date or date.today()
         ref_year, ref_month = ref_date.year, ref_date.month
         kpi = SalesKPI.query.filter_by(
@@ -5146,10 +5184,10 @@ def api_applications_approve(rid):
             kpi = SalesKPI(staff_id=rec.staff_id, store_id=rec.store_id,
                            year=ref_year, month=ref_month)
             db.session.add(kpi)
-        kpi.sales_amount = (kpi.sales_amount or 0) + total_sales
+        kpi.sales_amount = (kpi.sales_amount or 0) + approved_amount
 
     db.session.commit()
-    return jsonify({'status': 'ok'})
+    return jsonify({'status': 'ok', 'approved_amount': approved_amount})
 
 
 @app.route("/api/pending-approvals")

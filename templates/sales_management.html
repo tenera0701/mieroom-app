@@ -609,8 +609,22 @@
     </div>
   </div>
 
+  <!-- ===== 一括検索バー ===== -->
+  <div style="margin-top:24px;margin-bottom:8px;">
+    <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #5EEAD4;border-radius:10px;padding:8px 14px;box-shadow:0 2px 8px rgba(13,148,136,0.08);">
+      <svg style="width:18px;height:18px;color:#0D9488;flex-shrink:0;" fill="none" stroke="#0D9488" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+      <input id="global-search" type="text" placeholder="申込一覧・入金済み・未入金を一括検索（物件名・お客様名・担当）"
+        style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;"
+        oninput="applyGlobalSearch(this.value)">
+      <button onclick="document.getElementById('global-search').value='';applyGlobalSearch('');"
+        style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:0 2px;" title="クリア">✕</button>
+    </div>
+  </div>
+
   <!-- ===== 申込一覧表 ===== -->
-  <div class="table-section" id="application-section" style="margin-top:24px;">
+  <div class="table-section" id="application-section" style="margin-top:8px;">
     <div class="table-section-header" style="flex-wrap:wrap;gap:8px;">
       <h2>申込一覧表</h2>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto;">
@@ -635,6 +649,12 @@
         {% endif %}
         <button onclick="openAppModal()" style="padding:6px 14px;font-size:12px;font-weight:700;background:#0D9488;color:#fff;border:none;border-radius:6px;cursor:pointer;">＋ 申込追加</button>
       </div>
+    </div>
+    <!-- 入金状況カラー凡例 -->
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;">
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d1fae5;display:inline-block;border:1px solid #6ee7b7;"></span>全入金済</span>
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#dbeafe;display:inline-block;border:1px solid #93c5fd;"></span>仲介入金済</span>
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>AD入金済</span>
     </div>
     <div class="table-wrapper">
       <table class="app-table">
@@ -700,43 +720,47 @@
     </div>
   </div>
 
-  <!-- 未入金（AD）一覧 -->
+  <!-- 未入金一覧 -->
   <div class="table-section" id="uncollected-section" style="margin-top:24px;">
     <div class="table-section-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-      <h2>未入金一覧（AD管理）</h2>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <h2>未入金一覧</h2>
+        <span id="unc-count" style="font-size:12px;background:#fef3c7;color:#92400e;border-radius:12px;padding:2px 10px;font-weight:700;">0件</span>
+      </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <label style="font-size:12px;color:#6b7280;font-weight:600;">スタッフ</label>
-          <select id="unc-filter-staff" onchange="loadUncollected()"
-            style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;color:#111827;background:#fff;min-width:110px;">
-            <option value="">全スタッフ</option>
-            {% for s in staff_list %}
-            <option value="{{ s.id }}">{{ s.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <label style="font-size:12px;color:#6b7280;"><input type="checkbox" id="show-paid" onchange="loadUncollected()"> 入金済みも表示</label>
-        <button class="btn-primary" onclick="openUncollectedModal()">＋ 追加</button>
+        {% if is_manager %}
+        <select id="unc-filter-staff" onchange="loadUncollected()"
+          style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;color:#111827;background:#fff;min-width:110px;">
+          <option value="">全スタッフ</option>
+          {% for s in staff_list %}
+          <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+        {% endif %}
       </div>
     </div>
     <div class="table-wrapper">
       <table id="uncollected-table">
         <thead>
           <tr>
-            <th>入金予定日</th>
-            <th>スタッフ</th>
-            <th>物件名</th>
-            <th>合室</th>
             <th>申込日</th>
-            <th>管理会社</th>
+            <th>担当</th>
+            <th>物件名</th>
+            <th>号室</th>
             <th>お客様名</th>
-            <th>金額（円）</th>
-            <th>状態</th>
+            <th>賃料</th>
+            <th>契約開始日</th>
+            <th>仲介手数料</th>
+            <th>オプション</th>
+            <th>AD</th>
+            <th>AD入金日</th>
+            <th>仲介入金</th>
+            <th>AD入金</th>
             <th>操作</th>
           </tr>
         </thead>
         <tbody id="uncollected-tbody">
-          <tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>
+          <tr><td colspan="14" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>
         </tbody>
       </table>
     </div>
@@ -1811,26 +1835,15 @@ function navigateSalesToday() {
 let editingUncollectedId = null;
 
 async function loadUncollected() {
-  // 前月の未承認申込を未入金一覧に自動転記
-  try {
-    const prevDate  = new Date(salesYear, salesMonth - 2, 1);
-    const prevYear  = prevDate.getFullYear();
-    const prevMonth = prevDate.getMonth() + 1;
-    await fetch('/api/uncollected/sync-from-applications', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ year: prevYear, month: prevMonth, store_id: STORE_ID })
-    });
-  } catch(e) { /* 同期エラーは無視 */ }
-
-  const includePaid = document.getElementById('show-paid')?.checked;
   const staffId = document.getElementById('unc-filter-staff')?.value;
-  const params = new URLSearchParams({ include_paid: includePaid ? 'true' : 'false' });
+  const params = new URLSearchParams({ store_id: STORE_ID });
   if (staffId) params.set('staff_id', staffId);
   try {
-    const res = await fetch(`/api/uncollected?${params}`);
+    const res = await fetch(`/api/applications/unpaid?${params}`);
     if (!res.ok) return;
     const list = await res.json();
+    const cntEl = document.getElementById('unc-count');
+    if (cntEl) cntEl.textContent = list.length + '件';
     renderUncollectedTable(list);
   } catch(e) { console.warn('loadUncollected error', e); }
 }
@@ -1838,46 +1851,37 @@ async function loadUncollected() {
 function renderUncollectedTable(list) {
   const tbody = document.getElementById('uncollected-tbody');
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:24px;">未入金データなし</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:#9ca3af;padding:24px;">未入金データなし</td></tr>';
     return;
   }
   tbody.innerHTML = '';
-  const today = new Date();
-  list.forEach(p => {
+  list.forEach(r => {
     const tr = document.createElement('tr');
-    const expDate = p.expected_payment_date ? new Date(p.expected_payment_date) : null;
-    const isOverdue = expDate && !p.is_paid && expDate < today;
-    const isPaid = p.is_paid;
-    tr.style.cssText = isPaid ? 'opacity:0.5;' : (isOverdue ? 'background:#fff7ed;' : '');
-    tr.innerHTML = `
-      <td data-uf="expected_payment_date" data-uv="${p.expected_payment_date||''}" style="${isOverdue?'color:#dc2626;font-weight:700;':''}">${p.expected_payment_date || '―'}</td>
-      <td data-uf="staff_id" data-ut="staff" data-uv="${p.staff_id||''}">${p.staff_name || '―'}</td>
-      <td data-uf="property_name"    data-uv="${escApp(p.property_name)}"   >${p.property_name || '―'}</td>
-      <td data-uf="room_number"      data-uv="${escApp(p.room_number)}"     >${p.room_number || '―'}</td>
-      <td data-uf="application_date" data-ut="date" data-uv="${p.application_date||''}">${p.application_date || '―'}</td>
-      <td data-uf="management_company" data-uv="${escApp(p.management_company)}">${p.management_company || '―'}</td>
-      <td data-uf="customer_name"    data-uv="${escApp(p.customer_name)}"   >${p.customer_name || '―'}</td>
-      <td data-uf="amount"           data-ut="number" data-uv="${p.amount||0}" style="text-align:right;">${p.amount ? p.amount.toLocaleString() : '―'}</td>
-      <td>${isPaid ? '<span style="color:#0D9488;font-weight:700;">入金済</span>' : (isOverdue ? '<span style="color:#dc2626;font-weight:700;">期限超過</span>' : '<span style="color:#f59e0b;font-weight:700;">未入金</span>')}</td>
-      <td style="white-space:nowrap;">
-        ${!isPaid ? `<button onclick="markPaid(${p.id})" style="padding:3px 8px;font-size:11px;border:1px solid #5EEAD4;border-radius:4px;background:#F0FDFA;color:#0F766E;cursor:pointer;margin-right:4px;">入金済</button>` : ''}
-        <button onclick="deleteUncollected(${p.id})" style="padding:3px 8px;font-size:11px;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#ef4444;cursor:pointer;">削除</button>
-      </td>`;
+    const adYen = adAmountYen(r);
+    const adDisp = r.ad_type === 'percent'
+      ? `${r.ad_amount ?? 0}% (¥${Math.round(adYen).toLocaleString()})`
+      : (r.ad_amount ? `¥${r.ad_amount.toLocaleString()}` : '―');
 
-    // インライン編集（未入金行のみ）
-    if (!isPaid) {
-      tr.querySelectorAll('td[data-uf]').forEach(td => {
-        const field = td.dataset.uf;
-        const type  = td.dataset.ut || 'text';
-        const val   = td.dataset.uv;
-        if (field === 'staff_id') return; // スタッフ変更は除外
-        td.style.cursor = 'pointer';
-        td.title = 'クリックで編集';
-        td.addEventListener('click', function() {
-          editCellUnc(td, p.id, field, type, val);
-        });
-      });
-    }
+    const brokerageCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved, '#111827');
+    const adCell        = buildSettleCell(r, 'ad',        r.ad_settled,        r.ad_approved,        '#111827');
+
+    tr.innerHTML = `
+      <td style="white-space:nowrap;">${r.application_date || '―'}</td>
+      <td>${r.staff_name || '―'}</td>
+      <td>${r.property_name || '―'}</td>
+      <td>${r.room_number || '―'}</td>
+      <td>${r.customer_name || '―'}</td>
+      <td style="text-align:right;white-space:nowrap;">${r.rent ? '¥'+r.rent.toLocaleString() : '―'}</td>
+      <td style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
+      <td style="text-align:right;white-space:nowrap;">${r.brokerage_fee ? '¥'+r.brokerage_fee.toLocaleString() : '―'}</td>
+      <td style="text-align:right;white-space:nowrap;">${r.option_amount ? '¥'+r.option_amount.toLocaleString() : '―'}</td>
+      <td style="text-align:right;white-space:nowrap;">${adDisp}</td>
+      <td style="white-space:nowrap;">${r.ad_payment_date || '―'}</td>
+      <td style="text-align:center;white-space:nowrap;">${brokerageCell}</td>
+      <td style="text-align:center;white-space:nowrap;">${adCell}</td>
+      <td style="white-space:nowrap;">
+        <button onclick="openAppModal(appData.find(x=>x.id===${r.id}))" style="padding:3px 8px;font-size:11px;border:1px solid #d1d5db;border-radius:4px;background:#fff;color:#374151;cursor:pointer;">詳細</button>
+      </td>`;
     tbody.appendChild(tr);
   });
 }
@@ -1975,11 +1979,31 @@ async function loadApplications() {
 }
 
 /** 全入金承認済みかどうか判定 */
+/** AD金額（円換算）: %タイプなら賃料×%/100、amountタイプはそのまま */
+function adAmountYen(r) {
+  if ((r.ad_type || 'amount') === 'percent') return (r.rent || 0) * (r.ad_amount || 0) / 100;
+  return r.ad_amount || 0;
+}
+
 function isFullyApproved(r) {
-  const needAd        = (r.ad_amount      || 0) > 0;
+  const needAd        = adAmountYen(r) > 0;
   const needBrokerage = (r.brokerage_fee  || 0) > 0;
   if (!needAd && !needBrokerage) return false;
   return (!needAd || r.ad_approved) && (!needBrokerage || r.brokerage_approved);
+}
+
+/** 入金状況による行の背景色を返す（ステータス色より優先） */
+function paymentRowBg(r) {
+  const hasBrokerage = (r.brokerage_fee || 0) > 0;
+  const hasAd        = adAmountYen(r) > 0;
+  const bOk = !hasBrokerage || r.brokerage_approved;
+  const aOk = !hasAd        || r.ad_approved;
+  if (hasBrokerage || hasAd) {
+    if (bOk && aOk) return '#d1fae5';         // 全入金済 → 緑
+    if (bOk && !aOk && hasBrokerage) return '#dbeafe'; // 仲介のみ済 → 青
+    if (aOk && !bOk && hasAd) return '#fef3c7';        // ADのみ済 → 黄
+  }
+  return null; // 色なし（ステータス色を使う）
 }
 
 function toggleSettledSection() {
@@ -2003,10 +2027,12 @@ function buildAppRow(r, colors, isSettled = false) {
   };
   const sc = colors[r.status] || DEFAULT_COLORS[r.status] || { bg: '#fff', text: '#111827' };
   const tr = document.createElement('tr');
-  tr.style.cssText = `background:${sc.bg};color:${sc.text};`;
+  const payBg = paymentRowBg(r);
+  tr.style.cssText = `background:${payBg || sc.bg};color:${sc.text};`;
 
+  const adYen = adAmountYen(r);
   const adLabel = r.ad_type === 'percent'
-    ? `${r.ad_amount ?? 0}%`
+    ? `${r.ad_amount ?? 0}% (¥${Math.round(adYen).toLocaleString()})`
     : `¥${(r.ad_amount || 0).toLocaleString()}`;
 
   const brokerageCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved, sc.text);
@@ -2071,23 +2097,35 @@ function escApp(s) {
   return String(s || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/** 申込一覧・入金済み・未入金を横断検索 */
+function applyGlobalSearch(q) {
+  const kw = (q || '').trim().toLowerCase();
+  // テキストで検索対象セルを含む行をフィルタ
+  ['app-tbody', 'settled-tbody', 'uncollected-tbody'].forEach(id => {
+    const tbody = document.getElementById(id);
+    if (!tbody) return;
+    tbody.querySelectorAll('tr').forEach(tr => {
+      if (tr.querySelector('td[colspan]')) return; // empty row
+      const text = tr.textContent.toLowerCase();
+      tr.style.display = (!kw || text.includes(kw)) ? '' : 'none';
+    });
+  });
+}
+
 function renderApplications(list, colors) {
   const tbody        = document.getElementById('app-tbody');
   const settledTbody = document.getElementById('settled-tbody');
 
-  // 入金済み（全承認済み）と未承認に分割
-  const pending = list.filter(r => !isFullyApproved(r));
-  const settled = list.filter(r =>  isFullyApproved(r));
-
-  // 未承認（メインリスト）
-  if (!pending.length) {
+  // 全件を申込一覧に表示（入金済みでも残す）
+  if (!list.length) {
     tbody.innerHTML = '<tr><td colspan="19" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>';
   } else {
     tbody.innerHTML = '';
-    pending.forEach(r => tbody.appendChild(buildAppRow(r, colors)));
+    list.forEach(r => tbody.appendChild(buildAppRow(r, colors, false)));
   }
 
-  // 入金済みリスト
+  // 入金済み一覧：全承認済みのみ（参照用・編集不可）
+  const settled = list.filter(r => isFullyApproved(r));
   const countEl = document.getElementById('settled-count');
   if (countEl) countEl.textContent = settled.length + '件';
   if (!settled.length) {
@@ -2248,8 +2286,7 @@ async function approvePayment(rid, field) {
     });
     if (!res.ok) throw new Error();
     showAlert('承認しました。売上に反映されました。');
-    loadApplications();
-    loadData();
+    await Promise.all([loadApplications(), loadUncollected(), loadData()]);
   } catch(e) { showAlert('承認に失敗しました。', 'error'); }
 }
 
