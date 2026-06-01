@@ -180,12 +180,12 @@
       <h2>ログインアカウント管理</h2>
       <button class="btn-primary" onclick="openCreateUserModal()">＋ アカウント追加</button>
     </div>
-    <div style="overflow-x: auto;">
+    <p style="font-size:11px;color:#9ca3af;margin-bottom:6px;">権限の ✓/— はクリックで直接切り替えできます</p>
+    <div style="overflow-x: auto; position:relative;">
       <table>
         <thead>
           <tr>
-            <th>ユーザー名</th>
-            <th>メール</th>
+            <th style="position:sticky;left:0;background:#F0FDFA;z-index:2;">ユーザー名</th>
             <th>役割</th>
             <th>担当スタッフ</th>
             <th style="text-align:center;">経理閲覧</th>
@@ -195,21 +195,19 @@
             <th style="text-align:center;">売上管理</th>
             <th style="text-align:center;">反響管理</th>
             <th style="text-align:center;">日報</th>
-            <th style="text-align:center;">有給管理</th>
-            <th>最終ログイン</th>
-            <th>操作</th>
+            <th style="position:sticky;right:0;background:#F0FDFA;z-index:2;white-space:nowrap;">操作</th>
           </tr>
         </thead>
         <tbody>
           {% for acc in accounts %}
+          {% set is_me = (acc.id == session.get('app_user_id')) %}
           <tr id="account-row-{{ acc.id }}">
-            <td style="font-weight:600;">
+            <td style="font-weight:600;position:sticky;left:0;background:#fff;z-index:1;">
               {{ acc.username }}
-              {% if acc.id == session.get('app_user_id') %}
+              {% if is_me %}
               <span style="font-size:10px;background:#CCFBF1;color:#0D9488;padding:1px 6px;border-radius:999px;font-weight:700;margin-left:4px;">あなた</span>
               {% endif %}
             </td>
-            <td>{{ acc.email or '—' }}</td>
             <td>
               <span class="badge-role {% if acc.role == 'owner' %}badge-owner{% elif acc.role == 'store_manager' %}badge-owner{% else %}badge-staff{% endif %}">
                 {{ 'オーナー' if acc.role == 'owner' else ('店長' if acc.role == 'store_manager' else 'スタッフ') }}
@@ -220,24 +218,32 @@
                 {% for s in staff_list %}{% if s.id == acc.staff_id %}{{ s.name }}{% endif %}{% endfor %}
               {% else %}—{% endif %}
             </td>
-            <td style="text-align:center;">{% if acc.can_view_accounting %}<span style="color:#0D9488;font-size:15px;">✓</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
-            <td style="text-align:center;">{% if acc.can_view_all_staff %}<span style="color:#0D9488;font-size:15px;">✓</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
-            <td style="text-align:center;">{% if acc.can_edit_kpi %}<span style="color:#0D9488;font-size:15px;">✓</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
-            <td style="text-align:center;">{% if acc.can_manage_uncollected %}<span style="color:#0D9488;font-size:15px;">✓</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
-            <td style="text-align:center;">{% if acc.can_view_executive %}<span style="color:#0D9488;font-size:15px;">✓</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
-            <td style="text-align:center;">{% if acc.can_view_leads_page %}<span style="color:#0D9488;font-size:15px;">✓</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
-            <td style="text-align:center;">{% if acc.can_view_daily_report %}<span style="color:#0D9488;font-size:15px;">✓</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
-            <td style="text-align:center;">{% if acc.can_view_leave %}<span style="color:#0D9488;font-size:15px;">✓</span>{% else %}<span style="color:#d1d5db;">—</span>{% endif %}</td>
-            <td>{{ acc.last_login.strftime('%Y/%m/%d %H:%M') if acc.last_login else '未ログイン' }}</td>
-            <td>
+            {% macro ptoggle(uid, field, val) %}
+            <td style="text-align:center;">
+              <button onclick="toggleUserPerm({{ uid }},'{{ field }}',{{ val|lower }})"
+                id="up-{{ uid }}-{{ field }}"
+                style="padding:1px 10px;border-radius:999px;border:none;cursor:pointer;font-size:12px;font-weight:700;transition:all .15s;
+                  {% if val %}background:#0D9488;color:#fff;{% else %}background:#e5e7eb;color:#9ca3af;{% endif %}">
+                {{ '✓' if val else '✗' }}
+              </button>
+            </td>
+            {% endmacro %}
+            {{ ptoggle(acc.id, 'can_view_accounting',    acc.can_view_accounting) }}
+            {{ ptoggle(acc.id, 'can_view_all_staff',     acc.can_view_all_staff) }}
+            {{ ptoggle(acc.id, 'can_edit_kpi',           acc.can_edit_kpi) }}
+            {{ ptoggle(acc.id, 'can_manage_uncollected', acc.can_manage_uncollected) }}
+            {{ ptoggle(acc.id, 'can_view_executive',     acc.can_view_executive) }}
+            {{ ptoggle(acc.id, 'can_view_leads_page',    acc.can_view_leads_page) }}
+            {{ ptoggle(acc.id, 'can_view_daily_report',  acc.can_view_daily_report) }}
+            <td style="position:sticky;right:0;background:#fff;z-index:1;white-space:nowrap;">
               <button class="btn-sm" onclick="openEditUserModal({{ acc.id }}, '{{ acc.username }}', '{{ acc.email or '' }}', '{{ acc.role }}', {{ acc.staff_id or 'null' }}, {{ acc.can_view_accounting|lower }}, {{ acc.can_view_all_staff|lower }}, {{ acc.can_edit_kpi|lower }}, {{ acc.can_manage_uncollected|lower }}, {{ acc.can_view_executive|lower }}, {{ acc.can_view_leads_page|lower }}, {{ acc.can_view_daily_report|lower }}, {{ acc.can_view_leave|lower }})">編集</button>
-              {% if acc.id != session.get('app_user_id') %}
+              {% if not is_me %}
               <button class="btn-sm btn-danger" onclick="deleteUser({{ acc.id }})" style="margin-left:4px;">削除</button>
               {% endif %}
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="10" style="text-align:center;padding:30px;color:var(--text-muted);">アカウントがありません</td></tr>
+          <tr><td colspan="9" style="text-align:center;padding:30px;color:var(--text-muted);">アカウントがありません</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -627,6 +633,23 @@ async function submitCreateUser() {
   } catch(e) {
     errEl.textContent = '通信エラーが発生しました';
     errEl.style.display = 'block';
+  }
+}
+
+async function toggleUserPerm(uid, field, currentVal) {
+  const newVal = !currentVal;
+  const res = await fetch(`/api/users/${uid}`, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ [field]: newVal })
+  });
+  if (!res.ok) { alert('更新に失敗しました'); return; }
+  const btn = document.getElementById(`up-${uid}-${field}`);
+  if (btn) {
+    btn.textContent = newVal ? '✓' : '✗';
+    btn.style.background = newVal ? '#0D9488' : '#e5e7eb';
+    btn.style.color      = newVal ? '#fff'    : '#9ca3af';
+    btn.setAttribute('onclick', `toggleUserPerm(${uid},'${field}',${newVal})`);
   }
 }
 
