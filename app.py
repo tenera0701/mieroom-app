@@ -125,6 +125,8 @@ class Tenant(db.Model):
     name = db.Column(db.String(100), nullable=False)       # 会社名
     plan = db.Column(db.String(20), default='standard')   # standard / premium
     is_active = db.Column(db.Boolean, default=True)
+    trial_ends_at = db.Column(db.DateTime, nullable=True)  # トライアル終了日時
+    subscription_status = db.Column(db.String(20), default='trial')  # trial / active / locked / cancelled
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -1072,6 +1074,8 @@ def migrate_postgres():
                 ("application_record",        "option_amount", "FLOAT DEFAULT 0"),
                 ("daily_report",             "store_id",     "INTEGER"),
                 ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
+                ("tenant", "trial_ends_at",        "TIMESTAMP"),
+                ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
             ]
             for tbl, col, typedef in new_cols:
                 try:
@@ -1199,11 +1203,31 @@ with app.app_context():
 
 # ── 認証デコレータ ────────────────────────────────────────
 
+def is_tenant_locked(tenant):
+    """テナントがロック/トライアル期限切れかどうかを判定"""
+    if not tenant:
+        return False
+    if tenant.subscription_status == 'locked':
+        return True
+    if tenant.subscription_status == 'trial' and tenant.trial_ends_at:
+        return datetime.utcnow() > tenant.trial_ends_at
+    return False
+
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         if 'app_user_id' not in session:
             return redirect(url_for('app_login'))
+        # トライアル/ロックチェック（APIルートとロック通知ページ自身は除外）
+        from flask import request as _req
+        skip_paths = ('/trial-expired', '/app-login', '/forgot-password', '/reset-password')
+        if not _req.path.startswith('/api/') and not any(_req.path.startswith(p) for p in skip_paths):
+            user = AppUser.query.get(session['app_user_id'])
+            if user and user.role != 'super_admin' and user.tenant_id:
+                tenant = Tenant.query.get(user.tenant_id)
+                if is_tenant_locked(tenant):
+                    return redirect('/trial-expired')
         return f(*args, **kwargs)
     return decorated
 
@@ -4591,6 +4615,8 @@ def api_tenants_get():
             'name': t.name,
             'plan': t.plan,
             'is_active': t.is_active,
+            'subscription_status': t.subscription_status or 'trial',
+            'trial_ends_at': t.trial_ends_at.strftime('%Y-%m-%dT%H:%M:%S') if t.trial_ends_at else None,
             'store_count': len(stores),
             'owner_username': owner.username if owner else None,
             'owner_email': owner.email if owner else None,
@@ -4618,7 +4644,12 @@ def api_tenants_post():
     if AppUser.query.filter_by(username=owner_username).first():
         return jsonify({'error': 'そのユーザー名は既に使われています'}), 400
 
-    tenant = Tenant(name=name, plan=data.get('plan', 'standard'), is_active=True)
+    trial_days = int(data.get('trial_days', 14))
+    from datetime import timedelta
+    trial_ends_at = datetime.utcnow() + timedelta(days=trial_days)
+
+    tenant = Tenant(name=name, plan=data.get('plan', 'standard'), is_active=True,
+                    trial_ends_at=trial_ends_at, subscription_status='trial')
     db.session.add(tenant)
     db.session.flush()
 
@@ -4653,6 +4684,50 @@ def api_tenant_update(tid):
         tenant.is_active = bool(data['is_active'])
     db.session.commit()
     return jsonify({'status': 'ok'})
+
+
+@app.route("/api/tenants/<int:tid>/lock", methods=["POST"])
+@super_admin_required
+def api_tenant_lock(tid):
+    """テナントをロック（アクセス不可）"""
+    tenant = Tenant.query.get_or_404(tid)
+    tenant.subscription_status = 'locked'
+    tenant.is_active = False
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/tenants/<int:tid>/unlock", methods=["POST"])
+@super_admin_required
+def api_tenant_unlock(tid):
+    """テナントを有効化（ロック解除）"""
+    tenant = Tenant.query.get_or_404(tid)
+    tenant.subscription_status = 'active'
+    tenant.is_active = True
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/tenants/<int:tid>/extend-trial", methods=["POST"])
+@super_admin_required
+def api_tenant_extend_trial(tid):
+    """トライアル期間を延長"""
+    from datetime import timedelta
+    tenant = Tenant.query.get_or_404(tid)
+    data = request.get_json() or {}
+    days = int(data.get('days', 7))
+    base = tenant.trial_ends_at if (tenant.trial_ends_at and tenant.trial_ends_at > datetime.utcnow()) else datetime.utcnow()
+    tenant.trial_ends_at = base + timedelta(days=days)
+    tenant.subscription_status = 'trial'
+    tenant.is_active = True
+    db.session.commit()
+    return jsonify({'status': 'ok', 'trial_ends_at': tenant.trial_ends_at.strftime('%Y-%m-%d')})
+
+
+@app.route("/trial-expired")
+def trial_expired_page():
+    """トライアル期限切れ・ロック時のページ"""
+    return render_template("trial_expired.html")
 
 
 @app.route("/api/tenants/<int:tid>", methods=["DELETE"])
