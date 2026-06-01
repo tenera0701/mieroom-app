@@ -92,7 +92,6 @@
     <div>
       <h1 style="font-size:22px;font-weight:800;color:#111827;margin:0;">
         本部ダッシュボード
-        <span style="font-size:12px;background:#f59e0b;color:#fff;border-radius:4px;padding:2px 7px;margin-left:8px;font-weight:700;vertical-align:middle;">PREMIUM</span>
       </h1>
       <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">全店舗一括管理・分析・アラート</p>
     </div>
@@ -110,17 +109,32 @@
     </div>
   </div>
 
-  <!-- ① KPIカード（申込数・成約率のみ残す） -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+  <!-- ① KPIカード 6指標 -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
     <div class="hq-card">
-      <div class="hq-card-label">全店舗 総申込数</div>
-      <div class="hq-card-value" id="kpi-total-apps">―</div>
-      <div class="hq-card-sub" id="kpi-total-apps-sub">申込件数</div>
+      <div class="hq-card-label">全店舗 売上合計</div>
+      <div class="hq-card-value" id="kpi-total-sales" style="font-size:22px;">―</div>
     </div>
     <div class="hq-card">
-      <div class="hq-card-label">全店舗 総成約率</div>
-      <div class="hq-card-value" id="kpi-close-rate">―</div>
-      <div class="hq-card-sub" id="kpi-close-rate-sub">成約 / 申込</div>
+      <div class="hq-card-label">全店舗 利益合計</div>
+      <div class="hq-card-value" id="kpi-total-profit" style="font-size:22px;">―</div>
+    </div>
+    <div class="hq-card">
+      <div class="hq-card-label">全店舗 経費合計</div>
+      <div class="hq-card-value" id="kpi-total-expenses" style="font-size:22px;color:#f59e0b;">―</div>
+    </div>
+    <div class="hq-card">
+      <div class="hq-card-label">全店舗 反響数</div>
+      <div class="hq-card-value" id="kpi-total-inquiries" style="font-size:22px;">―</div>
+    </div>
+    <div class="hq-card">
+      <div class="hq-card-label">全店舗 申込数</div>
+      <div class="hq-card-value" id="kpi-total-apps" style="font-size:22px;">―</div>
+      <div class="hq-card-sub" id="kpi-total-apps-sub"></div>
+    </div>
+    <div class="hq-card">
+      <div class="hq-card-label">全店舗 契約数</div>
+      <div class="hq-card-value" id="kpi-total-contracts" style="font-size:22px;">―</div>
     </div>
   </div>
 
@@ -164,11 +178,14 @@
 
   <!-- ③ 店舗ランキング -->
   <div class="hq-section">
-    <div class="hq-section-title">🏆 店舗ランキング <span class="badge-pro">PRO</span></div>
+    <div class="hq-section-title">🏆 店舗ランキング</div>
     <div class="rank-tabs">
       <div class="rank-tab active" onclick="switchRankTab('sales',this)">売上</div>
+      <div class="rank-tab" onclick="switchRankTab('profit',this)">利益</div>
+      <div class="rank-tab" onclick="switchRankTab('expenses',this)">経費</div>
+      <div class="rank-tab" onclick="switchRankTab('inquiries',this)">反響数</div>
       <div class="rank-tab" onclick="switchRankTab('apps',this)">申込数</div>
-      <div class="rank-tab" onclick="switchRankTab('close_rate',this)">成約率</div>
+      <div class="rank-tab" onclick="switchRankTab('contracts',this)">契約数</div>
     </div>
     <div id="rank-list">
       <p style="color:#9ca3af;font-size:13px;">読込中...</p>
@@ -177,7 +194,7 @@
 
   <!-- ④ 店舗比較チャート -->
   <div class="hq-section">
-    <div class="hq-section-title">📊 店舗別月次比較 <span class="badge-pro">PRO</span></div>
+    <div class="hq-section-title">📊 店舗別月次比較</div>
     <div class="compare-toolbar">
       <label style="font-size:12px;color:#6b7280;font-weight:600;">期間</label>
       <input type="month" id="compare-from" style="">
@@ -185,8 +202,11 @@
       <input type="month" id="compare-to" style="">
       <select id="compare-metric" onchange="loadComparison()">
         <option value="sales">売上</option>
+        <option value="profit">利益</option>
+        <option value="expenses">経費</option>
+        <option value="inquiries">反響数</option>
         <option value="apps">申込数</option>
-        <option value="close_rate">成約率（%）</option>
+        <option value="contracts">契約数</option>
       </select>
       <button onclick="loadComparison()" style="padding:5px 14px;background:#1d4ed8;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;">適用</button>
     </div>
@@ -234,20 +254,15 @@ async function loadSummary(year, month) {
     if (!res.ok) throw new Error();
     const d = await res.json();
 
-    // KPIカード
-    document.getElementById('kpi-total-sales').textContent =
-      d.total_sales ? '¥' + Math.round(d.total_sales).toLocaleString() : '¥0';
-    document.getElementById('kpi-total-sales-sub').textContent =
-      d.total_target ? `目標 ¥${Math.round(d.total_target).toLocaleString()}` : '目標未設定';
-    document.getElementById('kpi-forecast').textContent =
-      d.total_forecast ? '¥' + Math.round(d.total_forecast).toLocaleString() : '¥0';
-    document.getElementById('kpi-forecast-sub').textContent =
-      `${d.elapsed_days}日経過 / ${d.days_in_month}日`;
-    document.getElementById('kpi-total-apps').textContent = d.total_apps || 0;
-    document.getElementById('kpi-total-apps-sub').textContent =
-      `成約 ${d.total_contracts || 0}件`;
-    document.getElementById('kpi-close-rate').textContent =
-      (d.total_close_rate || 0) + '%';
+    // KPIカード 6指標
+    const fmtY2 = v => v != null ? '¥' + Math.round(v).toLocaleString() : '¥0';
+    const setEl = (id, v) => { const e = document.getElementById(id); if(e) e.textContent = v; };
+    setEl('kpi-total-sales',      fmtY2(d.total_sales));
+    setEl('kpi-total-profit',     fmtY2(d.total_profit));
+    setEl('kpi-total-expenses',   fmtY2(d.total_expenses));
+    setEl('kpi-total-inquiries',  (d.total_inquiries  || 0) + '件');
+    setEl('kpi-total-apps',       (d.total_apps       || 0) + '件');
+    setEl('kpi-total-contracts',  (d.total_contracts  || 0) + '件');
 
     // アラート
     const dangerStores = (d.stores || []).filter(s => s.is_danger);
@@ -310,9 +325,11 @@ async function loadRankings(metric, year, month) {
     const el = document.getElementById('rank-list');
     if (!rows.length) { el.innerHTML = '<p style="color:#9ca3af;font-size:13px;">データなし</p>'; return; }
     el.innerHTML = rows.map((r, i) => {
-      const val = metric === 'sales' ? '¥' + Math.round(r[metric]).toLocaleString()
-               : metric === 'close_rate' ? r[metric] + '%'
-               : r[metric] + '件';
+      const yenMetrics = ['sales','profit','expenses'];
+      const pctMetrics = ['close_rate'];
+      const val = yenMetrics.includes(metric) ? '¥' + Math.round(r[metric] || 0).toLocaleString()
+               : pctMetrics.includes(metric)  ? (r[metric] || 0) + '%'
+               : (r[metric] || 0) + '件';
       const pct  = maxVal > 0 ? (r[metric] / maxVal * 100).toFixed(1) : 0;
       const fillCls = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
       return `<div class="rank-bar-wrap">

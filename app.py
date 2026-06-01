@@ -5835,16 +5835,22 @@ def api_hq_summary():
             'is_drop':    (vs_prev is not None and vs_prev <= -20),
         })
 
-    total_forecast = int(total_sales / elapsed_days * days_in_month) if elapsed_days > 0 else 0
-    total_close    = round(total_contracts / total_apps * 100, 1) if total_apps > 0 else 0
+    total_forecast  = int(total_sales / elapsed_days * days_in_month) if elapsed_days > 0 else 0
+    total_close     = round(total_contracts / total_apps * 100, 1) if total_apps > 0 else 0
+    total_inquiries = sum(r['inquiries'] for r in result)
+    total_profit    = sum(r['profit']    for r in result if r['profit'] is not None)
+    total_expenses  = sum(r['expenses']  for r in result if r['expenses'] is not None)
     return jsonify({
-        'stores':          result,
-        'total_sales':     total_sales,
-        'total_target':    total_target,
-        'total_forecast':  total_forecast,
-        'total_apps':      total_apps,
-        'total_contracts': total_contracts,
-        'total_close_rate':total_close,
+        'stores':           result,
+        'total_sales':      total_sales,
+        'total_target':     total_target,
+        'total_forecast':   total_forecast,
+        'total_apps':       total_apps,
+        'total_contracts':  total_contracts,
+        'total_inquiries':  total_inquiries,
+        'total_profit':     total_profit,
+        'total_expenses':   total_expenses,
+        'total_close_rate': total_close,
         'year': year, 'month': month,
         'elapsed_days': elapsed_days, 'days_in_month': days_in_month,
     })
@@ -5871,13 +5877,21 @@ def api_hq_rankings():
         sales     = sum(k.sales_amount or 0 for k in kpis)
         apps      = sum(k.applications or 0 for k in kpis)
         contracts = sum(k.contracts    or 0 for k in kpis)
+        inquiries = sum(k.inquiries    or 0 for k in kpis)
         close_rate= round(contracts / apps * 100, 1) if apps > 0 else 0
+        pl = PLRecord.query.filter_by(store_id=sid, year=year, month=month).first()
+        profit   = pl.net_profit if pl else 0
+        expenses = max(0, sales - profit) if pl else 0
         rows.append({'store_id': sid, 'store_name': store.name,
-                     'sales': sales, 'apps': apps, 'close_rate': close_rate})
+                     'sales': sales, 'apps': apps, 'contracts': contracts,
+                     'inquiries': inquiries, 'close_rate': close_rate,
+                     'profit': profit, 'expenses': expenses})
 
-    key_map = {'sales': 'sales', 'apps': 'apps', 'close_rate': 'close_rate'}
+    key_map = {'sales':'sales','apps':'apps','contracts':'contracts',
+               'inquiries':'inquiries','close_rate':'close_rate',
+               'profit':'profit','expenses':'expenses'}
     sort_key = key_map.get(metric, 'sales')
-    rows.sort(key=lambda r: r[sort_key], reverse=True)
+    rows.sort(key=lambda r: r.get(sort_key, 0), reverse=True)
     for i, r in enumerate(rows):
         r['rank'] = i + 1
     return jsonify(rows)
@@ -5927,10 +5941,19 @@ def api_hq_store_comparison():
                 v = sum(k.sales_amount or 0 for k in kpis)
             elif metric == 'apps':
                 v = sum(k.applications or 0 for k in kpis)
+            elif metric == 'contracts':
+                v = sum(k.contracts    or 0 for k in kpis)
+            elif metric == 'inquiries':
+                v = sum(k.inquiries    or 0 for k in kpis)
             elif metric == 'close_rate':
                 apps = sum(k.applications or 0 for k in kpis)
                 ctrs = sum(k.contracts   or 0 for k in kpis)
                 v = round(ctrs / apps * 100, 1) if apps > 0 else 0
+            elif metric in ('profit', 'expenses'):
+                pl = PLRecord.query.filter_by(store_id=sid, year=y, month=m).first()
+                sales_v = sum(k.sales_amount or 0 for k in kpis)
+                profit_v = pl.net_profit if pl else 0
+                v = profit_v if metric == 'profit' else max(0, sales_v - profit_v)
             else:
                 v = 0
             values.append(v)
