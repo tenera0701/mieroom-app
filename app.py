@@ -1262,12 +1262,26 @@ def owner_or_manager_required(f):
 
 
 def super_admin_required(f):
+    """super_admin または sys_admin がアクセス可"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if 'app_user_id' not in session:
+            return redirect(url_for('app_login'))
+        if session.get('app_user_role') not in ('super_admin', 'sys_admin'):
+            return redirect(url_for('executive_dashboard'))
+        return f(*args, **kwargs)
+    return decorated
+
+
+def super_admin_only(f):
+    """破壊的操作：super_admin のみ（ロック・削除・店舗管理など）"""
     @wraps(f)
     def decorated(*args, **kwargs):
         if 'app_user_id' not in session:
             return redirect(url_for('app_login'))
         if session.get('app_user_role') != 'super_admin':
-            return redirect(url_for('executive_dashboard'))
+            from flask import jsonify as _jsonify
+            return _jsonify({'error': 'この操作はスーパー管理者のみ実行できます'}), 403
         return f(*args, **kwargs)
     return decorated
 
@@ -4602,7 +4616,10 @@ def api_user_list():
 def admin_tenants():
     """テナント管理ページ（super_adminのみ）"""
     tenants = Tenant.query.order_by(Tenant.created_at.desc()).all()
-    return render_template("admin_tenants.html", tenants=tenants, now=datetime.now())
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    is_super_admin = cur_user and cur_user.role == 'super_admin'
+    return render_template("admin_tenants.html", tenants=tenants, now=datetime.now(),
+                           is_super_admin=is_super_admin)
 
 
 @app.route("/api/tenants", methods=["GET"])
@@ -4697,8 +4714,78 @@ def api_tenant_update(tid):
     return jsonify({'status': 'ok'})
 
 
-@app.route("/api/tenants/<int:tid>/lock", methods=["POST"])
+@app.route("/api/tenants/<int:tid>/activate", methods=["POST"])
 @super_admin_required
+def api_tenant_activate(tid):
+    """トライアル → 契約開始（super_admin / sys_admin 共通可）"""
+    from datetime import date as _date
+    tenant = Tenant.query.get_or_404(tid)
+    tenant.subscription_status = 'active'
+    tenant.is_active = True
+    if not tenant.contract_start_date:
+        tenant.contract_start_date = _date.today()
+    db.session.commit()
+    return jsonify({'status': 'ok', 'contract_start_date': tenant.contract_start_date.strftime('%Y-%m-%d')})
+
+
+@app.route("/api/admin-users", methods=["GET"])
+@super_admin_required
+def api_admin_users_list():
+    """sys_admin ユーザー一覧（super_admin のみ全表示）"""
+    users = AppUser.query.filter(
+        AppUser.role.in_(['sys_admin']),
+        AppUser.is_active == True
+    ).all()
+    return jsonify([{
+        'id': u.id, 'username': u.username,
+        'email': u.email or '',
+        'created_at': u.created_at.strftime('%Y-%m-%d') if u.created_at else None
+    } for u in users])
+
+
+@app.route("/api/admin-users", methods=["POST"])
+@super_admin_required
+def api_admin_users_create():
+    """sys_admin ユーザー作成（super_admin のみ）"""
+    if session.get('app_user_role') != 'super_admin':
+        return jsonify({'error': 'スーパー管理者のみ作成できます'}), 403
+    data = request.get_json() or {}
+    username = (data.get('username') or '').strip()
+    password = (data.get('password') or '').strip()
+    email    = (data.get('email') or '').strip()
+    if not username or not password:
+        return jsonify({'error': 'ユーザー名とパスワードは必須です'}), 400
+    if AppUser.query.filter_by(username=username).first():
+        return jsonify({'error': 'そのユーザー名は既に使われています'}), 400
+    user = AppUser(
+        username=username,
+        email=email or None,
+        password_hash=generate_password_hash(password),
+        role='sys_admin',
+        tenant_id=None,
+        is_active=True,
+    )
+    db.session.add(user)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': user.id})
+
+
+@app.route("/api/admin-users/<int:uid>", methods=["DELETE"])
+@super_admin_required
+def api_admin_users_delete(uid):
+    """sys_admin ユーザー削除（super_admin のみ）"""
+    if session.get('app_user_role') != 'super_admin':
+        return jsonify({'error': 'スーパー管理者のみ削除できます'}), 403
+    user = AppUser.query.get_or_404(uid)
+    if user.role not in ('sys_admin',):
+        return jsonify({'error': '削除できないアカウントです'}), 400
+    user.is_active = False
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/tenants/<int:tid>/lock", methods=["POST"])
+@super_admin_only
 def api_tenant_lock(tid):
     """テナントをロック（アクセス不可）"""
     tenant = Tenant.query.get_or_404(tid)
@@ -4709,7 +4796,7 @@ def api_tenant_lock(tid):
 
 
 @app.route("/api/tenants/<int:tid>/unlock", methods=["POST"])
-@super_admin_required
+@super_admin_only
 def api_tenant_unlock(tid):
     """テナントを有効化（ロック解除）"""
     from datetime import date as _date
@@ -4724,7 +4811,7 @@ def api_tenant_unlock(tid):
 
 
 @app.route("/api/tenants/<int:tid>/extend-trial", methods=["POST"])
-@super_admin_required
+@super_admin_only
 def api_tenant_extend_trial(tid):
     """トライアル期間を延長"""
     from datetime import timedelta
@@ -4746,7 +4833,7 @@ def trial_expired_page():
 
 
 @app.route("/api/tenants/<int:tid>", methods=["DELETE"])
-@super_admin_required
+@super_admin_only
 def api_tenant_delete(tid):
     """テナント物理削除（関連データを全てカスケード削除）"""
     tenant = Tenant.query.get_or_404(tid)
@@ -4831,7 +4918,7 @@ def api_tenant_stores(tid):
 
 
 @app.route("/api/tenants/<int:tid>/stores", methods=["POST"])
-@super_admin_required
+@super_admin_only
 def api_tenant_store_add(tid):
     """テナントに店舗を追加"""
     Tenant.query.get_or_404(tid)
@@ -4860,7 +4947,7 @@ def api_tenant_store_update(tid, sid):
 
 
 @app.route("/api/tenants/<int:tid>/stores/<int:sid>", methods=["DELETE"])
-@super_admin_required
+@super_admin_only
 def api_tenant_store_delete(tid, sid):
     """店舗を論理削除"""
     store = Store.query.filter_by(id=sid, tenant_id=tid).first_or_404()
