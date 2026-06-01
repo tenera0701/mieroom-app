@@ -1059,50 +1059,50 @@ def migrate_db():
 
 
 def migrate_postgres():
-    """PostgreSQL用: 新カラムが存在しない場合のみALTER TABLEで追加"""
-    try:
-        with db.engine.connect() as conn:
-            new_cols = [
-                ("sales_kpi",          "estimated_sales",         "FLOAT DEFAULT 0"),
-                ("sales_kpi",          "target_sales",            "FLOAT DEFAULT 0"),
-                ("sales_kpi",          "fire_insurance_count",    "INTEGER DEFAULT 0"),
-                ("sales_kpi",          "lifeline_count",          "INTEGER DEFAULT 0"),
-                ("sales_kpi",          "moving_count",            "INTEGER DEFAULT 0"),
-                ("store",              "tenant_id",               "INTEGER"),
-                ("app_user",           "tenant_id",               "INTEGER"),
-                ("app_user",           "email",                   "VARCHAR(200)"),
-                ("app_user",           "store_id",                "INTEGER"),
-                ("app_user",           "last_login",              "TIMESTAMP"),
-                ("app_user",           "can_view_accounting",     "BOOLEAN DEFAULT TRUE"),
-                ("app_user",           "can_view_all_staff",      "BOOLEAN DEFAULT TRUE"),
-                ("app_user",           "can_edit_kpi",            "BOOLEAN DEFAULT TRUE"),
-                ("app_user",           "can_manage_uncollected",  "BOOLEAN DEFAULT TRUE"),
-                ("app_user",           "can_view_executive",      "BOOLEAN DEFAULT TRUE"),
-                ("app_user",           "can_view_leads_page",     "BOOLEAN DEFAULT TRUE"),
-                ("app_user",           "can_view_daily_report",   "BOOLEAN DEFAULT TRUE"),
-                ("app_user",           "can_view_leave",          "BOOLEAN DEFAULT TRUE"),
-                ("application_record",        "option_amount", "FLOAT DEFAULT 0"),
-                ("daily_report",             "store_id",     "INTEGER"),
-                ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
-                ("tenant", "trial_ends_at",        "TIMESTAMP"),
-                ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
-                ("tenant", "contract_start_date",     "DATE"),
-                ("store",  "created_at",             "TIMESTAMP"),
-                ("app_user", "admin_can_add_tenant",    "BOOLEAN DEFAULT FALSE"),
-                ("app_user", "admin_can_manage_stores", "BOOLEAN DEFAULT FALSE"),
-                ("app_user", "admin_can_delete_tenant", "BOOLEAN DEFAULT FALSE"),
-                ("app_user", "admin_can_lock_tenant",   "BOOLEAN DEFAULT FALSE"),
-            ]
-            for tbl, col, typedef in new_cols:
-                try:
-                    conn.execute(db.text(
-                        f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {typedef}"
-                    ))
-                    conn.commit()
-                except Exception as e:
-                    print(f"PG migrate skip {tbl}.{col}: {e}")
-    except Exception as e:
-        print(f"migrate_postgres error: {e}")
+    """PostgreSQL用: 新カラムが存在しない場合のみALTER TABLEで追加
+    各カラムを独立したコネクションで処理し、1つの失敗が他に影響しないようにする"""
+    new_cols = [
+        ("sales_kpi",          "estimated_sales",         "FLOAT DEFAULT 0"),
+        ("sales_kpi",          "target_sales",            "FLOAT DEFAULT 0"),
+        ("sales_kpi",          "fire_insurance_count",    "INTEGER DEFAULT 0"),
+        ("sales_kpi",          "lifeline_count",          "INTEGER DEFAULT 0"),
+        ("sales_kpi",          "moving_count",            "INTEGER DEFAULT 0"),
+        ("store",              "tenant_id",               "INTEGER"),
+        ("app_user",           "tenant_id",               "INTEGER"),
+        ("app_user",           "email",                   "VARCHAR(200)"),
+        ("app_user",           "store_id",                "INTEGER"),
+        ("app_user",           "last_login",              "TIMESTAMP"),
+        ("app_user",           "can_view_accounting",     "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_all_staff",      "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_edit_kpi",            "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_manage_uncollected",  "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_executive",      "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_leads_page",     "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_daily_report",   "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_leave",          "BOOLEAN DEFAULT TRUE"),
+        ("application_record",        "option_amount", "FLOAT DEFAULT 0"),
+        ("daily_report",             "store_id",     "INTEGER"),
+        ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
+        ("tenant", "trial_ends_at",        "TIMESTAMP"),
+        ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
+        ("tenant", "contract_start_date",     "DATE"),
+        ("store",  "created_at",             "TIMESTAMP"),
+        ("app_user", "admin_can_add_tenant",    "BOOLEAN DEFAULT FALSE"),
+        ("app_user", "admin_can_manage_stores", "BOOLEAN DEFAULT FALSE"),
+        ("app_user", "admin_can_delete_tenant", "BOOLEAN DEFAULT FALSE"),
+        ("app_user", "admin_can_lock_tenant",   "BOOLEAN DEFAULT FALSE"),
+    ]
+    # 各カラムを独立した接続で追加（1つの失敗が他に波及しない）
+    for tbl, col, typedef in new_cols:
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(db.text(
+                    f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {typedef}"
+                ))
+                conn.commit()
+                print(f"PG migrate OK: {tbl}.{col}")
+        except Exception as e:
+            print(f"PG migrate skip {tbl}.{col}: {e}")
 
 
 _DROPDOWN_DEFAULTS = {
