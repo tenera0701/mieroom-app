@@ -4528,9 +4528,12 @@ def settings_users():
         sys_admins = AppUser.query.filter(
             AppUser.role == 'sys_admin', AppUser.is_active == True
         ).order_by(AppUser.created_at).all()
+        # super_admin 自身を先頭に追加してテンプレートに渡す
+        all_admins = [app_user] + [u for u in sys_admins if u.id != app_user.id]
         return render_template("settings_admin_perms.html",
                                sys_admins=sys_admins,
-                               me=app_user,
+                               all_admins=all_admins,
+                               my_id=app_user.id,
                                is_super_admin=(app_user.role == 'super_admin'))
     stores      = get_allowed_stores(ignore_active=True)
     allowed_ids = [s.id for s in stores]
