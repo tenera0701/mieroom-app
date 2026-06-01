@@ -132,13 +132,6 @@
         <span id="app-count" style="font-size:12px;background:#CCFBF1;color:#0F766E;border-radius:12px;padding:2px 10px;font-weight:700;">0件</span>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;" onclick="event.stopPropagation()">
-        {% if is_manager %}
-        <select id="app-filter-staff" onchange="loadApplications()"
-          style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;color:#111827;background:#fff;">
-          <option value="">全スタッフ</option>
-          {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
-        </select>
-        {% endif %}
         <select id="app-filter-status" onchange="loadApplications()"
           style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;color:#111827;background:#fff;">
           <option value="">全ステータス</option>
@@ -149,7 +142,6 @@
         </select>
         {% if is_manager %}
         <button onclick="openColorModal()" style="padding:5px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#374151;">🎨 色設定</button>
-        <button onclick="openMediaModal()" style="padding:5px 10px;font-size:12px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;color:#374151;">📋 媒体管理</button>
         {% endif %}
       </div>
     </div>
@@ -219,15 +211,6 @@
         </svg>
         <h2>未入金一覧</h2>
         <span id="unc-count" style="font-size:12px;background:#fef3c7;color:#92400e;border-radius:12px;padding:2px 10px;font-weight:700;">0件</span>
-      </div>
-      <div onclick="event.stopPropagation()">
-        {% if is_manager %}
-        <select id="unc-filter-staff" onchange="loadUncollected()"
-          style="border:1px solid #d1d5db;border-radius:6px;padding:5px 8px;font-size:12px;color:#111827;background:#fff;min-width:110px;">
-          <option value="">全スタッフ</option>
-          {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
-        </select>
-        {% endif %}
       </div>
     </div>
     <div id="unc-body-wrap">
