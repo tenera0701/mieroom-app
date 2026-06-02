@@ -528,6 +528,7 @@ class ApplicationRecord(db.Model):
     ad_approved = db.Column(db.Boolean, default=False)         # 店長がAD承認
     brokerage_settled = db.Column(db.Boolean, default=False)   # 営業が仲介入金報告
     brokerage_approved = db.Column(db.Boolean, default=False)  # 店長が仲介承認
+    brokerage_payment_date = db.Column(db.Date, nullable=True) # 仲介入金日
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1083,6 +1084,7 @@ def migrate_postgres():
         ("app_user",           "can_view_daily_report",   "BOOLEAN DEFAULT TRUE"),
         ("app_user",           "can_view_leave",          "BOOLEAN DEFAULT TRUE"),
         ("application_record",        "option_amount", "FLOAT DEFAULT 0"),
+                ("application_record", "brokerage_payment_date", "DATE"),
         ("daily_report",             "store_id",     "INTEGER"),
         ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
@@ -5460,6 +5462,7 @@ def _app_record_to_dict(r, staff_map):
         'status': r.status or '申込',
         'ad_settled': bool(r.ad_settled),
         'ad_approved': bool(r.ad_approved),
+        'brokerage_payment_date': r.brokerage_payment_date.strftime('%Y-%m-%d') if r.brokerage_payment_date else None,
         'brokerage_settled': bool(r.brokerage_settled),
         'brokerage_approved': bool(r.brokerage_approved),
         'created_at': r.created_at.isoformat() if r.created_at else None,
@@ -5478,8 +5481,11 @@ def api_applications_settled():
         ApplicationRecord.store_id.in_(allowed_ids),
         ApplicationRecord.status != 'キャンセル',
         db.or_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.ad_amount > 0),
-        db.or_(ApplicationRecord.ad_amount <= 0, ApplicationRecord.ad_approved == True),
-        db.or_(ApplicationRecord.brokerage_fee <= 0, ApplicationRecord.brokerage_approved == True),
+        # 片方でも承認があれば入金済み一覧に表示
+        db.or_(
+            db.and_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.brokerage_approved == True),
+            db.and_(ApplicationRecord.ad_amount > 0, ApplicationRecord.ad_approved == True),
+        )
     )
     if store_id and store_id in allowed_ids:
         q = q.filter(ApplicationRecord.store_id == store_id)
@@ -5701,7 +5707,7 @@ def api_applications_update(rid):
         if fld in data: setattr(rec, fld, float(data[fld] or 0))
     for fld in ['lifeline', 'moving', 'fire_insurance']:
         if fld in data: setattr(rec, fld, bool(data[fld]))
-    for fld in ['application_date', 'contract_start_date', 'ad_payment_date']:
+    for fld in ['application_date', 'contract_start_date', 'ad_payment_date', 'brokerage_payment_date']:
         if fld in data: setattr(rec, fld, _parse_date(data[fld]))
 
     rec.updated_at = datetime.utcnow()
