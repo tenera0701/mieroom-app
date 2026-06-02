@@ -4514,10 +4514,9 @@ def _reset_serializer():
 
 
 def _send_reset_email(to_email, reset_url):
-    """パスワードリセットメールを送信（SMTP設定がある場合のみ）"""
-    # Gmail SMTP (MAIL_USERNAME / MAIL_PASSWORD で設定)
+    """パスワードリセットメールを送信（Gmail SMTP / IPv4強制）"""
     smtp_host  = os.getenv('SMTP_HOST',  'smtp.gmail.com')
-    smtp_port  = int(os.getenv('SMTP_PORT', 587))
+    smtp_port  = int(os.getenv('SMTP_PORT', 465))
     smtp_user  = os.getenv('MAIL_USERNAME', os.getenv('SMTP_USER', ''))
     smtp_pass  = os.getenv('MAIL_PASSWORD', os.getenv('SMTP_PASS', ''))
     from_email = os.getenv('MAIL_FROM', smtp_user)
@@ -4527,42 +4526,46 @@ def _send_reset_email(to_email, reset_url):
         return False
 
     try:
-        import smtplib
+        import smtplib, socket
         from email.mime.text import MIMEText
         from email.mime.multipart import MIMEMultipart
 
+        # IPv4アドレスを明示的に解決してNetworkUnreachableを回避
+        ipv4_list = socket.getaddrinfo(smtp_host, smtp_port, socket.AF_INET, socket.SOCK_STREAM)
+        if not ipv4_list:
+            raise Exception(f'IPv4アドレスが見つかりません: {smtp_host}')
+        ipv4_addr = ipv4_list[0][4][0]
+        app.logger.info(f'SMTP接続先: {smtp_host} -> {ipv4_addr}:{smtp_port}')
+
         msg = MIMEMultipart('alternative')
         msg['Subject'] = 'パスワードリセットのご案内'
-        msg['From'] = from_email
-        msg['To'] = to_email
+        msg['From']    = f'ミエルーム <{from_email}>'
+        msg['To']      = to_email
 
-        body = f"""パスワードリセットのリクエストを受け付けました。
+        body = f"""ミエルームをご利用いただきありがとうございます。
 
-以下のURLからパスワードをリセットしてください（有効期限: 1時間）:
+以下のURLからパスワードをリセットしてください。
+このURLの有効期限は1時間です。
 
 {reset_url}
 
-このメールに心当たりがない場合は、無視してください。
+このメールに心当たりがない場合は無視してください。
+
+---
+ミエルーム サポート
 """
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
-        # Gmail SSL接続（ポート465）を優先、失敗したらTLS(587)にフォールバック
-        connected = False
-        try:
-            with smtplib.SMTP_SSL(smtp_host, 465, timeout=10) as server:
-                server.login(smtp_user, smtp_pass)
-                server.sendmail(from_email, to_email, msg.as_string())
-                connected = True
-        except Exception as ssl_err:
-            app.logger.warning(f'SSL接続失敗: {ssl_err}, TLSで再試行')
-            with smtplib.SMTP_SSL(smtp_host, 465, timeout=10) as server:
-                server.login(smtp_user, smtp_pass)
-                server.sendmail(from_email, to_email, msg.as_string())
-                connected = True
+        # IPv4アドレスに直接接続
+        with smtplib.SMTP_SSL(ipv4_addr, smtp_port, timeout=15) as server:
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(from_email, to_email, msg.as_string())
+        app.logger.info(f'メール送信成功: {to_email}')
         return True
     except Exception as e:
         app.logger.error(f'SMTP送信エラー詳細: host={smtp_host} user={smtp_user} error={e}')
         return False
+
 
 
 @app.route("/forgot-password", methods=["GET", "POST"])
