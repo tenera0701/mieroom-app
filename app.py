@@ -4552,7 +4552,7 @@ def _send_reset_email(to_email, reset_url):
             server.sendmail(from_email, to_email, msg.as_string())
         return True
     except Exception as e:
-        app.logger.error(f'メール送信エラー: {e}')
+        app.logger.error(f'SMTP送信エラー詳細: host={smtp_host} user={smtp_user} error={e}')
         return False
 
 
@@ -4577,7 +4577,14 @@ def forgot_password():
             # メール送信を別スレッドで実行（画面がフリーズしないように）
             import threading
             def _send_bg(email=user.email, url=reset_url):
-                _send_reset_email(email, url)
+                try:
+                    result = _send_reset_email(email, url)
+                    if result:
+                        app.logger.info(f'パスワードリセットメール送信成功: {email}')
+                    else:
+                        app.logger.error(f'パスワードリセットメール送信失敗: {email}')
+                except Exception as e:
+                    app.logger.error(f'パスワードリセットメール例外: {email} - {e}')
             threading.Thread(target=_send_bg, daemon=True).start()
             sent = True  # 非同期なので常にTrue扱い
             message = "パスワードリセット用のメールを送信しました。"
@@ -5083,6 +5090,36 @@ def api_tenant_extend_trial(tid):
     tenant.is_active = True
     db.session.commit()
     return jsonify({'status': 'ok', 'trial_ends_at': tenant.trial_ends_at.strftime('%Y-%m-%d')})
+
+
+@app.route("/api/admin/test-email", methods=["POST"])
+@super_admin_required
+def api_test_email():
+    """メール送信テスト（super_adminのみ）"""
+    data = request.get_json() or {}
+    to_email = data.get("email", "").strip()
+    if not to_email:
+        return jsonify({"error": "emailが必要です"}), 400
+    try:
+        import smtplib
+        smtp_host  = os.getenv("SMTP_HOST",  "smtp.gmail.com")
+        smtp_port  = int(os.getenv("SMTP_PORT", 587))
+        smtp_user  = os.getenv("MAIL_USERNAME", "")
+        smtp_pass  = os.getenv("MAIL_PASSWORD", "")
+        if not smtp_user or not smtp_pass:
+            return jsonify({"error": "MAIL_USERNAME/MAIL_PASSWORD が未設定"}), 500
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            from email.mime.text import MIMEText
+            msg = MIMEText("ミエルームのメールテストです。", "plain", "utf-8")
+            msg["Subject"] = "【ミエルーム】メール送信テスト"
+            msg["From"]    = smtp_user
+            msg["To"]      = to_email
+            server.sendmail(smtp_user, to_email, msg.as_string())
+        return jsonify({"status": "ok", "message": f"{to_email} に送信しました"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 @app.route("/law")
