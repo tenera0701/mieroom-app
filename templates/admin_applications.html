@@ -1,0 +1,184 @@
+{% extends "mgmt_base.html" %}
+{% block title %}問合せ管理{% endblock %}
+{% block breadcrumb %}問合せ管理{% endblock %}
+{% block content %}
+<div class="p-6 max-w-6xl mx-auto">
+
+  <!-- ヘッダー -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-800">問合せ管理</h1>
+      <p class="text-sm text-gray-500 mt-1">トライアル申込フォームからの問合せ一覧</p>
+    </div>
+    <a href="/admin/tenants" class="border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg text-sm font-medium">
+      ← クライアント管理
+    </a>
+  </div>
+
+  <!-- 集計カード -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+      <p class="text-xs text-gray-500 mb-1">合計</p>
+      <p class="text-2xl font-bold text-gray-800">{{ total }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-blue-200 p-4 text-center">
+      <p class="text-xs text-blue-500 mb-1">新規</p>
+      <p class="text-2xl font-bold text-blue-600">{{ new_cnt }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-yellow-200 p-4 text-center">
+      <p class="text-xs text-yellow-600 mb-1">対応中</p>
+      <p class="text-2xl font-bold text-yellow-600">{{ contacted_cnt }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-green-200 p-4 text-center">
+      <p class="text-xs text-green-600 mb-1">契約済</p>
+      <p class="text-2xl font-bold text-green-600">{{ contracted_cnt }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+      <p class="text-xs text-gray-400 mb-1">不採用</p>
+      <p class="text-2xl font-bold text-gray-400">{{ rejected_cnt }}</p>
+    </div>
+  </div>
+
+  <!-- 検索 -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4 flex gap-3">
+    <input type="text" id="searchInput" placeholder="会社名・担当者名・メールで検索..."
+      class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-400"
+      oninput="filterTable()">
+    <select id="statusFilter" class="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-400" onchange="filterTable()">
+      <option value="">すべてのステータス</option>
+      <option value="new">新規</option>
+      <option value="contacted">対応中</option>
+      <option value="contracted">契約済</option>
+      <option value="rejected">不採用</option>
+    </select>
+  </div>
+
+  <!-- テーブル -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <table class="w-full text-sm" id="appTable">
+      <thead>
+        <tr class="bg-gray-50 border-b border-gray-200">
+          <th class="px-4 py-3 text-left text-gray-600 font-medium">申込日時</th>
+          <th class="px-4 py-3 text-left text-gray-600 font-medium">会社名</th>
+          <th class="px-4 py-3 text-left text-gray-600 font-medium">担当者</th>
+          <th class="px-4 py-3 text-left text-gray-600 font-medium">メール</th>
+          <th class="px-4 py-3 text-left text-gray-600 font-medium">電話</th>
+          <th class="px-4 py-3 text-center text-gray-600 font-medium">店舗数</th>
+          <th class="px-4 py-3 text-center text-gray-600 font-medium">ステータス</th>
+          <th class="px-4 py-3 text-left text-gray-600 font-medium">メモ</th>
+          <th class="px-4 py-3 text-center text-gray-600 font-medium">操作</th>
+        </tr>
+      </thead>
+      <tbody id="appTbody">
+        {% for a in apps %}
+        <tr class="border-b border-gray-100 hover:bg-gray-50 app-row"
+            data-company="{{ a.company }}" data-name="{{ a.name }}" data-email="{{ a.email }}" data-status="{{ a.status }}">
+          <td class="px-4 py-3 text-gray-500 whitespace-nowrap">
+            {{ a.created_at.strftime('%Y/%m/%d %H:%M') if a.created_at else '-' }}
+          </td>
+          <td class="px-4 py-3 font-medium text-gray-800">{{ a.company }}</td>
+          <td class="px-4 py-3 text-gray-700">{{ a.name }}</td>
+          <td class="px-4 py-3">
+            <a href="mailto:{{ a.email }}" class="text-teal-600 hover:underline">{{ a.email }}</a>
+          </td>
+          <td class="px-4 py-3 text-gray-700">{{ a.phone }}</td>
+          <td class="px-4 py-3 text-center text-gray-700">{{ a.stores }}</td>
+          <td class="px-4 py-3 text-center">
+            <select class="status-select text-xs px-2 py-1 rounded-full border font-medium cursor-pointer"
+                    data-id="{{ a.id }}" onchange="updateStatus(this)">
+              <option value="new"        {% if a.status=='new' %}selected{% endif %}>新規</option>
+              <option value="contacted"  {% if a.status=='contacted' %}selected{% endif %}>対応中</option>
+              <option value="contracted" {% if a.status=='contracted' %}selected{% endif %}>契約済</option>
+              <option value="rejected"   {% if a.status=='rejected' %}selected{% endif %}>不採用</option>
+            </select>
+          </td>
+          <td class="px-4 py-3">
+            <input type="text" class="memo-input w-full border border-gray-200 rounded px-2 py-1 text-xs focus:border-teal-400 outline-none"
+                   data-id="{{ a.id }}" value="{{ a.memo or '' }}" placeholder="メモ..."
+                   onblur="updateMemo(this)">
+          </td>
+          <td class="px-4 py-3 text-center">
+            {% if a.message %}
+            <button onclick="showMessage({{ a.id }}, `{{ a.message | replace('`','\\`') }}`)"
+                    class="text-xs text-teal-600 hover:underline">内容を見る</button>
+            {% else %}
+            <span class="text-xs text-gray-400">-</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" class="px-4 py-8 text-center text-gray-400">申込がまだありません</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- メッセージモーダル -->
+<div id="msgModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow-xl p-6 max-w-lg w-full mx-4">
+    <h3 class="font-bold text-gray-800 mb-3">お問い合わせ内容</h3>
+    <p id="msgContent" class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 rounded-lg p-4"></p>
+    <div class="text-right mt-4">
+      <button onclick="document.getElementById('msgModal').classList.add('hidden')"
+              class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STATUS_STYLE = {
+  new:        'bg-blue-50 text-blue-700 border-blue-200',
+  contacted:  'bg-yellow-50 text-yellow-700 border-yellow-200',
+  contracted: 'bg-green-50 text-green-700 border-green-200',
+  rejected:   'bg-gray-50 text-gray-400 border-gray-200',
+};
+
+document.querySelectorAll('.status-select').forEach(sel => {
+  applyStatusStyle(sel);
+});
+
+function applyStatusStyle(sel) {
+  sel.className = 'status-select text-xs px-2 py-1 rounded-full border font-medium cursor-pointer ' + (STATUS_STYLE[sel.value] || '');
+}
+
+function updateStatus(sel) {
+  applyStatusStyle(sel);
+  fetch(`/api/admin/applications/${sel.dataset.id}`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({status: sel.value})
+  });
+  // 行のdata-statusも更新（フィルター用）
+  sel.closest('tr').dataset.status = sel.value;
+}
+
+function updateMemo(inp) {
+  fetch(`/api/admin/applications/${inp.dataset.id}`, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({memo: inp.value})
+  });
+}
+
+function showMessage(id, msg) {
+  document.getElementById('msgContent').textContent = msg;
+  document.getElementById('msgModal').classList.remove('hidden');
+}
+
+function filterTable() {
+  const q      = document.getElementById('searchInput').value.toLowerCase();
+  const status = document.getElementById('statusFilter').value;
+  document.querySelectorAll('.app-row').forEach(row => {
+    const matchQ = !q ||
+      row.dataset.company.toLowerCase().includes(q) ||
+      row.dataset.name.toLowerCase().includes(q) ||
+      row.dataset.email.toLowerCase().includes(q);
+    const matchS = !status || row.dataset.status === status;
+    row.style.display = (matchQ && matchS) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

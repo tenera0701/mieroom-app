@@ -588,6 +588,21 @@ class DropdownOption(db.Model):
     sort_order = db.Column(db.Integer, default=0)
 
 
+class TrialApplication(db.Model):
+    """トライアル申込フォーム送信履歴"""
+    __tablename__ = 'trial_application'
+    id         = db.Column(db.Integer, primary_key=True)
+    company    = db.Column(db.String(200), nullable=False)
+    name       = db.Column(db.String(100), nullable=False)
+    email      = db.Column(db.String(200), nullable=False)
+    phone      = db.Column(db.String(50),  nullable=False)
+    stores     = db.Column(db.String(20),  nullable=False)
+    message    = db.Column(db.Text,        nullable=True)
+    status     = db.Column(db.String(20),  default='new')   # new / contacted / contracted / rejected
+    memo       = db.Column(db.Text,        nullable=True)   # 管理者メモ
+    created_at = db.Column(db.DateTime,    default=datetime.utcnow)
+
+
 # ── Excel関連ヘルパー ─────────────────────────────────────
 
 def excel_date_to_date(v):
@@ -4824,6 +4839,37 @@ def admin_tenants():
                            is_super_admin=is_super_admin)
 
 
+@app.route("/admin/applications")
+@super_admin_required
+def admin_applications():
+    """トライアル申込管理ページ（super_adminのみ）"""
+    apps = TrialApplication.query.order_by(TrialApplication.created_at.desc()).all()
+    total   = len(apps)
+    new_cnt = sum(1 for a in apps if a.status == 'new')
+    contacted_cnt  = sum(1 for a in apps if a.status == 'contacted')
+    contracted_cnt = sum(1 for a in apps if a.status == 'contracted')
+    rejected_cnt   = sum(1 for a in apps if a.status == 'rejected')
+    return render_template("admin_applications.html", apps=apps,
+                           total=total, new_cnt=new_cnt,
+                           contacted_cnt=contacted_cnt,
+                           contracted_cnt=contracted_cnt,
+                           rejected_cnt=rejected_cnt)
+
+
+@app.route("/api/admin/applications/<int:app_id>", methods=["PATCH"])
+@super_admin_required
+def api_admin_application_update(app_id):
+    """申込ステータス・メモ更新"""
+    rec  = TrialApplication.query.get_or_404(app_id)
+    data = request.get_json() or {}
+    if 'status' in data:
+        rec.status = data['status']
+    if 'memo' in data:
+        rec.memo = data['memo']
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
 @app.route("/api/tenants", methods=["GET"])
 @super_admin_required
 def api_tenants_get():
@@ -5186,6 +5232,18 @@ def apply_page():
         if not all([company, name, email, phone, stores]):
             error = "必須項目をすべて入力してください。"
         else:
+            # DBに保存
+            try:
+                app_record = TrialApplication(
+                    company=company, name=name, email=email,
+                    phone=phone, stores=stores, message=message
+                )
+                db.session.add(app_record)
+                db.session.commit()
+            except Exception as e:
+                app.logger.error(f'TrialApplication DB保存エラー: {e}')
+                db.session.rollback()
+
             # 管理者への通知メール
             import threading
             def _notify():
