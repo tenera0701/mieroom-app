@@ -5085,6 +5085,12 @@ def api_tenant_extend_trial(tid):
     return jsonify({'status': 'ok', 'trial_ends_at': tenant.trial_ends_at.strftime('%Y-%m-%d')})
 
 
+@app.route("/law")
+def law_page():
+    """特定商取引法に基づく表示ページ"""
+    return render_template("law.html")
+
+
 @app.route("/terms")
 def terms_page():
     """利用規約ページ"""
