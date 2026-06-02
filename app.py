@@ -4858,6 +4858,47 @@ def api_tenant_update(tid):
     return jsonify({'status': 'ok'})
 
 
+@app.route("/api/tenants/<int:tid>/reset-all-data", methods=["POST"])
+@super_admin_required
+def api_tenant_reset_all_data(tid):
+    """テナントの全業務データを削除（アカウント・店舗・テナントは残す）"""
+    tenant = Tenant.query.get_or_404(tid)
+    store_ids = [s.id for s in Store.query.filter_by(tenant_id=tid).all()]
+    staff_ids  = [s.id for s in Staff.query.filter(Staff.store_id.in_(store_ids)).all()] if store_ids else []
+    counts = {}
+
+    if store_ids:
+        counts['SalesKPI']             = SalesKPI.query.filter(SalesKPI.store_id.in_(store_ids)).delete(synchronize_session=False)
+        counts['ApplicationRecord']    = ApplicationRecord.query.filter(ApplicationRecord.store_id.in_(store_ids)).delete(synchronize_session=False)
+        counts['EchoRecord']           = EchoRecord.query.filter(EchoRecord.store_id.in_(store_ids)).delete(synchronize_session=False)
+        counts['CustomerServiceRecord']= CustomerServiceRecord.query.filter(CustomerServiceRecord.store_id.in_(store_ids)).delete(synchronize_session=False)
+        counts['PLRecord']             = PLRecord.query.filter(PLRecord.store_id.in_(store_ids)).delete(synchronize_session=False)
+
+        # 日報関連
+        report_ids = [r.id for r in DailyReport.query.filter(DailyReport.store_id.in_(store_ids)).all()]
+        if report_ids:
+            DailyReportCustomer.query.filter(DailyReportCustomer.report_id.in_(report_ids)).delete(synchronize_session=False)
+            DailyTaskCheck.query.filter(DailyTaskCheck.report_id.in_(report_ids)).delete(synchronize_session=False)
+            counts['DailyReport'] = DailyReport.query.filter(DailyReport.store_id.in_(store_ids)).delete(synchronize_session=False)
+
+    if staff_ids:
+        counts['LeaveRecord'] = LeaveRecord.query.filter(LeaveRecord.staff_id.in_(staff_ids)).delete(synchronize_session=False)
+        try:
+            counts['LeaveAllocation'] = LeaveAllocation.query.filter(LeaveAllocation.staff_id.in_(staff_ids)).delete(synchronize_session=False)
+        except Exception:
+            pass
+
+    # UncollectedPayment
+    if store_ids:
+        try:
+            counts['UncollectedPayment'] = UncollectedPayment.query.filter(UncollectedPayment.store_id.in_(store_ids)).delete(synchronize_session=False)
+        except Exception:
+            pass
+
+    db.session.commit()
+    return jsonify({'status': 'ok', 'tenant_name': tenant.name, 'deleted': counts})
+
+
 @app.route("/api/tenants/<int:tid>/activate", methods=["POST"])
 @super_admin_required
 def api_tenant_activate(tid):

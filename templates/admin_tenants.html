@@ -420,8 +420,10 @@
             class="px-3 py-1.5 text-xs border border-red-400 text-red-600 rounded-lg hover:bg-red-50 font-bold">🔒 ロック</button>
           <button id="e-unlock-btn" onclick="unlockFromEdit()"
             class="px-3 py-1.5 text-xs border border-gray-400 text-gray-600 rounded-lg hover:bg-gray-50 font-bold hidden">🔓 解除</button>
+          <button onclick="resetAllDataFromEdit()"
+            class="px-3 py-1.5 text-xs border border-orange-400 text-orange-600 rounded-lg hover:bg-orange-50 font-bold">🗑 全データ削除</button>
           <button onclick="deleteFromEdit()"
-            class="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg">🗑 削除</button>
+            class="px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg">✕ テナント削除</button>
           {% endif %}
         </div>
       </div>
@@ -654,6 +656,24 @@ async function activateFromEdit() {
     closeEditModal();
     loadTenants();
   }
+}
+
+async function resetAllDataFromEdit() {
+  const tid = document.getElementById('e-id').value;
+  const t = tenants.find(x => x.id == tid);
+  const name = t ? t.name : 'このテナント';
+  if (!confirm(`「${name}」の全業務データを削除しますか？\n\n【削除されるもの】\nKPI・売上・申込・反響・接客・経理・日報・有給\n\n【残るもの】\nアカウント・店舗・テナント情報\n\nこの操作は元に戻せません。`)) return;
+  try {
+    const res = await fetch(`/api/tenants/${tid}/reset-all-data`, { method: 'POST' });
+    const json = await res.json();
+    if (res.ok) {
+      alert(`「${name}」の全データを削除しました。\nアカウントと店舗は残っています。`);
+      closeEditModal();
+      loadTenants();
+    } else {
+      alert('削除に失敗しました: ' + (json.error || ''));
+    }
+  } catch(e) { alert('通信エラーが発生しました'); }
 }
 
 async function saveOwnerAccount() {
