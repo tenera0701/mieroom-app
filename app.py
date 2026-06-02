@@ -5206,7 +5206,7 @@ def apply_page():
 </table>"""
                     payload = _json.dumps({
                         'from': 'ミエルーム申込通知 <onboarding@resend.dev>',
-                        'to':   ['teneramente0701@gmail.com'],
+                        'to':   ['mieroom.cloud@gmail.com'],
                         'reply_to': email,
                         'subject': f'【申込】{company} - ミエルーム トライアル申請',
                         'html': body_html,
