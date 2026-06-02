@@ -125,7 +125,7 @@
       </svg>
       <input id="cs-search" type="text" placeholder="お客様名・担当・媒体で検索"
         style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;"
-        oninput="applySearch(this.value)">
+        oninput="applySearch(this.value)" autocomplete="off">
       <button onclick="document.getElementById('cs-search').value='';applySearch('');"
         style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:0 2px;">✕</button>
     </div>
@@ -223,7 +223,7 @@
         </div>
         <div class="form-group">
           <label>お客様名</label>
-          <input type="text" id="f-customer-name" placeholder="例：田中 太郎">
+          <input type="text" id="f-customer-name" placeholder="例：田中 太郎" autocomplete="off">
         </div>
         <div class="form-group">
           <label style="display:flex;align-items:center;gap:6px;">対応種別
@@ -233,7 +233,7 @@
         </div>
         <div class="form-group">
           <label>来店数</label>
-          <input type="number" id="f-visit-count" min="0" placeholder="0">
+          <input type="number" id="f-visit-count" min="0" placeholder="0" autocomplete="off">
         </div>
         <div class="form-group">
           <label style="display:flex;align-items:center;gap:6px;">状況
@@ -243,7 +243,7 @@
         </div>
         <div class="form-group form-full">
           <label>メモ</label>
-          <textarea id="f-memo" rows="2" placeholder="備考・特記事項"></textarea>
+          <textarea id="f-memo" rows="2" placeholder="備考・特記事項" autocomplete="off"></textarea>
         </div>
       </div>
     </div>
@@ -625,7 +625,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div style="display:flex;gap:8px;margin-top:12px;">
         <input id="dgr-input" type="text" placeholder="新しい選択肢を入力"
           style="flex:1;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:14px;outline:none;"
-          onkeydown="if(event.key==='Enter'){addDgrOpt();}">
+          onkeydown="if(event.key==='Enter'){addDgrOpt();}" autocomplete="off">
         <button onclick="addDgrOpt()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;">追加</button>
       </div>
     </div>

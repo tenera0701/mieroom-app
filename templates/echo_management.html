@@ -114,7 +114,7 @@
       </svg>
       <input id="echo-search" type="text" placeholder="お客様名・リスト名・媒体・担当で検索"
         style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;"
-        oninput="applyEchoSearch(this.value)">
+        oninput="applyEchoSearch(this.value)" autocomplete="off">
       <button onclick="document.getElementById('echo-search').value='';applyEchoSearch('');"
         style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:0 2px;">✕</button>
     </div>
@@ -187,11 +187,11 @@
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body">
-      <input type="hidden" id="edit-id">
+      <input type="hidden" id="edit-id" autocomplete="off">
       <div class="form-grid">
         <div class="form-group">
           <label>担当者</label>
-          <select id="f-staff">
+          <select id="f-staff" autocomplete="off">
             <option value="">― 未選択 ―</option>
             {% for s in staff_list %}
             <option value="{{ s.id }}">{{ s.name }}</option>
@@ -200,7 +200,7 @@
         </div>
         <div class="form-group">
           <label>リスト名</label>
-          <input type="text" id="f-list-name" placeholder="例：〇〇マンション">
+          <input type="text" id="f-list-name" placeholder="例：〇〇マンション" autocomplete="off">
         </div>
         <div class="form-group">
           <label>反響日 <span style="color:#ef4444;">*</span></label>
@@ -246,7 +246,7 @@
 
         <div class="form-group form-full">
           <label>メモ</label>
-          <textarea id="f-memo" rows="2" placeholder="備考・特記事項"></textarea>
+          <textarea id="f-memo" rows="2" placeholder="備考・特記事項" autocomplete="off"></textarea>
         </div>
       </div>
     </div>
@@ -666,7 +666,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div style="display:flex;gap:8px;margin-top:12px;">
         <input id="dgr-input" type="text" placeholder="新しい選択肢を入力"
           style="flex:1;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:14px;outline:none;"
-          onkeydown="if(event.key==='Enter'){addDgrOpt();}">
+          onkeydown="if(event.key==='Enter'){addDgrOpt();}" autocomplete="off">
         <button onclick="addDgrOpt()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;">追加</button>
       </div>
     </div>

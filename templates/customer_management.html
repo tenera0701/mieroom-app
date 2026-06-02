@@ -117,7 +117,7 @@
       </svg>
       <input id="global-search" type="text" placeholder="全期間横断検索（物件名・お客様名・担当・媒体）"
         style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;"
-        oninput="scheduleGlobalSearch(this.value)">
+        oninput="scheduleGlobalSearch(this.value)" autocomplete="off">
       <span id="search-mode-badge" style="display:none;background:#fef3c7;color:#92400e;border-radius:10px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap;">全期間検索中</span>
       <button onclick="clearGlobalSearch()" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:0 2px;" title="クリア">✕</button>
     </div>
@@ -274,19 +274,19 @@
         </div>
         <div class="form-group">
           <label>物件名</label>
-          <input type="text" id="app-property_name" placeholder="例: グランドパレス新宿">
+          <input type="text" id="app-property_name" placeholder="例: グランドパレス新宿" autocomplete="off">
         </div>
         <div class="form-group">
           <label>号室</label>
-          <input type="text" id="app-room_number" placeholder="例: 301">
+          <input type="text" id="app-room_number" placeholder="例: 301" autocomplete="off">
         </div>
         <div class="form-group">
           <label>お客様名</label>
-          <input type="text" id="app-customer_name" placeholder="例: 山田 太郎">
+          <input type="text" id="app-customer_name" placeholder="例: 山田 太郎" autocomplete="off">
         </div>
         <div class="form-group">
           <label>賃料（円）</label>
-          <input type="number" id="app-rent" min="0" placeholder="0">
+          <input type="number" id="app-rent" min="0" placeholder="0" autocomplete="off">
         </div>
         <div class="form-group">
           <label>契約開始日</label>
@@ -298,7 +298,7 @@
         </div>
         <div class="form-group">
           <label>仲介手数料（円）</label>
-          <input type="number" id="app-brokerage_fee" min="0" placeholder="0">
+          <input type="number" id="app-brokerage_fee" min="0" placeholder="0" autocomplete="off">
         </div>
         <div class="form-group">
           <label>AD種別</label>
@@ -309,11 +309,11 @@
         </div>
         <div class="form-group">
           <label id="app-ad-label">AD金額（円）</label>
-          <input type="number" id="app-ad_amount" min="0" placeholder="0">
+          <input type="number" id="app-ad_amount" min="0" placeholder="0" autocomplete="off">
         </div>
         <div class="form-group">
           <label>オプション金額（円）</label>
-          <input type="number" id="app-option_amount" min="0" placeholder="0">
+          <input type="number" id="app-option_amount" min="0" placeholder="0" autocomplete="off">
         </div>
         <div class="form-group" style="grid-column:1/-1;">
           <label>ステータス</label>
@@ -378,7 +378,7 @@
       <div style="display:flex;gap:8px;margin-bottom:16px;">
         <input type="text" id="new-media-name" placeholder="新しい媒体名"
           style="flex:1;border:1px solid #d1d5db;border-radius:6px;padding:7px 10px;font-size:13px;"
-          onkeydown="if(event.key==='Enter')addMedia()">
+          onkeydown="if(event.key==='Enter')addMedia()" autocomplete="off">
         <button onclick="addMedia()" class="btn-submit" style="padding:7px 16px;">追加</button>
       </div>
       <div id="media-list" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
@@ -949,7 +949,7 @@ async function loadColors() {
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;">背景色
         <input type="color" data-status="${key}" data-type="bg" value="${c.bg}" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;"></label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;">文字色
-        <input type="color" data-status="${key}" data-type="text" value="${c.text}" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;"></label>
+        <input type="color" data-status="${key}" data-type="text" value="${c.text}" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;" autocomplete="off"></label>
       <span class="app-status-badge cp-${key.replace(/[^a-z]/gi,'')}" style="background:${c.bg};color:${c.text};border:1px solid ${c.text}30;">${key}</span>`;
     container.appendChild(row);
     row.querySelectorAll('input[type="color"]').forEach(inp => {
