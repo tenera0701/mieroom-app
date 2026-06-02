@@ -4516,7 +4516,9 @@ def _reset_serializer():
 def _send_reset_email(to_email, reset_url):
     """パスワードリセットメール送信（Resend API / HTTPS）"""
     resend_key = os.getenv('RESEND_API_KEY', '')
-    from_email = os.getenv('MAIL_FROM', 'mieroom.cloud@gmail.com')
+    # Resendドメイン未認証の場合はonboarding@resend.devを使用
+    # 独自ドメイン取得後は MAIL_FROM 環境変数で変更可能
+    from_email = os.getenv('MAIL_FROM', 'onboarding@resend.dev')
     from_name  = 'ミエルーム'
 
     if not resend_key:
@@ -5115,14 +5117,31 @@ def api_test_email():
     if not to_email:
         return jsonify({"error": "emailが必要です"}), 400
     try:
-        sent = _send_reset_email(to_email, "https://web-production-9f628.up.railway.app/reset-password/test")
-        if sent:
-            return jsonify({"status": "ok", "message": f"{to_email} に送信しました（Resend）"})
-        else:
-            resend_key = os.getenv('RESEND_API_KEY', '')
-            if not resend_key:
-                return jsonify({"status": "error", "message": "RESEND_API_KEY が Railway に未設定"}), 500
-            return jsonify({"status": "error", "message": "送信失敗（Railwayログを確認）"}), 500
+        # Resendを直接呼んでエラー詳細を取得
+        import urllib.request, urllib.error, json as _json
+        resend_key = os.getenv('RESEND_API_KEY', '')
+        if not resend_key:
+            return jsonify({"status": "error", "message": "RESEND_API_KEY が Railway に未設定"}), 500
+        from_addr = os.getenv('MAIL_FROM', 'onboarding@resend.dev')
+        payload = _json.dumps({
+            'from': f'ミエルーム <{from_addr}>',
+            'to': [to_email],
+            'subject': '【ミエルーム】メール送信テスト',
+            'html': '<p>ミエルームのテストメールです。</p>'
+        }).encode('utf-8')
+        req = urllib.request.Request(
+            'https://api.resend.com/emails',
+            data=payload,
+            headers={'Authorization': f'Bearer {resend_key}', 'Content-Type': 'application/json'},
+            method='POST'
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                result = _json.loads(resp.read())
+                return jsonify({"status": "ok", "message": f"{to_email} に送信成功", "id": result.get("id")})
+        except urllib.error.HTTPError as he:
+            err_body = he.read().decode('utf-8', errors='replace')
+            return jsonify({"status": "error", "http_status": he.code, "message": err_body}), 500
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
