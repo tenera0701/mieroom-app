@@ -5218,8 +5218,8 @@ def apply_page():
                                  'User-Agent': 'mieroom-app/1.0'},
                         method='POST')
                     ctx = ssl.create_default_context()
-                    with urllib.request.urlopen(req, timeout=15, context=ctx):
-                        pass
+                    with urllib.request.urlopen(req, timeout=15, context=ctx) as r:
+                        app.logger.info(f'管理者通知メール送信成功: {company} → mieroom.cloud@gmail.com')
 
                     # サンクスメール（申込者へ）
                     thanks_html = f"""
@@ -5249,23 +5249,23 @@ def apply_page():
     </p>
   </div>
 </div>"""
-                    thanks_payload = _json.dumps({{
+                    thanks_payload = _json.dumps({
                         'from': 'ミエルーム <onboarding@resend.dev>',
                         'to': [email],
                         'subject': '【ミエルーム】お申し込みありがとうございます',
                         'html': thanks_html,
-                    }}).encode('utf-8')
+                    }).encode('utf-8')
                     thanks_req = urllib.request.Request(
                         'https://api.resend.com/emails', data=thanks_payload,
-                        headers={{'Authorization': f'Bearer {{resend_key}}',
+                        headers={'Authorization': f'Bearer {resend_key}',
                                  'Content-Type': 'application/json',
-                                 'User-Agent': 'mieroom-app/1.0'}},
+                                 'User-Agent': 'mieroom-app/1.0'},
                         method='POST')
-                    with urllib.request.urlopen(thanks_req, timeout=15, context=ctx):
-                        pass
+                    with urllib.request.urlopen(thanks_req, timeout=15, context=ctx) as r:
+                        app.logger.info(f'サンクスメール送信成功: {email}')
 
                 except Exception as e:
-                    app.logger.error(f'申込通知メールエラー: {{e}}')
+                    app.logger.error(f'申込通知メールエラー: {e}')
             threading.Thread(target=_notify, daemon=True).start()
             success = True
 
