@@ -4514,56 +4514,58 @@ def _reset_serializer():
 
 
 def _send_reset_email(to_email, reset_url):
-    """パスワードリセットメールを送信（Gmail SMTP / IPv4強制）"""
-    smtp_host  = os.getenv('SMTP_HOST',  'smtp.gmail.com')
-    smtp_port  = int(os.getenv('SMTP_PORT', 465))
-    smtp_user  = os.getenv('MAIL_USERNAME', os.getenv('SMTP_USER', ''))
-    smtp_pass  = os.getenv('MAIL_PASSWORD', os.getenv('SMTP_PASS', ''))
-    from_email = os.getenv('MAIL_FROM', smtp_user)
+    """パスワードリセットメール送信（Resend API / HTTPS）"""
+    resend_key = os.getenv('RESEND_API_KEY', '')
+    from_email = os.getenv('MAIL_FROM', 'mieroom.cloud@gmail.com')
+    from_name  = 'ミエルーム'
 
-    if not smtp_user or not smtp_pass:
-        app.logger.warning('メール設定なし: MAIL_USERNAME/MAIL_PASSWORD が未設定')
+    if not resend_key:
+        app.logger.warning('RESEND_API_KEY が未設定')
         return False
 
     try:
-        import smtplib, socket
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
+        import urllib.request, json as _json
+        body_html = f"""
+<div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;">
+  <div style="text-align:center;margin-bottom:24px;">
+    <h2 style="color:#0D9488;margin:0;">ミエルーム</h2>
+    <p style="color:#6b7280;font-size:14px;margin:4px 0 0;">不動産賃貸仲介業務管理システム</p>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;">
+    <h3 style="color:#111827;margin:0 0 12px;">パスワードリセットのご案内</h3>
+    <p style="color:#374151;line-height:1.7;">以下のボタンからパスワードをリセットしてください。<br>このリンクの有効期限は<strong>1時間</strong>です。</p>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="{reset_url}" style="background:#0D9488;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">パスワードをリセットする</a>
+    </div>
+    <p style="color:#6b7280;font-size:13px;">ボタンが押せない場合は以下のURLをコピーしてください：<br>
+    <a href="{reset_url}" style="color:#0D9488;word-break:break-all;">{reset_url}</a></p>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0;">
+    <p style="color:#9ca3af;font-size:12px;text-align:center;">このメールに心当たりがない場合は無視してください。</p>
+  </div>
+</div>"""
 
-        # IPv4アドレスを明示的に解決してNetworkUnreachableを回避
-        ipv4_list = socket.getaddrinfo(smtp_host, smtp_port, socket.AF_INET, socket.SOCK_STREAM)
-        if not ipv4_list:
-            raise Exception(f'IPv4アドレスが見つかりません: {smtp_host}')
-        ipv4_addr = ipv4_list[0][4][0]
-        app.logger.info(f'SMTP接続先: {smtp_host} -> {ipv4_addr}:{smtp_port}')
+        payload = _json.dumps({
+            'from': f'{from_name} <{from_email}>',
+            'to':   [to_email],
+            'subject': 'パスワードリセットのご案内 - ミエルーム',
+            'html': body_html,
+        }).encode('utf-8')
 
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = 'パスワードリセットのご案内'
-        msg['From']    = f'ミエルーム <{from_email}>'
-        msg['To']      = to_email
-
-        body = f"""ミエルームをご利用いただきありがとうございます。
-
-以下のURLからパスワードをリセットしてください。
-このURLの有効期限は1時間です。
-
-{reset_url}
-
-このメールに心当たりがない場合は無視してください。
-
----
-ミエルーム サポート
-"""
-        msg.attach(MIMEText(body, 'plain', 'utf-8'))
-
-        # IPv4アドレスに直接接続
-        with smtplib.SMTP_SSL(ipv4_addr, smtp_port, timeout=15) as server:
-            server.login(smtp_user, smtp_pass)
-            server.sendmail(from_email, to_email, msg.as_string())
-        app.logger.info(f'メール送信成功: {to_email}')
-        return True
+        req = urllib.request.Request(
+            'https://api.resend.com/emails',
+            data=payload,
+            headers={
+                'Authorization': f'Bearer {resend_key}',
+                'Content-Type': 'application/json',
+            },
+            method='POST'
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = _json.loads(resp.read())
+            app.logger.info(f'Resend送信成功: {to_email} id={result.get("id")}')
+            return True
     except Exception as e:
-        app.logger.error(f'SMTP送信エラー詳細: host={smtp_host} user={smtp_user} error={e}')
+        app.logger.error(f'Resend送信エラー: {e}')
         return False
 
 
