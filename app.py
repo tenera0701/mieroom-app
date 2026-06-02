@@ -4856,6 +4856,16 @@ def admin_applications():
                            rejected_cnt=rejected_cnt)
 
 
+@app.route("/api/admin/applications/<int:app_id>", methods=["DELETE"])
+@super_admin_required
+def api_admin_application_delete(app_id):
+    """申込削除"""
+    rec = TrialApplication.query.get_or_404(app_id)
+    db.session.delete(rec)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
 @app.route("/api/admin/applications/<int:app_id>", methods=["PATCH"])
 @super_admin_required
 def api_admin_application_update(app_id):

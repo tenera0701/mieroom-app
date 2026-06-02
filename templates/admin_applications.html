@@ -98,12 +98,16 @@
                    onblur="updateMemo(this)">
           </td>
           <td class="px-4 py-3 text-center">
-            {% if a.message %}
-            <button onclick="showMessage({{ a.id }}, `{{ a.message | replace('`','\\`') }}`)"
-                    class="text-xs text-teal-600 hover:underline">内容を見る</button>
-            {% else %}
-            <span class="text-xs text-gray-400">-</span>
-            {% endif %}
+            <div class="flex items-center justify-center gap-2">
+              {% if a.message %}
+              <button onclick="showMessage({{ a.id }}, `{{ a.message | replace('`','\\`') }}`)"
+                      class="text-xs text-teal-600 hover:underline">内容を見る</button>
+              {% else %}
+              <span class="text-xs text-gray-400">-</span>
+              {% endif %}
+              <button onclick="deleteApp({{ a.id }}, this)"
+                      class="text-xs text-red-400 hover:text-red-600 hover:underline">削除</button>
+            </div>
           </td>
         </tr>
         {% else %}
@@ -166,6 +170,17 @@ function updateMemo(inp) {
 function showMessage(id, msg) {
   document.getElementById('msgContent').textContent = msg;
   document.getElementById('msgModal').classList.remove('hidden');
+}
+
+function deleteApp(id, btn) {
+  if (!confirm('この申込を削除しますか？')) return;
+  fetch(`/api/admin/applications/${id}`, {method: 'DELETE'})
+    .then(r => r.json())
+    .then(d => {
+      if (d.ok) {
+        btn.closest('tr').remove();
+      }
+    });
 }
 
 function filterTable() {
