@@ -495,6 +495,9 @@ function adAmountYen(r) {
 function isFullyApproved(r) {
   const needAd        = adAmountYen(r) > 0;
   const needBrokerage = (r.brokerage_fee || 0) > 0;
+  // 両方承認済みで少なくともどちらかに金額があれば入金済み
+  if (r.ad_approved && r.brokerage_approved && (needAd || needBrokerage)) return true;
+  // 片方だけの場合の判定
   if (!needAd && !needBrokerage) return false;
   return (!needAd || r.ad_approved) && (!needBrokerage || r.brokerage_approved);
 }
@@ -949,7 +952,7 @@ async function loadColors() {
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;">背景色
         <input type="color" data-status="${key}" data-type="bg" value="${c.bg}" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;"></label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;">文字色
-        <input type="color" data-status="${key}" data-type="text" value="${c.text}" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;" autocomplete="off"></label>
+        <input type="color" data-status="${key}" data-type="text" value="${c.text}" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;"></label>
       <span class="app-status-badge cp-${key.replace(/[^a-z]/gi,'')}" style="background:${c.bg};color:${c.text};border:1px solid ${c.text}30;">${key}</span>`;
     container.appendChild(row);
     row.querySelectorAll('input[type="color"]').forEach(inp => {
