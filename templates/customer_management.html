@@ -180,7 +180,7 @@
         <svg id="settled-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:16px;height:16px;transition:transform .2s;">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
         </svg>
-        <h2 style="color:#0D9488;">✓ 入金済み一覧</h2>
+        <h2 style="color:#0D9488;">入金済み一覧</h2>
         <span id="settled-count" style="font-size:12px;background:#CCFBF1;color:#0F766E;border-radius:12px;padding:2px 10px;font-weight:700;">0件</span>
       </div>
     </div>
@@ -686,7 +686,7 @@ async function loadApplications() {
 async function loadUncollected() {
   if (_isSearchMode) return;
   const staffId = document.getElementById('unc-filter-staff')?.value;
-  const params  = new URLSearchParams({ store_id: STORE_ID });
+  const params  = new URLSearchParams({ store_id: STORE_ID, year: salesYear, month: salesMonth });
   if (staffId) params.set('staff_id', staffId);
   try {
     const res = await fetch(`/api/applications/unpaid?${params}`);
@@ -730,8 +730,9 @@ async function settlePayment(rid, field) {
     });
     if (!res.ok) throw new Error();
     showAlert('入金を報告しました。店長の承認をお待ちください。');
-    loadApplications();
-  } catch(_) { showAlert('処理に失敗しました。', 'error'); }
+  } catch(_) { showAlert('処理に失敗しました。', 'error'); return; }
+  loadApplications().catch(()=>{});
+  loadUncollected().catch(()=>{});
 }
 
 async function approvePayment(rid, field) {
@@ -743,8 +744,10 @@ async function approvePayment(rid, field) {
     });
     if (!res.ok) throw new Error();
     showAlert('承認しました。売上に反映されました。');
-    await Promise.all([loadApplications(), loadUncollected()]);
-  } catch(_) { showAlert('承認に失敗しました。', 'error'); }
+  } catch(_) { showAlert('承認に失敗しました。', 'error'); return; }
+  // 承認後にリロード（エラーはサイレントに）
+  loadApplications().catch(()=>{});
+  loadUncollected().catch(()=>{});
 }
 
 /* ===================================================
@@ -821,8 +824,10 @@ async function submitApp() {
     if (!res.ok) throw new Error();
     closeAppModal();
     showAlert(editingAppId ? '更新しました。' : '新規入力しました。');
-    loadApplications(); loadUncollected();
-  } catch(_) { showAlert('保存に失敗しました。', 'error'); }
+  } catch(_) { showAlert('保存に失敗しました。', 'error'); return; }
+  // 保存成功後にリロード（エラーはサイレントに）
+  loadApplications().catch(()=>{});
+  loadUncollected().catch(()=>{});
 }
 
 async function editApp(id) {

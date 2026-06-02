@@ -5469,14 +5469,27 @@ def _app_record_to_dict(r, staff_map):
 @app.route("/api/applications/unpaid")
 @login_required
 def api_applications_unpaid():
-    """未入金一覧：仲介またはADが未承認の申込レコードを返す"""
+    """未入金一覧：仲介またはADが未承認の申込レコードを返す（月フィルタ）"""
     allowed_ids = get_allowed_store_ids()
     store_id = request.args.get('store_id', type=int)
     staff_id = request.args.get('staff_id', type=int)
+    year  = request.args.get('year',  type=int) or current_ym()[0]
+    month = request.args.get('month', type=int) or current_ym()[1]
+
+    from datetime import date as _date
+    # その月以前に申し込まれた未承認レコードを表示（入力した月から記載）
+    month_end = _date(year, month, 28)  # その月末日以前
+    try:
+        import calendar
+        last_day = calendar.monthrange(year, month)[1]
+        month_end = _date(year, month, last_day)
+    except Exception:
+        pass
 
     q = ApplicationRecord.query.filter(
         ApplicationRecord.store_id.in_(allowed_ids),
         ApplicationRecord.status != 'キャンセル',
+        ApplicationRecord.application_date <= month_end,  # 選択月以前の案件のみ
         db.or_(
             db.and_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.brokerage_approved == False),
             db.and_(ApplicationRecord.ad_amount > 0,     ApplicationRecord.ad_approved == False),
@@ -5487,6 +5500,7 @@ def api_applications_unpaid():
     if staff_id:
         q = q.filter(ApplicationRecord.staff_id == staff_id)
 
+    # 古いものが上（申込日昇順）
     recs = q.order_by(ApplicationRecord.application_date.asc()).all()
     staff_ids = list({r.staff_id for r in recs if r.staff_id})
     staff_map = {s.id: s.name for s in Staff.query.filter(Staff.id.in_(staff_ids)).all()} if staff_ids else {}
