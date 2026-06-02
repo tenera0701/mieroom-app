@@ -195,13 +195,14 @@
         <table style="opacity:0.85;">
           <thead>
             <tr>
-              <th>申込日</th><th>担当</th><th>物件名</th><th>号室</th><th>お客様名</th>
-              <th>仲介手数料</th><th>仲介入金</th><th>仲介入金日</th>
-              <th>AD</th><th>AD入金</th><th>AD入金日</th>
+              <th>申込日</th><th>物件名</th><th>号室</th><th>お客様名</th><th>契約開始日</th>
+              <th>LL</th><th>引越</th><th>火保</th>
+              <th>仲介手数料</th><th>オプション</th><th>仲手＋オプ合計</th><th>AD金額</th>
+              <th>仲手＋オプ入金</th><th>AD入金</th>
             </tr>
           </thead>
           <tbody id="settled-tbody">
-            <tr><td colspan="11" style="text-align:center;color:#9ca3af;padding:16px;">入金済み案件なし</td></tr>
+            <tr><td colspan="14" style="text-align:center;color:#9ca3af;padding:16px;">入金済み案件なし</td></tr>
           </tbody>
         </table>
       </div>
@@ -613,56 +614,68 @@ function renderSettled(list, colors) {
   const countEl = document.getElementById('settled-count');
   if (countEl) countEl.textContent = list.length + '件';
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:#9ca3af;padding:16px;">入金済み案件なし</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:#9ca3af;padding:16px;">入金済み案件なし</td></tr>';
     return;
   }
   tbody.innerHTML = '';
   list.forEach(r => {
-    const adYen  = adAmountYen(r);
-    const hasBrok = (r.brokerage_fee || 0) > 0;
-    const hasAd   = adYen > 0;
-    const brokOk  = hasBrok && r.brokerage_approved;
-    const adOk    = hasAd   && r.ad_approved;
+    const adYen    = adAmountYen(r);
+    const hasBrok  = (r.brokerage_fee || 0) > 0;
+    const hasAd    = adYen > 0;
+    const brokOk   = hasBrok && r.brokerage_approved;
+    const adOk     = hasAd   && r.ad_approved;
+    const optAmt   = r.option_amount || 0;
+    const brokTotal= (r.brokerage_fee || 0) + optAmt;
 
+    // 仲手＋オプ入金セル: 承認済みなら入金日入力欄、未承認なら✗
     const brokCell = hasBrok
-      ? (brokOk ? '<span style="color:#0D9488;font-weight:700;">✓ 承認済</span>'
-                : '<span style="color:#dc2626;font-weight:700;">✗ 未承認</span>')
-      : '<span style="color:#d1d5db;">—</span>';
+      ? (brokOk
+          ? '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">' +
+            '<span style="color:#0D9488;font-weight:700;font-size:11px;">✓ 入金済</span>' +
+            '<input type="date" value="' + (r.brokerage_payment_date || '') + '" ' +
+            'onchange="updatePaymentDate(' + r.id + ',&quot;brokerage_payment_date&quot;,this.value)" ' +
+            'style="border:1px solid #d1d5db;border-radius:4px;padding:1px 4px;font-size:10px;width:100px;text-align:center;" title="仲介入金日">' +
+            '</div>'
+          : '<span style="color:#dc2626;font-weight:700;font-size:13px;">✗</span>')
+      : '<span style="color:#d1d5db;font-size:11px;">—</span>';
 
+    // AD入金セル
     const adCell = hasAd
-      ? (adOk   ? '<span style="color:#0D9488;font-weight:700;">✓ 承認済</span>'
-                : '<span style="color:#dc2626;font-weight:700;">✗ 未承認</span>')
-      : '<span style="color:#d1d5db;">—</span>';
+      ? (adOk
+          ? '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">' +
+            '<span style="color:#0D9488;font-weight:700;font-size:11px;">✓ 入金済</span>' +
+            '<input type="date" value="' + (r.ad_payment_date || '') + '" ' +
+            'onchange="updatePaymentDate(' + r.id + ',&quot;ad_payment_date&quot;,this.value)" ' +
+            'style="border:1px solid #d1d5db;border-radius:4px;padding:1px 4px;font-size:10px;width:100px;text-align:center;" title="AD入金日">' +
+            '</div>'
+          : '<span style="color:#dc2626;font-weight:700;font-size:13px;">✗</span>')
+      : '<span style="color:#d1d5db;font-size:11px;">—</span>';
 
-    const brokDate = brokOk
-      ? '<input type="date" value="' + (r.brokerage_payment_date || '') + '" ' +
-        'onchange="updatePaymentDate(' + r.id + ',&quot;brokerage_payment_date&quot;,this.value)" ' +
-        'style="border:1px solid #d1d5db;border-radius:4px;padding:2px 5px;font-size:11px;width:110px;">'
-      : '<span style="color:#d1d5db;">—</span>';
-
-    const adDate = adOk
-      ? '<input type="date" value="' + (r.ad_payment_date || '') + '" ' +
-        'onchange="updatePaymentDate(' + r.id + ',&quot;ad_payment_date&quot;,this.value)" ' +
-        'style="border:1px solid #d1d5db;border-radius:4px;padding:2px 5px;font-size:11px;width:110px;">'
-      : '<span style="color:#d1d5db;">—</span>';
+    const fmt = v => v > 0 ? '¥' + Math.round(v).toLocaleString() : '—';
+    const chk = v => v ? '●' : '×';
 
     const tr = document.createElement('tr');
-    tr.style.background = (brokOk && adOk) ? '#f0fdf4' : '#fffbeb';
+    tr.style.background = (brokOk && adOk) ? '#f0fdf4' : (brokOk || adOk ? '#fffbeb' : '#fff');
+    tr.style.textAlign  = 'center';
     tr.innerHTML =
       '<td style="white-space:nowrap;">' + (r.application_date || '―') + '</td>' +
-      '<td>' + (r.staff_name || '―') + '</td>' +
       '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;">' + (r.property_name || '―') + '</td>' +
       '<td>' + (r.room_number || '―') + '</td>' +
       '<td>' + (r.customer_name || '―') + '</td>' +
-      '<td style="text-align:right;">' + (r.brokerage_fee ? '¥' + r.brokerage_fee.toLocaleString() : '—') + '</td>' +
-      '<td style="text-align:center;">' + brokCell + '</td>' +
-      '<td style="text-align:center;">' + brokDate + '</td>' +
-      '<td style="text-align:right;">' + (hasAd ? '¥' + Math.round(adYen).toLocaleString() : '—') + '</td>' +
-      '<td style="text-align:center;">' + adCell + '</td>' +
-      '<td style="text-align:center;">' + adDate + '</td>';
+      '<td style="white-space:nowrap;">' + (r.contract_start_date || '―') + '</td>' +
+      '<td>' + chk(r.lifeline) + '</td>' +
+      '<td>' + chk(r.moving) + '</td>' +
+      '<td>' + chk(r.fire_insurance) + '</td>' +
+      '<td>' + fmt(r.brokerage_fee) + '</td>' +
+      '<td>' + fmt(optAmt) + '</td>' +
+      '<td style="font-weight:700;">' + fmt(brokTotal) + '</td>' +
+      '<td>' + fmt(adYen) + '</td>' +
+      '<td>' + brokCell + '</td>' +
+      '<td>' + adCell   + '</td>';
     tbody.appendChild(tr);
   });
 }
+
 
 async function updatePaymentDate(id, field, value) {
   try {

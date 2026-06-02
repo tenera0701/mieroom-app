@@ -28,6 +28,12 @@
       --sidebar-w: 240px;
       --topbar-h: 56px;
     }
+    /* 全ページ共通: テーブルのヘッダーと数値セルをセンター揃え */
+    table thead th { text-align: center !important; }
+    table tbody td { text-align: center; }
+    table tbody td:first-child { text-align: left; }
+    /* カード内の数字もセンター */
+    .kpi-card-value, .hq-card-value { text-align: center; }
     * { box-sizing: border-box; }
     body { font-family: system-ui, -apple-system, sans-serif; }
     /* 数値入力の上下矢印を全廃止 */
