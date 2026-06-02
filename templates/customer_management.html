@@ -184,6 +184,12 @@
         <span id="settled-count" style="font-size:12px;background:#CCFBF1;color:#0F766E;border-radius:12px;padding:2px 10px;font-weight:700;">0件</span>
       </div>
     </div>
+    <!-- 色凡例 -->
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;">
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#f0fdf4;display:inline-block;border:1px solid #86efac;"></span>両方入金済み</span>
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fffbeb;display:inline-block;border:1px solid #fcd34d;"></span>一部入金済み（✗は未入金）</span>
+      <span style="font-size:11px;color:#9ca3af;">💡 入金日欄は入金確認後に入力してください</span>
+    </div>
     <div id="settled-body-wrap">
       <div class="table-wrapper">
         <table style="opacity:0.85;">
@@ -630,13 +636,13 @@ function renderSettled(list, colors) {
 
     const brokDate = brokOk
       ? '<input type="date" value="' + (r.brokerage_payment_date || '') + '" ' +
-        'onchange="updatePaymentDate(' + r.id + ','brokerage_payment_date',this.value)" ' +
+        'onchange="updatePaymentDate(' + r.id + ',&quot;brokerage_payment_date&quot;,this.value)" ' +
         'style="border:1px solid #d1d5db;border-radius:4px;padding:2px 5px;font-size:11px;width:110px;">'
       : '<span style="color:#d1d5db;">—</span>';
 
     const adDate = adOk
       ? '<input type="date" value="' + (r.ad_payment_date || '') + '" ' +
-        'onchange="updatePaymentDate(' + r.id + ','ad_payment_date',this.value)" ' +
+        'onchange="updatePaymentDate(' + r.id + ',&quot;ad_payment_date&quot;,this.value)" ' +
         'style="border:1px solid #d1d5db;border-radius:4px;padding:2px 5px;font-size:11px;width:110px;">'
       : '<span style="color:#d1d5db;">—</span>';
 
@@ -1153,6 +1159,7 @@ document.addEventListener('DOMContentLoaded', () => {
   updateMonthLabel();
   loadApplications();
   loadUncollected();
+  loadSettled();
 });
 </script>
 {% endblock %}
