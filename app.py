@@ -4546,7 +4546,7 @@ def _send_reset_email(to_email, reset_url):
 """
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
             server.starttls()
             server.login(smtp_user, smtp_pass)
             server.sendmail(from_email, to_email, msg.as_string())
@@ -4574,12 +4574,13 @@ def forgot_password():
             db.session.add(rt)
             db.session.commit()
             reset_url = url_for('reset_password', token=token, _external=True)
-            sent = _send_reset_email(user.email, reset_url)
-            if not sent:
-                # メール送信不可の場合はURLを画面に表示（開発用）
-                message = f"（開発環境）リセットURL: {reset_url}"
-            else:
-                message = "パスワードリセット用のメールを送信しました。"
+            # メール送信を別スレッドで実行（画面がフリーズしないように）
+            import threading
+            def _send_bg(email=user.email, url=reset_url):
+                _send_reset_email(email, url)
+            threading.Thread(target=_send_bg, daemon=True).start()
+            sent = True  # 非同期なので常にTrue扱い
+            message = "パスワードリセット用のメールを送信しました。"
         else:
             message = "入力されたメールアドレスに一致するアカウントが見つかりませんでした。"
     return render_template("forgot_password.html", message=message, error=error)
