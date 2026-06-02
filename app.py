@@ -2837,7 +2837,13 @@ def api_pl_summary():
 
     # prev_month / prev_year サポート
     def get_prev_summary(y, m):
-        prev_pls = PLRecord.query.filter_by(year=y, month=m).all()
+        # 店舗フィルタ（選択中の店舗のみ）
+        pq = PLRecord.query.filter_by(year=y, month=m)
+        if allowed_ids:
+            pq = pq.filter(PLRecord.store_id.in_(allowed_ids))
+        if store_id and store_id in allowed_ids:
+            pq = pq.filter(PLRecord.store_id == store_id)
+        prev_pls = pq.all()
         if not prev_pls:
             return None
         pl = prev_pls[0]
@@ -2945,8 +2951,12 @@ def api_staff_ranking():
     else:
         query = SalesKPI.query.filter_by(year=year, month=month)
 
-    if store_id:
+    # 店舗フィルタ（テナント分離）
+    _allowed = get_allowed_store_ids()
+    if store_id and store_id in _allowed:
         query = query.filter_by(store_id=store_id)
+    elif _allowed:
+        query = query.filter(SalesKPI.store_id.in_(_allowed))
     kpis = query.all()
 
     # スタッフ別に集計
@@ -3541,7 +3551,8 @@ def api_contract_delete(contract_id):
 @login_required
 def payments():
     """入金管理ページ"""
-    staff_list = Staff.query.filter_by(is_active=True).all()
+    _allowed = get_allowed_store_ids()
+    staff_list = Staff.query.filter(Staff.store_id.in_(_allowed), Staff.is_active == True).all() if _allowed else []
     year, month = current_ym()
     return render_template("payments.html",
                            staff_list=staff_list, year=year, month=month,
@@ -3834,8 +3845,13 @@ def api_settings_profile():
 def api_kpi_staff_history():
     """スタッフ別の6ヶ月推移データを返す"""
     staff_id = request.args.get('staff_id', type=int)
+    store_id = request.args.get('store_id', type=int)
     year  = request.args.get('year',  type=int) or current_ym()[0]
     month = request.args.get('month', type=int) or current_ym()[1]
+
+    # 店舗フィルタ（テナント分離）
+    allowed_ids = get_allowed_store_ids()
+    filter_ids = [store_id] if (store_id and store_id in allowed_ids) else allowed_ids
 
     history = []
     yoy_data = {}
@@ -3845,6 +3861,8 @@ def api_kpi_staff_history():
         while m < 1:
             m += 12; y -= 1
         query = SalesKPI.query.filter_by(year=y, month=m)
+        if filter_ids:
+            query = query.filter(SalesKPI.store_id.in_(filter_ids))
         if staff_id:
             query = query.filter_by(staff_id=staff_id)
         kpis = query.all()
@@ -3858,6 +3876,8 @@ def api_kpi_staff_history():
         # 現在月のみ前年比を計算
         if i == 0:
             prev_y_kpis = SalesKPI.query.filter_by(year=y-1, month=m)
+            if filter_ids:
+                prev_y_kpis = prev_y_kpis.filter(SalesKPI.store_id.in_(filter_ids))
             if staff_id:
                 prev_y_kpis = prev_y_kpis.filter_by(staff_id=staff_id)
             prev_y_kpis = prev_y_kpis.all()
@@ -4213,7 +4233,11 @@ def api_leave_delete(lid):
 def api_leave_balance():
     """スタッフ別有給残日数サマリー"""
     year = request.args.get('year', type=int) or date.today().year
-    staff_list = Staff.query.filter_by(is_active=True).all()
+    # 店舗フィルタ（テナント分離）
+    _allowed = get_allowed_store_ids()
+    staff_list = Staff.query.filter(
+        Staff.store_id.in_(_allowed), Staff.is_active == True
+    ).all() if _allowed else []
     result = []
     for s in staff_list:
         bal = LeaveBalance.query.filter_by(staff_id=s.id, year=year).first()

@@ -960,7 +960,7 @@ function toggleDetail(tr, staffObj) {
 
   (async () => {
     try {
-      const params = new URLSearchParams({ year: salesYear, month: salesMonth });
+      const params = new URLSearchParams({ year: salesYear, month: salesMonth, store_id: STORE_ID });
       if (staffObj.staff_id) params.set('staff_id', staffObj.staff_id);
       const res = await fetch(`/api/kpi/staff-history?${params}`);
       const d = res.ok ? await res.json() : null;
@@ -1044,7 +1044,7 @@ async function loadChartHistory() {
   if (labelEl) labelEl.textContent = staffName ? `対象スタッフ：${staffName}` : '全スタッフ合計';
 
   try {
-    const params = new URLSearchParams({ year: salesYear, month: salesMonth });
+    const params = new URLSearchParams({ year: salesYear, month: salesMonth, store_id: STORE_ID });
     if (staffId) params.set('staff_id', staffId);
     const res = await fetch(`/api/kpi/staff-history?${params}`);
     const d = res.ok ? await res.json() : null;

@@ -301,9 +301,9 @@ async function loadSummary(year, month) {
       const profitColor = s.profit == null ? '#9ca3af' : s.profit >= 0 ? '#059669' : '#dc2626';
       return `<tr>
         <td style="font-weight:700;color:#111827;">${s.store_name}</td>
-        <td style="color:#0D9488;font-weight:600;">${fmtY(s.sales)}</td>
-        <td style="color:${profitColor};font-weight:600;">${fmtY(s.profit)}</td>
-        <td style="color:#f59e0b;">${fmtY(s.expenses)}</td>
+        <td style="text-align:right;color:#0D9488;font-weight:600;">${fmtY(s.sales)}</td>
+        <td style="text-align:right;color:${profitColor};font-weight:600;">${fmtY(s.profit)}</td>
+        <td style="text-align:right;color:#f59e0b;">${fmtY(s.expenses)}</td>
         <td style="text-align:right;">${s.inquiries || 0}件</td>
         <td style="text-align:right;">${s.apps}件</td>
         <td style="text-align:right;">${s.contracts}件</td>
