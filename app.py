@@ -5166,6 +5166,69 @@ def law_page():
     return render_template("law.html")
 
 
+@app.route("/apply", methods=["GET", "POST"])
+def apply_page():
+    """無料トライアル申し込みフォーム"""
+    success = False
+    error   = None
+    form    = {}
+
+    if request.method == "POST":
+        company = request.form.get("company", "").strip()
+        name    = request.form.get("name", "").strip()
+        email   = request.form.get("email", "").strip()
+        phone   = request.form.get("phone", "").strip()
+        stores  = request.form.get("stores", "").strip()
+        message = request.form.get("message", "").strip()
+        form    = {"company": company, "name": name, "email": email,
+                   "phone": phone, "stores": stores, "message": message}
+
+        if not all([company, name, email, phone, stores]):
+            error = "必須項目をすべて入力してください。"
+        else:
+            # 管理者への通知メール
+            import threading
+            def _notify():
+                try:
+                    import urllib.request, json as _json, ssl
+                    resend_key = os.getenv('RESEND_API_KEY', '')
+                    if not resend_key:
+                        return
+                    body_html = f"""
+<h2>【ミエルーム】新規トライアル申し込み</h2>
+<table border="1" cellpadding="8" style="border-collapse:collapse;">
+  <tr><th>会社名</th><td>{company}</td></tr>
+  <tr><th>担当者名</th><td>{name}</td></tr>
+  <tr><th>メール</th><td>{email}</td></tr>
+  <tr><th>電話番号</th><td>{phone}</td></tr>
+  <tr><th>店舗数</th><td>{stores}</td></tr>
+  <tr><th>メッセージ</th><td>{message or "なし"}</td></tr>
+</table>"""
+                    payload = _json.dumps({
+                        'from': 'ミエルーム申込通知 <onboarding@resend.dev>',
+                        'to':   ['teneramente0701@gmail.com'],
+                        'reply_to': email,
+                        'subject': f'【申込】{company} - ミエルーム トライアル申請',
+                        'html': body_html,
+                    }).encode('utf-8')
+                    req = urllib.request.Request(
+                        'https://api.resend.com/emails', data=payload,
+                        headers={'Authorization': f'Bearer {resend_key}',
+                                 'Content-Type': 'application/json',
+                                 'User-Agent': 'mieroom-app/1.0'},
+                        method='POST')
+                    ctx = ssl.create_default_context()
+                    with urllib.request.urlopen(req, timeout=15, context=ctx):
+                        pass
+                except Exception as e:
+                    app.logger.error(f'申込通知メールエラー: {e}')
+            threading.Thread(target=_notify, daemon=True).start()
+            success = True
+
+    return render_template("apply.html", success=success, error=error,
+                           form=form, email=form.get("email",""))
+
+
 @app.route("/terms")
 def terms_page():
     """利用規約ページ"""

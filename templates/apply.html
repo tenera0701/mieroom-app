@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ミエルーム | 無料トライアル申し込み</title>
+  <link rel="icon" type="image/png" href="/static/logo_notext.png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: linear-gradient(135deg, #0D4A48 0%, #115E59 40%, #0F766E 100%); min-height: 100vh; font-family: system-ui, -apple-system, sans-serif; }
+    .card { background: #fff; border-radius: 20px; box-shadow: 0 24px 64px rgba(0,0,0,0.3); padding: 48px 40px; width: 100%; max-width: 520px; }
+    .input-field { width: 100%; border: 1.5px solid #d1d5db; border-radius: 10px; padding: 12px 16px; font-size: 15px; color: #111827; outline: none; transition: border-color 0.2s, box-shadow 0.2s; background: #f9fafb; box-sizing: border-box; }
+    .input-field:focus { border-color: #0D9488; box-shadow: 0 0 0 3px rgba(13,148,136,0.15); background: #fff; }
+    .btn-primary { width: 100%; background: #0D9488; color: #fff; border: none; border-radius: 10px; padding: 14px; font-size: 16px; font-weight: 700; cursor: pointer; transition: background 0.2s; }
+    .btn-primary:hover { background: #0F766E; }
+    .btn-primary:disabled { background: #9ca3af; cursor: not-allowed; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+    .required { color: #ef4444; margin-left: 3px; }
+    select.input-field { cursor: pointer; }
+  </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+  <div class="card">
+    <div class="text-center mb-8">
+      <img src="/static/logo_text.png" alt="ミエルーム" style="height:70px; margin:0 auto 16px; display:block;">
+      <h1 style="font-size:20px; font-weight:800; color:#111827; margin:0 0 6px;">14日間 無料トライアル申し込み</h1>
+      <p style="font-size:13px; color:#6b7280; margin:0;">申し込み後、担当者よりご連絡いたします</p>
+    </div>
+
+    {% if success %}
+    <div style="background:#F0FDFA; border:1px solid #5EEAD4; border-radius:12px; padding:24px; text-align:center;">
+      <div style="font-size:40px; margin-bottom:12px;">✅</div>
+      <h2 style="font-size:17px; font-weight:700; color:#0F766E; margin:0 0 8px;">お申し込みありがとうございます！</h2>
+      <p style="font-size:14px; color:#374151; line-height:1.7;">
+        担当者より <strong>{{ email }}</strong> 宛にご連絡いたします。<br>
+        通常1〜2営業日以内にご連絡します。
+      </p>
+      <a href="/app-login" style="display:inline-block; margin-top:20px; padding:10px 24px; background:#0D9488; color:#fff; border-radius:8px; font-size:14px; font-weight:700; text-decoration:none;">ログイン画面へ</a>
+    </div>
+
+    {% else %}
+
+    {% if error %}
+    <div style="background:#fee2e2; border:1px solid #fca5a5; border-radius:8px; padding:12px 16px; margin-bottom:20px; color:#b91c1c; font-size:14px;">
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="POST" id="applyForm">
+      <div style="display:flex; flex-direction:column; gap:18px;">
+
+        <div>
+          <label>会社名<span class="required">*</span></label>
+          <input type="text" name="company" class="input-field" placeholder="例：株式会社〇〇不動産" required value="{{ form.company or '' }}">
+        </div>
+
+        <div>
+          <label>担当者名<span class="required">*</span></label>
+          <input type="text" name="name" class="input-field" placeholder="例：山田 太郎" required value="{{ form.name or '' }}">
+        </div>
+
+        <div>
+          <label>メールアドレス<span class="required">*</span></label>
+          <input type="email" name="email" class="input-field" placeholder="例：yamada@company.co.jp" required value="{{ form.email or '' }}">
+        </div>
+
+        <div>
+          <label>電話番号<span class="required">*</span></label>
+          <input type="tel" name="phone" class="input-field" placeholder="例：052-123-4567" required value="{{ form.phone or '' }}">
+        </div>
+
+        <div>
+          <label>店舗数<span class="required">*</span></label>
+          <select name="stores" class="input-field" required>
+            <option value="" {% if not form.stores %}selected{% endif %}>-- 選択してください --</option>
+            <option value="1" {% if form.stores == '1' %}selected{% endif %}>1店舗</option>
+            <option value="2-3" {% if form.stores == '2-3' %}selected{% endif %}>2〜3店舗</option>
+            <option value="4-5" {% if form.stores == '4-5' %}selected{% endif %}>4〜5店舗</option>
+            <option value="6+" {% if form.stores == '6+' %}selected{% endif %}>6店舗以上</option>
+          </select>
+        </div>
+
+        <div>
+          <label>お問い合わせ内容（任意）</label>
+          <textarea name="message" class="input-field" rows="3" placeholder="ご質問・ご要望などあればご記入ください" style="resize:vertical;">{{ form.message or '' }}</textarea>
+        </div>
+
+        <div style="font-size:12px; color:#6b7280; line-height:1.6;">
+          <a href="/terms" target="_blank" style="color:#0D9488;">利用規約</a> および
+          <a href="/privacy" target="_blank" style="color:#0D9488;">プライバシーポリシー</a>
+          に同意の上、お申し込みください。
+        </div>
+
+        <button type="submit" class="btn-primary" id="submitBtn">
+          無料トライアルを申し込む →
+        </button>
+      </div>
+    </form>
+
+    {% endif %}
+
+    <div style="text-align:center; margin-top:24px; font-size:12px; color:#9ca3af;">
+      すでにアカウントをお持ちの方は
+      <a href="/app-login" style="color:#0D9488; font-weight:600;">こちらからログイン</a>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('applyForm')?.addEventListener('submit', function() {
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = '送信中...';
+    });
+  </script>
+</body>
+</html>
