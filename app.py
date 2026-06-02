@@ -5220,8 +5220,52 @@ def apply_page():
                     ctx = ssl.create_default_context()
                     with urllib.request.urlopen(req, timeout=15, context=ctx):
                         pass
+
+                    # サンクスメール（申込者へ）
+                    thanks_html = f"""
+<div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;">
+  <div style="text-align:center;margin-bottom:24px;">
+    <h2 style="color:#0D9488;margin:0;">ミエルーム</h2>
+    <p style="color:#6b7280;font-size:13px;margin:4px 0 0;">不動産賃貸仲介業務管理システム</p>
+  </div>
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;">
+    <h3 style="color:#111827;margin:0 0 16px;">お申し込みありがとうございます</h3>
+    <p style="color:#374151;line-height:1.8;">{name} 様<br><br>
+    この度は、ミエルームの無料トライアルにお申し込みいただきありがとうございます。<br><br>
+    担当者より <strong>1〜2営業日以内</strong> にご連絡いたします。<br>
+    今しばらくお待ちください。</p>
+    <div style="background:#F0FDFA;border-radius:8px;padding:16px;margin-top:20px;">
+      <p style="margin:0;font-size:13px;color:#0F766E;font-weight:600;">お申し込み内容</p>
+      <table style="margin-top:8px;font-size:13px;color:#374151;width:100%;">
+        <tr><td style="padding:3px 0;color:#6b7280;">会社名</td><td>{company}</td></tr>
+        <tr><td style="padding:3px 0;color:#6b7280;">担当者名</td><td>{name}</td></tr>
+        <tr><td style="padding:3px 0;color:#6b7280;">電話番号</td><td>{phone}</td></tr>
+        <tr><td style="padding:3px 0;color:#6b7280;">店舗数</td><td>{stores}</td></tr>
+      </table>
+    </div>
+    <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
+    <p style="color:#9ca3af;font-size:12px;margin:0;">
+      ご不明な点は <a href="mailto:mieroom.cloud@gmail.com" style="color:#0D9488;">mieroom.cloud@gmail.com</a> までご連絡ください。
+    </p>
+  </div>
+</div>"""
+                    thanks_payload = _json.dumps({{
+                        'from': 'ミエルーム <onboarding@resend.dev>',
+                        'to': [email],
+                        'subject': '【ミエルーム】お申し込みありがとうございます',
+                        'html': thanks_html,
+                    }}).encode('utf-8')
+                    thanks_req = urllib.request.Request(
+                        'https://api.resend.com/emails', data=thanks_payload,
+                        headers={{'Authorization': f'Bearer {{resend_key}}',
+                                 'Content-Type': 'application/json',
+                                 'User-Agent': 'mieroom-app/1.0'}},
+                        method='POST')
+                    with urllib.request.urlopen(thanks_req, timeout=15, context=ctx):
+                        pass
+
                 except Exception as e:
-                    app.logger.error(f'申込通知メールエラー: {e}')
+                    app.logger.error(f'申込通知メールエラー: {{e}}')
             threading.Thread(target=_notify, daemon=True).start()
             success = True
 
