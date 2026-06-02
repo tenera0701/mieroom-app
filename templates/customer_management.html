@@ -591,8 +591,7 @@ function buildAppRow(r, colors, isSettled = false) {
 }
 
 function renderApplications(list, colors) {
-  const tbody        = document.getElementById('app-tbody');
-  const settledTbody = document.getElementById('settled-tbody');
+  const tbody = document.getElementById('app-tbody');
 
   const cntEl = document.getElementById('app-count');
   if (cntEl) cntEl.textContent = list.length + '件';
@@ -603,16 +602,29 @@ function renderApplications(list, colors) {
   } else {
     list.forEach(r => tbody.appendChild(buildAppRow(r, colors, false)));
   }
+}
 
-  const settled = list.filter(isFullyApproved);
+function renderSettled(list, colors) {
+  const settledTbody = document.getElementById('settled-tbody');
   const countEl = document.getElementById('settled-count');
-  if (countEl) countEl.textContent = settled.length + '件';
-  if (!settled.length) {
+  if (countEl) countEl.textContent = list.length + '件';
+  if (!list.length) {
     settledTbody.innerHTML = '<tr><td colspan="19" style="text-align:center;color:#9ca3af;padding:16px;">承認済み案件なし</td></tr>';
   } else {
     settledTbody.innerHTML = '';
-    settled.forEach(r => settledTbody.appendChild(buildAppRow(r, colors, true)));
+    list.forEach(r => settledTbody.appendChild(buildAppRow(r, colors, true)));
   }
+}
+
+async function loadSettled() {
+  const params = new URLSearchParams({ store_id: STORE_ID });
+  try {
+    const res = await fetch('/api/applications/settled?' + params);
+    if (!res.ok) return;
+    const list = await res.json();
+    const colors = window._appColors || {};
+    renderSettled(list, colors);
+  } catch(_) {}
 }
 
 function renderUncollectedTable(list) {
@@ -679,6 +691,7 @@ async function loadApplications() {
       if (sr.ok) _APP_STAFF_PAIRS = (await sr.json()).map(s => [s.id, s.name]);
     } catch(_) {}
     renderApplications(appData, statusColors);
+    loadSettled().catch(()=>{});
   } catch(e) { appData = []; renderApplications([], {}); }
   if (IS_MANAGER) loadPendingApprovals();
 }
@@ -733,6 +746,7 @@ async function settlePayment(rid, field) {
   } catch(_) { showAlert('処理に失敗しました。', 'error'); return; }
   loadApplications().catch(()=>{});
   loadUncollected().catch(()=>{});
+  loadSettled().catch(()=>{});
 }
 
 async function approvePayment(rid, field) {
@@ -748,6 +762,7 @@ async function approvePayment(rid, field) {
   // 承認後にリロード（エラーはサイレントに）
   loadApplications().catch(()=>{});
   loadUncollected().catch(()=>{});
+  loadSettled().catch(()=>{});
 }
 
 /* ===================================================
@@ -828,6 +843,7 @@ async function submitApp() {
   // 保存成功後にリロード（エラーはサイレントに）
   loadApplications().catch(()=>{});
   loadUncollected().catch(()=>{});
+  loadSettled().catch(()=>{});
 }
 
 async function editApp(id) {
@@ -999,8 +1015,10 @@ function toggleInlineMediaInput() {
   if (hidden) document.getElementById('inline-media-name').focus();
 }
 function cancelInlineMedia() {
-  document.getElementById('inline-media-input').style.display = 'none';
-  document.getElementById('inline-media-name').value = '';
+  const el = document.getElementById('inline-media-input');
+  if (el) el.style.display = 'none';
+  const nm = document.getElementById('inline-media-name');
+  if (nm) nm.value = '';
 }
 async function confirmInlineMedia() {
   const input = document.getElementById('inline-media-name');

@@ -5466,6 +5466,31 @@ def _app_record_to_dict(r, staff_map):
     }
 
 
+@app.route("/api/applications/settled")
+@login_required
+def api_applications_settled():
+    """入金済み一覧：両方承認済みの申込を返す（月フィルタなし）"""
+    allowed_ids = get_allowed_store_ids()
+    store_id = request.args.get('store_id', type=int)
+    staff_id = request.args.get('staff_id', type=int)
+
+    q = ApplicationRecord.query.filter(
+        ApplicationRecord.store_id.in_(allowed_ids),
+        ApplicationRecord.status != 'キャンセル',
+        db.or_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.ad_amount > 0),
+        db.or_(ApplicationRecord.ad_amount <= 0, ApplicationRecord.ad_approved == True),
+        db.or_(ApplicationRecord.brokerage_fee <= 0, ApplicationRecord.brokerage_approved == True),
+    )
+    if store_id and store_id in allowed_ids:
+        q = q.filter(ApplicationRecord.store_id == store_id)
+    if staff_id:
+        q = q.filter(ApplicationRecord.staff_id == staff_id)
+
+    recs = q.order_by(ApplicationRecord.application_date.desc()).all()
+    staff_map = {s.id: s.name for s in Staff.query.filter(Staff.id.in_({r.staff_id for r in recs if r.staff_id})).all()}
+    return jsonify([_app_record_to_dict(r, staff_map) for r in recs])
+
+
 @app.route("/api/applications/unpaid")
 @login_required
 def api_applications_unpaid():
