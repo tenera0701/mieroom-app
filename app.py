@@ -4515,13 +4515,15 @@ def _reset_serializer():
 
 def _send_reset_email(to_email, reset_url):
     """パスワードリセットメールを送信（SMTP設定がある場合のみ）"""
-    smtp_host = os.getenv('SMTP_HOST', '')
-    smtp_port = int(os.getenv('SMTP_PORT', 587))
-    smtp_user = os.getenv('SMTP_USER', '')
-    smtp_pass = os.getenv('SMTP_PASS', '')
-    from_email = os.getenv('FROM_EMAIL', smtp_user)
+    # Gmail SMTP (MAIL_USERNAME / MAIL_PASSWORD で設定)
+    smtp_host  = os.getenv('SMTP_HOST',  'smtp.gmail.com')
+    smtp_port  = int(os.getenv('SMTP_PORT', 587))
+    smtp_user  = os.getenv('MAIL_USERNAME', os.getenv('SMTP_USER', ''))
+    smtp_pass  = os.getenv('MAIL_PASSWORD', os.getenv('SMTP_PASS', ''))
+    from_email = os.getenv('MAIL_FROM', smtp_user)
 
-    if not smtp_host or not smtp_user:
+    if not smtp_user or not smtp_pass:
+        app.logger.warning('メール設定なし: MAIL_USERNAME/MAIL_PASSWORD が未設定')
         return False
 
     try:
