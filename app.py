@@ -1571,15 +1571,15 @@ def sales_management():
 @block_super_admin
 def customer_management():
     """顧客管理表ページ：申込・入金管理に特化"""
-    stores = get_allowed_stores()
-    allowed_ids = [s.id for s in stores]
-    staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all()
+    stores = get_allowed_stores(ignore_active=True)   # サイドバー用（全店舗）
+    active_ids = get_allowed_store_ids()              # アクティブ店舗のみ
+    staff_list = Staff.query.filter(Staff.store_id.in_(active_ids), Staff.is_active == True).all() if active_ids else []
     year, month = current_ym()
     cur_user = AppUser.query.get(session.get('app_user_id'))
     cur_role = cur_user.role if cur_user else 'staff'
     cur_staff_id = cur_user.staff_id if cur_user else None
     is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
-    store_id = allowed_ids[0] if allowed_ids else None
+    store_id = active_ids[0] if active_ids else None
     media_types = MediaType.query.filter_by(store_id=store_id, is_active=True).order_by(MediaType.sort_order, MediaType.name).all() if store_id else []
     return render_template("customer_management.html", stores=stores, staff_list=staff_list,
                            year=year, month=month, now=datetime.now(),
@@ -5593,9 +5593,13 @@ def api_applications_create():
     allowed_ids = get_allowed_store_ids()
     data = request.get_json() or {}
 
-    store_id = int(data.get('store_id') or (allowed_ids[0] if allowed_ids else 1))
-    if store_id not in allowed_ids:
-        return jsonify({'error': '権限がありません'}), 403
+    req_sid = data.get('store_id')
+    if req_sid and int(req_sid) in allowed_ids:
+        store_id = int(req_sid)
+    elif allowed_ids:
+        store_id = allowed_ids[0]
+    else:
+        return jsonify({'error': '利用可能な店舗がありません'}), 403
 
     staff_id = data.get('staff_id') or None
     if cur_user and cur_user.role == 'staff':
