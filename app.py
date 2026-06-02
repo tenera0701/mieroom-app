@@ -5115,26 +5115,16 @@ def api_test_email():
     if not to_email:
         return jsonify({"error": "emailが必要です"}), 400
     try:
-        import smtplib
-        smtp_host  = os.getenv("SMTP_HOST",  "smtp.gmail.com")
-        smtp_port  = int(os.getenv("SMTP_PORT", 587))
-        smtp_user  = os.getenv("MAIL_USERNAME", "")
-        smtp_pass  = os.getenv("MAIL_PASSWORD", "")
-        if not smtp_user or not smtp_pass:
-            return jsonify({"error": "MAIL_USERNAME/MAIL_PASSWORD が未設定"}), 500
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            from email.mime.text import MIMEText
-            msg = MIMEText("ミエルームのメールテストです。", "plain", "utf-8")
-            msg["Subject"] = "【ミエルーム】メール送信テスト"
-            msg["From"]    = smtp_user
-            msg["To"]      = to_email
-            server.sendmail(smtp_user, to_email, msg.as_string())
-        return jsonify({"status": "ok", "message": f"{to_email} に送信しました"})
+        sent = _send_reset_email(to_email, "https://web-production-9f628.up.railway.app/reset-password/test")
+        if sent:
+            return jsonify({"status": "ok", "message": f"{to_email} に送信しました（Resend）"})
+        else:
+            resend_key = os.getenv('RESEND_API_KEY', '')
+            if not resend_key:
+                return jsonify({"status": "error", "message": "RESEND_API_KEY が Railway に未設定"}), 500
+            return jsonify({"status": "error", "message": "送信失敗（Railwayログを確認）"}), 500
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
 
 @app.route("/law")
 def law_page():
