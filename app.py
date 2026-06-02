@@ -4553,21 +4553,29 @@ def _send_reset_email(to_email, reset_url):
             'html': body_html,
         }).encode('utf-8')
 
+        import ssl
+        ctx = ssl.create_default_context()
         req = urllib.request.Request(
             'https://api.resend.com/emails',
             data=payload,
             headers={
                 'Authorization': f'Bearer {resend_key}',
                 'Content-Type': 'application/json',
+                'User-Agent': 'mieroom-app/1.0',
+                'Accept': 'application/json',
             },
             method='POST'
         )
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
             result = _json.loads(resp.read())
             app.logger.info(f'Resend送信成功: {to_email} id={result.get("id")}')
             return True
+    except urllib.error.HTTPError as he:
+        err_body = he.read().decode('utf-8', errors='replace')
+        app.logger.error(f'Resend HTTPエラー {he.code}: {err_body}')
+        return False
     except Exception as e:
-        app.logger.error(f'Resend送信エラー: {e}')
+        app.logger.error(f'Resend送信エラー: {type(e).__name__}: {e}')
         return False
 
 
@@ -5129,19 +5137,26 @@ def api_test_email():
             'subject': '【ミエルーム】メール送信テスト',
             'html': '<p>ミエルームのテストメールです。</p>'
         }).encode('utf-8')
+        import ssl
+        ctx = ssl.create_default_context()
         req = urllib.request.Request(
             'https://api.resend.com/emails',
             data=payload,
-            headers={'Authorization': f'Bearer {resend_key}', 'Content-Type': 'application/json'},
+            headers={
+                'Authorization': f'Bearer {resend_key}',
+                'Content-Type': 'application/json',
+                'User-Agent': 'mieroom-app/1.0',
+                'Accept': 'application/json',
+            },
             method='POST'
         )
         try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=15, context=ctx) as resp:
                 result = _json.loads(resp.read())
                 return jsonify({"status": "ok", "message": f"{to_email} に送信成功", "id": result.get("id")})
         except urllib.error.HTTPError as he:
             err_body = he.read().decode('utf-8', errors='replace')
-            return jsonify({"status": "error", "http_status": he.code, "message": err_body}), 500
+            return jsonify({"status": "error", "http_status": he.code, "message": err_body[:500]}), 500
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
