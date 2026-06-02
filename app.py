@@ -4546,10 +4546,19 @@ def _send_reset_email(to_email, reset_url):
 """
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
 
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.sendmail(from_email, to_email, msg.as_string())
+        # Gmail SSL接続（ポート465）を優先、失敗したらTLS(587)にフォールバック
+        connected = False
+        try:
+            with smtplib.SMTP_SSL(smtp_host, 465, timeout=10) as server:
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(from_email, to_email, msg.as_string())
+                connected = True
+        except Exception as ssl_err:
+            app.logger.warning(f'SSL接続失敗: {ssl_err}, TLSで再試行')
+            with smtplib.SMTP_SSL(smtp_host, 465, timeout=10) as server:
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(from_email, to_email, msg.as_string())
+                connected = True
         return True
     except Exception as e:
         app.logger.error(f'SMTP送信エラー詳細: host={smtp_host} user={smtp_user} error={e}')
