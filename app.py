@@ -5085,6 +5085,18 @@ def api_tenant_extend_trial(tid):
     return jsonify({'status': 'ok', 'trial_ends_at': tenant.trial_ends_at.strftime('%Y-%m-%d')})
 
 
+@app.route("/terms")
+def terms_page():
+    """利用規約ページ"""
+    return render_template("terms.html")
+
+
+@app.route("/privacy")
+def privacy_page():
+    """プライバシーポリシーページ"""
+    return render_template("privacy.html")
+
+
 @app.route("/trial-expired")
 def trial_expired_page():
     """トライアル期限切れ・ロック時のページ"""
