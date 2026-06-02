@@ -5124,11 +5124,17 @@ def api_tenant_store_add(tid):
     store = Store(name=name, is_active=True, tenant_id=tid)
     db.session.add(store)
     db.session.flush()  # IDを確定させる
-    # 新店舗のIDに紐づく万が一の既存データを削除（まっさらを保証）
-    SalesKPI.query.filter_by(store_id=store.id).delete()
-    PLRecord.query.filter_by(store_id=store.id).delete()
-    Staff.query.filter_by(store_id=store.id).update({'is_active': False})
-    ApplicationRecord.query.filter_by(store_id=store.id).delete()
+    # 新店舗IDに万が一紐づく既存データを全削除（まっさら保証）
+    sid = store.id
+    SalesKPI.query.filter_by(store_id=sid).delete()
+    PLRecord.query.filter_by(store_id=sid).delete()
+    ApplicationRecord.query.filter_by(store_id=sid).delete()
+    Staff.query.filter_by(store_id=sid).delete()
+    UncollectedPayment.query.filter_by(store_id=sid).delete()
+    try:
+        EchoRecord.query.filter_by(store_id=sid).delete()
+        CustomerServiceRecord.query.filter_by(store_id=sid).delete()
+    except Exception: pass
     db.session.commit()
     return jsonify({'status': 'ok', 'id': store.id})
 
@@ -5181,16 +5187,28 @@ def api_tenant_owner_update(tid):
 @app.route("/api/tenants/<int:tid>/stores/<int:sid>/reset-data", methods=["POST"])
 @super_admin_required
 def api_tenant_store_reset_data(tid, sid):
-    """店舗のKPIデータをすべてリセット（空の状態に戻す）"""
+    """店舗の全データをリセット（完全にまっさらな状態に戻す）"""
     store = Store.query.filter_by(id=sid, tenant_id=tid).first_or_404()
-    # SalesKPI を削除
+    # 1. KPI・売上データ
     SalesKPI.query.filter_by(store_id=sid).delete()
-    # PLRecord を削除
     PLRecord.query.filter_by(store_id=sid).delete()
-    # Staff を論理削除（is_active=False）
-    Staff.query.filter_by(store_id=sid).update({'is_active': False})
-    # ApplicationRecord を削除
+    # 2. 申込データ
     ApplicationRecord.query.filter_by(store_id=sid).delete()
+    # 3. 反響・接客データ
+    try:
+        EchoRecord.query.filter_by(store_id=sid).delete()
+    except Exception: pass
+    try:
+        CustomerServiceRecord.query.filter_by(store_id=sid).delete()
+    except Exception: pass
+    # 4. スタッフと有給
+    staff_ids = [s.id for s in Staff.query.filter_by(store_id=sid).all()]
+    if staff_ids:
+        LeaveRecord.query.filter(LeaveRecord.staff_id.in_(staff_ids)).delete(synchronize_session=False)
+        LeaveBalance.query.filter(LeaveBalance.staff_id.in_(staff_ids)).delete(synchronize_session=False)
+    Staff.query.filter_by(store_id=sid).delete()
+    # 5. 未入金データ
+    UncollectedPayment.query.filter_by(store_id=sid).delete()
     db.session.commit()
     return jsonify({'status': 'ok', 'store_name': store.name})
 
