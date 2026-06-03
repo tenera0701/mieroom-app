@@ -404,6 +404,7 @@
 const IS_MANAGER   = {{ 'true' if is_manager else 'false' }};
 const CUR_STAFF_ID = {{ cur_staff_id if cur_staff_id else 'null' }};
 const STORE_ID     = {{ store_id or 0 }};
+let _headerStaffId = '';  // ヘッダースタッフフィルター
 const STATUS_KEYS  = ['申込','契約','キャンセル','キャンセル振替'];
 const STATUS_DEFAULTS = {
   '申込':          { bg: '#ffffff', text: '#111827' },
@@ -456,15 +457,10 @@ function jumpMonth(val) {
 
 /** ヘッダースタッフフィルター変更 → 申込/未入金フィルターに連動 */
 function onHeaderStaffChange() {
-  const staffId = document.getElementById('header-filter-staff')?.value || '';
-  // 申込一覧のスタッフフィルターに同期
-  const appStaff = document.getElementById('app-filter-staff');
-  if (appStaff) appStaff.value = staffId;
-  // 未入金のスタッフフィルターに同期
-  const uncStaff = document.getElementById('unc-filter-staff');
-  if (uncStaff) uncStaff.value = staffId;
+  _headerStaffId = document.getElementById('header-filter-staff')?.value || '';
   loadApplications();
   loadUncollected();
+  loadSettled();
 }
 
 /* ===================================================
@@ -689,6 +685,8 @@ async function updatePaymentDate(id, field, value) {
 
 async function loadSettled() {
   const params = new URLSearchParams({ store_id: STORE_ID });
+  if (!IS_MANAGER && CUR_STAFF_ID) params.set('staff_id', CUR_STAFF_ID);
+  else if (_headerStaffId)         params.set('staff_id', _headerStaffId);
   try {
     const res = await fetch('/api/applications/settled?' + params);
     if (!res.ok) return;
@@ -743,11 +741,10 @@ function renderUncollectedTable(list) {
 async function loadApplications() {
   if (_isSearchMode) return;
   const params = new URLSearchParams({ year: salesYear, month: salesMonth, store_id: STORE_ID });
-  const staffSel  = document.getElementById('app-filter-staff');
   const statusSel = document.getElementById('app-filter-status');
-  if (staffSel && staffSel.value)   params.set('staff_id', staffSel.value);
-  if (statusSel && statusSel.value) params.set('status',   statusSel.value);
+  if (statusSel && statusSel.value) params.set('status', statusSel.value);
   if (!IS_MANAGER && CUR_STAFF_ID)  params.set('staff_id', CUR_STAFF_ID);
+  else if (_headerStaffId)          params.set('staff_id', _headerStaffId);
   try {
     const [appsRes, colorsRes] = await Promise.all([
       fetch(`/api/applications?${params}`),
@@ -769,9 +766,9 @@ async function loadApplications() {
 
 async function loadUncollected() {
   if (_isSearchMode) return;
-  const staffId = document.getElementById('unc-filter-staff')?.value;
-  const params  = new URLSearchParams({ store_id: STORE_ID, year: salesYear, month: salesMonth });
-  if (staffId) params.set('staff_id', staffId);
+  const params = new URLSearchParams({ store_id: STORE_ID, year: salesYear, month: salesMonth });
+  if (!IS_MANAGER && CUR_STAFF_ID) params.set('staff_id', CUR_STAFF_ID);
+  else if (_headerStaffId)         params.set('staff_id', _headerStaffId);
   try {
     const res = await fetch(`/api/applications/unpaid?${params}`);
     if (!res.ok) return;
