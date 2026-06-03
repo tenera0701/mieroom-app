@@ -834,7 +834,6 @@ async function loadSummary() {
 
   el.innerHTML =
     `<div style="grid-column:1/-1;font-size:12px;color:#6b7280;font-weight:700;">📊 ${salesYear}年${salesMonth}月 集計（${staffName}）</div>` +
-    card('合計', yen(d.total), '#0D9488') +
     card('売上（入金済み）', yen(d.sales), '#16a34a') +
     card('見込み売上', yen(d.expected_sales), '#0ea5e9') +
     card('未入金合計', yen(d.uncollected), '#f59e0b') +
