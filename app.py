@@ -5879,11 +5879,25 @@ def _app_record_to_dict(r, staff_map):
     }
 
 
+def _approved_in_month(rec, field, year, month):
+    """指定方向(field)が、指定年月に入金（承認）済みかを返す。
+    入金日(payment_date)の年月で判定する。"""
+    if field == 'brokerage':
+        ok, dt, amt = rec.brokerage_approved, rec.brokerage_payment_date, (rec.brokerage_fee or 0)
+    elif field == 'option':
+        ok, dt, amt = rec.option_approved, rec.option_payment_date, (rec.option_amount or 0)
+    elif field == 'ad':
+        ok, dt, amt = rec.ad_approved, rec.ad_payment_date, _ad_yen(rec)
+    else:
+        return False
+    return bool(ok and amt > 0 and dt and dt.year == year and dt.month == month)
+
+
 @app.route("/api/applications/settled")
 @login_required
 def api_applications_settled():
-    """入金済み一覧：仲手・その他費用・ADのいずれか1つでも承認済みの申込を返す
-    （申込月でフィルタ。翌月には繰り越さない）"""
+    """入金済み一覧：その月に入金（承認）された方向がある案件を返す。
+    入金日(payment_date)の月で判定（6月申込/7月AD入金→7月の一覧に表示）。"""
     allowed_ids = get_allowed_store_ids()
     store_id = request.args.get('store_id', type=int)
     staff_id = request.args.get('staff_id', type=int)
@@ -5893,27 +5907,44 @@ def api_applications_settled():
     q = ApplicationRecord.query.filter(
         ApplicationRecord.store_id.in_(allowed_ids),
         ApplicationRecord.status != 'キャンセル',
-        db.or_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.ad_amount > 0, ApplicationRecord.option_amount > 0),
-        # 3方向のいずれか1つでも承認があれば入金済み一覧に表示
-        db.or_(
-            db.and_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.brokerage_approved == True),
-            db.and_(ApplicationRecord.ad_amount > 0, ApplicationRecord.ad_approved == True),
-            db.and_(ApplicationRecord.option_amount > 0, ApplicationRecord.option_approved == True),
-        )
     )
     if store_id and store_id in allowed_ids:
         q = q.filter(ApplicationRecord.store_id == store_id)
     if staff_id:
         q = q.filter(ApplicationRecord.staff_id == staff_id)
+
     if year and month:
-        q = q.filter(
-            db.extract('year',  ApplicationRecord.application_date) == year,
-            db.extract('month', ApplicationRecord.application_date) == month,
-        )
+        # その月に入金日がある方向を持つ案件のみ
+        q = q.filter(db.or_(
+            db.and_(ApplicationRecord.brokerage_approved == True, ApplicationRecord.brokerage_fee > 0,
+                    db.extract('year', ApplicationRecord.brokerage_payment_date) == year,
+                    db.extract('month', ApplicationRecord.brokerage_payment_date) == month),
+            db.and_(ApplicationRecord.option_approved == True, ApplicationRecord.option_amount > 0,
+                    db.extract('year', ApplicationRecord.option_payment_date) == year,
+                    db.extract('month', ApplicationRecord.option_payment_date) == month),
+            db.and_(ApplicationRecord.ad_approved == True, ApplicationRecord.ad_amount > 0,
+                    db.extract('year', ApplicationRecord.ad_payment_date) == year,
+                    db.extract('month', ApplicationRecord.ad_payment_date) == month),
+        ))
+    else:
+        q = q.filter(db.or_(
+            db.and_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.brokerage_approved == True),
+            db.and_(ApplicationRecord.ad_amount > 0, ApplicationRecord.ad_approved == True),
+            db.and_(ApplicationRecord.option_amount > 0, ApplicationRecord.option_approved == True),
+        ))
 
     recs = q.order_by(ApplicationRecord.application_date.desc()).all()
     staff_map = {s.id: s.name for s in Staff.query.filter(Staff.id.in_({r.staff_id for r in recs if r.staff_id})).all()}
-    return jsonify([_app_record_to_dict(r, staff_map) for r in recs])
+    # フロントが当月入金分を判定できるよう、対象年月も返す
+    out = []
+    for r in recs:
+        d = _app_record_to_dict(r, staff_map)
+        if year and month:
+            d['brokerage_paid_this_month'] = _approved_in_month(r, 'brokerage', year, month)
+            d['option_paid_this_month']    = _approved_in_month(r, 'option', year, month)
+            d['ad_paid_this_month']        = _approved_in_month(r, 'ad', year, month)
+        out.append(d)
+    return jsonify(out)
 
 
 @app.route("/api/applications/unpaid")
@@ -6009,14 +6040,12 @@ def api_applications_summary():
     """顧客管理表の集計サマリー（年月・スタッフ別）
 
     定義:
-      合計      = 当月全案件の金額総額（仲手＋その他費用＋AD満額／キャンセル除く）
-      売上      = うち入金済み（承認済み）金額
-      見込み売上 = 売上 ＋ 未入金（＝合計と一致）
-      未入金合計 = まだ承認されていない金額
+      売上      = その月に入金済み一覧に入った金額（入金日がその月の承認済み金額）
+      見込み売上 = 申込一覧表（その月の申込）の入金予定金額の合計（満額）
+      未入金    = 未入金一覧（その月以前の申込で未承認の方向）の金額合計
       申込数    = 当月の申込件数（キャンセル除く）
       契約数    = ステータス「契約」件数
-      付帯契約数 = LL/引越/火保のいずれかが付帯する件数
-      付帯契約割合 = 付帯契約数 ÷ 申込数 ×100
+      ライフライン/火災保険/引越し = 各付帯件数と申込数に対する割合(%)
     """
     allowed = get_allowed_store_ids()
     store_id = request.args.get('store_id', type=int)
@@ -6024,39 +6053,54 @@ def api_applications_summary():
     year  = request.args.get('year',  type=int) or current_ym()[0]
     month = request.args.get('month', type=int) or current_ym()[1]
 
-    q = ApplicationRecord.query.filter(
+    import calendar as _cal
+    month_end = date(year, month, _cal.monthrange(year, month)[1])
+
+    base = ApplicationRecord.query.filter(
         ApplicationRecord.store_id.in_(allowed),
         ApplicationRecord.status != 'キャンセル',
-        db.extract('year',  ApplicationRecord.application_date) == year,
-        db.extract('month', ApplicationRecord.application_date) == month,
     )
     if store_id and store_id in allowed:
-        q = q.filter(ApplicationRecord.store_id == store_id)
+        base = base.filter(ApplicationRecord.store_id == store_id)
     if staff_id:
-        q = q.filter(ApplicationRecord.staff_id == staff_id)
-    recs = q.all()
+        base = base.filter(ApplicationRecord.staff_id == staff_id)
 
-    total_amount = sum(_record_total_amount(r) for r in recs)
-    sales        = sum(_record_approved_amount(r) for r in recs)
-    uncollected  = total_amount - sales
-    app_count    = len(recs)
-    contract_count = sum(1 for r in recs if r.status == '契約')
-    ancillary_count = sum(1 for r in recs if r.lifeline or r.moving or r.fire_insurance)
-    ancillary_rate = round(ancillary_count / app_count * 100, 1) if app_count else 0
-    lifeline_count = sum(1 for r in recs if r.lifeline)
-    moving_count   = sum(1 for r in recs if r.moving)
-    fire_count     = sum(1 for r in recs if r.fire_insurance)
+    # その月の申込（件数・付帯・見込み売上）
+    month_recs = base.filter(
+        db.extract('year',  ApplicationRecord.application_date) == year,
+        db.extract('month', ApplicationRecord.application_date) == month,
+    ).all()
+
+    # 売上：入金日がその月の承認済み金額（申込月は問わない）
+    paid_recs = base.all()
+    sales = 0
+    for r in paid_recs:
+        if _approved_in_month(r, 'brokerage', year, month): sales += (r.brokerage_fee or 0)
+        if _approved_in_month(r, 'option', year, month):    sales += (r.option_amount or 0)
+        if _approved_in_month(r, 'ad', year, month):         sales += _ad_yen(r)
+
+    # 未入金：その月以前の申込で未承認の方向の金額合計
+    uncollected = 0
+    for r in base.filter(ApplicationRecord.application_date <= month_end).all():
+        if (r.brokerage_fee or 0) > 0 and not r.brokerage_approved: uncollected += r.brokerage_fee or 0
+        if (r.option_amount or 0) > 0 and not r.option_approved:    uncollected += r.option_amount or 0
+        ady = _ad_yen(r)
+        if ady > 0 and not r.ad_approved:                            uncollected += ady
+
+    expected_sales = sum(_record_total_amount(r) for r in month_recs)
+    app_count    = len(month_recs)
+    contract_count = sum(1 for r in month_recs if r.status == '契約')
+    lifeline_count = sum(1 for r in month_recs if r.lifeline)
+    moving_count   = sum(1 for r in month_recs if r.moving)
+    fire_count     = sum(1 for r in month_recs if r.fire_insurance)
     rate = lambda c: round(c / app_count * 100, 1) if app_count else 0
 
     return jsonify({
-        'total': total_amount,
         'sales': sales,
-        'expected_sales': total_amount,
+        'expected_sales': expected_sales,
         'uncollected': uncollected,
         'application_count': app_count,
         'contract_count': contract_count,
-        'ancillary_count': ancillary_count,
-        'ancillary_rate': ancillary_rate,
         'lifeline_count': lifeline_count,
         'moving_count': moving_count,
         'fire_insurance_count': fire_count,
@@ -6127,19 +6171,7 @@ def api_applications_list():
     if status_filter:
         q = q.filter(ApplicationRecord.status == status_filter)
 
-    # 全方向の入金が承認済み（＝完済）の案件は申込一覧から除外し、入金済み一覧のみに表示する
-    not_fully_paid = db.or_(
-        db.and_(
-            db.or_(ApplicationRecord.brokerage_fee == None, ApplicationRecord.brokerage_fee <= 0),
-            db.or_(ApplicationRecord.ad_amount == None, ApplicationRecord.ad_amount <= 0),
-            db.or_(ApplicationRecord.option_amount == None, ApplicationRecord.option_amount <= 0),
-        ),
-        db.and_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.brokerage_approved == False),
-        db.and_(ApplicationRecord.ad_amount > 0, ApplicationRecord.ad_approved == False),
-        db.and_(ApplicationRecord.option_amount > 0, ApplicationRecord.option_approved == False),
-    )
-    q = q.filter(not_fully_paid)
-
+    # 申込一覧は全件表示（全部入金済みになっても申込一覧からは消さない）
     records = q.order_by(ApplicationRecord.application_date.asc()).all()
     staff_map = {s.id: s.name for s in Staff.query.all()}
     return jsonify([_app_record_to_dict(r, staff_map) for r in records])
@@ -6286,12 +6318,18 @@ def api_applications_approve(rid):
     data = request.get_json() or {}
     field = data.get('field')  # 'ad' / 'brokerage' / 'option'
 
+    # 承認日（入金日）を指定可能。未指定なら当日
+    approve_date = _parse_date(data.get('date')) or date.today()
+
     if field == 'ad' and not rec.ad_approved:
         rec.ad_approved = True
+        rec.ad_payment_date = rec.ad_payment_date or approve_date
     elif field == 'brokerage' and not rec.brokerage_approved:
         rec.brokerage_approved = True
+        rec.brokerage_payment_date = rec.brokerage_payment_date or approve_date
     elif field == 'option' and not rec.option_approved:
         rec.option_approved = True
+        rec.option_payment_date = rec.option_payment_date or approve_date
     else:
         return jsonify({'error': 'invalid field or already approved'}), 400
 

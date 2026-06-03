@@ -163,7 +163,7 @@
               <th>お客様名</th><th>賃料</th><th>契約開始日</th><th>仲介手数料</th>
               <th>AD</th><th>AD入金日</th><th>その他費用</th>
               <th>LL</th><th>引越</th><th>火保</th><th>ステータス</th>
-              <th>仲介入金</th><th>その他入金</th><th>AD入金</th><th>操作</th>
+              <th>仲手入金</th><th>その他入金</th><th>AD入金</th><th>操作</th>
             </tr>
           </thead>
           <tbody id="app-tbody">
@@ -198,7 +198,7 @@
             <tr>
               <th>申込日</th><th>担当</th><th>物件名</th><th>号室</th><th>お客様名</th><th>契約開始日</th>
               <th>LL</th><th>引越</th><th>火保</th>
-              <th>仲介手数料</th><th>仲介入金</th><th>その他費用</th><th>その他入金</th>
+              <th>仲介手数料</th><th>仲手入金</th><th>その他費用</th><th>その他入金</th>
               <th>AD金額</th><th>AD入金</th>
             </tr>
           </thead>
@@ -224,7 +224,7 @@
     <div id="unc-body-wrap">
       <!-- 色凡例 -->
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;">
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#dbeafe;display:inline-block;border:1px solid #93c5fd;"></span>仲介入金済（AD未入金）</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#dbeafe;display:inline-block;border:1px solid #93c5fd;"></span>仲手入金済（AD未入金）</span>
         <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>AD入金済（仲介未入金）</span>
         <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fff;display:inline-block;border:1px solid #e5e7eb;"></span>未入金</span>
       </div>
@@ -234,7 +234,7 @@
             <tr>
               <th>申込日</th><th>担当</th><th>物件名</th><th>号室</th><th>お客様名</th>
               <th>賃料</th><th>契約開始日</th><th>仲介手数料</th><th>その他費用</th>
-              <th>AD</th><th>AD入金日</th><th>仲介入金</th><th>その他入金</th><th>AD入金</th><th>操作</th>
+              <th>AD</th><th>AD入金日</th><th>仲手入金</th><th>その他入金</th><th>AD入金</th><th>操作</th>
             </tr>
           </thead>
           <tbody id="uncollected-tbody">
@@ -615,46 +615,36 @@ function renderSettled(list, colors) {
   const countEl = document.getElementById('settled-count');
   if (countEl) countEl.textContent = list.length + '件';
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:#9ca3af;padding:16px;">入金済み案件なし</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="text-align:center;color:#9ca3af;padding:16px;">入金済み案件なし</td></tr>';
     return;
   }
   tbody.innerHTML = '';
-  // 入金セル: 金額なし→「—」/ 承認済み→入金日入力欄 / 未承認→✗
-  const payCell = (has, ok, id, dateField, val, title) => {
-    if (!has) return '<span style="color:#d1d5db;font-size:11px;">—</span>';
-    if (!ok)  return '<span style="color:#dc2626;font-weight:700;font-size:13px;">✗</span>';
-    return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">' +
-      '<span style="color:#0D9488;font-weight:700;font-size:11px;">✓ 入金済</span>' +
-      '<input type="date" value="' + (val || '') + '" ' +
-      'onchange="updatePaymentDate(' + id + ',&quot;' + dateField + '&quot;,this.value)" ' +
-      'style="border:1px solid #d1d5db;border-radius:4px;padding:1px 4px;font-size:10px;width:100px;text-align:center;" title="' + title + '">' +
-      '</div>';
+  // 入金セル: その月に入金があれば「✓入金済＋日付（テキスト）」/ なければ ×
+  const payCell = (paidThisMonth, dateStr) => {
+    if (paidThisMonth) {
+      return '<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">' +
+        '<span style="color:#0D9488;font-weight:700;font-size:11px;">✓ 入金済</span>' +
+        (dateStr ? '<span style="font-size:10px;color:#6b7280;">' + dateStr + '</span>' : '') +
+        '</div>';
+    }
+    return '<span style="color:#dc2626;font-weight:700;font-size:13px;">×</span>';
   };
   list.forEach(r => {
     const adYen    = adAmountYen(r);
     const optAmt   = r.option_amount || 0;
-    const hasBrok  = (r.brokerage_fee || 0) > 0;
-    const hasOpt   = optAmt > 0;
-    const hasAd    = adYen > 0;
-    const brokOk   = hasBrok && r.brokerage_approved;
-    const optOk    = hasOpt  && r.option_approved;
-    const adOk     = hasAd   && r.ad_approved;
+    const brokPaid = !!r.brokerage_paid_this_month;
+    const optPaid  = !!r.option_paid_this_month;
+    const adPaid   = !!r.ad_paid_this_month;
 
-    const brokCell = payCell(hasBrok, brokOk, r.id, 'brokerage_payment_date', r.brokerage_payment_date, '仲介入金日');
-    const optCell  = payCell(hasOpt,  optOk,  r.id, 'option_payment_date',    r.option_payment_date,    'その他費用入金日');
-    const adCell   = payCell(hasAd,   adOk,   r.id, 'ad_payment_date',        r.ad_payment_date,        'AD入金日');
+    const brokCell = payCell(brokPaid, r.brokerage_payment_date);
+    const optCell  = payCell(optPaid,  r.option_payment_date);
+    const adCell   = payCell(adPaid,   r.ad_payment_date);
 
     const fmt = v => v > 0 ? '¥' + Math.round(v).toLocaleString() : '—';
     const chk = v => v ? '●' : '×';
 
-    // 該当する全方向が承認済みなら緑、一部承認なら黄
-    const need = [hasBrok, hasOpt, hasAd];
-    const okd  = [brokOk, optOk, adOk];
-    const allOk = need.every((n, i) => !n || okd[i]) && need.some(Boolean);
-    const someOk = okd.some(Boolean);
-
     const tr = document.createElement('tr');
-    tr.style.background = allOk ? '#f0fdf4' : (someOk ? '#fffbeb' : '#fff');
+    tr.style.background = '#f0fdf4';
     tr.style.textAlign  = 'center';
     tr.innerHTML =
       '<td style="white-space:nowrap;">' + (r.application_date || '―') + '</td>' +
@@ -836,11 +826,12 @@ async function loadSummary() {
     `<div style="grid-column:1/-1;font-size:12px;color:#6b7280;font-weight:700;">📊 ${salesYear}年${salesMonth}月 集計（${staffName}）</div>` +
     card('売上（入金済み）', yen(d.sales), '#16a34a') +
     card('見込み売上', yen(d.expected_sales), '#0ea5e9') +
-    card('未入金合計', yen(d.uncollected), '#f59e0b') +
+    card('未入金', yen(d.uncollected), '#f59e0b') +
     card('申込数', (d.application_count||0) + unit('件'), '#6366f1') +
     card('契約数', (d.contract_count||0) + unit('件'), '#8b5cf6') +
-    card('付帯契約数', (d.ancillary_count||0) + unit('件'), '#ec4899') +
-    card('付帯契約割合', (d.ancillary_rate||0) + unit('%'), '#f43f5e');
+    card('ライフライン', `${d.lifeline_count||0}${unit('件')}　${d.lifeline_rate||0}${unit('%')}`, '#0D9488') +
+    card('火災保険', `${d.fire_insurance_count||0}${unit('件')}　${d.fire_insurance_rate||0}${unit('%')}`, '#f43f5e') +
+    card('引越し', `${d.moving_count||0}${unit('件')}　${d.moving_rate||0}${unit('%')}`, '#ec4899');
 }
 
 /* ===================================================
