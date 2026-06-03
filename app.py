@@ -5897,7 +5897,7 @@ def api_applications_list():
     if status_filter:
         q = q.filter(ApplicationRecord.status == status_filter)
 
-    records = q.order_by(ApplicationRecord.application_date.desc()).all()
+    records = q.order_by(ApplicationRecord.application_date.asc()).all()
     staff_map = {s.id: s.name for s in Staff.query.all()}
     return jsonify([_app_record_to_dict(r, staff_map) for r in records])
 
