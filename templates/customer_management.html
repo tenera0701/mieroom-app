@@ -936,6 +936,18 @@ async function deleteApp(id) {
 /* ===================================================
    インライン編集
 =================================================== */
+/** インライン編集後にローカルデータだけ更新（順番を変えない） */
+function applyLocalUpdate(id, field, value) {
+  const rec = appData.find(r => r.id === id);
+  if (rec) {
+    // 数値フィールドは数値に変換
+    rec[field] = (field === 'rent' || field === 'brokerage_fee' || field === 'ad_amount' || field === 'option_amount')
+      ? (parseFloat(value) || 0) : value;
+  }
+  renderApplications(appData, statusColors);
+  loadSettled().catch(() => {});
+}
+
 function editCellApp(td, id, field, type, curVal, opts) {
   if (td.querySelector('input,select')) return;
   const prev = td.innerHTML;
@@ -949,17 +961,18 @@ function editCellApp(td, id, field, type, curVal, opts) {
       el.appendChild(o);
     });
     td.innerHTML = ''; td.appendChild(el); el.focus();
-    el.addEventListener('change', async () => { await patchApp(id, field, el.value); loadApplications(); });
-    el.addEventListener('blur',   () => { if (td.querySelector('select')) loadApplications(); });
+    el.addEventListener('change', async () => { await patchApp(id, field, el.value); applyLocalUpdate(id, field, el.value); });
+    el.addEventListener('blur',   () => { if (!td.querySelector('select')) return; });
   } else if (type === 'checkbox') {
-    patchApp(id, field, !curVal).then(() => loadApplications());
+    const newVal = !curVal;
+    patchApp(id, field, newVal).then(() => applyLocalUpdate(id, field, newVal));
   } else {
     el = document.createElement('input');
     el.type = type; el.value = curVal || '';
     el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
     td.innerHTML = ''; td.appendChild(el); el.focus();
     if (type === 'text' || type === 'number') el.select();
-    const save = async () => { await patchApp(id, field, el.value); loadApplications(); };
+    const save = async () => { await patchApp(id, field, el.value); applyLocalUpdate(id, field, el.value); };
     el.addEventListener('blur', save);
     el.addEventListener('keydown', e => { if (e.key === 'Enter') el.blur(); if (e.key === 'Escape') td.innerHTML = prev; });
   }
