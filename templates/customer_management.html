@@ -545,8 +545,8 @@ function buildAppRow(r, colors, isSettled = false) {
 
   const adYen = adAmountYen(r);
   const adLabel = r.ad_type === 'percent'
-    ? `${r.ad_amount ?? 0}% (¥${Math.round(adYen).toLocaleString()})`
-    : `¥${(r.ad_amount || 0).toLocaleString()}`;
+    ? `${r.ad_amount ?? 0}% (${Math.round(adYen).toLocaleString()}円)`
+    : `${(r.ad_amount || 0).toLocaleString()}円`;
 
   const brokerageCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved, (r.brokerage_fee || 0) > 0);
   const optionCell    = buildSettleCell(r, 'option',    r.option_settled,    r.option_approved,    (r.option_amount || 0) > 0);
@@ -564,12 +564,12 @@ function buildAppRow(r, colors, isSettled = false) {
     <td data-f="property_name"    data-t="text"   data-v="${escApp(r.property_name)}"   >${r.property_name || '―'}</td>
     <td data-f="room_number"      data-t="text"   data-v="${escApp(r.room_number)}"     >${r.room_number || '―'}</td>
     <td data-f="customer_name"    data-t="text"   data-v="${escApp(r.customer_name)}"   >${r.customer_name || '―'}</td>
-    <td data-f="rent"             data-t="number" data-v="${r.rent||0}"                  style="text-align:right;">${r.rent ? '¥'+r.rent.toLocaleString() : '―'}</td>
+    <td data-f="rent"             data-t="number" data-v="${r.rent||0}"                  style="text-align:right;">${r.rent ? r.rent.toLocaleString()+'円' : '―'}</td>
     <td data-f="contract_start_date" data-t="date" data-v="${r.contract_start_date||''}" style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
-    <td data-f="brokerage_fee"    data-t="number" data-v="${r.brokerage_fee||0}"         style="text-align:right;">${r.brokerage_fee ? '¥'+r.brokerage_fee.toLocaleString() : '―'}</td>
+    <td data-f="brokerage_fee"    data-t="number" data-v="${r.brokerage_fee||0}"         style="text-align:right;">${r.brokerage_fee ? r.brokerage_fee.toLocaleString()+'円' : '―'}</td>
     <td data-f="ad_amount"        data-t="number" data-v="${r.ad_amount||0}"             style="text-align:right;">${adLabel}</td>
     <td data-f="ad_payment_date"  data-t="date"   data-v="${r.ad_payment_date||''}"      style="white-space:nowrap;">${r.ad_payment_date || '―'}</td>
-    <td data-f="option_amount"    data-t="number" data-v="${r.option_amount||0}"         style="text-align:right;">${r.option_amount ? '¥'+r.option_amount.toLocaleString() : '―'}</td>
+    <td data-f="option_amount"    data-t="number" data-v="${r.option_amount||0}"         style="text-align:right;">${r.option_amount ? r.option_amount.toLocaleString()+'円' : '―'}</td>
     <td data-f="lifeline"         data-t="bool"   data-v="${!!r.lifeline}"               style="text-align:center;">${r.lifeline ? '●' : '×'}</td>
     <td data-f="moving"           data-t="bool"   data-v="${!!r.moving}"                 style="text-align:center;">${r.moving ? '●' : '×'}</td>
     <td data-f="fire_insurance"   data-t="bool"   data-v="${!!r.fire_insurance}"         style="text-align:center;">${r.fire_insurance ? '●' : '×'}</td>
@@ -619,12 +619,14 @@ function renderSettled(list, colors) {
     return;
   }
   tbody.innerHTML = '';
-  // 入金セル: その月に入金があれば「✓入金済＋日付（テキスト）」/ なければ ×
-  const payCell = (paidThisMonth, dateStr) => {
+  // 入金セル: その月に入金があれば「✓入金済＋日付(クリックで変更可)」/ なければ ×
+  const payCell = (paidThisMonth, dateStr, id, field) => {
     if (paidThisMonth) {
+      const ds = dateStr || '日付未設定';
       return '<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">' +
         '<span style="color:#0D9488;font-weight:700;font-size:11px;">✓ 入金済</span>' +
-        (dateStr ? '<span style="font-size:10px;color:#6b7280;">' + dateStr + '</span>' : '') +
+        '<span style="font-size:10px;color:#6b7280;cursor:pointer;border-bottom:1px dotted #9ca3af;" title="クリックで入金日を変更" ' +
+        'onclick="editSettledDate(this,' + id + ',&quot;' + field + '&quot;,&quot;' + (dateStr || '') + '&quot;)">' + ds + '</span>' +
         '</div>';
     }
     return '<span style="color:#dc2626;font-weight:700;font-size:13px;">×</span>';
@@ -636,11 +638,11 @@ function renderSettled(list, colors) {
     const optPaid  = !!r.option_paid_this_month;
     const adPaid   = !!r.ad_paid_this_month;
 
-    const brokCell = payCell(brokPaid, r.brokerage_payment_date);
-    const optCell  = payCell(optPaid,  r.option_payment_date);
-    const adCell   = payCell(adPaid,   r.ad_payment_date);
+    const brokCell = payCell(brokPaid, r.brokerage_payment_date, r.id, 'brokerage_payment_date');
+    const optCell  = payCell(optPaid,  r.option_payment_date,    r.id, 'option_payment_date');
+    const adCell   = payCell(adPaid,   r.ad_payment_date,        r.id, 'ad_payment_date');
 
-    const fmt = v => v > 0 ? '¥' + Math.round(v).toLocaleString() : '—';
+    const fmt = v => v > 0 ? Math.round(v).toLocaleString() + '円' : '—';
     const chk = v => v ? '●' : '×';
 
     const tr = document.createElement('tr');
@@ -676,6 +678,28 @@ async function updatePaymentDate(id, field, value) {
   } catch(_) {}
 }
 
+/** 入金済み一覧の入金日をクリックで編集（日付入力→保存→即再描画） */
+function editSettledDate(span, id, field, cur) {
+  if (!span || span.dataset.editing) return;
+  span.dataset.editing = '1';
+  const inp = document.createElement('input');
+  inp.type = 'date';
+  inp.value = cur || '';
+  inp.style.cssText = 'font-size:10px;border:1px solid #0D9488;border-radius:4px;padding:1px 3px;';
+  span.replaceWith(inp);
+  inp.focus();
+  let done = false;
+  const finish = async (save) => {
+    if (done) return; done = true;
+    if (save) await updatePaymentDate(id, field, inp.value);
+    loadSettled().catch(()=>{});
+    loadSummary().catch(()=>{});
+    loadUncollected().catch(()=>{});
+  };
+  inp.addEventListener('change', () => finish(true));
+  inp.addEventListener('blur',   () => finish(false));
+}
+
 
 async function loadSettled() {
   const params = new URLSearchParams({ store_id: STORE_ID, year: salesYear, month: salesMonth });
@@ -703,8 +727,8 @@ function renderUncollectedTable(list) {
     if (payBg) tr.style.background = payBg;
     const adYen = adAmountYen(r);
     const adDisp = r.ad_type === 'percent'
-      ? `${r.ad_amount ?? 0}% (¥${Math.round(adYen).toLocaleString()})`
-      : (r.ad_amount ? `¥${r.ad_amount.toLocaleString()}` : '―');
+      ? `${r.ad_amount ?? 0}% (${Math.round(adYen).toLocaleString()}円)`
+      : (r.ad_amount ? `${r.ad_amount.toLocaleString()}円` : '―');
     const bCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved, (r.brokerage_fee || 0) > 0);
     const oCell = buildSettleCell(r, 'option',    r.option_settled,    r.option_approved,    (r.option_amount || 0) > 0);
     const aCell = buildSettleCell(r, 'ad',        r.ad_settled,        r.ad_approved,        adYen > 0);
@@ -714,10 +738,10 @@ function renderUncollectedTable(list) {
       <td>${r.property_name || '―'}</td>
       <td>${r.room_number || '―'}</td>
       <td>${r.customer_name || '―'}</td>
-      <td style="text-align:right;">${r.rent ? '¥'+r.rent.toLocaleString() : '―'}</td>
+      <td style="text-align:right;">${r.rent ? r.rent.toLocaleString()+'円' : '―'}</td>
       <td style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
-      <td style="text-align:right;">${r.brokerage_fee ? '¥'+r.brokerage_fee.toLocaleString() : '―'}</td>
-      <td style="text-align:right;">${r.option_amount ? '¥'+r.option_amount.toLocaleString() : '―'}</td>
+      <td style="text-align:right;">${r.brokerage_fee ? r.brokerage_fee.toLocaleString()+'円' : '―'}</td>
+      <td style="text-align:right;">${r.option_amount ? r.option_amount.toLocaleString()+'円' : '―'}</td>
       <td style="text-align:right;">${adDisp}</td>
       <td style="white-space:nowrap;">${r.ad_payment_date || '―'}</td>
       <td style="text-align:center;white-space:nowrap;">${bCell}</td>
@@ -808,7 +832,7 @@ async function loadSummary() {
     d = await res.json();
   } catch(_) { return; }
 
-  const yen = v => '¥' + Math.round(v || 0).toLocaleString();
+  const yen = v => Math.round(v || 0).toLocaleString() + '円';
   const staffName = (() => {
     const sel = document.getElementById('header-filter-staff');
     if (sel && sel.value) return sel.options[sel.selectedIndex].text;
@@ -982,6 +1006,8 @@ function applyLocalUpdate(id, field, value) {
   }
   renderApplications(appData, statusColors);
   loadSettled().catch(() => {});
+  loadSummary().catch(() => {});
+  loadUncollected().catch(() => {});
 }
 
 function editCellApp(td, id, field, type, curVal, opts) {

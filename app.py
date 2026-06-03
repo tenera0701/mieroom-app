@@ -50,8 +50,11 @@ def sync_session_role():
 
 @app.after_request
 def add_no_cache(response):
-    """HTMLページのブラウザキャッシュを無効化"""
-    if 'text/html' in response.content_type:
+    """HTMLページとAPI(JSON)応答のブラウザキャッシュを無効化。
+    APIをキャッシュすると編集後の再取得が古い値を返し、リロードするまで反映されない。"""
+    ctype = response.content_type or ''
+    is_api = request.path.startswith('/api/')
+    if 'text/html' in ctype or 'application/json' in ctype or is_api:
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
@@ -2389,6 +2392,23 @@ def api_kpi_staff():
         query = query.filter(SalesKPI.store_id == store_id)
     kpis = query.all()
 
+    # 顧客管理表(ApplicationRecord)からスタッフ別の申込数・付帯契約数を集計（成約率算出用）
+    app_q = ApplicationRecord.query.filter(
+        ApplicationRecord.store_id.in_(allowed_ids),
+        ApplicationRecord.status != 'キャンセル',
+        db.extract('year',  ApplicationRecord.application_date) == year,
+        db.extract('month', ApplicationRecord.application_date) == month,
+    )
+    if store_id and store_id in allowed_ids:
+        app_q = app_q.filter(ApplicationRecord.store_id == store_id)
+    app_stats = {}
+    for a in app_q.all():
+        st = app_stats.setdefault(a.staff_id, {'app': 0, 'll': 0, 'fire': 0, 'mv': 0})
+        st['app'] += 1
+        if a.lifeline:       st['ll']   += 1
+        if a.fire_insurance: st['fire'] += 1
+        if a.moving:         st['mv']   += 1
+
     result = []
     for kpi in kpis:
         staff = Staff.query.get(kpi.staff_id)
@@ -2412,6 +2432,19 @@ def api_kpi_staff():
             'fire_insurance_count':kpi.fire_insurance_count or 0,
             'lifeline_count':      kpi.lifeline_count or 0,
             'moving_count':        kpi.moving_count or 0,
+        })
+        # 顧客管理表ベースの付帯契約数・成約率（申込数に対して）
+        st = app_stats.get(kpi.staff_id, {'app': 0, 'll': 0, 'fire': 0, 'mv': 0})
+        app_ct = st['app']
+        _r = lambda c: round(c / app_ct * 100, 1) if app_ct else 0
+        result[-1].update({
+            'app_count_real':  app_ct,
+            'll_contracts':    st['ll'],
+            'fire_contracts':  st['fire'],
+            'moving_contracts': st['mv'],
+            'll_rate':         _r(st['ll']),
+            'fire_rate':       _r(st['fire']),
+            'moving_rate':     _r(st['mv']),
         })
 
     # 売上降順でソート
@@ -3992,6 +4025,36 @@ def api_settings_profile():
 
 
 # ── スタッフ別6ヶ月推移 API ──────────────────────────────────────
+def _staff_real_stats(filter_ids, staff_id, y, m):
+    """指定スタッフ・年月の実績を各管理表から集計（反響/接客/申込/売上）"""
+    import calendar as _cal
+    m_start = date(y, m, 1)
+    m_end   = date(y, m, _cal.monthrange(y, m)[1])
+    if not filter_ids:
+        return {'inquiries': 0, 'visits': 0, 'applications': 0, 'revenue': 0}
+
+    eq = EchoRecord.query.filter(EchoRecord.store_id.in_(filter_ids),
+                                 EchoRecord.echo_date >= m_start, EchoRecord.echo_date <= m_end)
+    cq = CustomerServiceRecord.query.filter(CustomerServiceRecord.store_id.in_(filter_ids),
+                                            CustomerServiceRecord.service_date >= m_start,
+                                            CustomerServiceRecord.service_date <= m_end)
+    aq = ApplicationRecord.query.filter(ApplicationRecord.store_id.in_(filter_ids),
+                                        ApplicationRecord.status != 'キャンセル',
+                                        db.extract('year',  ApplicationRecord.application_date) == y,
+                                        db.extract('month', ApplicationRecord.application_date) == m)
+    if staff_id:
+        eq = eq.filter(EchoRecord.staff_id == staff_id)
+        cq = cq.filter(CustomerServiceRecord.staff_id == staff_id)
+        aq = aq.filter(ApplicationRecord.staff_id == staff_id)
+    apps = aq.all()
+    return {
+        'inquiries':    eq.count(),
+        'visits':       cq.count(),
+        'applications': len(apps),
+        'revenue':      sum(_record_approved_amount(a) for a in apps),
+    }
+
+
 @app.route("/api/kpi/staff-history")
 def api_kpi_staff_history():
     """スタッフ別の6ヶ月推移データを返す"""
@@ -4024,21 +4087,15 @@ def api_kpi_staff_history():
             'revenue':      sum(k.sales_amount or 0 for k in kpis),
             'inquiries':    sum(k.inquiries    or 0 for k in kpis),
         })
-        # 現在月のみ前年比を計算
+        # 現在月のみ前年同月比を計算（実データから：反響=反響管理表/接客=接客管理表/申込・売上=顧客管理表）
         if i == 0:
-            prev_y_kpis = SalesKPI.query.filter_by(year=y-1, month=m)
-            if filter_ids:
-                prev_y_kpis = prev_y_kpis.filter(SalesKPI.store_id.in_(filter_ids))
-            if staff_id:
-                prev_y_kpis = prev_y_kpis.filter_by(staff_id=staff_id)
-            prev_y_kpis = prev_y_kpis.all()
-            _visits     = lambda ks: sum((k.store_visits or 0) + (k.viewings or 0) for k in ks)
+            cur  = _staff_real_stats(filter_ids, staff_id, y, m)
+            prev = _staff_real_stats(filter_ids, staff_id, y - 1, m)
             yoy_data = {
-                'inquiries':    {'cur': sum(k.inquiries    or 0 for k in kpis),   'yoy': sum(k.inquiries    or 0 for k in prev_y_kpis)},
-                'visits':       {'cur': _visits(kpis),                            'yoy': _visits(prev_y_kpis)},
-                'applications': {'cur': sum(k.applications or 0 for k in kpis),   'yoy': sum(k.applications or 0 for k in prev_y_kpis)},
-                'contracts':    {'cur': sum(k.contracts    or 0 for k in kpis),   'yoy': sum(k.contracts    or 0 for k in prev_y_kpis)},
-                'revenue':      {'cur': sum(k.sales_amount or 0 for k in kpis),   'yoy': sum(k.sales_amount or 0 for k in prev_y_kpis)},
+                'inquiries':    {'cur': cur['inquiries'],    'yoy': prev['inquiries']},
+                'visits':       {'cur': cur['visits'],       'yoy': prev['visits']},
+                'applications': {'cur': cur['applications'], 'yoy': prev['applications']},
+                'revenue':      {'cur': cur['revenue'],      'yoy': prev['revenue']},
             }
 
     return jsonify({'history': history, 'yoy': yoy_data})
@@ -5933,7 +5990,7 @@ def api_applications_settled():
             db.and_(ApplicationRecord.option_amount > 0, ApplicationRecord.option_approved == True),
         ))
 
-    recs = q.order_by(ApplicationRecord.application_date.desc()).all()
+    recs = q.order_by(ApplicationRecord.application_date.asc()).all()
     staff_map = {s.id: s.name for s in Staff.query.filter(Staff.id.in_({r.staff_id for r in recs if r.staff_id})).all()}
     # フロントが当月入金分を判定できるよう、対象年月も返す
     out = []

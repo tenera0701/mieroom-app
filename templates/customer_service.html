@@ -169,10 +169,9 @@
     <table>
       <thead>
         <tr>
-          <th>カードNo</th>
           <th>日付</th>
-          <th>反響媒体</th>
           <th>担当者</th>
+          <th>反響媒体</th>
           <th>お客様名</th>
           <th class="center">対応</th>
           <th class="center">来店数</th>
@@ -182,7 +181,7 @@
         </tr>
       </thead>
       <tbody id="cs-tbody">
-        <tr class="empty-row"><td colspan="10">読み込み中...</td></tr>
+        <tr class="empty-row"><td colspan="9">読み込み中...</td></tr>
       </tbody>
     </table>
   </div>
@@ -198,10 +197,6 @@
     </div>
     <div class="modal-body">
       <div class="form-grid">
-        <div class="form-group">
-          <label>カードNo</label>
-          <input type="text" id="f-card-no" placeholder="例：2401001" autocomplete="off">
-        </div>
         <div class="form-group">
           <label>日付 <span style="color:#ef4444;">*</span></label>
           <input type="date" id="f-service-date">
@@ -522,17 +517,16 @@ function staffName(sid) {
 function renderTable() {
   const tbody = document.getElementById('cs-tbody');
   if (!records.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="10">データがありません</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="9">データがありません</td></tr>';
     return;
   }
   tbody.innerHTML = records.map(r => {
     const svcBadge = SERVICE_BADGE[r.service_type] || 'badge badge-other';
     const stsBadge = STATUS_BADGE[r.status] || 'badge badge-follow';
     return `<tr>
-      <td onclick="editCell(this,${r.id},'card_no','text','${escHtml(r.card_no)}')">${escHtml(r.card_no)||'―'}</td>
       <td onclick="editCell(this,${r.id},'service_date','date','${r.service_date||''}')">${r.service_date||'―'}</td>
-      <td onclick="editCell(this,${r.id},'echo_media','text','${escHtml(r.echo_media)}')">${escHtml(r.echo_media)||'―'}</td>
       <td onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${escHtml(staffName(r.staff_id))}</td>
+      <td onclick="editCell(this,${r.id},'echo_media','text','${escHtml(r.echo_media)}')">${escHtml(r.echo_media)||'―'}</td>
       <td onclick="editCell(this,${r.id},'customer_name','text','${escHtml(r.customer_name)}')">${escHtml(r.customer_name)||'―'}</td>
       <td class="center" onclick="editCell(this,${r.id},'service_type','select','${r.service_type||''}',SERVICE_TYPES.map(v=>[v,v]))">
         <span class="${svcBadge}">${escHtml(r.service_type)||'―'}</span></td>
@@ -556,7 +550,6 @@ function closeModal() {
   document.getElementById('record-modal').classList.remove('active');
 }
 function clearForm() {
-  document.getElementById('f-card-no').value       = '';
   document.getElementById('f-service-date').value  = '';
   document.getElementById('f-echo-media').value    = '';
   document.getElementById('f-staff').value         = '';
@@ -572,7 +565,6 @@ async function saveRecord() {
   if (!serviceDate) { showAlert('日付は必須です', 'error'); return; }
   const payload = {
     store_id:      STORE_ID,
-    card_no:       document.getElementById('f-card-no').value.trim(),
     service_date:  serviceDate,
     echo_media:    document.getElementById('f-echo-media').value.trim(),
     staff_id:      document.getElementById('f-staff').value || null,

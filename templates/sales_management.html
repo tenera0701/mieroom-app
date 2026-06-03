@@ -91,8 +91,8 @@
   .kpi-cards {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 20px;
+    gap: 10px;
+    margin-bottom: 16px;
   }
   @media (max-width: 1100px) { .kpi-cards { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 600px)  { .kpi-cards { grid-template-columns: 1fr; } }
@@ -101,8 +101,8 @@
   .kpi-card {
     background: #fff;
     border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    padding: 18px 20px;
+    border-radius: 8px;
+    padding: 9px 12px;
     position: relative;
     overflow: hidden;
   }
@@ -110,26 +110,25 @@
     content: '';
     position: absolute;
     top: 0; left: 0; right: 0;
-    height: 4px;
+    height: 3px;
     background: var(--primary);
   }
   .kpi-card-label {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+    margin-bottom: 3px;
   }
   .kpi-card-value {
-    font-size: 28px;
+    font-size: 18px;
     font-weight: 700;
     color: #111827;
-    line-height: 1;
-    margin-bottom: 4px;
+    line-height: 1.1;
+    margin-bottom: 2px;
   }
   .kpi-card-sub {
-    font-size: 13px;
+    font-size: 11px;
     color: var(--text-muted);
   }
   .kpi-card-badge {
@@ -530,8 +529,6 @@
     <div class="kpi-card">
       <div class="kpi-card-label">総売上</div>
       <div class="kpi-card-value"><span id="card-revenue">-</span><span class="kpi-unit">円</span></div>
-      <div class="kpi-card-sub">顧客管理表の入金合計（全スタッフ）</div>
-      <span class="kpi-card-badge badge-up" id="card-revenue-trend"></span>
     </div>
     <div class="kpi-card">
       <div class="kpi-card-label">平均成約率</div>
@@ -590,6 +587,9 @@
             <th onclick="sortTable(9)">目標(円)</th>
             <th onclick="sortTable(10)">達成率</th>
             <th onclick="sortTable(11)">前月比</th>
+            <th title="ライフライン契約数・成約率">ライフライン</th>
+            <th title="火災保険契約数・成約率">火災保険</th>
+            <th title="引越し契約数・成約率">引越し</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -615,7 +615,7 @@
 <!-- ===== 個人KPI詳細パネル（テンプレート）===== -->
 <template id="detail-panel-tpl">
   <tr class="detail-row">
-    <td colspan="13">
+    <td colspan="16">
       <div class="detail-panel">
         <div class="detail-chart-wrap">
           <h3>📈 6ヶ月推移（契約数・売上）</h3>
@@ -872,7 +872,7 @@ function renderStaffTable(data) {
   expandedRow = null;
 
   if (!data || !data.length) {
-    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding:40px; color:var(--text-muted); font-size:14px;">データがありません</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="16" style="text-align:center; padding:40px; color:var(--text-muted); font-size:14px;">データがありません</td></tr>';
     return;
   }
 
@@ -905,6 +905,9 @@ function renderStaffTable(data) {
       <td>${target > 0 ? target.toLocaleString()+'円' : '―'}</td>
       <td>${achvHtml}</td>
       <td>${trendArrow(s.revenue, s.prev_revenue)}</td>
+      <td style="white-space:nowrap;">${s.ll_contracts||0}件<span style="color:#6b7280;font-size:11px;"> (${s.ll_rate||0}%)</span></td>
+      <td style="white-space:nowrap;">${s.fire_contracts||0}件<span style="color:#6b7280;font-size:11px;"> (${s.fire_rate||0}%)</span></td>
+      <td style="white-space:nowrap;">${s.moving_contracts||0}件<span style="color:#6b7280;font-size:11px;"> (${s.moving_rate||0}%)</span></td>
       <td onclick="event.stopPropagation();" style="white-space:nowrap;">
         ${s.kpi_id ? `
           <button class="btn-cancel" style="padding:3px 10px;font-size:12px;color:#0F766E;border-color:#5EEAD4;margin-right:4px;" onclick="editKpi(${s.kpi_id}, ${JSON.stringify(s).replace(/"/g,'&quot;')})">編集</button>
