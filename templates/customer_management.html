@@ -417,9 +417,10 @@ const STATUS_KEYS  = ['申込','契約','キャンセル','キャンセル振替
 const STATUS_DEFAULTS = {
   '申込':          { bg: '#ffffff', text: '#111827' },
   '契約':          { bg: '#fef9c3', text: '#92400e' },
-  'キャンセル':     { bg: '#fee2e2', text: '#b91c1c' },
-  'キャンセル振替': { bg: '#CCFBF1', text: '#0F766E' },
+  'キャンセル':     { bg: '#e5e7eb', text: '#6b7280' },
+  'キャンセル振替': { bg: '#e5e7eb', text: '#6b7280' },
 };
+const CANCEL_STATUSES = ['キャンセル', 'キャンセル振替'];
 
 let appData = [];
 let statusColors = {};
@@ -547,8 +548,10 @@ function buildSettleCell(r, field, settled, approved, hasAmount = true) {
 function buildAppRow(r, colors, isSettled = false) {
   const sc = colors[r.status] || STATUS_DEFAULTS[r.status] || { bg: '#fff', text: '#111827' };
   const tr = document.createElement('tr');
+  const isCancel = CANCEL_STATUSES.includes(r.status);
   const payBg = paymentRowBg(r);
-  tr.style.cssText = `background:${payBg || sc.bg};color:${sc.text};`;
+  // キャンセル/キャンセル振替はデフォルトでグレー背景（入金色より優先）
+  tr.style.cssText = `background:${isCancel ? '#e5e7eb' : (payBg || sc.bg)};color:${sc.text};`;
 
   const adYen = adAmountYen(r);
   const adLabel = r.ad_type === 'percent'

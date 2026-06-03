@@ -2120,7 +2120,7 @@ def api_kpi_by_store():
         from sqlalchemy import extract as _ex
         approved_cnt = ApplicationRecord.query.filter(
             ApplicationRecord.store_id == store.id,
-            ApplicationRecord.status != 'キャンセル',
+            ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
             _ex('year',  ApplicationRecord.application_date) == year,
             _ex('month', ApplicationRecord.application_date) == month,
             db.or_(ApplicationRecord.ad_amount > 0, ApplicationRecord.brokerage_fee > 0),
@@ -2401,7 +2401,7 @@ def api_kpi_staff():
     # 顧客管理表(ApplicationRecord)からスタッフ別の申込数・付帯契約数を集計（成約率算出用）
     app_q = ApplicationRecord.query.filter(
         ApplicationRecord.store_id.in_(allowed_ids),
-        ApplicationRecord.status != 'キャンセル',
+        ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
         db.extract('year',  ApplicationRecord.application_date) == year,
         db.extract('month', ApplicationRecord.application_date) == month,
     )
@@ -4045,7 +4045,7 @@ def _staff_real_stats(filter_ids, staff_id, y, m):
                                             CustomerServiceRecord.service_date >= m_start,
                                             CustomerServiceRecord.service_date <= m_end)
     aq = ApplicationRecord.query.filter(ApplicationRecord.store_id.in_(filter_ids),
-                                        ApplicationRecord.status != 'キャンセル',
+                                        ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
                                         db.extract('year',  ApplicationRecord.application_date) == y,
                                         db.extract('month', ApplicationRecord.application_date) == m)
     if staff_id:
@@ -4293,7 +4293,7 @@ def api_uncollected_sync_from_applications():
         ApplicationRecord.store_id.in_(filter_ids),
         extract('year',  ApplicationRecord.application_date) == year,
         extract('month', ApplicationRecord.application_date) == month,
-        ApplicationRecord.status != 'キャンセル',
+        ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
         db.or_(
             db.and_(ApplicationRecord.ad_amount > 0,       ApplicationRecord.ad_approved == False),
             db.and_(ApplicationRecord.brokerage_fee > 0,   ApplicationRecord.brokerage_approved == False),
@@ -5971,7 +5971,7 @@ def api_applications_settled():
 
     q = ApplicationRecord.query.filter(
         ApplicationRecord.store_id.in_(allowed_ids),
-        ApplicationRecord.status != 'キャンセル',
+        ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
     )
     if store_id and store_id in allowed_ids:
         q = q.filter(ApplicationRecord.store_id == store_id)
@@ -6034,7 +6034,7 @@ def api_applications_unpaid():
 
     q = ApplicationRecord.query.filter(
         ApplicationRecord.store_id.in_(allowed_ids),
-        ApplicationRecord.status != 'キャンセル',
+        ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
         ApplicationRecord.application_date <= month_end,  # 選択月以前の案件のみ
         db.or_(
             db.and_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.brokerage_approved == False),
@@ -6064,7 +6064,7 @@ def api_applications_approved_sum():
 
     recs = ApplicationRecord.query.filter(
         ApplicationRecord.store_id.in_(allowed),
-        ApplicationRecord.status != 'キャンセル',
+        ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
         db.extract('year',  ApplicationRecord.application_date) == year,
         db.extract('month', ApplicationRecord.application_date) == month,
     ).all()
@@ -6123,7 +6123,7 @@ def api_applications_summary():
 
     base = ApplicationRecord.query.filter(
         ApplicationRecord.store_id.in_(allowed),
-        ApplicationRecord.status != 'キャンセル',
+        ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
     )
     if store_id and store_id in allowed:
         base = base.filter(ApplicationRecord.store_id == store_id)
