@@ -90,12 +90,10 @@
       <input type="month" id="month-jump-cm"
         style="border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:13px;"
         onchange="jumpMonth(this.value)">
-      {% if is_manager %}
       <select id="header-filter-staff" onchange="onHeaderStaffChange()" class="filter">
         <option value="">全スタッフ</option>
         {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
       </select>
-      {% endif %}
       <button class="btn-add" onclick="openAppModal()">＋ 新規入力</button>
     </div>
   </div>
@@ -107,6 +105,10 @@
     </svg>
     <span id="approval-notice-text"></span>
     <button onclick="scrollToApproval()" style="margin-left:auto;padding:3px 10px;font-size:12px;border:1px solid #fde68a;border-radius:6px;background:#fff;color:#92400e;cursor:pointer;font-weight:600;">確認する</button>
+  </div>
+
+  <!-- ===== 集計サマリー ===== -->
+  <div id="summary-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;">
   </div>
 
   <!-- 一括検索バー -->
@@ -151,8 +153,7 @@
       <!-- 色凡例 -->
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;">
         <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d1fae5;display:inline-block;border:1px solid #6ee7b7;"></span>全入金済</span>
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#dbeafe;display:inline-block;border:1px solid #93c5fd;"></span>仲介入金済</span>
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>AD入金済</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>一部入金済（仲手・その他費用・ADのいずれか）</span>
       </div>
       <div class="table-wrapper">
         <table>
@@ -160,13 +161,13 @@
             <tr>
               <th>申込日</th><th>担当</th><th>媒体</th><th>物件名</th><th>号室</th>
               <th>お客様名</th><th>賃料</th><th>契約開始日</th><th>仲介手数料</th>
-              <th>AD</th><th>AD入金日</th><th>オプション</th>
+              <th>AD</th><th>AD入金日</th><th>その他費用</th>
               <th>LL</th><th>引越</th><th>火保</th><th>ステータス</th>
-              <th>仲介入金</th><th>AD入金</th><th>操作</th>
+              <th>仲介入金</th><th>その他入金</th><th>AD入金</th><th>操作</th>
             </tr>
           </thead>
           <tbody id="app-tbody">
-            <tr><td colspan="19" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>
+            <tr><td colspan="20" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>
           </tbody>
         </table>
       </div>
@@ -195,14 +196,14 @@
         <table style="opacity:0.85;">
           <thead>
             <tr>
-              <th>申込日</th><th>物件名</th><th>号室</th><th>お客様名</th><th>契約開始日</th>
+              <th>申込日</th><th>担当</th><th>物件名</th><th>号室</th><th>お客様名</th><th>契約開始日</th>
               <th>LL</th><th>引越</th><th>火保</th>
-              <th>仲介手数料</th><th>オプション</th><th>仲手＋オプ合計</th><th>AD金額</th>
-              <th>仲手＋オプ入金</th><th>AD入金</th>
+              <th>仲介手数料</th><th>仲介入金</th><th>その他費用</th><th>その他入金</th>
+              <th>AD金額</th><th>AD入金</th>
             </tr>
           </thead>
           <tbody id="settled-tbody">
-            <tr><td colspan="14" style="text-align:center;color:#9ca3af;padding:16px;">入金済み案件なし</td></tr>
+            <tr><td colspan="15" style="text-align:center;color:#9ca3af;padding:16px;">入金済み案件なし</td></tr>
           </tbody>
         </table>
       </div>
@@ -232,12 +233,12 @@
           <thead>
             <tr>
               <th>申込日</th><th>担当</th><th>物件名</th><th>号室</th><th>お客様名</th>
-              <th>賃料</th><th>契約開始日</th><th>仲介手数料</th><th>オプション</th>
-              <th>AD</th><th>AD入金日</th><th>仲介入金</th><th>AD入金</th><th>操作</th>
+              <th>賃料</th><th>契約開始日</th><th>仲介手数料</th><th>その他費用</th>
+              <th>AD</th><th>AD入金日</th><th>仲介入金</th><th>その他入金</th><th>AD入金</th><th>操作</th>
             </tr>
           </thead>
           <tbody id="uncollected-tbody">
-            <tr><td colspan="14" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>
+            <tr><td colspan="15" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>
           </tbody>
         </table>
       </div>
@@ -308,8 +309,8 @@
         <div class="form-group">
           <label>AD種別</label>
           <select id="app-ad_type" onchange="updateAdLabel()">
-            <option value="amount">金額（円）</option>
             <option value="percent">割合（%）</option>
+            <option value="amount">金額（円）</option>
           </select>
         </div>
         <div class="form-group">
@@ -317,7 +318,7 @@
           <input type="number" id="app-ad_amount" min="0" placeholder="0" autocomplete="off">
         </div>
         <div class="form-group">
-          <label>オプション金額（円）</label>
+          <label>その他費用（円）</label>
           <input type="number" id="app-option_amount" min="0" placeholder="0" autocomplete="off">
         </div>
         <div class="form-group" style="grid-column:1/-1;">
@@ -330,7 +331,7 @@
           </div>
         </div>
         <div class="form-group" style="grid-column:1/-1;">
-          <label>オプション</label>
+          <label>付帯サービス</label>
           <div style="display:flex;gap:28px;align-items:center;flex-wrap:wrap;margin-top:8px;">
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
               <input type="checkbox" id="app-lifeline" style="width:16px;height:16px;accent-color:#0D9488;">
@@ -505,13 +506,14 @@ function isFullyApproved(r) {
 
 function paymentRowBg(r) {
   const hasBrokerage = (r.brokerage_fee || 0) > 0;
+  const hasOption    = (r.option_amount || 0) > 0;
   const hasAd        = adAmountYen(r) > 0;
   const bOk = !hasBrokerage || r.brokerage_approved;
+  const oOk = !hasOption    || r.option_approved;
   const aOk = !hasAd        || r.ad_approved;
-  if (hasBrokerage || hasAd) {
-    if (bOk && aOk) return '#d1fae5';
-    if (bOk && !aOk && hasBrokerage) return '#dbeafe';
-    if (aOk && !bOk && hasAd)        return '#fef3c7';
+  if (hasBrokerage || hasOption || hasAd) {
+    if (bOk && oOk && aOk) return '#d1fae5';            // 全方向入金済み
+    if ((bOk && hasBrokerage) || (oOk && hasOption) || (aOk && hasAd)) return '#fef3c7'; // 一部入金済み
   }
   return null;
 }
@@ -523,7 +525,8 @@ function escApp(s) {
 /* ===================================================
    行ビルダー
 =================================================== */
-function buildSettleCell(r, field, settled, approved) {
+function buildSettleCell(r, field, settled, approved, hasAmount = true) {
+  if (!hasAmount) return '<span style="color:#d1d5db;font-size:11px;">—</span>';
   if (approved) return '<span style="color:#0D9488;font-weight:700;font-size:11px;">✓ 承認済</span>';
   if (settled) {
     if (IS_MANAGER) return `<button onclick="approvePayment(${r.id},'${field}')" style="padding:3px 8px;font-size:11px;border:none;border-radius:4px;background:#2563eb;color:#fff;cursor:pointer;font-weight:700;">承認</button>`;
@@ -545,8 +548,9 @@ function buildAppRow(r, colors, isSettled = false) {
     ? `${r.ad_amount ?? 0}% (¥${Math.round(adYen).toLocaleString()})`
     : `¥${(r.ad_amount || 0).toLocaleString()}`;
 
-  const brokerageCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved);
-  const adCell        = buildSettleCell(r, 'ad',        r.ad_settled,        r.ad_approved);
+  const brokerageCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved, (r.brokerage_fee || 0) > 0);
+  const optionCell    = buildSettleCell(r, 'option',    r.option_settled,    r.option_approved,    (r.option_amount || 0) > 0);
+  const adCell        = buildSettleCell(r, 'ad',        r.ad_settled,        r.ad_approved,        adYen > 0);
 
   const canEdit = IS_MANAGER || r.staff_id === CUR_STAFF_ID;
   const opBtns  = canEdit
@@ -571,6 +575,7 @@ function buildAppRow(r, colors, isSettled = false) {
     <td data-f="fire_insurance"   data-t="bool"   data-v="${!!r.fire_insurance}"         style="text-align:center;">${r.fire_insurance ? '●' : '×'}</td>
     <td data-f="status"           data-t="status" data-v="${escApp(r.status)}"           style="white-space:nowrap;"><span class="app-status-badge" style="background:${sc.bg};color:${sc.text};border:1px solid ${sc.text}30;">${r.status}</span></td>
     <td style="text-align:center;white-space:nowrap;">${brokerageCell}</td>
+    <td style="text-align:center;white-space:nowrap;">${optionCell}</td>
     <td style="text-align:center;white-space:nowrap;">${adCell}</td>
     <td style="white-space:nowrap;">${opBtns}</td>`;
 
@@ -599,7 +604,7 @@ function renderApplications(list, colors) {
 
   tbody.innerHTML = '';
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="19" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="20" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>';
   } else {
     list.forEach(r => tbody.appendChild(buildAppRow(r, colors, false)));
   }
@@ -614,47 +619,46 @@ function renderSettled(list, colors) {
     return;
   }
   tbody.innerHTML = '';
+  // 入金セル: 金額なし→「—」/ 承認済み→入金日入力欄 / 未承認→✗
+  const payCell = (has, ok, id, dateField, val, title) => {
+    if (!has) return '<span style="color:#d1d5db;font-size:11px;">—</span>';
+    if (!ok)  return '<span style="color:#dc2626;font-weight:700;font-size:13px;">✗</span>';
+    return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">' +
+      '<span style="color:#0D9488;font-weight:700;font-size:11px;">✓ 入金済</span>' +
+      '<input type="date" value="' + (val || '') + '" ' +
+      'onchange="updatePaymentDate(' + id + ',&quot;' + dateField + '&quot;,this.value)" ' +
+      'style="border:1px solid #d1d5db;border-radius:4px;padding:1px 4px;font-size:10px;width:100px;text-align:center;" title="' + title + '">' +
+      '</div>';
+  };
   list.forEach(r => {
     const adYen    = adAmountYen(r);
+    const optAmt   = r.option_amount || 0;
     const hasBrok  = (r.brokerage_fee || 0) > 0;
+    const hasOpt   = optAmt > 0;
     const hasAd    = adYen > 0;
     const brokOk   = hasBrok && r.brokerage_approved;
+    const optOk    = hasOpt  && r.option_approved;
     const adOk     = hasAd   && r.ad_approved;
-    const optAmt   = r.option_amount || 0;
-    const brokTotal= (r.brokerage_fee || 0) + optAmt;
 
-    // 仲手＋オプ入金セル: 承認済みなら入金日入力欄、未承認なら✗
-    const brokCell = hasBrok
-      ? (brokOk
-          ? '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">' +
-            '<span style="color:#0D9488;font-weight:700;font-size:11px;">✓ 入金済</span>' +
-            '<input type="date" value="' + (r.brokerage_payment_date || '') + '" ' +
-            'onchange="updatePaymentDate(' + r.id + ',&quot;brokerage_payment_date&quot;,this.value)" ' +
-            'style="border:1px solid #d1d5db;border-radius:4px;padding:1px 4px;font-size:10px;width:100px;text-align:center;" title="仲介入金日">' +
-            '</div>'
-          : '<span style="color:#dc2626;font-weight:700;font-size:13px;">✗</span>')
-      : '<span style="color:#d1d5db;font-size:11px;">—</span>';
-
-    // AD入金セル
-    const adCell = hasAd
-      ? (adOk
-          ? '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;">' +
-            '<span style="color:#0D9488;font-weight:700;font-size:11px;">✓ 入金済</span>' +
-            '<input type="date" value="' + (r.ad_payment_date || '') + '" ' +
-            'onchange="updatePaymentDate(' + r.id + ',&quot;ad_payment_date&quot;,this.value)" ' +
-            'style="border:1px solid #d1d5db;border-radius:4px;padding:1px 4px;font-size:10px;width:100px;text-align:center;" title="AD入金日">' +
-            '</div>'
-          : '<span style="color:#dc2626;font-weight:700;font-size:13px;">✗</span>')
-      : '<span style="color:#d1d5db;font-size:11px;">—</span>';
+    const brokCell = payCell(hasBrok, brokOk, r.id, 'brokerage_payment_date', r.brokerage_payment_date, '仲介入金日');
+    const optCell  = payCell(hasOpt,  optOk,  r.id, 'option_payment_date',    r.option_payment_date,    'その他費用入金日');
+    const adCell   = payCell(hasAd,   adOk,   r.id, 'ad_payment_date',        r.ad_payment_date,        'AD入金日');
 
     const fmt = v => v > 0 ? '¥' + Math.round(v).toLocaleString() : '—';
     const chk = v => v ? '●' : '×';
 
+    // 該当する全方向が承認済みなら緑、一部承認なら黄
+    const need = [hasBrok, hasOpt, hasAd];
+    const okd  = [brokOk, optOk, adOk];
+    const allOk = need.every((n, i) => !n || okd[i]) && need.some(Boolean);
+    const someOk = okd.some(Boolean);
+
     const tr = document.createElement('tr');
-    tr.style.background = (brokOk && adOk) ? '#f0fdf4' : (brokOk || adOk ? '#fffbeb' : '#fff');
+    tr.style.background = allOk ? '#f0fdf4' : (someOk ? '#fffbeb' : '#fff');
     tr.style.textAlign  = 'center';
     tr.innerHTML =
       '<td style="white-space:nowrap;">' + (r.application_date || '―') + '</td>' +
+      '<td>' + (r.staff_name || '―') + '</td>' +
       '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;">' + (r.property_name || '―') + '</td>' +
       '<td>' + (r.room_number || '―') + '</td>' +
       '<td>' + (r.customer_name || '―') + '</td>' +
@@ -663,11 +667,11 @@ function renderSettled(list, colors) {
       '<td>' + chk(r.moving) + '</td>' +
       '<td>' + chk(r.fire_insurance) + '</td>' +
       '<td>' + fmt(r.brokerage_fee) + '</td>' +
-      '<td>' + fmt(optAmt) + '</td>' +
-      '<td style="font-weight:700;">' + fmt(brokTotal) + '</td>' +
-      '<td>' + fmt(adYen) + '</td>' +
       '<td>' + brokCell + '</td>' +
-      '<td>' + adCell   + '</td>';
+      '<td>' + fmt(optAmt) + '</td>' +
+      '<td>' + optCell + '</td>' +
+      '<td>' + fmt(adYen) + '</td>' +
+      '<td>' + adCell + '</td>';
     tbody.appendChild(tr);
   });
 }
@@ -684,9 +688,8 @@ async function updatePaymentDate(id, field, value) {
 
 
 async function loadSettled() {
-  const params = new URLSearchParams({ store_id: STORE_ID });
-  if (!IS_MANAGER && CUR_STAFF_ID) params.set('staff_id', CUR_STAFF_ID);
-  else if (_headerStaffId)         params.set('staff_id', _headerStaffId);
+  const params = new URLSearchParams({ store_id: STORE_ID, year: salesYear, month: salesMonth });
+  if (_headerStaffId) params.set('staff_id', _headerStaffId);
   try {
     const res = await fetch('/api/applications/settled?' + params);
     if (!res.ok) return;
@@ -712,8 +715,9 @@ function renderUncollectedTable(list) {
     const adDisp = r.ad_type === 'percent'
       ? `${r.ad_amount ?? 0}% (¥${Math.round(adYen).toLocaleString()})`
       : (r.ad_amount ? `¥${r.ad_amount.toLocaleString()}` : '―');
-    const bCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved);
-    const aCell = buildSettleCell(r, 'ad',        r.ad_settled,        r.ad_approved);
+    const bCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved, (r.brokerage_fee || 0) > 0);
+    const oCell = buildSettleCell(r, 'option',    r.option_settled,    r.option_approved,    (r.option_amount || 0) > 0);
+    const aCell = buildSettleCell(r, 'ad',        r.ad_settled,        r.ad_approved,        adYen > 0);
     tr.innerHTML = `
       <td style="white-space:nowrap;">${r.application_date || '―'}</td>
       <td>${r.staff_name || '―'}</td>
@@ -727,6 +731,7 @@ function renderUncollectedTable(list) {
       <td style="text-align:right;">${adDisp}</td>
       <td style="white-space:nowrap;">${r.ad_payment_date || '―'}</td>
       <td style="text-align:center;white-space:nowrap;">${bCell}</td>
+      <td style="text-align:center;white-space:nowrap;">${oCell}</td>
       <td style="text-align:center;white-space:nowrap;">${aCell}</td>
       <td style="white-space:nowrap;">
         <button onclick="editApp(${r.id})" style="padding:3px 8px;font-size:11px;border:1px solid #bfdbfe;border-radius:4px;background:#eff6ff;color:#1d4ed8;cursor:pointer;">詳細</button>
@@ -743,8 +748,7 @@ async function loadApplications() {
   const params = new URLSearchParams({ year: salesYear, month: salesMonth, store_id: STORE_ID });
   const statusSel = document.getElementById('app-filter-status');
   if (statusSel && statusSel.value) params.set('status', statusSel.value);
-  if (!IS_MANAGER && CUR_STAFF_ID)  params.set('staff_id', CUR_STAFF_ID);
-  else if (_headerStaffId)          params.set('staff_id', _headerStaffId);
+  if (_headerStaffId) params.set('staff_id', _headerStaffId);
   try {
     const [appsRes, colorsRes] = await Promise.all([
       fetch(`/api/applications?${params}`),
@@ -760,6 +764,7 @@ async function loadApplications() {
     } catch(_) {}
     renderApplications(appData, statusColors);
     loadSettled().catch(()=>{});
+    loadSummary().catch(()=>{});
   } catch(e) { appData = []; renderApplications([], {}); }
   if (IS_MANAGER) loadPendingApprovals();
 }
@@ -767,8 +772,7 @@ async function loadApplications() {
 async function loadUncollected() {
   if (_isSearchMode) return;
   const params = new URLSearchParams({ store_id: STORE_ID, year: salesYear, month: salesMonth });
-  if (!IS_MANAGER && CUR_STAFF_ID) params.set('staff_id', CUR_STAFF_ID);
-  else if (_headerStaffId)         params.set('staff_id', _headerStaffId);
+  if (_headerStaffId) params.set('staff_id', _headerStaffId);
   try {
     const res = await fetch(`/api/applications/unpaid?${params}`);
     if (!res.ok) return;
@@ -800,10 +804,52 @@ function scrollToApproval() {
 }
 
 /* ===================================================
+   集計サマリー（⑤）
+=================================================== */
+async function loadSummary() {
+  const params = new URLSearchParams({ store_id: STORE_ID, year: salesYear, month: salesMonth });
+  if (_headerStaffId) params.set('staff_id', _headerStaffId);
+  const el = document.getElementById('summary-cards');
+  if (!el) return;
+  let d;
+  try {
+    const res = await fetch('/api/applications/summary?' + params);
+    if (!res.ok) return;
+    d = await res.json();
+  } catch(_) { return; }
+
+  const yen = v => '¥' + Math.round(v || 0).toLocaleString();
+  const staffName = (() => {
+    const sel = document.getElementById('header-filter-staff');
+    if (sel && sel.value) return sel.options[sel.selectedIndex].text;
+    return '全スタッフ';
+  })();
+
+  const card = (label, valHtml, accent) => `
+    <div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${accent};border-radius:10px;padding:10px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+      <div style="font-size:11px;color:#6b7280;font-weight:600;">${label}</div>
+      <div style="font-size:18px;font-weight:800;color:#111827;margin-top:3px;">${valHtml}</div>
+    </div>`;
+  const unit = u => `<span style="font-size:12px;font-weight:600;color:#6b7280;margin-left:2px;">${u}</span>`;
+
+  el.innerHTML =
+    `<div style="grid-column:1/-1;font-size:12px;color:#6b7280;font-weight:700;">📊 ${salesYear}年${salesMonth}月 集計（${staffName}）</div>` +
+    card('合計', yen(d.total), '#0D9488') +
+    card('売上（入金済み）', yen(d.sales), '#16a34a') +
+    card('見込み売上', yen(d.expected_sales), '#0ea5e9') +
+    card('未入金合計', yen(d.uncollected), '#f59e0b') +
+    card('申込数', (d.application_count||0) + unit('件'), '#6366f1') +
+    card('契約数', (d.contract_count||0) + unit('件'), '#8b5cf6') +
+    card('付帯契約数', (d.ancillary_count||0) + unit('件'), '#ec4899') +
+    card('付帯契約割合', (d.ancillary_rate||0) + unit('%'), '#f43f5e');
+}
+
+/* ===================================================
    入金ワークフロー
 =================================================== */
+const PAY_LABELS = { brokerage: '仲介手数料', option: 'その他費用', ad: 'AD' };
 async function settlePayment(rid, field) {
-  const label = field === 'brokerage' ? '仲介手数料' : 'AD';
+  const label = PAY_LABELS[field] || field;
   if (!confirm(`${label}の入金を報告しますか？`)) return;
   try {
     const res = await fetch(`/api/applications/${rid}/settle`, {
@@ -818,7 +864,7 @@ async function settlePayment(rid, field) {
 }
 
 async function approvePayment(rid, field) {
-  const label = field === 'brokerage' ? '仲介手数料' : 'AD';
+  const label = PAY_LABELS[field] || field;
   if (!confirm(`${label}の入金を承認しますか？承認すると売上に反映されます。`)) return;
   try {
     const res = await fetch(`/api/applications/${rid}/approve`, {
@@ -854,7 +900,7 @@ function openAppModal(existing) {
   if (mediaSel) mediaSel.value = existing?.media || '';
 
   const adTypeSel = document.getElementById('app-ad_type');
-  if (adTypeSel) { adTypeSel.value = existing?.ad_type || 'amount'; updateAdLabel(); }
+  if (adTypeSel) { adTypeSel.value = existing?.ad_type || 'percent'; updateAdLabel(); }
 
   ['lifeline','moving','fire_insurance'].forEach(f => {
     const el = document.getElementById(`app-${f}`);
@@ -1013,8 +1059,9 @@ async function runGlobalSearch(q) {
 
     const unpaid = list.filter(r => {
       const needB = (r.brokerage_fee || 0) > 0 && !r.brokerage_approved;
+      const needO = (r.option_amount || 0) > 0 && !r.option_approved;
       const needA = adAmountYen(r) > 0 && !r.ad_approved;
-      return needB || needA;
+      return needB || needO || needA;
     });
     const unc = document.getElementById('unc-count');
     if (unc) unc.textContent = unpaid.length + '件';
@@ -1180,6 +1227,12 @@ function updateAdLabel() {
 =================================================== */
 document.addEventListener('DOMContentLoaded', () => {
   updateMonthLabel();
+  // 18: ログイン者がスタッフの場合、デフォルトで自分のデータを表示
+  const staffSel = document.getElementById('header-filter-staff');
+  if (staffSel && !IS_MANAGER && CUR_STAFF_ID) {
+    staffSel.value = String(CUR_STAFF_ID);
+    _headerStaffId = String(CUR_STAFF_ID);
+  }
   loadApplications();
   loadUncollected();
   loadSettled();

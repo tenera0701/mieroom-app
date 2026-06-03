@@ -213,7 +213,7 @@
     <div class="kpi-card-sub" id="kpi-inquiries-sub">-</div>
   </div>
   <div class="kpi-card">
-    <div class="kpi-card-label">来店数</div>
+    <div class="kpi-card-label">接客数</div>
     <div class="kpi-card-value" id="kpi-visits">-</div>
     <div class="kpi-card-sub" id="kpi-visits-sub">-</div>
   </div>
@@ -256,7 +256,7 @@
             <th>反響</th>
             <th>前月比</th>
             <th>LINE追加</th>
-            <th>来店</th>
+            <th>接客</th>
             <th>申込</th>
             <th>前月比</th>
             <th>契約</th>
@@ -381,7 +381,7 @@
             <input type="number" id="manual-line" min="0" placeholder="0">
           </div>
           <div class="form-group">
-            <label>来店数</label>
+            <label>接客数</label>
             <input type="number" id="manual-visits" min="0" placeholder="0">
           </div>
           <div class="form-group">
@@ -529,7 +529,7 @@ function renderKpiCards(t) {
   document.getElementById('kpi-adcost').textContent         = fmtYen(t.ad_cost);
 
   document.getElementById('kpi-inquiries-sub').innerHTML    = `前月比 ${momBadge(t.mom_inq)}`;
-  document.getElementById('kpi-visits-sub').textContent     = `来店率 ${t.inquiries ? (t.visits/t.inquiries*100).toFixed(1) : 0}%`;
+  document.getElementById('kpi-visits-sub').textContent     = `接客率 ${t.inquiries ? (t.visits/t.inquiries*100).toFixed(1) : 0}%`;
   document.getElementById('kpi-applications-sub').innerHTML = `前月比 ${momBadge(t.mom_app)}`;
   document.getElementById('kpi-estimated-sub').innerHTML    = `前月比 ${momBadge(t.mom_est)}`;
   const roas = t.ad_cost ? (t.estimated_sales / t.ad_cost * 100).toFixed(1) : '0.0';
@@ -552,7 +552,7 @@ function renderMediaCards(stats) {
         ${s.mom_inq !== null && s.mom_inq !== undefined ? `<span style="font-size:11px;margin-left:4px;color:${s.mom_inq>=0?'#0D9488':'#ef4444'}">${s.mom_inq>=0?'▲':'▼'}${Math.abs(s.mom_inq)}%</span>` : ''}
       </div>
       <div class="media-card-sub">
-        <span>来店 ${fmtNum(s.visits)}件</span>
+        <span>接客 ${fmtNum(s.visits)}件</span>
         <span>申込 ${fmtNum(s.applications)}件 ${s.mom_app!==null&&s.mom_app!==undefined?`<span style="color:${s.mom_app>=0?'#0D9488':'#ef4444'};font-size:10px;">${s.mom_app>=0?'▲':'▼'}${Math.abs(s.mom_app)}%</span>`:''}</span>
         <span>見込 ${fmtYen(s.estimated_sales)} ${s.mom_est!==null&&s.mom_est!==undefined?`<span style="color:${s.mom_est>=0?'#0D9488':'#ef4444'};font-size:10px;">${s.mom_est>=0?'▲':'▼'}${Math.abs(s.mom_est)}%</span>`:''}</span>
       </div>

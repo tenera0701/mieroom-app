@@ -529,6 +529,10 @@ class ApplicationRecord(db.Model):
     brokerage_settled = db.Column(db.Boolean, default=False)   # 営業が仲介入金報告
     brokerage_approved = db.Column(db.Boolean, default=False)  # 店長が仲介承認
     brokerage_payment_date = db.Column(db.Date, nullable=True) # 仲介入金日
+    # その他費用（旧オプション）の入金承認ワークフロー（仲手とは別方向）
+    option_settled = db.Column(db.Boolean, default=False)      # 営業がその他費用入金報告
+    option_approved = db.Column(db.Boolean, default=False)     # 店長がその他費用承認
+    option_payment_date = db.Column(db.Date, nullable=True)    # その他費用入金日
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1023,6 +1027,29 @@ def migrate_db():
             except Exception as e:
                 print(f"  Skip {tbl}.tenant_id: {e}")
 
+    # store / tenant の後続カラム（migrate_postgres と整合させる）
+    for tbl, extra_cols in [
+        ('store', [
+            ('is_locked', 'INTEGER DEFAULT 0'),
+            ('contract_start_date', 'DATE'),
+            ('created_at', 'TIMESTAMP'),
+        ]),
+        ('tenant', [
+            ('trial_ends_at', 'TIMESTAMP'),
+            ('subscription_status', "VARCHAR(20) DEFAULT 'trial'"),
+            ('contract_start_date', 'DATE'),
+        ]),
+    ]:
+        cursor.execute(f"PRAGMA table_info({tbl})")
+        existing = {r[1] for r in cursor.fetchall()}
+        for col_name, col_def in extra_cols:
+            if col_name not in existing:
+                try:
+                    cursor.execute(f"ALTER TABLE {tbl} ADD COLUMN {col_name} {col_def}")
+                    print(f"  Added column {tbl}.{col_name}")
+                except Exception as e:
+                    print(f"  Skip {tbl}.{col_name}: {e}")
+
     # app_user の権限フラグカラムを追加
     cursor.execute("PRAGMA table_info(app_user)")
     au_cols = {r[1] for r in cursor.fetchall()}
@@ -1031,6 +1058,14 @@ def migrate_db():
         ('can_view_all_staff',     'INTEGER DEFAULT 1'),
         ('can_edit_kpi',           'INTEGER DEFAULT 1'),
         ('can_manage_uncollected', 'INTEGER DEFAULT 1'),
+        ('can_view_executive',     'INTEGER DEFAULT 1'),
+        ('can_view_leads_page',    'INTEGER DEFAULT 1'),
+        ('can_view_daily_report',  'INTEGER DEFAULT 1'),
+        ('can_view_leave',         'INTEGER DEFAULT 1'),
+        ('admin_can_add_tenant',    'INTEGER DEFAULT 0'),
+        ('admin_can_manage_stores', 'INTEGER DEFAULT 0'),
+        ('admin_can_delete_tenant', 'INTEGER DEFAULT 0'),
+        ('admin_can_lock_tenant',   'INTEGER DEFAULT 0'),
     ]:
         if col_name not in au_cols:
             try:
@@ -1044,6 +1079,10 @@ def migrate_db():
     ar_cols = {r[1] for r in cursor.fetchall()}
     for col_name, col_def in [
         ('option_amount', 'FLOAT DEFAULT 0'),
+        ('option_settled', 'BOOLEAN DEFAULT 0'),
+        ('option_approved', 'BOOLEAN DEFAULT 0'),
+        ('option_payment_date', 'DATE'),
+        ('brokerage_payment_date', 'DATE'),
     ]:
         if col_name not in ar_cols:
             try:
@@ -1099,7 +1138,10 @@ def migrate_postgres():
         ("app_user",           "can_view_daily_report",   "BOOLEAN DEFAULT TRUE"),
         ("app_user",           "can_view_leave",          "BOOLEAN DEFAULT TRUE"),
         ("application_record",        "option_amount", "FLOAT DEFAULT 0"),
-                ("application_record", "brokerage_payment_date", "DATE"),
+        ("application_record", "brokerage_payment_date", "DATE"),
+        ("application_record", "option_settled", "BOOLEAN DEFAULT FALSE"),
+        ("application_record", "option_approved", "BOOLEAN DEFAULT FALSE"),
+        ("application_record", "option_payment_date", "DATE"),
         ("daily_report",             "store_id",     "INTEGER"),
         ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
@@ -1519,7 +1561,8 @@ def app_login():
             if user.role == 'super_admin':
                 dashboard_url = url_for('admin_tenants')
             elif user.role == 'staff':
-                dashboard_url = url_for('sales_management')
+                # 18: スタッフは自分のデータがデフォルト表示される顧客管理表へ
+                dashboard_url = url_for('customer_management')
             else:
                 dashboard_url = url_for('executive_dashboard')
             return make_response(f'''<!DOCTYPE html><html><head>
@@ -1703,18 +1746,31 @@ def api_echo_records_update(rid):
         try: return _dt.strptime(s, '%Y-%m-%d').date()
         except: return None
 
-    r.staff_id = int(data.get('staff_id') or 0) or None
-    r.list_name = data.get('list_name', r.list_name)
-    r.echo_date = pd(data.get('echo_date')) or r.echo_date
-    r.media  = data.get('media', r.media)
-    r.method = data.get('method', r.method)
-    r.first_contact_date = pd(data.get('first_contact_date'))
+    # 部分更新対応：payload に含まれるキーのみ更新（インライン編集で他項目を消さない）
+    if 'staff_id' in data:
+        r.staff_id = int(data.get('staff_id') or 0) or None
+    if 'list_name' in data:
+        r.list_name = data.get('list_name')
+    if 'echo_date' in data:
+        r.echo_date = pd(data.get('echo_date')) or r.echo_date
+    if 'media' in data:
+        r.media = data.get('media')
+    if 'method' in data:
+        r.method = data.get('method')
+    if 'first_contact_date' in data:
+        r.first_contact_date = pd(data.get('first_contact_date'))
     for i in range(1, 11):
-        setattr(r, f'followup_{i}', pd(data.get(f'followup_{i}')))
-    r.has_reply = bool(data.get('has_reply'))
-    r.has_phone = bool(data.get('has_phone'))
-    r.has_line  = bool(data.get('has_line'))
-    r.memo = data.get('memo', r.memo)
+        key = f'followup_{i}'
+        if key in data:
+            setattr(r, key, pd(data.get(key)))
+    if 'has_reply' in data:
+        r.has_reply = bool(data.get('has_reply'))
+    if 'has_phone' in data:
+        r.has_phone = bool(data.get('has_phone'))
+    if 'has_line' in data:
+        r.has_line = bool(data.get('has_line'))
+    if 'memo' in data:
+        r.memo = data.get('memo')
     db.session.commit()
     return jsonify({'status': 'ok'})
 
@@ -2464,10 +2520,88 @@ def api_leads_summary():
     })
 
 
+_PL_AD_COL = {
+    'SUUMO': 'suumo_cost', "HOME'S": 'homes_cost', 'アットホーム': 'athome_cost',
+    'Instagram': 'instagram_cost', 'TikTok': 'tiktok_cost', '自社HP': 'hp_cost',
+    'LINE': 'line_cost', 'MEO': 'meo_cost', 'Google広告': 'google_ads_cost',
+}
+
+
+def _auto_lead_media_stats(store_id, year, month):
+    """媒体別の月次統計を各管理表から自動集計する（⑰）。
+    反響数/返信/LINE追加→反響管理表, 接客数→接客管理表,
+    申込/契約/キャンセル/売上見込み→顧客管理表, 広告費→経理PL"""
+    from types import SimpleNamespace
+    import calendar as _cal
+    last_day = _cal.monthrange(year, month)[1]
+    m_start = date(year, month, 1)
+    m_end   = date(year, month, last_day)
+
+    agg = {}  # media -> dict
+    def slot(media):
+        key = media or '不明'
+        if key not in agg:
+            agg[key] = dict(media=key, inquiries=0, replies=0, line_added=0, visits=0,
+                            applications=0, contracts=0, cancellations=0, cancel_amount=0,
+                            estimated_sales=0, ad_cost=0)
+        return agg[key]
+
+    # 反響管理表（EchoRecord）→ 反響数・返信・LINE追加
+    echoes = EchoRecord.query.filter(
+        EchoRecord.store_id == store_id,
+        EchoRecord.echo_date >= m_start, EchoRecord.echo_date <= m_end,
+    ).all()
+    for e in echoes:
+        s = slot(e.media)
+        s['inquiries'] += 1
+        if e.has_reply: s['replies'] += 1
+        if e.has_line:  s['line_added'] += 1
+
+    # 接客管理表（CustomerServiceRecord）→ 接客数
+    css = CustomerServiceRecord.query.filter(
+        CustomerServiceRecord.store_id == store_id,
+        CustomerServiceRecord.service_date >= m_start,
+        CustomerServiceRecord.service_date <= m_end,
+    ).all()
+    for c in css:
+        slot(c.echo_media)['visits'] += 1
+
+    # 顧客管理表（ApplicationRecord）→ 申込・契約・キャンセル・売上見込み
+    apps = ApplicationRecord.query.filter(
+        ApplicationRecord.store_id == store_id,
+        db.extract('year',  ApplicationRecord.application_date) == year,
+        db.extract('month', ApplicationRecord.application_date) == month,
+    ).all()
+    for a in apps:
+        s = slot(a.media)
+        if a.status in ('キャンセル', 'キャンセル振替'):
+            s['cancellations'] += 1
+            s['cancel_amount'] += _record_total_amount(a)
+        else:
+            s['applications'] += 1
+            s['estimated_sales'] += _record_total_amount(a)
+            if a.status == '契約':
+                s['contracts'] += 1
+
+    # 経理PL → 広告費（媒体別）
+    pl = PLRecord.query.filter_by(store_id=store_id, year=year, month=month).first()
+    if pl:
+        for media, col in _PL_AD_COL.items():
+            v = getattr(pl, col, 0) or 0
+            if v:
+                slot(media)['ad_cost'] += v
+    for cv in PLCustomValue.query.filter_by(store_id=store_id, year=year, month=month).all():
+        if cv.item_type == '広告費' and (cv.amount or 0):
+            slot(cv.item_name)['ad_cost'] += cv.amount or 0
+
+    # idは持たない（自動集計のため編集不可）
+    return [SimpleNamespace(id=None, **v) for v in agg.values()]
+
+
 @app.route("/api/leads/monthly-stats")
 @login_required
 def api_leads_monthly_stats():
-    """媒体別月次反響統計を返す"""
+    """媒体別月次反響統計を返す（各管理表から自動集計）"""
     cy, cm = current_ym()
     year  = request.args.get('year',  type=int) or cy
     month = request.args.get('month', type=int) or cm
@@ -2478,12 +2612,12 @@ def api_leads_monthly_stats():
     req_sid = request.args.get('store_id', type=int) or 0
     store_id = req_sid if req_sid and req_sid in allowed else allowed[0]
 
-    stats = LeadMediaStat.query.filter_by(store_id=store_id, year=year, month=month).all()
+    stats = _auto_lead_media_stats(store_id, year, month)
 
     # 前月比較
     prev_m = month - 1 if month > 1 else 12
     prev_y = year if month > 1 else year - 1
-    prev_stats = LeadMediaStat.query.filter_by(store_id=store_id, year=prev_y, month=prev_m).all()
+    prev_stats = _auto_lead_media_stats(store_id, prev_y, prev_m)
     prev_dict = {s.media: s for s in prev_stats}
 
     def safe_div(a, b, pct=False):
@@ -2574,7 +2708,7 @@ def api_leads_monthly_stats():
         tm, ty = month - i, year
         while tm <= 0:
             tm += 12; ty -= 1
-        ms = LeadMediaStat.query.filter_by(store_id=store_id, year=ty, month=tm).all()
+        ms = _auto_lead_media_stats(store_id, ty, tm)
         trend.append({
             'label': f'{ty}/{tm:02d}',
             'inquiries':      sum(s.inquiries for s in ms),
@@ -3898,8 +4032,10 @@ def api_kpi_staff_history():
             if staff_id:
                 prev_y_kpis = prev_y_kpis.filter_by(staff_id=staff_id)
             prev_y_kpis = prev_y_kpis.all()
+            _visits     = lambda ks: sum((k.store_visits or 0) + (k.viewings or 0) for k in ks)
             yoy_data = {
                 'inquiries':    {'cur': sum(k.inquiries    or 0 for k in kpis),   'yoy': sum(k.inquiries    or 0 for k in prev_y_kpis)},
+                'visits':       {'cur': _visits(kpis),                            'yoy': _visits(prev_y_kpis)},
                 'applications': {'cur': sum(k.applications or 0 for k in kpis),   'yoy': sum(k.applications or 0 for k in prev_y_kpis)},
                 'contracts':    {'cur': sum(k.contracts    or 0 for k in kpis),   'yoy': sum(k.contracts    or 0 for k in prev_y_kpis)},
                 'revenue':      {'cur': sum(k.sales_amount or 0 for k in kpis),   'yoy': sum(k.sales_amount or 0 for k in prev_y_kpis)},
@@ -5736,6 +5872,9 @@ def _app_record_to_dict(r, staff_map):
         'brokerage_payment_date': r.brokerage_payment_date.strftime('%Y-%m-%d') if r.brokerage_payment_date else None,
         'brokerage_settled': bool(r.brokerage_settled),
         'brokerage_approved': bool(r.brokerage_approved),
+        'option_settled': bool(r.option_settled),
+        'option_approved': bool(r.option_approved),
+        'option_payment_date': r.option_payment_date.strftime('%Y-%m-%d') if r.option_payment_date else None,
         'created_at': r.created_at.isoformat() if r.created_at else None,
     }
 
@@ -5743,25 +5882,34 @@ def _app_record_to_dict(r, staff_map):
 @app.route("/api/applications/settled")
 @login_required
 def api_applications_settled():
-    """入金済み一覧：両方承認済みの申込を返す（月フィルタなし）"""
+    """入金済み一覧：仲手・その他費用・ADのいずれか1つでも承認済みの申込を返す
+    （申込月でフィルタ。翌月には繰り越さない）"""
     allowed_ids = get_allowed_store_ids()
     store_id = request.args.get('store_id', type=int)
     staff_id = request.args.get('staff_id', type=int)
+    year  = request.args.get('year',  type=int)
+    month = request.args.get('month', type=int)
 
     q = ApplicationRecord.query.filter(
         ApplicationRecord.store_id.in_(allowed_ids),
         ApplicationRecord.status != 'キャンセル',
-        db.or_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.ad_amount > 0),
-        # 片方でも承認があれば入金済み一覧に表示
+        db.or_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.ad_amount > 0, ApplicationRecord.option_amount > 0),
+        # 3方向のいずれか1つでも承認があれば入金済み一覧に表示
         db.or_(
             db.and_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.brokerage_approved == True),
             db.and_(ApplicationRecord.ad_amount > 0, ApplicationRecord.ad_approved == True),
+            db.and_(ApplicationRecord.option_amount > 0, ApplicationRecord.option_approved == True),
         )
     )
     if store_id and store_id in allowed_ids:
         q = q.filter(ApplicationRecord.store_id == store_id)
     if staff_id:
         q = q.filter(ApplicationRecord.staff_id == staff_id)
+    if year and month:
+        q = q.filter(
+            db.extract('year',  ApplicationRecord.application_date) == year,
+            db.extract('month', ApplicationRecord.application_date) == month,
+        )
 
     recs = q.order_by(ApplicationRecord.application_date.desc()).all()
     staff_map = {s.id: s.name for s in Staff.query.filter(Staff.id.in_({r.staff_id for r in recs if r.staff_id})).all()}
@@ -5795,6 +5943,7 @@ def api_applications_unpaid():
         db.or_(
             db.and_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.brokerage_approved == False),
             db.and_(ApplicationRecord.ad_amount > 0,     ApplicationRecord.ad_approved == False),
+            db.and_(ApplicationRecord.option_amount > 0, ApplicationRecord.option_approved == False),
         )
     )
     if store_id and store_id in allowed_ids:
@@ -5822,16 +5971,99 @@ def api_applications_approved_sum():
         ApplicationRecord.status != 'キャンセル',
         db.extract('year',  ApplicationRecord.application_date) == year,
         db.extract('month', ApplicationRecord.application_date) == month,
-        db.or_(ApplicationRecord.ad_amount > 0, ApplicationRecord.brokerage_fee > 0),
-        db.or_(ApplicationRecord.ad_amount <= 0, ApplicationRecord.ad_amount == None, ApplicationRecord.ad_approved == True),
-        db.or_(ApplicationRecord.brokerage_fee <= 0, ApplicationRecord.brokerage_fee == None, ApplicationRecord.brokerage_approved == True),
     ).all()
 
-    total = sum(
-        (r.brokerage_fee or 0) + (r.ad_amount or 0) + (r.option_amount or 0)
-        for r in recs
+    # 仲手・その他費用・AD の承認済み金額をそれぞれ独立に合算（その他費用も売上に含む）
+    total = sum(_record_approved_amount(r) for r in recs)
+    count = sum(1 for r in recs if _record_approved_amount(r) > 0)
+    return jsonify({'total': total, 'count': count})
+
+
+def _ad_yen(r):
+    if (r.ad_type or 'amount') == 'percent':
+        return round((r.rent or 0) * (r.ad_amount or 0) / 100)
+    return r.ad_amount or 0
+
+
+def _record_total_amount(r):
+    """案件の満額（仲手＋その他費用＋AD）"""
+    return (r.brokerage_fee or 0) + (r.option_amount or 0) + _ad_yen(r)
+
+
+def _record_approved_amount(r):
+    """入金済み（承認済み）金額（方向ごとに独立加算）"""
+    amt = 0
+    if (r.brokerage_fee or 0) > 0 and r.brokerage_approved:
+        amt += r.brokerage_fee or 0
+    if (r.option_amount or 0) > 0 and r.option_approved:
+        amt += r.option_amount or 0
+    ady = _ad_yen(r)
+    if ady > 0 and r.ad_approved:
+        amt += ady
+    return amt
+
+
+@app.route("/api/applications/summary")
+@login_required
+def api_applications_summary():
+    """顧客管理表の集計サマリー（年月・スタッフ別）
+
+    定義:
+      合計      = 当月全案件の金額総額（仲手＋その他費用＋AD満額／キャンセル除く）
+      売上      = うち入金済み（承認済み）金額
+      見込み売上 = 売上 ＋ 未入金（＝合計と一致）
+      未入金合計 = まだ承認されていない金額
+      申込数    = 当月の申込件数（キャンセル除く）
+      契約数    = ステータス「契約」件数
+      付帯契約数 = LL/引越/火保のいずれかが付帯する件数
+      付帯契約割合 = 付帯契約数 ÷ 申込数 ×100
+    """
+    allowed = get_allowed_store_ids()
+    store_id = request.args.get('store_id', type=int)
+    staff_id = request.args.get('staff_id', type=int)
+    year  = request.args.get('year',  type=int) or current_ym()[0]
+    month = request.args.get('month', type=int) or current_ym()[1]
+
+    q = ApplicationRecord.query.filter(
+        ApplicationRecord.store_id.in_(allowed),
+        ApplicationRecord.status != 'キャンセル',
+        db.extract('year',  ApplicationRecord.application_date) == year,
+        db.extract('month', ApplicationRecord.application_date) == month,
     )
-    return jsonify({'total': total, 'count': len(recs)})
+    if store_id and store_id in allowed:
+        q = q.filter(ApplicationRecord.store_id == store_id)
+    if staff_id:
+        q = q.filter(ApplicationRecord.staff_id == staff_id)
+    recs = q.all()
+
+    total_amount = sum(_record_total_amount(r) for r in recs)
+    sales        = sum(_record_approved_amount(r) for r in recs)
+    uncollected  = total_amount - sales
+    app_count    = len(recs)
+    contract_count = sum(1 for r in recs if r.status == '契約')
+    ancillary_count = sum(1 for r in recs if r.lifeline or r.moving or r.fire_insurance)
+    ancillary_rate = round(ancillary_count / app_count * 100, 1) if app_count else 0
+    lifeline_count = sum(1 for r in recs if r.lifeline)
+    moving_count   = sum(1 for r in recs if r.moving)
+    fire_count     = sum(1 for r in recs if r.fire_insurance)
+    rate = lambda c: round(c / app_count * 100, 1) if app_count else 0
+
+    return jsonify({
+        'total': total_amount,
+        'sales': sales,
+        'expected_sales': total_amount,
+        'uncollected': uncollected,
+        'application_count': app_count,
+        'contract_count': contract_count,
+        'ancillary_count': ancillary_count,
+        'ancillary_rate': ancillary_rate,
+        'lifeline_count': lifeline_count,
+        'moving_count': moving_count,
+        'fire_insurance_count': fire_count,
+        'lifeline_rate': rate(lifeline_count),
+        'moving_rate': rate(moving_count),
+        'fire_insurance_rate': rate(fire_count),
+    })
 
 
 @app.route("/api/applications/search")
@@ -5862,8 +6094,7 @@ def api_applications_search():
         ApplicationRecord.store_id.in_(allowed_ids),
         db.or_(*conditions)
     )
-    if cur_user and cur_user.role == 'staff' and cur_user.staff_id:
-        query = query.filter(ApplicationRecord.staff_id == cur_user.staff_id)
+    # スタッフも他スタッフの情報を横断検索可（編集は本人のみ）
 
     records = query.order_by(ApplicationRecord.application_date.desc()).limit(200).all()
     staff_map = {s.id: s.name for s in Staff.query.all()}
@@ -5882,9 +6113,8 @@ def api_applications_list():
 
     q = ApplicationRecord.query.filter(ApplicationRecord.store_id.in_(allowed_ids))
 
-    if cur_user and cur_user.role == 'staff' and cur_user.staff_id:
-        q = q.filter(ApplicationRecord.staff_id == cur_user.staff_id)
-    elif staff_id_filter:
+    # スタッフも他スタッフの情報を閲覧可（編集は本人のみ＝フロント/更新APIで制御）
+    if staff_id_filter:
         q = q.filter(ApplicationRecord.staff_id == staff_id_filter)
 
     if year and month:
@@ -5896,6 +6126,19 @@ def api_applications_list():
 
     if status_filter:
         q = q.filter(ApplicationRecord.status == status_filter)
+
+    # 全方向の入金が承認済み（＝完済）の案件は申込一覧から除外し、入金済み一覧のみに表示する
+    not_fully_paid = db.or_(
+        db.and_(
+            db.or_(ApplicationRecord.brokerage_fee == None, ApplicationRecord.brokerage_fee <= 0),
+            db.or_(ApplicationRecord.ad_amount == None, ApplicationRecord.ad_amount <= 0),
+            db.or_(ApplicationRecord.option_amount == None, ApplicationRecord.option_amount <= 0),
+        ),
+        db.and_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.brokerage_approved == False),
+        db.and_(ApplicationRecord.ad_amount > 0, ApplicationRecord.ad_approved == False),
+        db.and_(ApplicationRecord.option_amount > 0, ApplicationRecord.option_approved == False),
+    )
+    q = q.filter(not_fully_paid)
 
     records = q.order_by(ApplicationRecord.application_date.asc()).all()
     staff_map = {s.id: s.name for s in Staff.query.all()}
@@ -5933,7 +6176,7 @@ def api_applications_create():
         ad_payment_date=_parse_date(data.get('ad_payment_date')),
         brokerage_fee=float(data.get('brokerage_fee') or 0),
         option_amount=float(data.get('option_amount') or 0),
-        ad_type=data.get('ad_type') or 'amount',
+        ad_type=data.get('ad_type') or 'percent',
         ad_amount=float(data.get('ad_amount') or 0),
         lifeline=bool(data.get('lifeline')),
         moving=bool(data.get('moving')),
@@ -5978,7 +6221,7 @@ def api_applications_update(rid):
         if fld in data: setattr(rec, fld, float(data[fld] or 0))
     for fld in ['lifeline', 'moving', 'fire_insurance']:
         if fld in data: setattr(rec, fld, bool(data[fld]))
-    for fld in ['application_date', 'contract_start_date', 'ad_payment_date', 'brokerage_payment_date']:
+    for fld in ['application_date', 'contract_start_date', 'ad_payment_date', 'brokerage_payment_date', 'option_payment_date']:
         if fld in data: setattr(rec, fld, _parse_date(data[fld]))
 
     rec.updated_at = datetime.utcnow()
@@ -6014,11 +6257,13 @@ def api_applications_settle(rid):
         return jsonify({'error': '権限がありません'}), 403
 
     data = request.get_json() or {}
-    field = data.get('field')  # 'ad' or 'brokerage'
+    field = data.get('field')  # 'ad' / 'brokerage' / 'option'
     if field == 'ad':
         rec.ad_settled = True
     elif field == 'brokerage':
         rec.brokerage_settled = True
+    elif field == 'option':
+        rec.option_settled = True
     else:
         return jsonify({'error': 'invalid field'}), 400
     db.session.commit()
@@ -6039,30 +6284,28 @@ def api_applications_approve(rid):
         return jsonify({'error': '権限がありません'}), 403
 
     data = request.get_json() or {}
-    field = data.get('field')  # 'ad' or 'brokerage'
+    field = data.get('field')  # 'ad' / 'brokerage' / 'option'
 
     if field == 'ad' and not rec.ad_approved:
         rec.ad_approved = True
     elif field == 'brokerage' and not rec.brokerage_approved:
         rec.brokerage_approved = True
+    elif field == 'option' and not rec.option_approved:
+        rec.option_approved = True
     else:
         return jsonify({'error': 'invalid field or already approved'}), 400
 
     # 承認されたフィールド分だけ即座に売上に反映（部分承認対応）
+    # 仲手・その他費用・ADはそれぞれ独立した入金方向として加算する
     ad_yen = round((rec.rent or 0) * (rec.ad_amount or 0) / 100) if (rec.ad_type or 'amount') == 'percent' else (rec.ad_amount or 0)
-    need_ad        = ad_yen > 0
-    need_brokerage = (rec.brokerage_fee or 0) > 0
 
-    # 今回承認したフィールドの金額を加算
-    # オプション金額は仲介入金承認時に一緒に反映する
     approved_amount = 0
-    if field == 'brokerage' and need_brokerage:
-        approved_amount += (rec.brokerage_fee or 0) + (rec.option_amount or 0)
-    if field == 'ad' and need_ad:
+    if field == 'brokerage':
+        approved_amount += (rec.brokerage_fee or 0)
+    elif field == 'option':
+        approved_amount += (rec.option_amount or 0)
+    elif field == 'ad' and ad_yen > 0:
         approved_amount += ad_yen
-        # 仲介がない場合（AD単独）はオプションもAD承認時に反映
-        if not need_brokerage:
-            approved_amount += (rec.option_amount or 0)
 
     if approved_amount > 0 and rec.staff_id:
         # staff_idが未設定の場合はKPI反映をスキップ（IntegrityError防止）
@@ -6094,7 +6337,8 @@ def api_pending_approvals():
         ApplicationRecord.store_id.in_(allowed_ids),
         db.or_(
             db.and_(ApplicationRecord.ad_settled == True, ApplicationRecord.ad_approved == False),
-            db.and_(ApplicationRecord.brokerage_settled == True, ApplicationRecord.brokerage_approved == False)
+            db.and_(ApplicationRecord.brokerage_settled == True, ApplicationRecord.brokerage_approved == False),
+            db.and_(ApplicationRecord.option_settled == True, ApplicationRecord.option_approved == False)
         )
     ).count()
     return jsonify({'count': count})

@@ -112,7 +112,7 @@
       <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="#0D9488" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
       </svg>
-      <input id="echo-search" type="text" placeholder="お客様名・リスト名・媒体・担当で検索"
+      <input id="echo-search" type="text" placeholder="顧客名・媒体・担当で検索"
         style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;"
         oninput="applyEchoSearch(this.value)" autocomplete="off">
       <button onclick="document.getElementById('echo-search').value='';applyEchoSearch('');"
@@ -149,7 +149,7 @@
       <thead>
         <tr>
           <th>担当者</th>
-          <th>リスト名</th>
+          <th>顧客名</th>
           <th>反響日</th>
           <th>媒体</th>
           <th>手段</th>
@@ -199,8 +199,8 @@
           </select>
         </div>
         <div class="form-group">
-          <label>リスト名</label>
-          <input type="text" id="f-list-name" placeholder="例：〇〇マンション" autocomplete="off">
+          <label>顧客名</label>
+          <input type="text" id="f-list-name" placeholder="例：山田 太郎" autocomplete="off">
         </div>
         <div class="form-group">
           <label>反響日 <span style="color:#ef4444;">*</span></label>
@@ -473,9 +473,10 @@ function renderTable() {
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'first_contact_date','date','${r.first_contact_date||''}')">${r.first_contact_date ? fmtMD(r.first_contact_date) : '―'}</td>
       ${[1,2,3,4,5].map(i => `<td style="cursor:pointer;" onclick="editCell(this,${r.id},'followup_${i}','date','${r['followup_'+i]||''}')">${r['followup_'+i] ? `<span class="followup-date">${shortDate(r['followup_'+i])}</span>` : '<span class="followup-empty">—</span>'}</td>`).join('')}
       ${[6,7,8,9,10].map(i => `<td class="followup-extra${_visibleFollowups >= i ? ' visible' : ''}" style="cursor:pointer;" onclick="editCell(this,${r.id},'followup_${i}','date','${r['followup_'+i]||''}')">${r['followup_'+i] ? `<span class="followup-date">${shortDate(r['followup_'+i])}</span>` : '<span class="followup-empty">—</span>'}</td>`).join('')}
-      <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_reply',${!!r.has_reply})">${r.has_reply ? '<span class="chk-yes">✓</span>' : '<span class="chk-no">—</span>'}</td>
-      <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_phone',${!!r.has_phone})">${r.has_phone ? '<span class="chk-yes">✓</span>' : '<span class="chk-no">—</span>'}</td>
-      <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_line',${!!r.has_line})">${r.has_line ? '<span class="chk-yes">✓</span>' : '<span class="chk-no">—</span>'}</td>
+      <td></td>
+      <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_reply',${!!r.has_reply})">${r.has_reply ? '<span class="chk-yes">〇</span>' : '<span class="chk-no">—</span>'}</td>
+      <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_phone',${!!r.has_phone})">${r.has_phone ? '<span class="chk-yes">〇</span>' : '<span class="chk-no">—</span>'}</td>
+      <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_line',${!!r.has_line})">${r.has_line ? '<span class="chk-yes">〇</span>' : '<span class="chk-no">—</span>'}</td>
       <td class="left" style="max-width:100px;cursor:pointer;" title="${escHtml(r.memo)}" onclick="editCell(this,${r.id},'memo','text','${escHtml(r.memo)}')">${escHtml(r.memo) || ''}</td>
       <td style="white-space:nowrap;">
         <button class="btn-sm btn-del" onclick="deleteRecord(${r.id})">削除</button>

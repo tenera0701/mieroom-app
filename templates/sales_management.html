@@ -96,6 +96,8 @@
   }
   @media (max-width: 1100px) { .kpi-cards { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 600px)  { .kpi-cards { grid-template-columns: 1fr; } }
+  .kpi-card-value { display: flex; align-items: baseline; gap: 4px; }
+  .kpi-unit { font-size: 13px; font-weight: 600; color: var(--text-muted); }
   .kpi-card {
     background: #fff;
     border: 1px solid #e5e7eb;
@@ -526,28 +528,40 @@
   <!-- KPIサマリーカード -->
   <div class="kpi-cards" id="kpi-cards">
     <div class="kpi-card">
-      <div class="kpi-card-label">今月の総売上</div>
-      <div class="kpi-card-value" id="card-revenue">-</div>
-      <div class="kpi-card-sub">万円</div>
+      <div class="kpi-card-label">総売上</div>
+      <div class="kpi-card-value"><span id="card-revenue">-</span><span class="kpi-unit">円</span></div>
+      <div class="kpi-card-sub">顧客管理表の入金合計（全スタッフ）</div>
       <span class="kpi-card-badge badge-up" id="card-revenue-trend"></span>
     </div>
     <div class="kpi-card">
       <div class="kpi-card-label">平均成約率</div>
-      <div class="kpi-card-value" id="card-close-rate">-</div>
-      <div class="kpi-card-sub">契約/来店</div>
-      <span class="kpi-card-badge badge-up" id="card-rate-trend"></span>
+      <div class="kpi-card-value"><span id="card-close-rate">-</span><span class="kpi-unit">%</span></div>
+      <div class="kpi-card-sub">申込数 / 接客数</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-card-label">総契約数</div>
-      <div class="kpi-card-value" id="card-contracts">-</div>
-      <div class="kpi-card-sub">件</div>
+      <div class="kpi-card-value"><span id="card-contracts">-</span><span class="kpi-unit">件</span></div>
       <span class="kpi-card-badge badge-up" id="card-contracts-trend"></span>
     </div>
     <div class="kpi-card">
       <div class="kpi-card-label">申込件数</div>
-      <div class="kpi-card-value" id="card-applications">-</div>
-      <div class="kpi-card-sub">件</div>
+      <div class="kpi-card-value"><span id="card-applications">-</span><span class="kpi-unit">件</span></div>
       <span class="kpi-card-badge" id="card-applications-trend"></span>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-card-label">ライフライン成約率</div>
+      <div class="kpi-card-value"><span id="card-lifeline-rate">-</span><span class="kpi-unit">%</span></div>
+      <div class="kpi-card-sub" id="card-lifeline-sub">申込数に対する成約数</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-card-label">火災保険成約率</div>
+      <div class="kpi-card-value"><span id="card-fire-rate">-</span><span class="kpi-unit">%</span></div>
+      <div class="kpi-card-sub" id="card-fire-sub">申込数に対する成約数</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-card-label">引越し成約率</div>
+      <div class="kpi-card-value"><span id="card-moving-rate">-</span><span class="kpi-unit">%</span></div>
+      <div class="kpi-card-sub" id="card-moving-sub">申込数に対する成約数</div>
     </div>
   </div>
 
@@ -575,8 +589,7 @@
             <th onclick="sortTable(8)">売上(円)</th>
             <th onclick="sortTable(9)">目標(円)</th>
             <th onclick="sortTable(10)">達成率</th>
-            <th onclick="sortTable(11)">オプション(円)</th>
-            <th onclick="sortTable(12)">前月比</th>
+            <th onclick="sortTable(11)">前月比</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -602,12 +615,8 @@
 <!-- ===== 個人KPI詳細パネル（テンプレート）===== -->
 <template id="detail-panel-tpl">
   <tr class="detail-row">
-    <td colspan="14">
+    <td colspan="13">
       <div class="detail-panel">
-        <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px;">
-          <button class="detail-edit-btn" style="padding:4px 14px;font-size:12px;border:1px solid #5EEAD4;border-radius:6px;background:#F0FDFA;color:#0F766E;cursor:pointer;font-weight:600;">編集</button>
-          <button class="detail-delete-btn" style="padding:4px 14px;font-size:12px;border:1px solid #fca5a5;border-radius:6px;background:#fff;color:#ef4444;cursor:pointer;font-weight:600;">削除</button>
-        </div>
         <div class="detail-chart-wrap">
           <h3>📈 6ヶ月推移（契約数・売上）</h3>
           <div style="position:relative;height:180px;overflow:hidden;">
@@ -798,14 +807,15 @@ async function loadStaffKpi(year, month) {
     await populateStaffSelect();
     renderStaffTable(staffData);
 
-    // 入金済み申込の売上合計（brokerage_fee + ad_amount + option_amount）
+    // 顧客管理表の集計（総売上＝入金済み全スタッフ合計／付帯成約率など）
     try {
-      const paidRes = await fetch(`/api/applications/approved-sum?year=${year}&month=${month}`);
-      if (paidRes.ok) {
-        const paidJson = await paidRes.json();
-        staffData._paidSum = paidJson.total || 0;
+      const sumRes = await fetch(`/api/applications/summary?year=${year}&month=${month}&store_id=${STORE_ID}`);
+      if (sumRes.ok) {
+        const sum = await sumRes.json();
+        staffData._summary = sum;
+        staffData._paidSum = sum.sales || 0;
       }
-    } catch(e2) { staffData._paidSum = 0; }
+    } catch(e2) { staffData._summary = null; staffData._paidSum = 0; }
     updateKpiCards(staffData);
   } catch(e) {
     console.error('loadStaffKpi error:', e);
@@ -823,31 +833,29 @@ async function loadStaffKpi(year, month) {
    KPIカード更新
 =================================================== */
 function updateKpiCards(data) {
-  if (!data.length) {
-    document.getElementById('card-revenue').textContent = '0';
-    document.getElementById('card-close-rate').textContent = '0%';
-    document.getElementById('card-contracts').textContent = '0';
-    document.getElementById('card-applications').textContent = '0';
-    return;
-  }
-  const totalRevenue = data._paidSum || 0;
-  const totalContracts = data.reduce((s, d) => s + (d.contracts || 0), 0);
-  const totalApplications = data.reduce((s, d) => s + (d.applications || 0), 0);
+  const sum = data._summary || {};
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+
+  // 総売上（⑦：顧客管理表の入金合計・全スタッフ）
+  set('card-revenue', (data._paidSum || 0).toLocaleString());
+
+  // 契約数・申込数は顧客管理表（ApplicationRecord）ベースで統一
+  const totalContracts = sum.contract_count ?? data.reduce((s, d) => s + (d.contracts || 0), 0);
+  const totalApplications = sum.application_count ?? data.reduce((s, d) => s + (d.applications || 0), 0);
+  // 平均成約率（⑨：申込数 / 接客数）。接客数はスタッフKPIの接客数合計
   const totalVisits = data.reduce((s, d) => s + (d.visits || 0), 0);
   const avgCloseRate = totalVisits ? pct(totalApplications, totalVisits) : 0;
-  const prevRevenue = data.reduce((s, d) => s + (d.prev_revenue || 0), 0);
-  const revTrend = prevRevenue ? ((totalRevenue - prevRevenue) / prevRevenue * 100).toFixed(1) : null;
+  set('card-close-rate', avgCloseRate);
+  set('card-contracts', totalContracts);
+  set('card-applications', totalApplications);
 
-  document.getElementById('card-revenue').textContent = totalRevenue.toLocaleString();
-  document.getElementById('card-close-rate').textContent = avgCloseRate + '%';
-  document.getElementById('card-contracts').textContent = totalContracts;
-  document.getElementById('card-applications').textContent = totalApplications;
-
-  if (revTrend !== null) {
-    const el = document.getElementById('card-revenue-trend');
-    el.textContent = (revTrend >= 0 ? '▲ ' : '▼ ') + Math.abs(revTrend) + '% 前月比';
-    el.className = 'kpi-card-badge ' + (revTrend >= 0 ? 'badge-up' : 'badge-down');
-  }
+  // 付帯成約率（⑪：申込数に対する各成約数）
+  set('card-lifeline-rate', sum.lifeline_rate ?? 0);
+  set('card-fire-rate',     sum.fire_insurance_rate ?? 0);
+  set('card-moving-rate',   sum.moving_rate ?? 0);
+  set('card-lifeline-sub', `${sum.lifeline_count ?? 0}件 / 申込${sum.application_count ?? 0}件`);
+  set('card-fire-sub',     `${sum.fire_insurance_count ?? 0}件 / 申込${sum.application_count ?? 0}件`);
+  set('card-moving-sub',   `${sum.moving_count ?? 0}件 / 申込${sum.application_count ?? 0}件`);
 }
 
 /* ===================================================
@@ -864,7 +872,7 @@ function renderStaffTable(data) {
   expandedRow = null;
 
   if (!data || !data.length) {
-    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center; padding:40px; color:var(--text-muted); font-size:14px;">データがありません</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center; padding:40px; color:var(--text-muted); font-size:14px;">データがありません</td></tr>';
     return;
   }
 
@@ -896,7 +904,6 @@ function renderStaffTable(data) {
       <td>${s.revenue.toLocaleString()}円</td>
       <td>${target > 0 ? target.toLocaleString()+'円' : '―'}</td>
       <td>${achvHtml}</td>
-      <td>${(s.option || 0).toLocaleString()}円</td>
       <td>${trendArrow(s.revenue, s.prev_revenue)}</td>
       <td onclick="event.stopPropagation();" style="white-space:nowrap;">
         ${s.kpi_id ? `
@@ -943,14 +950,6 @@ function toggleDetail(tr, staffObj) {
   const clone = tpl.content.cloneNode(true);
   const detailTr = clone.querySelector('tr');
 
-  // 編集/削除ボタン
-  detailTr.querySelector('.detail-edit-btn').onclick = () => { if (staffObj.kpi_id) editKpi(staffObj.kpi_id, staffObj); };
-  detailTr.querySelector('.detail-delete-btn').onclick = () => { if (staffObj.kpi_id) deleteKpi(staffObj.kpi_id); };
-  if (!staffObj.kpi_id) {
-    detailTr.querySelector('.detail-edit-btn').style.display = 'none';
-    detailTr.querySelector('.detail-delete-btn').style.display = 'none';
-  }
-
   tr.parentNode.insertBefore(detailTr, tr.nextSibling);
 
   // 実データ読み込み（非同期）
@@ -970,9 +969,10 @@ function toggleDetail(tr, staffObj) {
       // YoY
       yoyItems.innerHTML = '';
       const yoyDefs = [
-        { key: 'inquiries', label: '反響数', unit: '' },
-        { key: 'applications', label: '申込数', unit: '' },
-        { key: 'revenue',   label: '売上',   unit: '万円' },
+        { key: 'inquiries',    label: '反響数', unit: '件' },
+        { key: 'visits',       label: '接客数', unit: '件' },
+        { key: 'applications', label: '申込数', unit: '件' },
+        { key: 'revenue',      label: '売上',   unit: '円' },
       ];
       yoyDefs.forEach(({ key, label, unit }) => {
         const cur = yoy[key]?.cur ?? 0;
@@ -1154,8 +1154,7 @@ function sortTable(colIdx) {
       case 8:  av = pct(a.contracts,a.applications); bv = pct(b.contracts,b.applications); break;
       case 9:  av = a.revenue; bv = b.revenue; break;
       case 10: av = a.contracts ? a.revenue/a.contracts : 0; bv = b.contracts ? b.revenue/b.contracts : 0; break;
-      case 11: av = a.option || 0; bv = b.option || 0; break;
-      case 12: av = a.prev_revenue ? (a.revenue-a.prev_revenue)/a.prev_revenue : 0;
+      case 11: av = a.prev_revenue ? (a.revenue-a.prev_revenue)/a.prev_revenue : 0;
                bv = b.prev_revenue ? (b.revenue-b.prev_revenue)/b.prev_revenue : 0; break;
       default: return 0;
     }
