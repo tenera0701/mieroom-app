@@ -536,6 +536,8 @@ class ApplicationRecord(db.Model):
     option_settled = db.Column(db.Boolean, default=False)      # 営業がその他費用入金報告
     option_approved = db.Column(db.Boolean, default=False)     # 店長がその他費用承認
     option_payment_date = db.Column(db.Date, nullable=True)    # その他費用入金日
+    management_company = db.Column(db.String(200))             # 管理会社名
+    review_ng = db.Column(db.Boolean, default=False)          # 審査×（True=審査NG→キャンセル）
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1086,6 +1088,8 @@ def migrate_db():
         ('option_approved', 'BOOLEAN DEFAULT 0'),
         ('option_payment_date', 'DATE'),
         ('brokerage_payment_date', 'DATE'),
+        ('management_company', 'VARCHAR(200)'),
+        ('review_ng', 'BOOLEAN DEFAULT 0'),
     ]:
         if col_name not in ar_cols:
             try:
@@ -1145,6 +1149,8 @@ def migrate_postgres():
         ("application_record", "option_settled", "BOOLEAN DEFAULT FALSE"),
         ("application_record", "option_approved", "BOOLEAN DEFAULT FALSE"),
         ("application_record", "option_payment_date", "DATE"),
+        ("application_record", "management_company", "VARCHAR(200)"),
+        ("application_record", "review_ng", "BOOLEAN DEFAULT FALSE"),
         ("daily_report",             "store_id",     "INTEGER"),
         ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
@@ -5913,6 +5919,8 @@ def _app_record_to_dict(r, staff_map):
         'room_number': r.room_number or '',
         'customer_name': r.customer_name or '',
         'rent': r.rent or 0,
+        'management_company': r.management_company or '',
+        'review_ng': bool(r.review_ng),
         'contract_start_date': r.contract_start_date.isoformat() if r.contract_start_date else None,
         'ad_payment_date': r.ad_payment_date.isoformat() if r.ad_payment_date else None,
         'brokerage_fee': r.brokerage_fee or 0,
@@ -6202,6 +6210,20 @@ def api_applications_search():
     return jsonify([_app_record_to_dict(r, staff_map) for r in records])
 
 
+@app.route("/api/applications/management-companies")
+@login_required
+def api_management_companies():
+    """過去に入力された管理会社名の一覧（入力候補＝記憶用）"""
+    allowed_ids = get_allowed_store_ids()
+    rows = db.session.query(ApplicationRecord.management_company).filter(
+        ApplicationRecord.store_id.in_(allowed_ids),
+        ApplicationRecord.management_company.isnot(None),
+        ApplicationRecord.management_company != '',
+    ).distinct().all()
+    names = sorted({(r[0] or '').strip() for r in rows if (r[0] or '').strip()})
+    return jsonify(names)
+
+
 @app.route("/api/applications", methods=["GET"])
 @login_required
 def api_applications_list():
@@ -6261,6 +6283,8 @@ def api_applications_create():
         room_number=data.get('room_number') or None,
         customer_name=data.get('customer_name') or None,
         rent=float(data.get('rent') or 0),
+        management_company=data.get('management_company') or None,
+        review_ng=bool(data.get('review_ng')),
         contract_start_date=_parse_date(data.get('contract_start_date')),
         ad_payment_date=_parse_date(data.get('ad_payment_date')),
         brokerage_fee=float(data.get('brokerage_fee') or 0),
@@ -6302,7 +6326,7 @@ def api_applications_update(rid):
     data = request.get_json() or {}
     is_manager = cur_user and cur_user.role in ('owner', 'store_manager', 'super_admin')
 
-    for fld in ['media', 'property_name', 'room_number', 'customer_name', 'status', 'ad_type']:
+    for fld in ['media', 'property_name', 'room_number', 'customer_name', 'status', 'ad_type', 'management_company']:
         if fld in data: setattr(rec, fld, data[fld] or None)
     if 'staff_id' in data and is_manager:
         rec.staff_id = data['staff_id'] or None
@@ -6312,6 +6336,14 @@ def api_applications_update(rid):
         if fld in data: setattr(rec, fld, bool(data[fld]))
     for fld in ['application_date', 'contract_start_date', 'ad_payment_date', 'brokerage_payment_date', 'option_payment_date']:
         if fld in data: setattr(rec, fld, _parse_date(data[fld]))
+
+    # 審査〇× : ×（NG）でキャンセル、〇に戻すとキャンセルなら申込へ戻す
+    if 'review_ng' in data:
+        rec.review_ng = bool(data['review_ng'])
+        if rec.review_ng:
+            rec.status = 'キャンセル'
+        elif rec.status == 'キャンセル':
+            rec.status = '申込'
 
     rec.updated_at = datetime.utcnow()
     db.session.commit()

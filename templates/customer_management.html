@@ -76,6 +76,9 @@
   <!-- アラート -->
   <div id="alert-msg" class="alert"></div>
 
+  <!-- 管理会社名 入力候補（過去入力を記憶） -->
+  <datalist id="mgmt-companies"></datalist>
+
   <!-- ページヘッダー -->
   <div class="page-header">
     <div>
@@ -160,14 +163,14 @@
           <thead>
             <tr>
               <th>申込日</th><th>担当</th><th>媒体</th><th>物件名</th><th>号室</th>
-              <th>お客様名</th><th>賃料</th><th>契約開始日</th><th>仲介手数料</th>
+              <th>お客様名</th><th>賃料</th><th>管理会社</th><th>審査</th><th>契約開始日</th><th>仲介手数料</th>
               <th>AD</th><th>AD入金日</th><th>その他費用</th>
               <th>LL</th><th>引越</th><th>火保</th><th>ステータス</th>
               <th>仲手入金</th><th>その他入金</th><th>AD入金</th><th>操作</th>
             </tr>
           </thead>
           <tbody id="app-tbody">
-            <tr><td colspan="20" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>
+            <tr><td colspan="22" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>
           </tbody>
         </table>
       </div>
@@ -196,14 +199,14 @@
         <table style="opacity:0.85;">
           <thead>
             <tr>
-              <th>申込日</th><th>担当</th><th>物件名</th><th>号室</th><th>お客様名</th><th>契約開始日</th>
+              <th>申込日</th><th>担当</th><th>物件名</th><th>号室</th><th>お客様名</th><th>管理会社</th><th>契約開始日</th>
               <th>LL</th><th>引越</th><th>火保</th>
               <th>仲介手数料</th><th>仲手入金</th><th>その他費用</th><th>その他入金</th>
               <th>AD金額</th><th>AD入金</th>
             </tr>
           </thead>
           <tbody id="settled-tbody">
-            <tr><td colspan="15" style="text-align:center;color:#9ca3af;padding:16px;">入金済み案件なし</td></tr>
+            <tr><td colspan="16" style="text-align:center;color:#9ca3af;padding:16px;">入金済み案件なし</td></tr>
           </tbody>
         </table>
       </div>
@@ -233,12 +236,12 @@
           <thead>
             <tr>
               <th>申込日</th><th>担当</th><th>物件名</th><th>号室</th><th>お客様名</th>
-              <th>賃料</th><th>契約開始日</th><th>仲介手数料</th><th>その他費用</th>
+              <th>賃料</th><th>管理会社</th><th>契約開始日</th><th>仲介手数料</th><th>その他費用</th>
               <th>AD</th><th>AD入金日</th><th>仲手入金</th><th>その他入金</th><th>AD入金</th><th>操作</th>
             </tr>
           </thead>
           <tbody id="uncollected-tbody">
-            <tr><td colspan="15" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>
+            <tr><td colspan="16" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>
           </tbody>
         </table>
       </div>
@@ -293,6 +296,10 @@
         <div class="form-group">
           <label>賃料（円）</label>
           <input type="number" id="app-rent" min="0" placeholder="0" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>管理会社名</label>
+          <input type="text" id="app-management_company" list="mgmt-companies" placeholder="例: 〇〇管理" autocomplete="off">
         </div>
         <div class="form-group">
           <label>契約開始日</label>
@@ -565,6 +572,8 @@ function buildAppRow(r, colors, isSettled = false) {
     <td data-f="room_number"      data-t="text"   data-v="${escApp(r.room_number)}"     >${r.room_number || '―'}</td>
     <td data-f="customer_name"    data-t="text"   data-v="${escApp(r.customer_name)}"   >${r.customer_name || '―'}</td>
     <td data-f="rent"             data-t="number" data-v="${r.rent||0}"                  style="text-align:right;">${r.rent ? r.rent.toLocaleString()+'円' : '―'}</td>
+    <td data-f="management_company" data-t="text" data-v="${escApp(r.management_company)}">${r.management_company || '―'}</td>
+    <td style="cursor:pointer;font-weight:700;${r.review_ng ? 'color:#dc2626;' : 'color:#0D9488;'}" title="クリックで切替（×で審査NG→キャンセル）" onclick="toggleReview(${r.id}, ${!!r.review_ng})">${r.review_ng ? '×' : '〇'}</td>
     <td data-f="contract_start_date" data-t="date" data-v="${r.contract_start_date||''}" style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
     <td data-f="brokerage_fee"    data-t="number" data-v="${r.brokerage_fee||0}"         style="text-align:right;">${r.brokerage_fee ? r.brokerage_fee.toLocaleString()+'円' : '―'}</td>
     <td data-f="ad_amount"        data-t="number" data-v="${r.ad_amount||0}"             style="text-align:right;">${adLabel}</td>
@@ -604,7 +613,7 @@ function renderApplications(list, colors) {
 
   tbody.innerHTML = '';
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="20" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="22" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>';
   } else {
     list.forEach(r => tbody.appendChild(buildAppRow(r, colors, false)));
   }
@@ -654,6 +663,7 @@ function renderSettled(list, colors) {
       '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;">' + (r.property_name || '―') + '</td>' +
       '<td>' + (r.room_number || '―') + '</td>' +
       '<td>' + (r.customer_name || '―') + '</td>' +
+      '<td>' + (r.management_company || '―') + '</td>' +
       '<td style="white-space:nowrap;">' + (r.contract_start_date || '―') + '</td>' +
       '<td>' + chk(r.lifeline) + '</td>' +
       '<td>' + chk(r.moving) + '</td>' +
@@ -716,7 +726,7 @@ async function loadSettled() {
 function renderUncollectedTable(list) {
   const tbody = document.getElementById('uncollected-tbody');
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:#9ca3af;padding:24px;">未入金データなし</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="16" style="text-align:center;color:#9ca3af;padding:24px;">未入金データなし</td></tr>';
     return;
   }
   tbody.innerHTML = '';
@@ -739,6 +749,7 @@ function renderUncollectedTable(list) {
       <td>${r.room_number || '―'}</td>
       <td>${r.customer_name || '―'}</td>
       <td style="text-align:right;">${r.rent ? r.rent.toLocaleString()+'円' : '―'}</td>
+      <td>${r.management_company || '―'}</td>
       <td style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
       <td style="text-align:right;">${r.brokerage_fee ? r.brokerage_fee.toLocaleString()+'円' : '―'}</td>
       <td style="text-align:right;">${r.option_amount ? r.option_amount.toLocaleString()+'円' : '―'}</td>
@@ -815,6 +826,19 @@ async function loadPendingApprovals() {
 
 function scrollToApproval() {
   document.getElementById('application-section')?.scrollIntoView({ behavior: 'smooth' });
+}
+
+/* ===================================================
+   管理会社名 入力候補（記憶）
+=================================================== */
+async function loadMgmtCompanies() {
+  try {
+    const res = await fetch('/api/applications/management-companies');
+    if (!res.ok) return;
+    const list = await res.json();
+    const dl = document.getElementById('mgmt-companies');
+    if (dl) dl.innerHTML = list.map(n => `<option value="${escApp(n)}">`).join('');
+  } catch(_) {}
 }
 
 /* ===================================================
@@ -904,7 +928,7 @@ function openAppModal(existing) {
   document.getElementById('app-editing-id').value = existing?.id || '';
 
   const fields = ['application_date','property_name','room_number','customer_name',
-    'rent','contract_start_date','ad_payment_date','brokerage_fee','ad_amount','option_amount'];
+    'rent','management_company','contract_start_date','ad_payment_date','brokerage_fee','ad_amount','option_amount'];
   fields.forEach(f => { const el = document.getElementById(`app-${f}`); if (el) el.value = existing?.[f] ?? ''; });
 
   const staffSel = document.getElementById('app-staff_id');
@@ -949,6 +973,7 @@ async function submitApp() {
     room_number:         document.getElementById('app-room_number').value,
     customer_name:       document.getElementById('app-customer_name').value,
     rent:                parseFloat(document.getElementById('app-rent').value) || 0,
+    management_company:  document.getElementById('app-management_company').value,
     contract_start_date: document.getElementById('app-contract_start_date').value || null,
     ad_payment_date:     document.getElementById('app-ad_payment_date').value || null,
     brokerage_fee:       parseFloat(document.getElementById('app-brokerage_fee').value) || 0,
@@ -972,6 +997,7 @@ async function submitApp() {
   loadApplications().catch(()=>{});
   loadUncollected().catch(()=>{});
   loadSettled().catch(()=>{});
+  loadMgmtCompanies().catch(()=>{});
 }
 
 async function editApp(id) {
@@ -1010,6 +1036,26 @@ function applyLocalUpdate(id, field, value) {
   loadUncollected().catch(() => {});
 }
 
+/** 審査〇× トグル（×でキャンセル、〇に戻すと申込へ） */
+async function toggleReview(id, curNg) {
+  const newNg = !curNg;
+  const msg = newNg ? '審査を×（NG）にして、この申込をキャンセルにしますか？'
+                    : '審査を〇に戻しますか？（キャンセルの場合は申込に戻ります）';
+  if (!confirm(msg)) return;
+  try {
+    const res = await fetch('/api/applications/' + id, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ review_ng: newNg })
+    });
+    if (!res.ok) throw new Error();
+    showAlert(newNg ? '審査×：キャンセルにしました。' : '審査〇に戻しました。');
+  } catch(_) { showAlert('更新に失敗しました。', 'error'); return; }
+  loadApplications().catch(()=>{});
+  loadUncollected().catch(()=>{});
+  loadSettled().catch(()=>{});
+  loadSummary().catch(()=>{});
+}
+
 function editCellApp(td, id, field, type, curVal, opts) {
   if (td.querySelector('input,select')) return;
   const prev = td.innerHTML;
@@ -1031,6 +1077,7 @@ function editCellApp(td, id, field, type, curVal, opts) {
   } else {
     el = document.createElement('input');
     el.type = type; el.value = curVal || '';
+    if (field === 'management_company') el.setAttribute('list', 'mgmt-companies');
     el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
     td.innerHTML = ''; td.appendChild(el); el.focus();
     if (type === 'text' || type === 'number') el.select();
@@ -1249,6 +1296,7 @@ document.addEventListener('DOMContentLoaded', () => {
     staffSel.value = String(CUR_STAFF_ID);
     _headerStaffId = String(CUR_STAFF_ID);
   }
+  loadMgmtCompanies();
   loadApplications();
   loadUncollected();
   loadSettled();
