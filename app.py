@@ -6064,7 +6064,8 @@ def api_applications_approve(rid):
         if not need_brokerage:
             approved_amount += (rec.option_amount or 0)
 
-    if approved_amount > 0:
+    if approved_amount > 0 and rec.staff_id:
+        # staff_idが未設定の場合はKPI反映をスキップ（IntegrityError防止）
         ref_date = rec.application_date or date.today()
         ref_year, ref_month = ref_date.year, ref_date.month
         kpi = SalesKPI.query.filter_by(
