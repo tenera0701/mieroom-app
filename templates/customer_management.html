@@ -111,7 +111,7 @@
   </div>
 
   <!-- ===== 集計サマリー ===== -->
-  <div id="summary-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+  <div id="summary-cards" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
   </div>
 
   <!-- 一括検索バー -->
@@ -875,13 +875,13 @@ async function loadSummary() {
     return '全スタッフ';
   })();
 
-  // big=金額カード（サイズそのまま・数字1.1倍）/ それ以外は横幅を短く
+  // big=金額カード（やや大きめ）/ それ以外は小さめ。flexで横幅を自動配分し1行に収める
   const card = (label, valHtml, accent, big) => `
-    <div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${accent};border-radius:10px;padding:10px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.05);flex:0 0 auto;width:${big ? '152px' : '108px'};box-sizing:border-box;">
-      <div style="font-size:11px;color:#6b7280;font-weight:600;">${label}</div>
-      <div style="font-size:${big ? '20px' : '18px'};font-weight:800;color:#111827;margin-top:3px;">${valHtml}</div>
+    <div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${accent};border-radius:10px;padding:8px 10px;box-shadow:0 1px 3px rgba(0,0,0,0.05);box-sizing:border-box;flex:${big ? '1.35' : '1'} 1 0;min-width:${big ? '100px' : '84px'};">
+      <div style="font-size:10px;color:#6b7280;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+      <div style="font-size:${big ? '18px' : '16px'};font-weight:800;color:#111827;margin-top:2px;white-space:nowrap;">${valHtml}</div>
     </div>`;
-  const unit = u => `<span style="font-size:12px;font-weight:600;color:#6b7280;margin-left:2px;">${u}</span>`;
+  const unit = u => `<span style="font-size:11px;font-weight:600;color:#6b7280;margin-left:2px;">${u}</span>`;
 
   el.innerHTML =
     `<div style="flex-basis:100%;font-size:12px;color:#6b7280;font-weight:700;">📊 ${salesYear}年${salesMonth}月 集計（${staffName}）</div>` +
