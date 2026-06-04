@@ -283,23 +283,6 @@ const DOCS = [
     ]},
   ]},
 
-  { key:'cloudlinks', title:'CloudLinks', sections:[
-    { h:'お客様情報・新住所', fields:[
-      {k:'kana', l:'お名前(カナ)', t:'text'}, {k:'kanji', l:'漢字', t:'text', pre:'customer_name'},
-      {k:'renraku', l:'連絡先', t:'text'}, {k:'nyukyo', l:'入居日', t:'date', pre:'contract_start_date'},
-      {k:'yubin', l:'郵便番号', t:'text'}, {k:'shinjusho', l:'新住所', t:'text', full:true},
-      {k:'tatemono', l:'建物名', t:'text', pre:'property_name'}, {k:'heya', l:'部屋番号', t:'text', pre:'room_number'},
-      {k:'kanri_kaisha', l:'管理会社名', t:'text', pre:'management_company'}, {k:'kanri_tel', l:'管理会社TEL', t:'text'},
-    ]},
-    { h:'ライフライン・連絡', fields:[
-      {k:'denki', l:'でんき', t:'checks', o:['オール電化','建物指定'], full:true},
-      {k:'gas', l:'ガス', t:'sel', o:['都市ガス','プロパンガス','お客さま自身で手配']},
-      {k:'net', l:'ネット', t:'checks', o:['インターネット無料物件'], full:true},
-      {k:'jikan', l:'連絡希望時間帯', t:'checks', o:['午前中不可','10～12','13～15','15～17','17～21'], full:true},
-      {k:'tenpo', l:'店舗名', t:'text'}, {k:'tanto', l:'担当名', t:'text', pre:'staff_name'},
-    ]},
-  ]},
-
   { key:'soufujo', title:'契約書類送付状', sections:[
     { h:'宛先', fields:[
       {k:'okyakusama', l:'お客様名', t:'text', pre:'customer_name'}, {k:'goushitsu', l:'号室', t:'text', pre:'room_number'},
