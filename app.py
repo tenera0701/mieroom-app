@@ -1672,6 +1672,105 @@ def customer_management():
                            store_id=store_id)
 
 
+@app.route("/contract-customers")
+@login_required
+@block_super_admin
+def contract_customers():
+    """契約中顧客管理ページ：審査〇で契約に進んだ顧客の契約書類を準備する"""
+    stores = get_allowed_stores(ignore_active=True)
+    active_ids = get_allowed_store_ids()
+    staff_list = Staff.query.filter(Staff.store_id.in_(active_ids), Staff.is_active == True).all() if active_ids else []
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    cur_role = cur_user.role if cur_user else 'staff'
+    is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
+    store_id = active_ids[0] if active_ids else None
+    return render_template("contract_customers.html", stores=stores, staff_list=staff_list,
+                           now=datetime.now(), cur_role=cur_role,
+                           is_manager=is_manager, store_id=store_id)
+
+
+@app.route("/api/contract-customers")
+@login_required
+def api_contract_customers():
+    """契約中顧客一覧：審査〇（review_status='ok'）になった顧客（＝契約に進んだ顧客）"""
+    allowed_ids = get_allowed_store_ids()
+    staff_id = request.args.get('staff_id', type=int)
+    q = ApplicationRecord.query.filter(
+        ApplicationRecord.store_id.in_(allowed_ids),
+        ApplicationRecord.review_status == 'ok',
+        ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
+    )
+    if staff_id:
+        q = q.filter(ApplicationRecord.staff_id == staff_id)
+    recs = q.order_by(ApplicationRecord.application_date.asc(), ApplicationRecord.id.asc()).all()
+    staff_map = {s.id: s.name for s in Staff.query.all()}
+    return jsonify([_app_record_to_dict(r, staff_map) for r in recs])
+
+
+@app.route("/api/contract-customers/<int:rid>/document")
+@login_required
+def api_contract_customer_document(rid):
+    """契約中顧客の基本情報を埋めた契約書類（Excel）を生成してダウンロード"""
+    import io as _io
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    allowed_ids = get_allowed_store_ids()
+    rec = ApplicationRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed_ids:
+        return jsonify({'error': '権限がありません'}), 403
+    staff = Staff.query.get(rec.staff_id) if rec.staff_id else None
+    store = Store.query.get(rec.store_id)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = '顧客情報'
+    ws.column_dimensions['A'].width = 20
+    ws.column_dimensions['B'].width = 44
+
+    title = ws.cell(row=1, column=1, value='契約書類　顧客情報シート')
+    title.font = Font(size=16, bold=True)
+    ws.merge_cells('A1:B1')
+    ws.cell(row=2, column=1, value=f'発行: {date.today().isoformat()}　{store.name if store else ""}')
+
+    fd = lambda d: d.isoformat() if d else ''
+    ad_yen = round((rec.rent or 0) * (rec.ad_amount or 0) / 100) if (rec.ad_type or 'amount') == 'percent' else (rec.ad_amount or 0)
+    rows = [
+        ('お客様名', rec.customer_name or ''),
+        ('物件名', rec.property_name or ''),
+        ('号室', rec.room_number or ''),
+        ('賃料（円）', f'{int(rec.rent or 0):,}'),
+        ('管理会社', rec.management_company or ''),
+        ('媒体', rec.media or ''),
+        ('担当', staff.name if staff else ''),
+        ('申込日', fd(rec.application_date)),
+        ('契約開始日', fd(rec.contract_start_date)),
+        ('仲介手数料（円）', f'{int(rec.brokerage_fee or 0):,}'),
+        ('その他費用（円）', f'{int(rec.option_amount or 0):,}'),
+        ('AD（円）', f'{int(ad_yen):,}'),
+        ('ライフライン', '対象' if rec.lifeline else '―'),
+        ('引越し', '対象' if rec.moving else '―'),
+        ('火災保険', '対象' if rec.fire_insurance else '―'),
+        ('ステータス', rec.status or ''),
+    ]
+    thin = Side(style='thin', color='D1D5DB')
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    hdr_fill = PatternFill('solid', fgColor='F0FDFA')
+    for i, (k, v) in enumerate(rows, start=4):
+        kc = ws.cell(row=i, column=1, value=k); kc.font = Font(bold=True); kc.fill = hdr_fill; kc.border = border
+        vc = ws.cell(row=i, column=2, value=v); vc.border = border; vc.alignment = Alignment(wrap_text=True)
+
+    buf = _io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    safe_name = (rec.customer_name or 'customer').replace('/', '_').replace('\\', '_')
+    from urllib.parse import quote
+    fname = quote(f'契約書類_{safe_name}.xlsx')
+    resp = make_response(buf.read())
+    resp.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    resp.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{fname}"
+    return resp
+
+
 @app.route("/echo-management")
 @login_required
 @block_super_admin

@@ -1,0 +1,170 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}契約中顧客管理 | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}契約中顧客管理{% endblock %}
+
+{% block extra_head %}
+<style>
+  :root { --primary:#0D9488; --primary-dark:#0F766E; --primary-light:#CCFBF1; }
+  .page-title { font-size:22px; font-weight:800; color:#111827; margin:0; }
+  .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+  .filter { border:1px solid #d1d5db; border-radius:6px; padding:7px 10px; font-size:13px; }
+  .table-section { background:#fff; border-radius:12px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,0.06); border:1px solid #e5e7eb; }
+  .table-section-header { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .table-section-header h2 { font-size:15px; font-weight:800; color:#111827; margin:0; border-left:4px solid var(--primary); padding-left:10px; }
+  .table-wrapper { overflow-x:auto; border-radius:8px; border:1px solid #e5e7eb; }
+  table { width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap; }
+  thead th { background:#F0FDFA; padding:8px 10px; text-align:center; font-weight:700; color:#374151; border-bottom:2px solid #d1fae5; }
+  tbody tr { border-bottom:1px solid #f3f4f6; }
+  tbody tr:hover { background:#F0FDFA; }
+  tbody td { padding:8px; text-align:center; color:#111827; }
+  .btn-doc { background:var(--primary); color:#fff; border:none; border-radius:6px; padding:5px 12px; font-size:12px; font-weight:700; cursor:pointer; }
+  .btn-doc:hover { background:var(--primary-dark); }
+  .alert { padding:10px 16px; border-radius:8px; font-size:13px; margin-bottom:14px; display:none; }
+  .alert.show { display:block; }
+  .alert-success { background:var(--primary-light); color:var(--primary-dark); border:1px solid #5EEAD4; }
+  .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center; }
+  .modal-overlay.active { display:flex; }
+  .modal { background:#fff; border-radius:14px; width:560px; max-width:96vw; max-height:92vh; overflow-y:auto; }
+  .modal-header { padding:16px 24px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; }
+  .modal-header h3 { font-size:16px; font-weight:700; margin:0; }
+  .modal-close { background:none; border:none; font-size:22px; color:#9ca3af; cursor:pointer; }
+  .modal-body { padding:20px 24px; }
+  .modal-footer { padding:14px 24px; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:10px; }
+  .info-grid { display:grid; grid-template-columns:130px 1fr; gap:8px 12px; font-size:13px; }
+  .info-grid .k { color:#6b7280; font-weight:600; }
+  .info-grid .v { color:#111827; font-weight:600; }
+  .btn-cancel { background:#fff; color:#374151; border:1px solid #d1d5db; border-radius:6px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; }
+  .btn-submit { background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 20px; font-size:13px; font-weight:700; cursor:pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1400px; margin:0 auto;">
+  <div id="alert-msg" class="alert"></div>
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">契約中顧客管理</h1>
+      <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">審査〇で契約に進んだ顧客の契約書類を準備します</p>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <select id="filter-staff" class="filter" onchange="loadList()">
+        <option value="">全スタッフ</option>
+        {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="table-section">
+    <div class="table-section-header">
+      <h2>契約中顧客一覧</h2>
+      <span id="cc-count" style="font-size:12px;background:#CCFBF1;color:#0F766E;border-radius:12px;padding:2px 10px;font-weight:700;">0件</span>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>契約開始日</th><th>担当</th><th>物件名</th><th>号室</th><th>お客様名</th>
+            <th>賃料</th><th>管理会社</th><th>申込日</th><th>契約書類</th>
+          </tr>
+        </thead>
+        <tbody id="cc-tbody">
+          <tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:24px;">読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:12px;color:#9ca3af;margin-top:10px;">💡「契約書類」を押すと、顧客情報を引き継いだ契約書類（Excel）を作成できます。物件資料/契約書の取り込みや重要事項説明など完全版は次フェーズで対応予定です。</p>
+  </div>
+</div>
+
+<!-- 契約書類作成モーダル -->
+<div class="modal-overlay" id="doc-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>契約書類の作成</h3>
+      <button class="modal-close" onclick="closeDocModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:#374151;margin:0 0 12px;">この顧客情報を引き継いで契約書類を作成します。</p>
+      <div class="info-grid" id="doc-info"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeDocModal()">閉じる</button>
+      <button class="btn-submit" id="doc-download-btn">📄 契約書類をExcelで作成</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const STORE_ID = {{ store_id or 0 }};
+let ccData = [];
+
+function showAlert(msg, type='success') {
+  const el = document.getElementById('alert-msg');
+  el.textContent = msg; el.className = `alert alert-${type} show`;
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+function yen(v) { return v ? Math.round(v).toLocaleString() + '円' : '―'; }
+
+async function loadList() {
+  const staffId = document.getElementById('filter-staff').value;
+  const params = new URLSearchParams();
+  if (staffId) params.set('staff_id', staffId);
+  try {
+    const res = await fetch('/api/contract-customers?' + params);
+    ccData = res.ok ? await res.json() : [];
+  } catch(_) { ccData = []; }
+  render();
+}
+
+function render() {
+  const tbody = document.getElementById('cc-tbody');
+  document.getElementById('cc-count').textContent = ccData.length + '件';
+  if (!ccData.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:24px;">契約中の顧客はいません</td></tr>';
+    return;
+  }
+  tbody.innerHTML = ccData.map(r => `
+    <tr>
+      <td style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
+      <td>${escc(r.staff_name) || '―'}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;">${escc(r.property_name) || '―'}</td>
+      <td>${escc(r.room_number) || '―'}</td>
+      <td>${escc(r.customer_name) || '―'}</td>
+      <td style="text-align:right;">${yen(r.rent)}</td>
+      <td>${escc(r.management_company) || '―'}</td>
+      <td style="white-space:nowrap;">${r.application_date || '―'}</td>
+      <td><button class="btn-doc" onclick="openDocModal(${r.id})">契約書類</button></td>
+    </tr>`).join('');
+}
+
+function escc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function openDocModal(id) {
+  const r = ccData.find(x => x.id === id);
+  if (!r) return;
+  const ad = r.ad_type === 'percent' ? `${r.ad_amount||0}% (${Math.round(r.ad_amount_yen||0).toLocaleString()}円)` : yen(r.ad_amount);
+  const rows = [
+    ['お客様名', escc(r.customer_name)], ['物件名', escc(r.property_name)], ['号室', escc(r.room_number)],
+    ['賃料', yen(r.rent)], ['管理会社', escc(r.management_company) || '―'], ['担当', escc(r.staff_name)],
+    ['申込日', r.application_date || '―'], ['契約開始日', r.contract_start_date || '―'],
+    ['仲介手数料', yen(r.brokerage_fee)], ['その他費用', yen(r.option_amount)], ['AD', ad],
+    ['ライフライン', r.lifeline ? '対象' : '―'], ['引越し', r.moving ? '対象' : '―'], ['火災保険', r.fire_insurance ? '対象' : '―'],
+  ];
+  document.getElementById('doc-info').innerHTML = rows.map(([k,v]) =>
+    `<div class="k">${k}</div><div class="v">${v || '―'}</div>`).join('');
+  document.getElementById('doc-download-btn').onclick = () => {
+    window.location.href = `/api/contract-customers/${id}/document`;
+    showAlert('契約書類（Excel）を作成しました。');
+  };
+  document.getElementById('doc-modal').classList.add('active');
+}
+function closeDocModal() { document.getElementById('doc-modal').classList.remove('active'); }
+
+document.addEventListener('DOMContentLoaded', loadList);
+</script>
+{% endblock %}
