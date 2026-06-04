@@ -156,9 +156,7 @@
       <!-- 色凡例 -->
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;">
         <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d1fae5;display:inline-block;border:1px solid #6ee7b7;"></span>全入金済</span>
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#dbeafe;display:inline-block;border:1px solid #93c5fd;"></span>仲手入金済</span>
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d9f99d;display:inline-block;border:1px solid #bef264;"></span>その他費用入金済</span>
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>AD入金済</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>一部入金済（仲手・その他費用・ADのいずれか）</span>
       </div>
       <div class="table-wrapper">
         <table>
@@ -229,9 +227,8 @@
     <div id="unc-body-wrap">
       <!-- 色凡例 -->
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;">
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#dbeafe;display:inline-block;border:1px solid #93c5fd;"></span>仲手入金済</span>
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d9f99d;display:inline-block;border:1px solid #bef264;"></span>その他費用入金済</span>
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>AD入金済</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d1fae5;display:inline-block;border:1px solid #6ee7b7;"></span>全入金済</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>一部入金済（仲手・その他費用・ADのいずれか）</span>
         <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fff;display:inline-block;border:1px solid #e5e7eb;"></span>未入金</span>
       </div>
       <div class="table-wrapper">
@@ -418,10 +415,10 @@ const STORE_ID     = {{ store_id or 0 }};
 let _headerStaffId = '';  // ヘッダースタッフフィルター
 const STATUS_KEYS  = ['申込','契約','キャンセル','キャンセル振替'];
 const STATUS_DEFAULTS = {
-  '申込':          { bg: '#ffffff', text: '#111827' },
-  '契約':          { bg: '#fef9c3', text: '#92400e' },
-  'キャンセル':     { bg: '#e5e7eb', text: '#6b7280' },
-  'キャンセル振替': { bg: '#e5e7eb', text: '#6b7280' },
+  '申込':          { bg: '#ffffff', text: '#111827', row_bg: '#ffffff' },
+  '契約':          { bg: '#fef9c3', text: '#92400e', row_bg: '#fef9c3' },
+  'キャンセル':     { bg: '#fee2e2', text: '#b91c1c', row_bg: '#e5e7eb' },
+  'キャンセル振替': { bg: '#dcfce7', text: '#15803d', row_bg: '#e5e7eb' },
 };
 const CANCEL_STATUSES = ['キャンセル', 'キャンセル振替'];
 
@@ -519,16 +516,14 @@ function paymentRowBg(r) {
   const hasBrokerage = (r.brokerage_fee || 0) !== 0;
   const hasOption    = (r.option_amount || 0) !== 0;
   const hasAd        = adAmountYen(r) !== 0;
-  if (!(hasBrokerage || hasOption || hasAd)) return null;
-  const allOk = (!hasBrokerage || r.brokerage_approved) && (!hasOption || r.option_approved) && (!hasAd || r.ad_approved);
-  if (allOk) return '#d1fae5';                                  // 全方向入金済み：緑
-  const optPaid  = hasOption    && r.option_approved;
-  const brokPaid = hasBrokerage && r.brokerage_approved;
-  const adPaid   = hasAd        && r.ad_approved;
-  if (optPaid)  return '#d9f99d';   // その他費用入金済：黄緑
-  if (brokPaid) return '#dbeafe';   // 仲手入金済：青
-  if (adPaid)   return '#fef3c7';   // AD入金済：黄
-  return null;                       // どれも未入金
+  const bOk = !hasBrokerage || r.brokerage_approved;
+  const oOk = !hasOption    || r.option_approved;
+  const aOk = !hasAd        || r.ad_approved;
+  if (hasBrokerage || hasOption || hasAd) {
+    if (bOk && oOk && aOk) return '#d1fae5';            // 全入金済：緑
+    if ((bOk && hasBrokerage) || (oOk && hasOption) || (aOk && hasAd)) return '#fef3c7'; // 一部入金済：黄
+  }
+  return null;
 }
 
 function escApp(s) {
@@ -559,12 +554,13 @@ function buildSettleCell(r, field, settled, approved, hasAmount = true) {
 }
 
 function buildAppRow(r, colors, isSettled = false) {
-  const sc = colors[r.status] || STATUS_DEFAULTS[r.status] || { bg: '#fff', text: '#111827' };
+  const sc = colors[r.status] || STATUS_DEFAULTS[r.status] || { bg: '#fff', text: '#111827', row_bg: '#fff' };
   const tr = document.createElement('tr');
   const isCancel = CANCEL_STATUSES.includes(r.status);
   const payBg = paymentRowBg(r);
-  // キャンセル/キャンセル振替はデフォルトでグレー背景（入金色より優先）
-  tr.style.cssText = `background:${isCancel ? '#e5e7eb' : (payBg || sc.bg)};color:${sc.text};`;
+  const rowBg = sc.row_bg || sc.bg || '#fff';   // ステータス別の行背景色（カスタム可）
+  // キャンセルは行背景色を優先（入金色より）、それ以外は入金色＞行背景色
+  tr.style.cssText = `background:${isCancel ? rowBg : (payBg || rowBg)};color:${sc.text};`;
 
   const adYen = adAmountYen(r);
   const adLabel = r.ad_type === 'percent'
@@ -1265,21 +1261,29 @@ async function loadColors() {
     const c = colors[key] || STATUS_DEFAULTS[key] || { bg: '#ffffff', text: '#111827' };
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f3f4f6;';
+    const cls = key.replace(/[^a-z]/gi,'');
     row.innerHTML = `
-      <span style="font-size:13px;font-weight:600;min-width:90px;">${key}</span>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;">背景色
-        <input type="color" data-status="${key}" data-type="bg" value="${c.bg}" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;"></label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#6b7280;">文字色
-        <input type="color" data-status="${key}" data-type="text" value="${c.text}" style="width:36px;height:28px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;"></label>
-      <span class="app-status-badge cp-${key.replace(/[^a-z]/gi,'')}" style="background:${c.bg};color:${c.text};border:1px solid ${c.text}30;">${key}</span>`;
+      <span style="font-size:13px;font-weight:600;min-width:84px;">${key}</span>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#6b7280;">バッジ背景
+        <input type="color" data-status="${key}" data-type="bg" value="${c.bg}" style="width:32px;height:26px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;"></label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#6b7280;">文字色
+        <input type="color" data-status="${key}" data-type="text" value="${c.text}" style="width:32px;height:26px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;"></label>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#6b7280;">行背景
+        <input type="color" data-status="${key}" data-type="row_bg" value="${c.row_bg || '#ffffff'}" style="width:32px;height:26px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;"></label>
+      <span class="rp-${cls}" title="行プレビュー" style="display:inline-flex;align-items:center;padding:4px 8px;border-radius:4px;border:1px solid #e5e7eb;background:${c.row_bg || '#ffffff'};">
+        <span class="app-status-badge cp-${cls}" style="background:${c.bg};color:${c.text};border:1px solid ${c.text}30;">${key}</span>
+      </span>`;
     container.appendChild(row);
     row.querySelectorAll('input[type="color"]').forEach(inp => {
       inp.addEventListener('input', () => {
-        const s = inp.dataset.status;
-        const bgV = container.querySelector(`input[data-status="${s}"][data-type="bg"]`).value;
-        const txV = container.querySelector(`input[data-status="${s}"][data-type="text"]`).value;
-        const pv  = container.querySelector(`.cp-${s.replace(/[^a-z]/gi,'')}`);
-        if (pv) { pv.style.background = bgV; pv.style.color = txV; pv.style.borderColor = txV + '30'; }
+        const s = inp.dataset.status, cl = s.replace(/[^a-z]/gi,'');
+        const bgV  = container.querySelector(`input[data-status="${s}"][data-type="bg"]`).value;
+        const txV  = container.querySelector(`input[data-status="${s}"][data-type="text"]`).value;
+        const rowV = container.querySelector(`input[data-status="${s}"][data-type="row_bg"]`).value;
+        const badge = container.querySelector(`.cp-${cl}`);
+        const rowPv = container.querySelector(`.rp-${cl}`);
+        if (badge) { badge.style.background = bgV; badge.style.color = txV; badge.style.borderColor = txV + '30'; }
+        if (rowPv) { rowPv.style.background = rowV; }
       });
     });
   });
@@ -1289,9 +1293,10 @@ async function saveColors() {
   const container = document.getElementById('color-settings');
   const colors = {};
   STATUS_KEYS.forEach(key => {
-    const bgEl = container.querySelector(`input[data-status="${key}"][data-type="bg"]`);
-    const txEl = container.querySelector(`input[data-status="${key}"][data-type="text"]`);
-    if (bgEl && txEl) colors[key] = { bg: bgEl.value, text: txEl.value };
+    const bgEl  = container.querySelector(`input[data-status="${key}"][data-type="bg"]`);
+    const txEl  = container.querySelector(`input[data-status="${key}"][data-type="text"]`);
+    const rowEl = container.querySelector(`input[data-status="${key}"][data-type="row_bg"]`);
+    if (bgEl && txEl) colors[key] = { bg: bgEl.value, text: txEl.value, row_bg: rowEl ? rowEl.value : bgEl.value };
   });
   try {
     const res = await fetch('/api/status-colors', {

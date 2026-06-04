@@ -499,8 +499,9 @@ class StatusColor(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     store_id = db.Column(db.Integer, db.ForeignKey('store.id'), default=1)
     status_key = db.Column(db.String(50), nullable=False)
-    bg_color = db.Column(db.String(20), default='#ffffff')
-    text_color = db.Column(db.String(20), default='#111827')
+    bg_color = db.Column(db.String(20), default='#ffffff')      # バッジ背景色
+    text_color = db.Column(db.String(20), default='#111827')    # 文字色
+    row_bg_color = db.Column(db.String(20), default='#ffffff')  # 行全体の背景色
 
 
 class ApplicationRecord(db.Model):
@@ -1098,6 +1099,16 @@ def migrate_db():
             except Exception as e:
                 print(f"  Skip application_record.{col_name}: {e}")
 
+    # status_color に row_bg_color を追加
+    cursor.execute("PRAGMA table_info(status_color)")
+    scs_cols = {r[1] for r in cursor.fetchall()}
+    if 'row_bg_color' not in scs_cols:
+        try:
+            cursor.execute("ALTER TABLE status_color ADD COLUMN row_bg_color VARCHAR(20) DEFAULT '#ffffff'")
+            print("  Added column status_color.row_bg_color")
+        except Exception as e:
+            print(f"  Skip status_color.row_bg_color: {e}")
+
     # customer_service_record の status カラムを追加
     cursor.execute("PRAGMA table_info(customer_service_record)")
     csr_cols = {r[1] for r in cursor.fetchall()}
@@ -1151,6 +1162,7 @@ def migrate_postgres():
         ("application_record", "option_payment_date", "DATE"),
         ("application_record", "management_company", "VARCHAR(200)"),
         ("application_record", "review_ng", "BOOLEAN DEFAULT FALSE"),
+        ("status_color", "row_bg_color", "VARCHAR(20) DEFAULT '#ffffff'"),
         ("daily_report",             "store_id",     "INTEGER"),
         ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
@@ -6598,10 +6610,10 @@ def api_media_types_delete(mid):
 # ── ステータスカラー API ──────────────────────────────────
 
 STATUS_COLOR_DEFAULTS = {
-    '申込':          {'bg': '#ffffff', 'text': '#111827'},
-    '契約':          {'bg': '#fef9c3', 'text': '#92400e'},
-    'キャンセル':     {'bg': '#fee2e2', 'text': '#b91c1c'},
-    'キャンセル振替': {'bg': '#dcfce7', 'text': '#15803d'},
+    '申込':          {'bg': '#ffffff', 'text': '#111827', 'row_bg': '#ffffff'},
+    '契約':          {'bg': '#fef9c3', 'text': '#92400e', 'row_bg': '#fef9c3'},
+    'キャンセル':     {'bg': '#fee2e2', 'text': '#b91c1c', 'row_bg': '#e5e7eb'},
+    'キャンセル振替': {'bg': '#dcfce7', 'text': '#15803d', 'row_bg': '#e5e7eb'},
 }
 
 
@@ -6613,8 +6625,11 @@ def api_status_colors_get():
     result = {}
     for key, default in STATUS_COLOR_DEFAULTS.items():
         sc = StatusColor.query.filter_by(store_id=store_id, status_key=key).first()
-        result[key] = {'bg': sc.bg_color if sc else default['bg'],
-                       'text': sc.text_color if sc else default['text']}
+        result[key] = {
+            'bg':     sc.bg_color if sc else default['bg'],
+            'text':   sc.text_color if sc else default['text'],
+            'row_bg': (sc.row_bg_color if (sc and sc.row_bg_color) else default.get('row_bg', '#ffffff')),
+        }
     return jsonify(result)
 
 
@@ -6639,6 +6654,8 @@ def api_status_colors_update():
             db.session.add(sc)
         sc.bg_color = colors.get('bg', '#ffffff')
         sc.text_color = colors.get('text', '#111827')
+        if 'row_bg' in colors:
+            sc.row_bg_color = colors.get('row_bg') or '#ffffff'
     db.session.commit()
     return jsonify({'status': 'ok'})
 
