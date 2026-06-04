@@ -629,7 +629,8 @@
       try { flatpickr.localize(flatpickr.l10ns.ja); } catch (e) {}
       const fpOpts = {
         dateFormat: 'Y-m-d',
-        allowInput: true,
+        allowInput: false,      // クリック一発でカレンダーを開く（標準ピッカーと競合させない）
+        clickOpens: true,
         disableMobile: false,   // スマホは使いやすい標準ホイールを使用
         onReady: function (sel, str, inst) {
           if (inst._footAdded) return;
@@ -650,6 +651,12 @@
           try { flatpickr(el, fpOpts); } catch (e) {}
         });
       }
+      // 1つの入力にflatpickrを確実に付与して開く（モーダル等から利用）
+      window.fpOpen = function (el) {
+        if (!el) return;
+        if (!el._flatpickr) { el.setAttribute('data-fp', '1'); try { flatpickr(el, fpOpts); } catch (e) {} }
+        if (el._flatpickr) el._flatpickr.open();
+      };
       const run = function () {
         initFp(document);
         // 動的に追加される日付入力にも適用
