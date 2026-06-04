@@ -162,6 +162,42 @@
     @media (max-width: 1100px) {
       #topbar-notif { display: none !important; }
     }
+
+    /* ━━━ モバイル対応（768px以下：サイドバーをオフキャンバスのドロワーに） ━━━ */
+    #sidebar-overlay { display: none; }
+    @media (max-width: 768px) {
+      :root { --topbar-h: 52px; }
+      /* サイドバーは画面外に隠し、ハンバーガーでスライドイン（leftで制御＝堅牢） */
+      #sidebar {
+        left: -110%;
+        transition: left 0.25s ease;
+        width: var(--sidebar-w);
+        box-shadow: 2px 0 16px rgba(0,0,0,0.25);
+      }
+      /* モバイルでは折りたたみ(アイコンのみ)ではなく、開いたら全項目表示 */
+      #sidebar.collapsed { width: var(--sidebar-w); }
+      #sidebar.collapsed .nav-label,
+      #sidebar.collapsed .logo-text,
+      #sidebar.collapsed .user-info,
+      #sidebar.collapsed .nav-section-label { display: revert; }
+      #sidebar.collapsed .nav-item { justify-content: flex-start; padding: 10px 16px; }
+      #sidebar.collapsed .logo-img-text   { display: block; }
+      #sidebar.collapsed .logo-img-notext { display: none; }
+      #sidebar.mobile-open { left: 0; }
+      /* 本文は全幅 */
+      #main-wrap, #main-wrap.expanded { margin-left: 0 !important; }
+      /* ドロワー背後のオーバーレイ */
+      #sidebar-overlay.active { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 49; }
+      /* 余白を詰める */
+      #topbar { padding: 0 12px; }
+      #main-wrap > main { padding: 12px 12px !important; }
+      footer { padding-left: 12px !important; padding-right: 12px !important; }
+    }
+    /* さらに小さい端末（〜420px）：文字とカードをコンパクトに */
+    @media (max-width: 420px) {
+      .page-title { font-size: 18px !important; }
+      #main-wrap > main { padding: 10px 8px !important; }
+    }
   </style>
   {% block extra_head %}{% endblock %}
 </head>
@@ -396,6 +432,9 @@
     </div>
   </aside>
 
+  <!-- モバイル用ドロワー背景オーバーレイ -->
+  <div id="sidebar-overlay" onclick="closeMobileSidebar()"></div>
+
   <!-- メインエリア -->
   <div id="main-wrap" class="flex-1 flex flex-col">
 
@@ -467,15 +506,36 @@
     updateDatetime();
     setInterval(updateDatetime, 30000);
 
-    // サイドバー折りたたみ
+    const isMobileView = () => window.innerWidth <= 768;
+
+    // モバイル：ドロワー開閉
+    function openMobileSidebar() {
+      document.getElementById('sidebar').classList.add('mobile-open');
+      document.getElementById('sidebar-overlay').classList.add('active');
+    }
+    function closeMobileSidebar() {
+      document.getElementById('sidebar').classList.remove('mobile-open');
+      document.getElementById('sidebar-overlay').classList.remove('active');
+    }
+
+    // サイドバー切替（モバイル=ドロワー / PC=折りたたみ）
     function toggleSidebar() {
       const sb = document.getElementById('sidebar');
+      if (isMobileView()) {
+        sb.classList.contains('mobile-open') ? closeMobileSidebar() : openMobileSidebar();
+        return;
+      }
       const mw = document.getElementById('main-wrap');
       sb.classList.toggle('collapsed');
       mw.classList.toggle('expanded');
       // ユーザー操作状態をsessionStorageに保存
       sessionStorage.setItem('sidebar_collapsed', sb.classList.contains('collapsed') ? '1' : '0');
     }
+
+    // モバイルでナビをタップしたらドロワーを閉じる
+    document.querySelectorAll('#sidebar .nav-item').forEach(function(el) {
+      el.addEventListener('click', function() { if (isMobileView()) closeMobileSidebar(); });
+    });
 
     // 画面幅に応じてサイドバーを初期設定
     (function initSidebarState() {
@@ -530,6 +590,8 @@
         const sb = document.getElementById('sidebar');
         const mw = document.getElementById('main-wrap');
         if (!sb || !mw) return;
+        // PC幅に戻ったらモバイルドロワーを確実に閉じる
+        if (!isMobileView()) closeMobileSidebar();
         const saved = sessionStorage.getItem('sidebar_collapsed');
         // ユーザーが手動操作していない場合のみ自動調整
         if (saved === null) {
