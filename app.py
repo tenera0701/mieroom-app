@@ -538,7 +538,8 @@ class ApplicationRecord(db.Model):
     option_approved = db.Column(db.Boolean, default=False)     # 店長がその他費用承認
     option_payment_date = db.Column(db.Date, nullable=True)    # その他費用入金日
     management_company = db.Column(db.String(200))             # 管理会社名
-    review_ng = db.Column(db.Boolean, default=False)          # 審査×（True=審査NG→キャンセル）
+    review_ng = db.Column(db.Boolean, default=False)          # 審査×（True=審査NG→キャンセル）旧フィールド
+    review_status = db.Column(db.String(10), nullable=True)  # 審査状態: None=—, 'ok'=○, 'ng'=×
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1091,6 +1092,7 @@ def migrate_db():
         ('brokerage_payment_date', 'DATE'),
         ('management_company', 'VARCHAR(200)'),
         ('review_ng', 'BOOLEAN DEFAULT 0'),
+        ('review_status', 'VARCHAR(10)'),
     ]:
         if col_name not in ar_cols:
             try:
@@ -1162,6 +1164,7 @@ def migrate_postgres():
         ("application_record", "option_payment_date", "DATE"),
         ("application_record", "management_company", "VARCHAR(200)"),
         ("application_record", "review_ng", "BOOLEAN DEFAULT FALSE"),
+        ("application_record", "review_status", "VARCHAR(10)"),
         ("status_color", "row_bg_color", "VARCHAR(20) DEFAULT '#ffffff'"),
         ("daily_report",             "store_id",     "INTEGER"),
         ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
@@ -5933,6 +5936,7 @@ def _app_record_to_dict(r, staff_map):
         'rent': r.rent or 0,
         'management_company': r.management_company or '',
         'review_ng': bool(r.review_ng),
+        'review_status': r.review_status or None,
         'contract_start_date': r.contract_start_date.isoformat() if r.contract_start_date else None,
         'ad_payment_date': r.ad_payment_date.isoformat() if r.ad_payment_date else None,
         'brokerage_fee': r.brokerage_fee or 0,
@@ -6349,13 +6353,24 @@ def api_applications_update(rid):
     for fld in ['application_date', 'contract_start_date', 'ad_payment_date', 'brokerage_payment_date', 'option_payment_date']:
         if fld in data: setattr(rec, fld, _parse_date(data[fld]))
 
-    # 審査〇× : ×（NG）でキャンセル、〇に戻すとキャンセルなら申込へ戻す
-    if 'review_ng' in data:
+    # 審査状態: None=— / 'ok'=○ / 'ng'=×
+    if 'review_status' in data:
+        rs = data['review_status'] or None
+        rec.review_status = rs
+        rec.review_ng = (rs == 'ng')
+        if rs == 'ng':
+            rec.status = 'キャンセル'
+        elif rec.status == 'キャンセル' and rs != 'ng':
+            rec.status = '申込'  # ×→—/○に戻したらキャンセル解除
+    # 旧フィールド互換
+    elif 'review_ng' in data:
         rec.review_ng = bool(data['review_ng'])
         if rec.review_ng:
             rec.status = 'キャンセル'
+            rec.review_status = 'ng'
         elif rec.status == 'キャンセル':
             rec.status = '申込'
+            rec.review_status = None
 
     rec.updated_at = datetime.utcnow()
     db.session.commit()

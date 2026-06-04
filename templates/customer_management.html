@@ -585,7 +585,7 @@ function buildAppRow(r, colors, isSettled = false) {
     <td data-f="customer_name"    data-t="text"   data-v="${escApp(r.customer_name)}"   >${r.customer_name || '―'}</td>
     <td data-f="rent"             data-t="number" data-v="${r.rent||0}"                  style="text-align:right;">${r.rent ? r.rent.toLocaleString()+'円' : '―'}</td>
     <td data-f="management_company" data-t="text" data-v="${escApp(r.management_company)}">${r.management_company || '―'}</td>
-    <td style="cursor:pointer;font-weight:700;${r.review_ng ? 'color:#dc2626;' : 'color:#0D9488;'}" title="クリックで切替（×で審査NG→キャンセル）" onclick="toggleReview(${r.id}, ${!!r.review_ng})">${r.review_ng ? '×' : '〇'}</td>
+    <td style="cursor:pointer;font-weight:700;text-align:center;${r.review_status==='ok'?'color:#0D9488;':r.review_status==='ng'?'color:#dc2626;':'color:#9ca3af;'}" title="クリックで切替：—→○→×" onclick="cycleReview(${r.id}, '${r.review_status||''}')">${r.review_status==='ok'?'○':r.review_status==='ng'?'×':'—'}</td>
     <td data-f="contract_start_date" data-t="date" data-v="${r.contract_start_date||''}" style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
     <td data-f="brokerage_fee"    data-t="number" data-v="${r.brokerage_fee||0}"         style="text-align:right;">${r.brokerage_fee ? r.brokerage_fee.toLocaleString()+'円' : '―'}</td>
     <td data-f="ad_amount"        data-t="number" data-v="${r.ad_amount||0}"             style="text-align:right;">${adLabel}</td>
@@ -1138,24 +1138,33 @@ function applyLocalUpdate(id, field, value) {
   loadUncollected().catch(() => {});
 }
 
-/** 審査〇× トグル（×でキャンセル、〇に戻すと申込へ） */
-async function toggleReview(id, curNg) {
-  const newNg = !curNg;
-  const msg = newNg ? '審査を×（NG）にして、この申込をキャンセルにしますか？'
-                    : '審査を〇に戻しますか？（キャンセルの場合は申込に戻ります）';
-  if (!confirm(msg)) return;
+/** 審査 3状態サイクル: — → ○ → × → — */
+async function cycleReview(id, cur) {
+  // 次の状態を決定
+  let next;
+  if (!cur || cur === '')    next = 'ok';   // — → ○
+  else if (cur === 'ok')     next = 'ng';   // ○ → ×
+  else                        next = null;   // × → —
+
+  // × になる場合だけ確認
+  if (next === 'ng') {
+    if (!confirm('審査×（NG）にして、この申込をキャンセルにしますか？')) return;
+  }
+
   try {
     const res = await fetch('/api/applications/' + id, {
       method: 'PUT', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ review_ng: newNg })
+      body: JSON.stringify({ review_status: next })
     });
     if (!res.ok) throw new Error();
-    showAlert(newNg ? '審査×：キャンセルにしました。' : '審査〇に戻しました。');
+    const msg = next === 'ok' ? '審査○：通過にしました。'
+              : next === 'ng' ? '審査×：キャンセルにしました。'
+              : '審査をリセットしました。';
+    showAlert(msg);
   } catch(_) { showAlert('更新に失敗しました。', 'error'); return; }
   loadApplications().catch(()=>{});
   loadUncollected().catch(()=>{});
   loadSettled().catch(()=>{});
-  loadSummary().catch(()=>{});
 }
 
 function editCellApp(td, id, field, type, curVal, opts) {
