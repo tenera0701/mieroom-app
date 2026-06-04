@@ -6503,6 +6503,38 @@ def api_applications_unapprove(rid):
     return jsonify({'status': 'ok', 'removed_amount': removed_amount})
 
 
+@app.route("/api/applications/<int:rid>/unsettle", methods=["POST"])
+@login_required
+def api_applications_unsettle(rid):
+    """否認：入金報告を取消して未報告に戻す（承認前のみ／スタッフは自分の案件のみ可）"""
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    allowed_ids = get_allowed_store_ids()
+    rec = ApplicationRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed_ids:
+        return jsonify({'error': '権限がありません'}), 403
+    if cur_user and cur_user.role == 'staff' and rec.staff_id != cur_user.staff_id:
+        return jsonify({'error': '権限がありません'}), 403
+
+    data = request.get_json() or {}
+    field = data.get('field')  # 'ad' / 'brokerage' / 'option'
+    if field == 'brokerage':
+        if rec.brokerage_approved:
+            return jsonify({'error': 'already approved'}), 400
+        rec.brokerage_settled = False; rec.brokerage_payment_date = None
+    elif field == 'option':
+        if rec.option_approved:
+            return jsonify({'error': 'already approved'}), 400
+        rec.option_settled = False; rec.option_payment_date = None
+    elif field == 'ad':
+        if rec.ad_approved:
+            return jsonify({'error': 'already approved'}), 400
+        rec.ad_settled = False; rec.ad_payment_date = None
+    else:
+        return jsonify({'error': 'invalid field'}), 400
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
 @app.route("/api/pending-approvals")
 @login_required
 def api_pending_approvals():

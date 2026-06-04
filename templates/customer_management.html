@@ -539,11 +539,13 @@ function buildSettleCell(r, field, settled, approved, hasAmount = true) {
   const payDate = r[dateField] || '';
   const dateNote = payDate ? `<div style="font-size:10px;color:#6b7280;">${payDate}</div>` : '';
   if (approved) {
-    const undo = IS_MANAGER ? `<div><button onclick="unapprovePayment(${r.id},'${field}')" style="margin-top:2px;padding:1px 6px;font-size:10px;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#ef4444;cursor:pointer;">取消</button></div>` : '';
-    return '<span style="color:#0D9488;font-weight:700;font-size:11px;">承認済</span>' + dateNote + undo;
+    // 承認済（クリックで取消ボタンを表示。常時は出さない）
+    return `<span style="color:#0D9488;font-weight:700;font-size:11px;cursor:pointer;" title="クリックで取消" onclick="revealUndo(this,${r.id},'${field}')">承認済</span>` + dateNote;
   }
   if (settled) {
-    if (IS_MANAGER) return `<button onclick="approvePayment(${r.id},'${field}')" style="padding:3px 8px;font-size:11px;border:none;border-radius:4px;background:#2563eb;color:#fff;cursor:pointer;font-weight:700;">承認</button>` + dateNote;
+    // 承認待ち（クリックで「承認」「否認」を表示）
+    const canAct = IS_MANAGER || r.staff_id === CUR_STAFF_ID;
+    if (canAct) return `<span style="color:#f59e0b;font-weight:700;font-size:11px;cursor:pointer;" title="クリックで承認/否認" onclick="revealApproveDeny(this,${r.id},'${field}')">承認待ち</span>` + dateNote;
     return '<span style="color:#f59e0b;font-weight:700;font-size:11px;">承認待ち</span>' + dateNote;
   }
   const canReport = IS_MANAGER || r.staff_id === CUR_STAFF_ID;
@@ -641,12 +643,12 @@ function renderSettled(list, colors) {
   const payCell = (paidThisMonth, dateStr, id, field, fkey) => {
     if (paidThisMonth) {
       const ds = dateStr || '日付未設定';
-      const undo = IS_MANAGER ? '<button onclick="unapprovePayment(' + id + ',&quot;' + fkey + '&quot;)" style="margin-top:2px;padding:1px 6px;font-size:10px;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#ef4444;cursor:pointer;">取消</button>' : '';
       return '<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">' +
-        '<span style="color:#0D9488;font-weight:700;font-size:11px;">入金済</span>' +
+        '<span style="color:#0D9488;font-weight:700;font-size:11px;cursor:pointer;" title="クリックで取消" ' +
+        'onclick="revealUndoSettled(this,' + id + ',&quot;' + fkey + '&quot;)">入金済</span>' +
         '<span style="font-size:10px;color:#6b7280;cursor:pointer;border-bottom:1px dotted #9ca3af;" title="クリックで入金日を変更" ' +
         'onclick="editSettledDate(this,' + id + ',&quot;' + field + '&quot;,&quot;' + (dateStr || '') + '&quot;)">' + ds + '</span>' +
-        undo + '</div>';
+        '</div>';
     }
     return '<span style="color:#dc2626;font-weight:700;font-size:13px;">×</span>';
   };
@@ -937,6 +939,46 @@ async function doSettle(rid, field, payDate) {
     });
     if (!res.ok) throw new Error();
     showAlert(`${label}の入金（${payDate}）を報告しました。店長の承認をお待ちください。`);
+  } catch(_) { showAlert('処理に失敗しました。', 'error'); return; }
+  loadApplications().catch(()=>{});
+  loadUncollected().catch(()=>{});
+  loadSettled().catch(()=>{});
+}
+
+/** 承認待ちをクリック → 「承認」「否認」ボタンを表示 */
+function revealApproveDeny(el, rid, field) {
+  const approveBtn = IS_MANAGER
+    ? `<button onclick="approvePayment(${rid},'${field}')" style="padding:2px 8px;font-size:11px;border:none;border-radius:4px;background:#2563eb;color:#fff;cursor:pointer;font-weight:700;">承認</button>` : '';
+  const denyBtn = `<button onclick="denyPayment(${rid},'${field}')" style="padding:2px 8px;font-size:11px;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#ef4444;cursor:pointer;">否認</button>`;
+  el.outerHTML = `<span style="display:inline-flex;gap:3px;justify-content:center;">${approveBtn}${denyBtn}</span>`;
+}
+
+/** 承認済をクリック → 「取消」ボタンを表示（店長のみ） */
+function revealUndo(el, rid, field) {
+  if (!IS_MANAGER) return;
+  el.outerHTML = `<span style="display:inline-flex;flex-direction:column;align-items:center;gap:2px;">
+    <span style="color:#0D9488;font-weight:700;font-size:11px;">承認済</span>
+    <button onclick="unapprovePayment(${rid},'${field}')" style="padding:1px 6px;font-size:10px;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#ef4444;cursor:pointer;">取消</button></span>`;
+}
+
+/** 入金済（入金済み一覧）をクリック → 「取消」ボタンを表示（店長のみ） */
+function revealUndoSettled(el, rid, field) {
+  if (!IS_MANAGER) return;
+  el.style.cursor = 'default'; el.onclick = null;
+  el.insertAdjacentHTML('afterend',
+    `<button onclick="unapprovePayment(${rid},'${field}')" style="margin-top:2px;padding:1px 6px;font-size:10px;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#ef4444;cursor:pointer;">取消</button>`);
+}
+
+/** 否認（スタッフ・店長）→ 入金報告を取消し未報告に戻す */
+async function denyPayment(rid, field) {
+  const label = PAY_LABELS[field] || field;
+  if (!confirm(`${label}の入金報告を否認しますか？\n報告前（未報告）に戻ります。`)) return;
+  try {
+    const res = await fetch(`/api/applications/${rid}/unsettle`, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ field }),
+    });
+    if (!res.ok) throw new Error();
+    showAlert(`${label}を否認しました（未報告に戻りました）。`);
   } catch(_) { showAlert('処理に失敗しました。', 'error'); return; }
   loadApplications().catch(()=>{});
   loadUncollected().catch(()=>{});
