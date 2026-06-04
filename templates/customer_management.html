@@ -654,7 +654,7 @@ function renderSettled(list, colors) {
     const optCell  = payCell(optPaid,  r.option_payment_date,    r.id, 'option_payment_date');
     const adCell   = payCell(adPaid,   r.ad_payment_date,        r.id, 'ad_payment_date');
 
-    const fmt = v => v > 0 ? Math.round(v).toLocaleString() + '円' : '—';
+    const fmt = v => v ? Math.round(v).toLocaleString() + '円' : '—';
     const chk = v => v ? '●' : '×';
 
     const tr = document.createElement('tr');
