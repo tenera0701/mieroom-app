@@ -90,8 +90,9 @@
   /* ===== KPIサマリーカード ===== */
   .kpi-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
-    gap: 8px;
+    /* auto-fit で7枚を横幅いっぱいに均等配置（右側の空きをなくす） */
+    grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+    gap: 10px;
     margin-bottom: 16px;
     align-items: stretch;
     grid-auto-rows: 1fr;   /* 全カードを同じ高さに揃える */
@@ -102,8 +103,8 @@
   .kpi-card {
     background: #fff;
     border: 1px solid #e5e7eb;
-    border-radius: 7px;
-    padding: 6px 9px;
+    border-radius: 8px;
+    padding: 10px 14px;
     position: relative;
     overflow: hidden;
   }
@@ -115,26 +116,26 @@
     background: var(--primary);
   }
   .kpi-card-label {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-muted);
     font-weight: 600;
     letter-spacing: 0.01em;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
   }
   .kpi-card-value {
-    font-size: 14px;
+    font-size: 17px;
     font-weight: 700;
     color: #111827;
     line-height: 1.1;
-    margin-bottom: 1px;
+    margin-bottom: 2px;
   }
   .kpi-card-sub {
-    font-size: 9px;
+    font-size: 10px;
     color: var(--text-muted);
   }
   /* 総売上はカードサイズは他と同じ・数字だけ大きく強調 */
-  .kpi-card--primary .kpi-card-value { font-size: 21px; white-space: nowrap; }
-  .kpi-card--primary .kpi-unit { font-size: 11px; }
+  .kpi-card--primary .kpi-card-value { font-size: 26px; white-space: nowrap; }
+  .kpi-card--primary .kpi-unit { font-size: 13px; }
   .kpi-card-badge {
     display: inline-block;
     font-size: 12px;
