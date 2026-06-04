@@ -585,7 +585,7 @@ function buildAppRow(r, colors, isSettled = false) {
     <td data-f="customer_name"    data-t="text"   data-v="${escApp(r.customer_name)}"   >${r.customer_name || '―'}</td>
     <td data-f="rent"             data-t="number" data-v="${r.rent||0}"                  style="text-align:right;">${r.rent ? r.rent.toLocaleString()+'円' : '―'}</td>
     <td data-f="management_company" data-t="text" data-v="${escApp(r.management_company)}">${r.management_company || '―'}</td>
-    <td style="cursor:pointer;font-weight:700;text-align:center;${r.review_status==='ok'?'color:#0D9488;':r.review_status==='ng'?'color:#dc2626;':'color:#9ca3af;'}" title="クリックで切替：—→○→×" onclick="cycleReview(${r.id}, '${r.review_status||''}')">${r.review_status==='ok'?'○':r.review_status==='ng'?'×':'—'}</td>
+    <td style="text-align:center;cursor:pointer;" onclick="showReviewMenu(event,${r.id},'${r.review_status||''}')"><span style="font-weight:700;font-size:13px;${r.review_status==='ok'?'color:#0D9488':r.review_status==='ng'?'color:#dc2626':'color:#9ca3af'}">${r.review_status==='ok'?'○':r.review_status==='ng'?'×':'—'}</span></td>
     <td data-f="contract_start_date" data-t="date" data-v="${r.contract_start_date||''}" style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
     <td data-f="brokerage_fee"    data-t="number" data-v="${r.brokerage_fee||0}"         style="text-align:right;">${r.brokerage_fee ? r.brokerage_fee.toLocaleString()+'円' : '―'}</td>
     <td data-f="ad_amount"        data-t="number" data-v="${r.ad_amount||0}"             style="text-align:right;">${adLabel}</td>
@@ -1138,27 +1138,53 @@ function applyLocalUpdate(id, field, value) {
   loadUncollected().catch(() => {});
 }
 
-/** 審査 3状態サイクル: — → ○ → × → — */
-async function cycleReview(id, cur) {
-  // 次の状態を決定
-  let next;
-  if (!cur || cur === '')    next = 'ok';   // — → ○
-  else if (cur === 'ok')     next = 'ng';   // ○ → ×
-  else                        next = null;   // × → —
+/** 審査メニューを表示（クリック位置に出す） */
+function showReviewMenu(event, id, cur) {
+  event.stopPropagation();
+  // 既存メニューを閉じる
+  document.querySelectorAll('.review-popup').forEach(m => m.remove());
 
-  // × になる場合だけ確認
-  if (next === 'ng') {
-    if (!confirm('審査×（NG）にして、この申込をキャンセルにしますか？')) return;
-  }
+  const menu = document.createElement('div');
+  menu.className = 'review-popup';
+  menu.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,0.15);padding:6px;min-width:150px;';
+  menu.style.left = Math.min(event.clientX, window.innerWidth - 160) + 'px';
+  menu.style.top  = (event.clientY + 8) + 'px';
 
+  const opts = [
+    { value: 'ok',  label: '○  審査通過（契約）', color: '#0D9488' },
+    { value: 'ng',  label: '×  審査NG（キャンセル）', color: '#dc2626' },
+    { value: '',    label: '—  リセット', color: '#9ca3af' },
+  ];
+  opts.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.textContent = opt.label;
+    btn.style.cssText = `display:block;width:100%;text-align:left;padding:7px 12px;font-size:12px;font-weight:700;color:${opt.color};background:none;border:none;border-radius:6px;cursor:pointer;`;
+    if (opt.value === cur) btn.style.background = '#f0fdf4';
+    btn.onmouseover = () => btn.style.background = '#f9fafb';
+    btn.onmouseout  = () => btn.style.background = (opt.value === cur) ? '#f0fdf4' : 'none';
+    btn.onclick = () => { menu.remove(); setReviewStatus(id, opt.value || null); };
+    menu.appendChild(btn);
+  });
+
+  document.body.appendChild(menu);
+  // 外クリックで閉じる
+  setTimeout(() => {
+    document.addEventListener('click', function close(e) {
+      if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', close); }
+    });
+  }, 0);
+}
+
+async function setReviewStatus(id, status) {
+  if (status === 'ng' && !confirm('審査×にして、この申込をキャンセルにしますか？')) return;
   try {
     const res = await fetch('/api/applications/' + id, {
       method: 'PUT', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ review_status: next })
+      body: JSON.stringify({ review_status: status })
     });
     if (!res.ok) throw new Error();
-    const msg = next === 'ok' ? '審査○：通過にしました。'
-              : next === 'ng' ? '審査×：キャンセルにしました。'
+    const msg = status === 'ok' ? '審査○：契約に変更しました。'
+              : status === 'ng' ? '審査×：キャンセルに変更しました。'
               : '審査をリセットしました。';
     showAlert(msg);
   } catch(_) { showAlert('更新に失敗しました。', 'error'); return; }

@@ -6452,24 +6452,19 @@ def api_applications_update(rid):
     for fld in ['application_date', 'contract_start_date', 'ad_payment_date', 'brokerage_payment_date', 'option_payment_date']:
         if fld in data: setattr(rec, fld, _parse_date(data[fld]))
 
-    # 審査状態: None=— / 'ok'=○ / 'ng'=×
+    # 審査状態: None=— / 'ok'=○→契約 / 'ng'=×→キャンセル
     if 'review_status' in data:
         rs = data['review_status'] or None
         rec.review_status = rs
         rec.review_ng = (rs == 'ng')
-        if rs == 'ng':
+        if rs == 'ok':
+            rec.status = '契約'
+        elif rs == 'ng':
             rec.status = 'キャンセル'
-        elif rec.status == 'キャンセル' and rs != 'ng':
-            rec.status = '申込'  # ×→—/○に戻したらキャンセル解除
-    # 旧フィールド互換
-    elif 'review_ng' in data:
-        rec.review_ng = bool(data['review_ng'])
-        if rec.review_ng:
-            rec.status = 'キャンセル'
-            rec.review_status = 'ng'
-        elif rec.status == 'キャンセル':
-            rec.status = '申込'
-            rec.review_status = None
+        else:
+            # リセット: 審査由来のステータスを申込に戻す
+            if rec.status in ('契約', 'キャンセル'):
+                rec.status = '申込'
 
     rec.updated_at = datetime.utcnow()
     db.session.commit()
