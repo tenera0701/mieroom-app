@@ -156,7 +156,9 @@
       <!-- 色凡例 -->
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;">
         <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d1fae5;display:inline-block;border:1px solid #6ee7b7;"></span>全入金済</span>
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>一部入金済（仲手・その他費用・ADのいずれか）</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#dbeafe;display:inline-block;border:1px solid #93c5fd;"></span>仲手入金済</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d9f99d;display:inline-block;border:1px solid #bef264;"></span>その他費用入金済</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>AD入金済</span>
       </div>
       <div class="table-wrapper">
         <table>
@@ -227,8 +229,9 @@
     <div id="unc-body-wrap">
       <!-- 色凡例 -->
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;">
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#dbeafe;display:inline-block;border:1px solid #93c5fd;"></span>仲手入金済（AD未入金）</span>
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>AD入金済（仲介未入金）</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#dbeafe;display:inline-block;border:1px solid #93c5fd;"></span>仲手入金済</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d9f99d;display:inline-block;border:1px solid #bef264;"></span>その他費用入金済</span>
+        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>AD入金済</span>
         <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fff;display:inline-block;border:1px solid #e5e7eb;"></span>未入金</span>
       </div>
       <div class="table-wrapper">
@@ -516,14 +519,16 @@ function paymentRowBg(r) {
   const hasBrokerage = (r.brokerage_fee || 0) !== 0;
   const hasOption    = (r.option_amount || 0) !== 0;
   const hasAd        = adAmountYen(r) !== 0;
-  const bOk = !hasBrokerage || r.brokerage_approved;
-  const oOk = !hasOption    || r.option_approved;
-  const aOk = !hasAd        || r.ad_approved;
-  if (hasBrokerage || hasOption || hasAd) {
-    if (bOk && oOk && aOk) return '#d1fae5';            // 全方向入金済み
-    if ((bOk && hasBrokerage) || (oOk && hasOption) || (aOk && hasAd)) return '#fef3c7'; // 一部入金済み
-  }
-  return null;
+  if (!(hasBrokerage || hasOption || hasAd)) return null;
+  const allOk = (!hasBrokerage || r.brokerage_approved) && (!hasOption || r.option_approved) && (!hasAd || r.ad_approved);
+  if (allOk) return '#d1fae5';                                  // 全方向入金済み：緑
+  const optPaid  = hasOption    && r.option_approved;
+  const brokPaid = hasBrokerage && r.brokerage_approved;
+  const adPaid   = hasAd        && r.ad_approved;
+  if (optPaid)  return '#d9f99d';   // その他費用入金済：黄緑
+  if (brokPaid) return '#dbeafe';   // 仲手入金済：青
+  if (adPaid)   return '#fef3c7';   // AD入金済：黄
+  return null;                       // どれも未入金
 }
 
 function escApp(s) {

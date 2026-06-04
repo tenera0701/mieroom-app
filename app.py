@@ -6625,9 +6625,14 @@ def api_status_colors_update():
     if not cur_user or cur_user.role not in ('owner', 'store_manager', 'super_admin'):
         return jsonify({'error': '権限がありません'}), 403
     allowed_ids = get_allowed_store_ids()
-    store_id = allowed_ids[0] if allowed_ids else 1
     data = request.get_json() or {}
-    for status_key, colors in data.items():
+    # フロントは {store_id, colors:{...}} の形で送る。colors を取り出す（後方互換で直接形も許容）
+    req_sid = data.get('store_id')
+    store_id = int(req_sid) if (req_sid and int(req_sid) in allowed_ids) else (allowed_ids[0] if allowed_ids else 1)
+    colors_data = data.get('colors') if isinstance(data.get('colors'), dict) else data
+    for status_key, colors in colors_data.items():
+        if not isinstance(colors, dict):
+            continue   # store_id 等の非カラー項目はスキップ
         sc = StatusColor.query.filter_by(store_id=store_id, status_key=status_key).first()
         if not sc:
             sc = StatusColor(store_id=store_id, status_key=status_key)
