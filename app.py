@@ -6456,6 +6456,53 @@ def api_applications_approve(rid):
     return jsonify({'status': 'ok', 'approved_amount': approved_amount})
 
 
+@app.route("/api/applications/<int:rid>/unapprove", methods=["POST"])
+@login_required
+def api_applications_unapprove(rid):
+    """店長が入金承認を取消 → その方向を未報告に戻し、売上(KPI)から差し引く"""
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    if not cur_user or cur_user.role not in ('owner', 'store_manager', 'super_admin'):
+        return jsonify({'error': '権限がありません'}), 403
+
+    allowed_ids = get_allowed_store_ids()
+    rec = ApplicationRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed_ids:
+        return jsonify({'error': '権限がありません'}), 403
+
+    data = request.get_json() or {}
+    field = data.get('field')  # 'ad' / 'brokerage' / 'option'
+    ad_yen = round((rec.rent or 0) * (rec.ad_amount or 0) / 100) if (rec.ad_type or 'amount') == 'percent' else (rec.ad_amount or 0)
+
+    removed_amount = 0
+    if field == 'brokerage' and rec.brokerage_approved:
+        rec.brokerage_approved = False; rec.brokerage_settled = False
+        rec.brokerage_payment_date = None
+        removed_amount = rec.brokerage_fee or 0
+    elif field == 'option' and rec.option_approved:
+        rec.option_approved = False; rec.option_settled = False
+        rec.option_payment_date = None
+        removed_amount = rec.option_amount or 0
+    elif field == 'ad' and rec.ad_approved:
+        rec.ad_approved = False; rec.ad_settled = False
+        rec.ad_payment_date = None
+        removed_amount = ad_yen
+    else:
+        return jsonify({'error': 'invalid field or not approved'}), 400
+
+    # 承認時に加算したKPI売上を差し引く
+    if removed_amount and rec.staff_id:
+        ref_date = rec.application_date or date.today()
+        kpi = SalesKPI.query.filter_by(
+            staff_id=rec.staff_id, store_id=rec.store_id,
+            year=ref_date.year, month=ref_date.month
+        ).first()
+        if kpi:
+            kpi.sales_amount = (kpi.sales_amount or 0) - removed_amount
+
+    db.session.commit()
+    return jsonify({'status': 'ok', 'removed_amount': removed_amount})
+
+
 @app.route("/api/pending-approvals")
 @login_required
 def api_pending_approvals():

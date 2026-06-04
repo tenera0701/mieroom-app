@@ -111,7 +111,7 @@
   </div>
 
   <!-- ===== 集計サマリー ===== -->
-  <div id="summary-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px;">
+  <div id="summary-cards" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
   </div>
 
   <!-- 一括検索バー -->
@@ -402,27 +402,6 @@
   </div>
 </div>
 
-<!-- ===== 入金報告モーダル ===== -->
-<div class="modal-overlay" id="settle-modal">
-  <div class="modal" style="max-width:360px;">
-    <div class="modal-header">
-      <h3>入金報告</h3>
-      <button class="modal-close" onclick="closeSettleModal()">✕</button>
-    </div>
-    <div class="modal-body">
-      <p id="settle-modal-label" style="font-size:13px;color:#374151;margin:0 0 12px;"></p>
-      <div class="form-group">
-        <label>入金日 <span style="color:#ef4444;">*</span></label>
-        <input type="date" id="settle-modal-date">
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-cancel" onclick="closeSettleModal()">キャンセル</button>
-      <button class="btn-submit" onclick="submitSettleModal()">報告する</button>
-    </div>
-  </div>
-</div>
-
 {% endblock %}
 
 {% block extra_scripts %}
@@ -559,13 +538,16 @@ function buildSettleCell(r, field, settled, approved, hasAmount = true) {
   const dateField = field === 'brokerage' ? 'brokerage_payment_date' : field === 'option' ? 'option_payment_date' : 'ad_payment_date';
   const payDate = r[dateField] || '';
   const dateNote = payDate ? `<div style="font-size:10px;color:#6b7280;">${payDate}</div>` : '';
-  if (approved) return '<span style="color:#0D9488;font-weight:700;font-size:11px;">承認済</span>' + dateNote;
+  if (approved) {
+    const undo = IS_MANAGER ? `<div><button onclick="unapprovePayment(${r.id},'${field}')" style="margin-top:2px;padding:1px 6px;font-size:10px;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#ef4444;cursor:pointer;">取消</button></div>` : '';
+    return '<span style="color:#0D9488;font-weight:700;font-size:11px;">承認済</span>' + dateNote + undo;
+  }
   if (settled) {
     if (IS_MANAGER) return `<button onclick="approvePayment(${r.id},'${field}')" style="padding:3px 8px;font-size:11px;border:none;border-radius:4px;background:#2563eb;color:#fff;cursor:pointer;font-weight:700;">承認</button>` + dateNote;
     return '<span style="color:#f59e0b;font-weight:700;font-size:11px;">承認待ち</span>' + dateNote;
   }
   const canReport = IS_MANAGER || r.staff_id === CUR_STAFF_ID;
-  if (canReport) return `<button onclick="openSettleModal(${r.id},'${field}')" style="padding:3px 8px;font-size:11px;border:1px solid #d1d5db;border-radius:4px;background:#fff;color:#374151;cursor:pointer;">報告</button>`;
+  if (canReport) return `<button onclick="openSettleCalendar(this,${r.id},'${field}')" style="padding:3px 8px;font-size:11px;border:1px solid #d1d5db;border-radius:4px;background:#fff;color:#374151;cursor:pointer;">報告</button>`;
   return '<span style="color:#9ca3af;font-size:11px;">未報告</span>';
 }
 
@@ -656,14 +638,15 @@ function renderSettled(list, colors) {
   }
   tbody.innerHTML = '';
   // 入金セル: その月に入金があれば「✓入金済＋日付(クリックで変更可)」/ なければ ×
-  const payCell = (paidThisMonth, dateStr, id, field) => {
+  const payCell = (paidThisMonth, dateStr, id, field, fkey) => {
     if (paidThisMonth) {
       const ds = dateStr || '日付未設定';
+      const undo = IS_MANAGER ? '<button onclick="unapprovePayment(' + id + ',&quot;' + fkey + '&quot;)" style="margin-top:2px;padding:1px 6px;font-size:10px;border:1px solid #fca5a5;border-radius:4px;background:#fff;color:#ef4444;cursor:pointer;">取消</button>' : '';
       return '<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">' +
         '<span style="color:#0D9488;font-weight:700;font-size:11px;">入金済</span>' +
         '<span style="font-size:10px;color:#6b7280;cursor:pointer;border-bottom:1px dotted #9ca3af;" title="クリックで入金日を変更" ' +
         'onclick="editSettledDate(this,' + id + ',&quot;' + field + '&quot;,&quot;' + (dateStr || '') + '&quot;)">' + ds + '</span>' +
-        '</div>';
+        undo + '</div>';
     }
     return '<span style="color:#dc2626;font-weight:700;font-size:13px;">×</span>';
   };
@@ -674,9 +657,9 @@ function renderSettled(list, colors) {
     const optPaid  = !!r.option_paid_this_month;
     const adPaid   = !!r.ad_paid_this_month;
 
-    const brokCell = payCell(brokPaid, r.brokerage_payment_date, r.id, 'brokerage_payment_date');
-    const optCell  = payCell(optPaid,  r.option_payment_date,    r.id, 'option_payment_date');
-    const adCell   = payCell(adPaid,   r.ad_payment_date,        r.id, 'ad_payment_date');
+    const brokCell = payCell(brokPaid, r.brokerage_payment_date, r.id, 'brokerage_payment_date', 'brokerage');
+    const optCell  = payCell(optPaid,  r.option_payment_date,    r.id, 'option_payment_date', 'option');
+    const adCell   = payCell(adPaid,   r.ad_payment_date,        r.id, 'ad_payment_date', 'ad');
 
     const fmt = v => v ? Math.round(v).toLocaleString() + '円' : '—';
     const chk = v => v ? '●' : '×';
@@ -890,18 +873,19 @@ async function loadSummary() {
     return '全スタッフ';
   })();
 
-  const card = (label, valHtml, accent) => `
-    <div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${accent};border-radius:10px;padding:10px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+  // big=金額カード（サイズそのまま・数字1.1倍）/ それ以外は横幅を短く
+  const card = (label, valHtml, accent, big) => `
+    <div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${accent};border-radius:10px;padding:10px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.05);flex:0 0 auto;width:${big ? '152px' : '108px'};box-sizing:border-box;">
       <div style="font-size:11px;color:#6b7280;font-weight:600;">${label}</div>
-      <div style="font-size:18px;font-weight:800;color:#111827;margin-top:3px;">${valHtml}</div>
+      <div style="font-size:${big ? '20px' : '18px'};font-weight:800;color:#111827;margin-top:3px;">${valHtml}</div>
     </div>`;
   const unit = u => `<span style="font-size:12px;font-weight:600;color:#6b7280;margin-left:2px;">${u}</span>`;
 
   el.innerHTML =
-    `<div style="grid-column:1/-1;font-size:12px;color:#6b7280;font-weight:700;">📊 ${salesYear}年${salesMonth}月 集計（${staffName}）</div>` +
-    card('売上（入金済み）', yen(d.sales), '#16a34a') +
-    card('見込み売上', yen(d.expected_sales), '#0ea5e9') +
-    card('未入金', yen(d.uncollected), '#f59e0b') +
+    `<div style="flex-basis:100%;font-size:12px;color:#6b7280;font-weight:700;">📊 ${salesYear}年${salesMonth}月 集計（${staffName}）</div>` +
+    card('売上（入金済み）', yen(d.sales), '#16a34a', true) +
+    card('見込み売上', yen(d.expected_sales), '#0ea5e9', true) +
+    card('未入金', yen(d.uncollected), '#f59e0b', true) +
     card('申込数', (d.application_count||0) + unit('件'), '#6366f1') +
     card('契約数', (d.contract_count||0) + unit('件'), '#8b5cf6') +
     card('ライフライン', `${d.lifeline_count||0}${unit('件')}　${d.lifeline_rate||0}${unit('%')}`, '#0D9488') +
@@ -913,31 +897,40 @@ async function loadSummary() {
    入金ワークフロー
 =================================================== */
 const PAY_LABELS = { brokerage: '仲介手数料', option: 'その他費用', ad: 'AD' };
-let _settleCtx = null;
 
-/** 報告ボタン → 入金日入力モーダルを開く */
-function openSettleModal(rid, field) {
-  _settleCtx = { rid, field };
-  document.getElementById('settle-modal-label').textContent = `${PAY_LABELS[field] || field}の入金日を入力してください`;
-  const today = new Date();
-  const ymd = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-  const di = document.getElementById('settle-modal-date');
-  if (di._flatpickr) di._flatpickr.setDate(ymd, false); else di.value = ymd;
-  document.getElementById('settle-modal').classList.add('active');
-  setTimeout(() => { if (window.fpOpen) window.fpOpen(di); }, 120);
+/** 報告ボタン → カレンダーだけ表示。日付を選ぶとその日付で報告する */
+function openSettleCalendar(btn, rid, field) {
+  const td = btn.closest('td');
+  if (!td || td.dataset.reporting) return;
+  td.dataset.reporting = '1';
+  // セル内に隠し入力を置いてflatpickrを開く（カレンダーのみ表示）
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.readOnly = true;
+  inp.setAttribute('data-fp', '1');
+  inp.style.cssText = 'width:1px;height:1px;opacity:0;border:none;padding:0;margin:0;';
+  td.appendChild(inp);
+  let done = false;
+  const fp = flatpickr(inp, {
+    dateFormat: 'Y-m-d',
+    clickOpens: true,
+    disableMobile: false,
+    onChange: function (sel, str) {
+      if (!str || done) return;
+      done = true;
+      doSettle(rid, field, str);
+    },
+    onClose: function () {
+      // 日付未選択で閉じたら元の「報告」ボタンに戻す
+      setTimeout(function () { if (!done) { try { fp.destroy(); } catch(e){} loadApplications().catch(()=>{}); } }, 150);
+    }
+  });
+  fp.open();
 }
 
-function closeSettleModal() {
-  document.getElementById('settle-modal').classList.remove('active');
-  _settleCtx = null;
-}
-
-async function submitSettleModal() {
-  if (!_settleCtx) return;
-  const { rid, field } = _settleCtx;
+/** 入金報告を確定（日付付き） */
+async function doSettle(rid, field, payDate) {
   const label = PAY_LABELS[field] || field;
-  const payDate = document.getElementById('settle-modal-date').value;
-  if (!payDate) { showAlert('入金日を入力してください。', 'error'); return; }
   try {
     const res = await fetch(`/api/applications/${rid}/settle`, {
       method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ field, date: payDate }),
@@ -945,10 +938,26 @@ async function submitSettleModal() {
     if (!res.ok) throw new Error();
     showAlert(`${label}の入金（${payDate}）を報告しました。店長の承認をお待ちください。`);
   } catch(_) { showAlert('処理に失敗しました。', 'error'); return; }
-  closeSettleModal();
   loadApplications().catch(()=>{});
   loadUncollected().catch(()=>{});
   loadSettled().catch(()=>{});
+}
+
+/** 承認の取消（店長）→ その方向を未報告に戻す */
+async function unapprovePayment(rid, field) {
+  const label = PAY_LABELS[field] || field;
+  if (!confirm(`${label}の入金承認を取り消しますか？\n売上から差し引かれ、未報告に戻ります。`)) return;
+  try {
+    const res = await fetch(`/api/applications/${rid}/unapprove`, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ field }),
+    });
+    if (!res.ok) throw new Error();
+    showAlert(`${label}の承認を取り消しました。`);
+  } catch(_) { showAlert('取消に失敗しました。', 'error'); return; }
+  loadApplications().catch(()=>{});
+  loadUncollected().catch(()=>{});
+  loadSettled().catch(()=>{});
+  loadSummary().catch(()=>{});
 }
 
 async function approvePayment(rid, field) {
