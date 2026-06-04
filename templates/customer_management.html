@@ -314,6 +314,10 @@
           <input type="number" id="app-brokerage_fee" min="0" placeholder="0" autocomplete="off">
         </div>
         <div class="form-group">
+          <label>その他費用（円）</label>
+          <input type="number" id="app-option_amount" min="0" placeholder="0" autocomplete="off">
+        </div>
+        <div class="form-group">
           <label>AD種別</label>
           <select id="app-ad_type" onchange="updateAdLabel()">
             <option value="percent">割合（%）</option>
@@ -323,10 +327,6 @@
         <div class="form-group">
           <label id="app-ad-label">AD金額（円）</label>
           <input type="number" id="app-ad_amount" min="0" placeholder="0" autocomplete="off">
-        </div>
-        <div class="form-group">
-          <label>その他費用（円）</label>
-          <input type="number" id="app-option_amount" min="0" placeholder="0" autocomplete="off">
         </div>
         <div class="form-group" style="grid-column:1/-1;">
           <label>ステータス</label>

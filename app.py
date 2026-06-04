@@ -5998,7 +5998,7 @@ def api_applications_settled():
             db.and_(ApplicationRecord.option_amount != 0, ApplicationRecord.option_approved == True),
         ))
 
-    recs = q.order_by(ApplicationRecord.application_date.asc()).all()
+    recs = q.order_by(ApplicationRecord.application_date.asc(), ApplicationRecord.id.asc()).all()
     staff_map = {s.id: s.name for s in Staff.query.filter(Staff.id.in_({r.staff_id for r in recs if r.staff_id})).all()}
     # フロントが当月入金分を判定できるよう、対象年月も返す
     out = []
@@ -6048,7 +6048,7 @@ def api_applications_unpaid():
         q = q.filter(ApplicationRecord.staff_id == staff_id)
 
     # 古いものが上（申込日昇順）
-    recs = q.order_by(ApplicationRecord.application_date.asc()).all()
+    recs = q.order_by(ApplicationRecord.application_date.asc(), ApplicationRecord.id.asc()).all()
     staff_ids = list({r.staff_id for r in recs if r.staff_id})
     staff_map = {s.id: s.name for s in Staff.query.filter(Staff.id.in_(staff_ids)).all()} if staff_ids else {}
     return jsonify([_app_record_to_dict(r, staff_map) for r in recs])
@@ -6205,7 +6205,7 @@ def api_applications_search():
     )
     # スタッフも他スタッフの情報を横断検索可（編集は本人のみ）
 
-    records = query.order_by(ApplicationRecord.application_date.desc()).limit(200).all()
+    records = query.order_by(ApplicationRecord.application_date.desc(), ApplicationRecord.id.desc()).limit(200).all()
     staff_map = {s.id: s.name for s in Staff.query.all()}
     return jsonify([_app_record_to_dict(r, staff_map) for r in records])
 
@@ -6251,7 +6251,7 @@ def api_applications_list():
         q = q.filter(ApplicationRecord.status == status_filter)
 
     # 申込一覧は全件表示（全部入金済みになっても申込一覧からは消さない）
-    records = q.order_by(ApplicationRecord.application_date.asc()).all()
+    records = q.order_by(ApplicationRecord.application_date.asc(), ApplicationRecord.id.asc()).all()
     staff_map = {s.id: s.name for s in Staff.query.all()}
     return jsonify([_app_record_to_dict(r, staff_map) for r in records])
 
