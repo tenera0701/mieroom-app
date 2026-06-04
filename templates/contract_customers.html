@@ -74,7 +74,7 @@
         </tbody>
       </table>
     </div>
-    <p style="font-size:12px;color:#9ca3af;margin-top:10px;">💡「契約書類」を押すと、顧客情報を引き継いだ契約書類（Excel）を作成できます。物件資料/契約書の取り込みや重要事項説明など完全版は次フェーズで対応予定です。</p>
+    <p style="font-size:12px;color:#9ca3af;margin-top:10px;">💡「契約書類を編集」を押すと、顧客情報を引き継いだ取引成立台帳をツール上で編集・保存・印刷できます。物件資料/契約書の取り込み自動入力や重要事項説明など他帳票は順次追加予定です。</p>
   </div>
 </div>
 
@@ -138,7 +138,7 @@ function render() {
       <td style="text-align:right;">${yen(r.rent)}</td>
       <td>${escc(r.management_company) || '―'}</td>
       <td style="white-space:nowrap;">${r.application_date || '―'}</td>
-      <td><button class="btn-doc" onclick="openDocModal(${r.id})">契約書類</button></td>
+      <td><button class="btn-doc" onclick="location.href='/contract-customers/'+${r.id}+'/edit'">契約書類を編集</button></td>
     </tr>`).join('');
 }
 

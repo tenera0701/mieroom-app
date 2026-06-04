@@ -1,0 +1,222 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}契約書類の編集 | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}契約書類の編集{% endblock %}
+
+{% block extra_head %}
+<style>
+  :root { --primary:#0D9488; --primary-dark:#0F766E; }
+  .doc-wrap { max-width:1000px; margin:0 auto; }
+  .doc-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px; }
+  .doc-title { font-size:20px; font-weight:800; color:#111827; margin:0; }
+  .doc-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:22px 26px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+  .doc-h { text-align:center; font-size:18px; font-weight:800; margin:0 0 4px; }
+  .doc-sub { text-align:center; font-size:12px; color:#6b7280; margin:0 0 18px; }
+  .sec { border:1px solid #e5e7eb; border-radius:8px; margin-bottom:14px; overflow:hidden; }
+  .sec-h { background:#F0FDFA; color:#0F766E; font-weight:700; font-size:13px; padding:8px 12px; border-bottom:1px solid #d1fae5; }
+  .sec-b { padding:12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px 14px; }
+  .fg { display:flex; flex-direction:column; gap:4px; }
+  .fg.full { grid-column:1/-1; }
+  .fg label { font-size:12px; font-weight:600; color:#374151; }
+  .fg input, .fg select, .fg textarea { border:1px solid #d1d5db; border-radius:6px; padding:7px 9px; font-size:13px; }
+  .fg input:focus, .fg select:focus, .fg textarea:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 2px rgba(13,148,136,0.15); }
+  .yen-wrap { display:flex; align-items:center; gap:4px; }
+  .yen-wrap input { flex:1; text-align:right; }
+  .yen-wrap span { font-size:12px; color:#6b7280; }
+  .chk-row { display:flex; flex-wrap:wrap; gap:10px 16px; }
+  .chk-row label { display:flex; align-items:center; gap:5px; font-size:13px; cursor:pointer; font-weight:500; color:#374151; }
+  .chk-row input { width:16px; height:16px; accent-color:#0D9488; }
+  .radio-row { display:flex; gap:18px; }
+  .radio-row label { display:flex; align-items:center; gap:5px; font-size:13px; cursor:pointer; }
+  .btn { border:none; border-radius:7px; padding:9px 18px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-save { background:var(--primary); color:#fff; } .btn-save:hover { background:var(--primary-dark); }
+  .btn-print { background:#fff; color:#374151; border:1px solid #d1d5db; }
+  .btn-back { background:#fff; color:#0F766E; border:1px solid #5EEAD4; }
+  .alert { padding:10px 16px; border-radius:8px; font-size:13px; margin-bottom:14px; display:none; }
+  .alert.show { display:block; }
+  .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
+  .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+  @media print {
+    #sidebar, #topbar, footer, .doc-head, .no-print { display:none !important; }
+    #main-wrap, #main-wrap.expanded { margin-left:0 !important; }
+    .doc-card { box-shadow:none; border:none; }
+    .sec-h { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    body { background:#fff; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="doc-wrap">
+  <div id="alert-msg" class="alert"></div>
+  <div class="doc-head no-print">
+    <h1 class="doc-title">契約書類の編集</h1>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-back" onclick="location.href='/contract-customers'">← 一覧へ</button>
+      <button class="btn btn-print" onclick="window.print()">🖨 印刷</button>
+      <button class="btn btn-save" onclick="saveDoc()">💾 保存</button>
+    </div>
+  </div>
+
+  <div class="doc-card" id="doc-form">
+    <h2 class="doc-h">取引成立台帳（賃貸借）</h2>
+    <p class="doc-sub">{{ customer_name }} 様 ／ {{ property_name }}</p>
+
+    <div class="sec">
+      <div class="sec-h">取引態様・日付</div>
+      <div class="sec-b grid">
+        <div class="fg"><label>取引態様</label>
+          <div class="radio-row" style="padding-top:4px;">
+            <label><input type="radio" name="torihiki" value="媒介"> 媒介</label>
+            <label><input type="radio" name="torihiki" value="代理"> 代理</label>
+          </div>
+        </div>
+        <div class="fg"><label>契約成立日</label><input type="date" id="f-keiyaku_date"></div>
+        <div class="fg"><label>引渡日</label><input type="date" id="f-hikiwatashi_date"></div>
+        <div class="fg"><label>契約種類</label>
+          <select id="f-keiyaku_shurui"><option>普通借家</option><option>定期借家</option></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h">貸主</div>
+      <div class="sec-b grid">
+        <div class="fg"><label>貸主（本人）</label><input type="text" id="f-kashinushi_name"></div>
+        <div class="fg full"><label>住所</label><input type="text" id="f-kashinushi_addr"></div>
+        <div class="fg"><label>℡</label><input type="text" id="f-kashinushi_tel"></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h">借主</div>
+      <div class="sec-b grid">
+        <div class="fg"><label>借主（本人）</label><input type="text" id="f-karinushi_name"></div>
+        <div class="fg full"><label>住所</label><input type="text" id="f-karinushi_addr"></div>
+        <div class="fg"><label>℡</label><input type="text" id="f-karinushi_tel"></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h">物件・建物</div>
+      <div class="sec-b grid">
+        <div class="fg full"><label>物件所在地</label><input type="text" id="f-bukken_shozai"></div>
+        <div class="fg"><label>名称（物件名）</label><input type="text" id="f-meisho"></div>
+        <div class="fg"><label>号室</label><input type="text" id="f-goushitsu"></div>
+        <div class="fg"><label>構造</label>
+          <select id="f-kouzou"><option value=""></option><option>木造</option><option>軽量鉄骨造</option><option>鉄骨造</option><option>鉄筋コンクリート造</option><option>鉄骨鉄筋コンクリート造</option><option>その他</option></select>
+        </div>
+        <div class="fg"><label>屋根</label>
+          <select id="f-yane"><option value=""></option><option>瓦ぶき</option><option>スレートぶき</option><option>亜鉛メッキ鋼板ぶき</option><option>陸屋根</option><option>合金メッキ鋼板ぶき</option><option>その他</option></select>
+        </div>
+        <div class="fg"><label>用途</label>
+          <select id="f-youto"><option>居宅</option><option>共同住宅</option><option>店舗</option><option>事務所</option><option>工場</option><option>倉庫</option><option>その他</option></select>
+        </div>
+        <div class="fg"><label>階数（地上／地下）</label>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="number" id="f-kaisuu_above" min="0" style="width:70px;"><span style="font-size:12px;">階／地下</span>
+            <input type="number" id="f-kaisuu_below" min="0" style="width:70px;"><span style="font-size:12px;">階</span>
+          </div>
+        </div>
+        <div class="fg"><label>延面積（専有面積）㎡</label><input type="text" id="f-menseki"></div>
+        <div class="fg"><label>間取</label><input type="text" id="f-madori" placeholder="例: 1LDK"></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h">設備・付属物</div>
+      <div class="sec-b">
+        <label style="font-size:12px;font-weight:600;color:#374151;">設備</label>
+        <div class="chk-row" id="grp-setsubi" style="margin:6px 0 12px;">
+          {% for s in ['飲用水','都市ガス','プロパンガス','電気','下水','水洗トイレ','浴室'] %}
+          <label><input type="checkbox" data-group="setsubi" value="{{ s }}"> {{ s }}</label>
+          {% endfor %}
+        </div>
+        <label style="font-size:12px;font-weight:600;color:#374151;">付属物</label>
+        <div class="chk-row" id="grp-fuzoku" style="margin:6px 0 12px;">
+          {% for s in ['電話','車庫','物置','門塀'] %}
+          <label><input type="checkbox" data-group="fuzoku" value="{{ s }}"> {{ s }}</label>
+          {% endfor %}
+        </div>
+        <div class="fg full"><label>その他</label><input type="text" id="f-sonota"></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h">賃貸条件</div>
+      <div class="sec-b grid">
+        {% set money = [['chinryo','賃料'],['kanrihi','管理費/共益費'],['chuusha','駐車場'],['reikin','礼金'],['shikikin','敷金'],['hosho','初回保証料'],['kazai_hoken','家財保険'],['cleaning','クリーニング費用'],['support24','24時間サポート'],['chonaikai','町内会費'],['catv','CATV費用'],['suidou','水道料金']] %}
+        {% for k,lbl in money %}
+        <div class="fg"><label>{{ lbl }}</label>
+          <div class="yen-wrap"><input type="number" id="f-{{ k }}" min="0"><span>円</span></div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-h">その他</div>
+      <div class="sec-b grid">
+        <div class="fg"><label>管理会社</label><input type="text" id="f-kanri_kaisha"></div>
+        <div class="fg"><label>担当</label><input type="text" id="f-tantou"></div>
+        <div class="fg full"><label>備考</label><textarea id="f-biko" rows="3"></textarea></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const RID = {{ rid }};
+const TEXT_FIELDS = ['keiyaku_date','hikiwatashi_date','keiyaku_shurui','kashinushi_name','kashinushi_addr','kashinushi_tel',
+  'karinushi_name','karinushi_addr','karinushi_tel','bukken_shozai','meisho','goushitsu','kouzou','yane','youto',
+  'kaisuu_above','kaisuu_below','menseki','madori','sonota','chinryo','kanrihi','chuusha','reikin','shikikin','hosho',
+  'kazai_hoken','cleaning','support24','chonaikai','catv','suidou','kanri_kaisha','tantou','biko'];
+
+function showAlert(msg, type='success') {
+  const el = document.getElementById('alert-msg');
+  el.textContent = msg; el.className = `alert alert-${type} show`;
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+async function loadDoc() {
+  let d = {};
+  try {
+    const res = await fetch(`/api/contract-customers/${RID}/document-data`);
+    if (res.ok) d = (await res.json()).data || {};
+  } catch(_) {}
+  TEXT_FIELDS.forEach(k => { const el = document.getElementById('f-'+k); if (el) el.value = (d[k] ?? ''); });
+  // radio
+  document.querySelectorAll('input[name="torihiki"]').forEach(r => r.checked = (r.value === (d.torihiki || '媒介')));
+  // checkbox groups
+  ['setsubi','fuzoku'].forEach(g => {
+    const arr = Array.isArray(d[g]) ? d[g] : [];
+    document.querySelectorAll(`input[data-group="${g}"]`).forEach(c => c.checked = arr.includes(c.value));
+  });
+}
+
+function collect() {
+  const out = {};
+  TEXT_FIELDS.forEach(k => { const el = document.getElementById('f-'+k); out[k] = el ? el.value : ''; });
+  const r = document.querySelector('input[name="torihiki"]:checked');
+  out.torihiki = r ? r.value : '';
+  ['setsubi','fuzoku'].forEach(g => {
+    out[g] = [...document.querySelectorAll(`input[data-group="${g}"]:checked`)].map(c => c.value);
+  });
+  return out;
+}
+
+async function saveDoc() {
+  try {
+    const res = await fetch(`/api/contract-customers/${RID}/document-data`, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(collect())
+    });
+    if (!res.ok) throw new Error();
+    showAlert('契約書類を保存しました。');
+  } catch(_) { showAlert('保存に失敗しました。', 'error'); }
+}
+
+document.addEventListener('DOMContentLoaded', loadDoc);
+</script>
+{% endblock %}

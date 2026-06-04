@@ -6,6 +6,7 @@
 #   例: del instance\realestate.db (Windows)
 # ======================================================
 import os
+import json
 import random
 import tempfile
 from functools import wraps
@@ -540,6 +541,17 @@ class ApplicationRecord(db.Model):
     management_company = db.Column(db.String(200))             # 管理会社名
     review_ng = db.Column(db.Boolean, default=False)          # 審査×（True=審査NG→キャンセル）旧フィールド
     review_status = db.Column(db.String(10), nullable=True)  # 審査状態: None=—, 'ok'=○, 'ng'=×
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ContractDocument(db.Model):
+    """契約書類（取引成立台帳など）の編集データ。申込1件につき1つ。data はJSON文字列。"""
+    __tablename__ = 'contract_document'
+    id = db.Column(db.Integer, primary_key=True)
+    application_id = db.Column(db.Integer, db.ForeignKey('application_record.id'), unique=True, nullable=False)
+    store_id = db.Column(db.Integer)
+    data = db.Column(db.Text)   # JSON
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1707,68 +1719,85 @@ def api_contract_customers():
     return jsonify([_app_record_to_dict(r, staff_map) for r in recs])
 
 
-@app.route("/api/contract-customers/<int:rid>/document")
+def _contract_doc_defaults(rec, staff):
+    """申込データから契約書類（取引成立台帳）の初期値を作る"""
+    fd = lambda d: d.isoformat() if d else ''
+    return {
+        'torihiki': '媒介',
+        'keiyaku_date': fd(rec.contract_start_date),
+        'hikiwatashi_date': fd(rec.contract_start_date),
+        'kashinushi_name': '', 'kashinushi_addr': '', 'kashinushi_tel': '',
+        'karinushi_name': rec.customer_name or '', 'karinushi_addr': '', 'karinushi_tel': '',
+        'bukken_shozai': '',
+        'kouzou': '', 'yane': '', 'youto': '居宅',
+        'kaisuu_above': '', 'kaisuu_below': '', 'menseki': '', 'madori': '',
+        'meisho': rec.property_name or '', 'goushitsu': rec.room_number or '',
+        'setsubi': [], 'fuzoku': [], 'sonota': '',
+        'chinryo': int(rec.rent or 0), 'kanrihi': '', 'chuusha': '',
+        'reikin': '', 'shikikin': '', 'hosho': '', 'kazai_hoken': '',
+        'cleaning': '', 'support24': '', 'chonaikai': '', 'catv': '', 'suidou': '',
+        'keiyaku_shurui': '普通借家',
+        'kanri_kaisha': rec.management_company or '',
+        'tantou': staff.name if staff else '',
+        'biko': '',
+    }
+
+
+@app.route("/contract-customers/<int:rid>/edit")
 @login_required
-def api_contract_customer_document(rid):
-    """契約中顧客の基本情報を埋めた契約書類（Excel）を生成してダウンロード"""
-    import io as _io
-    import openpyxl
-    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+@block_super_admin
+def contract_document_edit(rid):
+    """契約書類エディタページ"""
+    allowed_ids = get_allowed_store_ids()
+    rec = ApplicationRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed_ids:
+        return "権限がありません", 403
+    return render_template("contract_editor.html", rid=rid,
+                           customer_name=rec.customer_name or '',
+                           property_name=rec.property_name or '')
+
+
+@app.route("/api/contract-customers/<int:rid>/document-data", methods=["GET"])
+@login_required
+def api_contract_document_get(rid):
+    """契約書類の編集データ（保存済み＋申込からの初期値）を返す"""
     allowed_ids = get_allowed_store_ids()
     rec = ApplicationRecord.query.get_or_404(rid)
     if rec.store_id not in allowed_ids:
         return jsonify({'error': '権限がありません'}), 403
     staff = Staff.query.get(rec.staff_id) if rec.staff_id else None
-    store = Store.query.get(rec.store_id)
+    data = _contract_doc_defaults(rec, staff)
+    doc = ContractDocument.query.filter_by(application_id=rid).first()
+    if doc and doc.data:
+        try:
+            saved = json.loads(doc.data)
+            if isinstance(saved, dict):
+                data.update(saved)
+        except Exception:
+            pass
+    return jsonify({'data': data, 'saved': bool(doc)})
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = '顧客情報'
-    ws.column_dimensions['A'].width = 20
-    ws.column_dimensions['B'].width = 44
 
-    title = ws.cell(row=1, column=1, value='契約書類　顧客情報シート')
-    title.font = Font(size=16, bold=True)
-    ws.merge_cells('A1:B1')
-    ws.cell(row=2, column=1, value=f'発行: {date.today().isoformat()}　{store.name if store else ""}')
-
-    fd = lambda d: d.isoformat() if d else ''
-    ad_yen = round((rec.rent or 0) * (rec.ad_amount or 0) / 100) if (rec.ad_type or 'amount') == 'percent' else (rec.ad_amount or 0)
-    rows = [
-        ('お客様名', rec.customer_name or ''),
-        ('物件名', rec.property_name or ''),
-        ('号室', rec.room_number or ''),
-        ('賃料（円）', f'{int(rec.rent or 0):,}'),
-        ('管理会社', rec.management_company or ''),
-        ('媒体', rec.media or ''),
-        ('担当', staff.name if staff else ''),
-        ('申込日', fd(rec.application_date)),
-        ('契約開始日', fd(rec.contract_start_date)),
-        ('仲介手数料（円）', f'{int(rec.brokerage_fee or 0):,}'),
-        ('その他費用（円）', f'{int(rec.option_amount or 0):,}'),
-        ('AD（円）', f'{int(ad_yen):,}'),
-        ('ライフライン', '対象' if rec.lifeline else '―'),
-        ('引越し', '対象' if rec.moving else '―'),
-        ('火災保険', '対象' if rec.fire_insurance else '―'),
-        ('ステータス', rec.status or ''),
-    ]
-    thin = Side(style='thin', color='D1D5DB')
-    border = Border(left=thin, right=thin, top=thin, bottom=thin)
-    hdr_fill = PatternFill('solid', fgColor='F0FDFA')
-    for i, (k, v) in enumerate(rows, start=4):
-        kc = ws.cell(row=i, column=1, value=k); kc.font = Font(bold=True); kc.fill = hdr_fill; kc.border = border
-        vc = ws.cell(row=i, column=2, value=v); vc.border = border; vc.alignment = Alignment(wrap_text=True)
-
-    buf = _io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-    safe_name = (rec.customer_name or 'customer').replace('/', '_').replace('\\', '_')
-    from urllib.parse import quote
-    fname = quote(f'契約書類_{safe_name}.xlsx')
-    resp = make_response(buf.read())
-    resp.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    resp.headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{fname}"
-    return resp
+@app.route("/api/contract-customers/<int:rid>/document-data", methods=["POST"])
+@login_required
+def api_contract_document_save(rid):
+    """契約書類の編集データを保存"""
+    allowed_ids = get_allowed_store_ids()
+    rec = ApplicationRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed_ids:
+        return jsonify({'error': '権限がありません'}), 403
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    if cur_user and cur_user.role == 'staff' and rec.staff_id != cur_user.staff_id:
+        return jsonify({'error': '権限がありません'}), 403
+    payload = request.get_json() or {}
+    doc = ContractDocument.query.filter_by(application_id=rid).first()
+    if not doc:
+        doc = ContractDocument(application_id=rid, store_id=rec.store_id)
+        db.session.add(doc)
+    doc.data = json.dumps(payload, ensure_ascii=False)
+    doc.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'status': 'ok'})
 
 
 @app.route("/echo-management")
