@@ -6379,12 +6379,16 @@ def api_applications_settle(rid):
 
     data = request.get_json() or {}
     field = data.get('field')  # 'ad' / 'brokerage' / 'option'
+    pay_date = _parse_date(data.get('date'))  # 報告時に入力された入金日
     if field == 'ad':
         rec.ad_settled = True
+        if pay_date: rec.ad_payment_date = pay_date
     elif field == 'brokerage':
         rec.brokerage_settled = True
+        if pay_date: rec.brokerage_payment_date = pay_date
     elif field == 'option':
         rec.option_settled = True
+        if pay_date: rec.option_payment_date = pay_date
     else:
         return jsonify({'error': 'invalid field'}), 400
     db.session.commit()

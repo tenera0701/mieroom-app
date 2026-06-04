@@ -535,13 +535,16 @@ function escApp(s) {
 =================================================== */
 function buildSettleCell(r, field, settled, approved, hasAmount = true) {
   if (!hasAmount) return '<span style="color:#d1d5db;font-size:11px;">—</span>';
-  if (approved) return '<span style="color:#0D9488;font-weight:700;font-size:11px;">✓ 承認済</span>';
+  const dateField = field === 'brokerage' ? 'brokerage_payment_date' : field === 'option' ? 'option_payment_date' : 'ad_payment_date';
+  const payDate = r[dateField] || '';
+  const dateNote = payDate ? `<div style="font-size:10px;color:#6b7280;">${payDate}</div>` : '';
+  if (approved) return '<span style="color:#0D9488;font-weight:700;font-size:11px;">✓ 承認済</span>' + dateNote;
   if (settled) {
-    if (IS_MANAGER) return `<button onclick="approvePayment(${r.id},'${field}')" style="padding:3px 8px;font-size:11px;border:none;border-radius:4px;background:#2563eb;color:#fff;cursor:pointer;font-weight:700;">承認</button>`;
-    return '<span style="color:#f59e0b;font-weight:700;font-size:11px;">承認待ち</span>';
+    if (IS_MANAGER) return `<button onclick="approvePayment(${r.id},'${field}')" style="padding:3px 8px;font-size:11px;border:none;border-radius:4px;background:#2563eb;color:#fff;cursor:pointer;font-weight:700;">承認</button>` + dateNote;
+    return '<span style="color:#f59e0b;font-weight:700;font-size:11px;">承認待ち</span>' + dateNote;
   }
   const canReport = IS_MANAGER || r.staff_id === CUR_STAFF_ID;
-  if (canReport) return `<button onclick="settlePayment(${r.id},'${field}')" style="padding:3px 8px;font-size:11px;border:1px solid #d1d5db;border-radius:4px;background:#fff;color:#374151;cursor:pointer;">報告</button>`;
+  if (canReport) return `<button onclick="settlePayment(this,${r.id},'${field}')" style="padding:3px 8px;font-size:11px;border:1px solid #d1d5db;border-radius:4px;background:#fff;color:#374151;cursor:pointer;">報告</button>`;
   return '<span style="color:#9ca3af;font-size:11px;">未報告</span>';
 }
 
@@ -889,15 +892,37 @@ async function loadSummary() {
    入金ワークフロー
 =================================================== */
 const PAY_LABELS = { brokerage: '仲介手数料', option: 'その他費用', ad: 'AD' };
-async function settlePayment(rid, field) {
+const PAY_DATE_FIELDS = { brokerage: 'brokerage_payment_date', option: 'option_payment_date', ad: 'ad_payment_date' };
+
+/** 報告ボタン → 入金日入力欄を表示（日付を入れて報告） */
+function settlePayment(btn, rid, field) {
+  const td = btn.closest('td');
+  if (!td || td.dataset.reporting) return;
+  td.dataset.reporting = '1';
+  const today = new Date();
+  const ymd = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  td.innerHTML =
+    '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;">' +
+    `<input type="date" value="${ymd}" id="settle-date-input" style="font-size:10px;border:1px solid #0D9488;border-radius:4px;padding:1px 3px;">` +
+    '<div style="display:flex;gap:3px;">' +
+    `<button onclick="confirmSettle(this,${rid},'${field}')" style="padding:2px 8px;font-size:11px;border:none;border-radius:4px;background:#0D9488;color:#fff;cursor:pointer;font-weight:700;">報告</button>` +
+    '<button onclick="loadApplications();loadUncollected();loadSettled();" style="padding:2px 6px;font-size:11px;border:1px solid #d1d5db;border-radius:4px;background:#fff;color:#6b7280;cursor:pointer;">×</button>' +
+    '</div></div>';
+  td.querySelector('input').focus();
+}
+
+/** 入金日を入れて報告を確定 */
+async function confirmSettle(btn, rid, field) {
   const label = PAY_LABELS[field] || field;
-  if (!confirm(`${label}の入金を報告しますか？`)) return;
+  const inp = btn.closest('td').querySelector('input[type=date]');
+  const payDate = inp ? inp.value : '';
+  if (!payDate) { showAlert('入金日を入力してください。', 'error'); return; }
   try {
     const res = await fetch(`/api/applications/${rid}/settle`, {
-      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ field }),
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ field, date: payDate }),
     });
     if (!res.ok) throw new Error();
-    showAlert('入金を報告しました。店長の承認をお待ちください。');
+    showAlert(`${label}の入金（${payDate}）を報告しました。店長の承認をお待ちください。`);
   } catch(_) { showAlert('処理に失敗しました。', 'error'); return; }
   loadApplications().catch(()=>{});
   loadUncollected().catch(()=>{});
