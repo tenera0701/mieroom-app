@@ -93,7 +93,8 @@
     grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
     gap: 8px;
     margin-bottom: 16px;
-    align-items: start;
+    align-items: stretch;
+    grid-auto-rows: 1fr;   /* 全カードを同じ高さに揃える */
   }
   @media (max-width: 600px)  { .kpi-cards { grid-template-columns: repeat(3, 1fr); } }
   .kpi-card-value { display: flex; align-items: baseline; gap: 3px; }
@@ -131,12 +132,9 @@
     font-size: 9px;
     color: var(--text-muted);
   }
-  /* 総売上カードは大きいまま・数字を強調（倍サイズ） */
-  .kpi-card--primary { grid-column: span 2; padding: 12px 16px; }
-  .kpi-card--primary .kpi-card-label { font-size: 12px; margin-bottom: 6px; }
-  .kpi-card--primary .kpi-card-value { font-size: 32px; }
-  .kpi-card--primary .kpi-unit { font-size: 15px; }
-  @media (max-width: 600px) { .kpi-card--primary { grid-column: span 3; } }
+  /* 総売上はカードサイズは他と同じ・数字だけ大きく強調 */
+  .kpi-card--primary .kpi-card-value { font-size: 21px; white-space: nowrap; }
+  .kpi-card--primary .kpi-unit { font-size: 11px; }
   .kpi-card-badge {
     display: inline-block;
     font-size: 12px;
