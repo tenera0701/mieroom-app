@@ -7,6 +7,10 @@
   <link rel="icon" type="image/png" href="/static/logo_notext.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- 独自カレンダー（日付ピッカー）flatpickr -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://npmcdn.com/flatpickr/dist/l10n/ja.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -198,6 +202,21 @@
       .page-title { font-size: 18px !important; }
       #main-wrap > main { padding: 10px 8px !important; }
     }
+
+    /* ===== 独自カレンダー（flatpickr）テーマ ===== */
+    .flatpickr-calendar { box-shadow: 0 8px 28px rgba(0,0,0,0.18); border-radius: 10px; }
+    .flatpickr-day { border-radius: 8px; }
+    .flatpickr-day:hover { background: #CCFBF1; border-color: #CCFBF1; color: #0F766E; }
+    .flatpickr-day.selected, .flatpickr-day.selected:hover { background: #0D9488; border-color: #0D9488; color: #fff; }
+    .flatpickr-day.today { border-color: #0D9488; }
+    .flatpickr-day.today:hover { background: #CCFBF1; color: #0F766E; }
+    .flatpickr-months .flatpickr-month, .flatpickr-weekday { color: #0F766E; fill: #0F766E; }
+    span.flatpickr-weekday { font-weight: 700; }
+    /* 「今日」「クリア」ボタン（中央配置） */
+    .fp-foot { display: flex; justify-content: center; gap: 10px; padding: 8px; border-top: 1px solid #eef2f2; }
+    .fp-foot button { padding: 5px 16px; font-size: 13px; font-weight: 600; border-radius: 6px; cursor: pointer; border: 1px solid #d1d5db; background: #fff; color: #374151; }
+    .fp-foot .fp-today { background: #0D9488; border-color: #0D9488; color: #fff; }
+    .fp-foot button:hover { filter: brightness(0.97); }
   </style>
   {% block extra_head %}{% endblock %}
 </head>
@@ -603,6 +622,53 @@
         }
       }, 150);
     });
+
+    /* ===== 独自カレンダー（flatpickr）を全 date 入力に適用 ===== */
+    (function () {
+      if (!window.flatpickr) return;   // 読み込み失敗時は標準カレンダーにフォールバック
+      try { flatpickr.localize(flatpickr.l10ns.ja); } catch (e) {}
+      const fpOpts = {
+        dateFormat: 'Y-m-d',
+        allowInput: true,
+        disableMobile: false,   // スマホは使いやすい標準ホイールを使用
+        onReady: function (sel, str, inst) {
+          if (inst._footAdded) return;
+          inst._footAdded = true;
+          const foot = document.createElement('div');
+          foot.className = 'fp-foot';
+          const clr = document.createElement('button'); clr.type = 'button'; clr.className = 'fp-clear'; clr.textContent = 'クリア';
+          const tdy = document.createElement('button'); tdy.type = 'button'; tdy.className = 'fp-today'; tdy.textContent = '今日';
+          clr.addEventListener('click', function () { inst.clear(); inst.close(); inst.input.dispatchEvent(new Event('change', { bubbles: true })); });
+          tdy.addEventListener('click', function () { inst.setDate(new Date(), true); inst.close(); });
+          foot.appendChild(clr); foot.appendChild(tdy);
+          inst.calendarContainer.appendChild(foot);
+        }
+      };
+      function initFp(root) {
+        (root || document).querySelectorAll('input[type="date"]:not([data-fp])').forEach(function (el) {
+          el.setAttribute('data-fp', '1');
+          try { flatpickr(el, fpOpts); } catch (e) {}
+        });
+      }
+      const run = function () {
+        initFp(document);
+        // 動的に追加される日付入力にも適用
+        try {
+          const mo = new MutationObserver(function (muts) {
+            for (const m of muts) {
+              for (const n of m.addedNodes) {
+                if (n.nodeType !== 1) continue;
+                if (n.matches && n.matches('input[type="date"]')) initFp(n.parentNode || document);
+                else if (n.querySelector && n.querySelector('input[type="date"]')) initFp(n);
+              }
+            }
+          });
+          mo.observe(document.body, { childList: true, subtree: true });
+        } catch (e) {}
+      };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+      else run();
+    })();
   </script>
   {% block scripts %}{% endblock %}
   {% block extra_scripts %}{% endblock %}
