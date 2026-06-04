@@ -5,12 +5,15 @@
 {% block extra_head %}
 <style>
   :root { --primary:#0D9488; --primary-dark:#0F766E; }
-  .doc-wrap { max-width:1000px; margin:0 auto; }
-  .doc-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px; }
+  .doc-wrap { max-width:1040px; margin:0 auto; }
+  .doc-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px; }
   .doc-title { font-size:20px; font-weight:800; color:#111827; margin:0; }
-  .doc-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:22px 26px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
-  .doc-h { text-align:center; font-size:18px; font-weight:800; margin:0 0 4px; }
-  .doc-sub { text-align:center; font-size:12px; color:#6b7280; margin:0 0 18px; }
+  .doc-sub { font-size:12px; color:#6b7280; margin:2px 0 0; }
+  .tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+  .tab { padding:6px 12px; font-size:12px; font-weight:700; border:1px solid #d1d5db; border-radius:8px; background:#fff; color:#374151; cursor:pointer; white-space:nowrap; }
+  .tab.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .doc-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:20px 24px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
+  .doc-h { text-align:center; font-size:17px; font-weight:800; margin:0 0 16px; color:#0F766E; }
   .sec { border:1px solid #e5e7eb; border-radius:8px; margin-bottom:14px; overflow:hidden; }
   .sec-h { background:#F0FDFA; color:#0F766E; font-weight:700; font-size:13px; padding:8px 12px; border-bottom:1px solid #d1fae5; }
   .sec-b { padding:12px; }
@@ -23,11 +26,9 @@
   .yen-wrap { display:flex; align-items:center; gap:4px; }
   .yen-wrap input { flex:1; text-align:right; }
   .yen-wrap span { font-size:12px; color:#6b7280; }
-  .chk-row { display:flex; flex-wrap:wrap; gap:10px 16px; }
+  .chk-row { display:flex; flex-wrap:wrap; gap:8px 14px; padding-top:4px; }
   .chk-row label { display:flex; align-items:center; gap:5px; font-size:13px; cursor:pointer; font-weight:500; color:#374151; }
-  .chk-row input { width:16px; height:16px; accent-color:#0D9488; }
-  .radio-row { display:flex; gap:18px; }
-  .radio-row label { display:flex; align-items:center; gap:5px; font-size:13px; cursor:pointer; }
+  .chk-row input { width:15px; height:15px; accent-color:#0D9488; }
   .btn { border:none; border-radius:7px; padding:9px 18px; font-size:13px; font-weight:700; cursor:pointer; }
   .btn-save { background:var(--primary); color:#fff; } .btn-save:hover { background:var(--primary-dark); }
   .btn-print { background:#fff; color:#374151; border:1px solid #d1d5db; }
@@ -37,9 +38,10 @@
   .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
   .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
   @media print {
-    #sidebar, #topbar, footer, .doc-head, .no-print { display:none !important; }
+    #sidebar, #topbar, footer, .doc-head, .tabs, .no-print { display:none !important; }
     #main-wrap, #main-wrap.expanded { margin-left:0 !important; }
     .doc-card { box-shadow:none; border:none; }
+    .doc-card.print-hide { display:none !important; }
     .sec-h { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     body { background:#fff; }
   }
@@ -50,170 +52,376 @@
 <div class="doc-wrap">
   <div id="alert-msg" class="alert"></div>
   <div class="doc-head no-print">
-    <h1 class="doc-title">契約書類の編集</h1>
+    <div>
+      <h1 class="doc-title">契約書類の編集</h1>
+      <p class="doc-sub">{{ customer_name }} 様 ／ {{ property_name }}　（タブで帳票を切替）</p>
+    </div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-back" onclick="location.href='/contract-customers'">← 一覧へ</button>
-      <button class="btn btn-print" onclick="window.print()">🖨 印刷</button>
-      <button class="btn btn-save" onclick="saveDoc()">💾 保存</button>
+      <button class="btn btn-print" onclick="printCurrent()">🖨 この帳票を印刷</button>
+      <button class="btn btn-save" onclick="saveDoc()">💾 全て保存</button>
     </div>
   </div>
 
-  <div class="doc-card" id="doc-form">
-    <h2 class="doc-h">取引成立台帳（賃貸借）</h2>
-    <p class="doc-sub">{{ customer_name }} 様 ／ {{ property_name }}</p>
-
-    <div class="sec">
-      <div class="sec-h">取引態様・日付</div>
-      <div class="sec-b grid">
-        <div class="fg"><label>取引態様</label>
-          <div class="radio-row" style="padding-top:4px;">
-            <label><input type="radio" name="torihiki" value="媒介"> 媒介</label>
-            <label><input type="radio" name="torihiki" value="代理"> 代理</label>
-          </div>
-        </div>
-        <div class="fg"><label>契約成立日</label><input type="date" id="f-keiyaku_date"></div>
-        <div class="fg"><label>引渡日</label><input type="date" id="f-hikiwatashi_date"></div>
-        <div class="fg"><label>契約種類</label>
-          <select id="f-keiyaku_shurui"><option>普通借家</option><option>定期借家</option></select>
-        </div>
-      </div>
-    </div>
-
-    <div class="sec">
-      <div class="sec-h">貸主</div>
-      <div class="sec-b grid">
-        <div class="fg"><label>貸主（本人）</label><input type="text" id="f-kashinushi_name"></div>
-        <div class="fg full"><label>住所</label><input type="text" id="f-kashinushi_addr"></div>
-        <div class="fg"><label>℡</label><input type="text" id="f-kashinushi_tel"></div>
-      </div>
-    </div>
-
-    <div class="sec">
-      <div class="sec-h">借主</div>
-      <div class="sec-b grid">
-        <div class="fg"><label>借主（本人）</label><input type="text" id="f-karinushi_name"></div>
-        <div class="fg full"><label>住所</label><input type="text" id="f-karinushi_addr"></div>
-        <div class="fg"><label>℡</label><input type="text" id="f-karinushi_tel"></div>
-      </div>
-    </div>
-
-    <div class="sec">
-      <div class="sec-h">物件・建物</div>
-      <div class="sec-b grid">
-        <div class="fg full"><label>物件所在地</label><input type="text" id="f-bukken_shozai"></div>
-        <div class="fg"><label>名称（物件名）</label><input type="text" id="f-meisho"></div>
-        <div class="fg"><label>号室</label><input type="text" id="f-goushitsu"></div>
-        <div class="fg"><label>構造</label>
-          <select id="f-kouzou"><option value=""></option><option>木造</option><option>軽量鉄骨造</option><option>鉄骨造</option><option>鉄筋コンクリート造</option><option>鉄骨鉄筋コンクリート造</option><option>その他</option></select>
-        </div>
-        <div class="fg"><label>屋根</label>
-          <select id="f-yane"><option value=""></option><option>瓦ぶき</option><option>スレートぶき</option><option>亜鉛メッキ鋼板ぶき</option><option>陸屋根</option><option>合金メッキ鋼板ぶき</option><option>その他</option></select>
-        </div>
-        <div class="fg"><label>用途</label>
-          <select id="f-youto"><option>居宅</option><option>共同住宅</option><option>店舗</option><option>事務所</option><option>工場</option><option>倉庫</option><option>その他</option></select>
-        </div>
-        <div class="fg"><label>階数（地上／地下）</label>
-          <div style="display:flex;gap:6px;align-items:center;">
-            <input type="number" id="f-kaisuu_above" min="0" style="width:70px;"><span style="font-size:12px;">階／地下</span>
-            <input type="number" id="f-kaisuu_below" min="0" style="width:70px;"><span style="font-size:12px;">階</span>
-          </div>
-        </div>
-        <div class="fg"><label>延面積（専有面積）㎡</label><input type="text" id="f-menseki"></div>
-        <div class="fg"><label>間取</label><input type="text" id="f-madori" placeholder="例: 1LDK"></div>
-      </div>
-    </div>
-
-    <div class="sec">
-      <div class="sec-h">設備・付属物</div>
-      <div class="sec-b">
-        <label style="font-size:12px;font-weight:600;color:#374151;">設備</label>
-        <div class="chk-row" id="grp-setsubi" style="margin:6px 0 12px;">
-          {% for s in ['飲用水','都市ガス','プロパンガス','電気','下水','水洗トイレ','浴室'] %}
-          <label><input type="checkbox" data-group="setsubi" value="{{ s }}"> {{ s }}</label>
-          {% endfor %}
-        </div>
-        <label style="font-size:12px;font-weight:600;color:#374151;">付属物</label>
-        <div class="chk-row" id="grp-fuzoku" style="margin:6px 0 12px;">
-          {% for s in ['電話','車庫','物置','門塀'] %}
-          <label><input type="checkbox" data-group="fuzoku" value="{{ s }}"> {{ s }}</label>
-          {% endfor %}
-        </div>
-        <div class="fg full"><label>その他</label><input type="text" id="f-sonota"></div>
-      </div>
-    </div>
-
-    <div class="sec">
-      <div class="sec-h">賃貸条件</div>
-      <div class="sec-b grid">
-        {% set money = [['chinryo','賃料'],['kanrihi','管理費/共益費'],['chuusha','駐車場'],['reikin','礼金'],['shikikin','敷金'],['hosho','初回保証料'],['kazai_hoken','家財保険'],['cleaning','クリーニング費用'],['support24','24時間サポート'],['chonaikai','町内会費'],['catv','CATV費用'],['suidou','水道料金']] %}
-        {% for k,lbl in money %}
-        <div class="fg"><label>{{ lbl }}</label>
-          <div class="yen-wrap"><input type="number" id="f-{{ k }}" min="0"><span>円</span></div>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-
-    <div class="sec">
-      <div class="sec-h">その他</div>
-      <div class="sec-b grid">
-        <div class="fg"><label>管理会社</label><input type="text" id="f-kanri_kaisha"></div>
-        <div class="fg"><label>担当</label><input type="text" id="f-tantou"></div>
-        <div class="fg full"><label>備考</label><textarea id="f-biko" rows="3"></textarea></div>
-      </div>
-    </div>
-  </div>
+  <div class="tabs no-print" id="tabs"></div>
+  <div id="docs-container"></div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
 const RID = {{ rid }};
-const TEXT_FIELDS = ['keiyaku_date','hikiwatashi_date','keiyaku_shurui','kashinushi_name','kashinushi_addr','kashinushi_tel',
-  'karinushi_name','karinushi_addr','karinushi_tel','bukken_shozai','meisho','goushitsu','kouzou','yane','youto',
-  'kaisuu_above','kaisuu_below','menseki','madori','sonota','chinryo','kanrihi','chuusha','reikin','shikikin','hosho',
-  'kazai_hoken','cleaning','support24','chonaikai','catv','suidou','kanri_kaisha','tantou','biko'];
+let CTX = {};
+
+/* 帳票スキーマ：t=text/num/date/sel/checks/area/radio, pre=初期値のctxキー */
+const DOCS = [
+  { key:'hyoshi', title:'表紙', sections:[
+    { h:'基本情報', fields:[
+      {k:'eigyo', l:'営業担当者', t:'text', pre:'staff_name'},
+      {k:'keiyakusha', l:'ご契約者氏名', t:'text', pre:'customer_name'},
+      {k:'mobile', l:'携帯番号', t:'text'},
+      {k:'renraku', l:'連絡方法', t:'sel', o:['電話','LINE','Mail','その他']},
+      {k:'bukken', l:'物件名', t:'text', pre:'property_name'},
+      {k:'goushitsu', l:'号室', t:'text', pre:'room_number'},
+      {k:'bukken_addr', l:'物件住所', t:'text', full:true},
+      {k:'moushikomi_date', l:'申込日', t:'date', pre:'application_date'},
+      {k:'keiyaku_start', l:'契約開始日', t:'date', pre:'contract_start_date'},
+      {k:'kanri_kaisha', l:'管理会社名', t:'text', pre:'management_company'},
+      {k:'kanri_tel', l:'管理TEL', t:'text'},
+      {k:'hosho_kaisha', l:'保証会社', t:'text'},
+    ]},
+    { h:'契約時必要書類（チェック）', fields:[
+      {k:'docs', l:'必要書類', t:'checks', o:['住民票','免許証','社保','印鑑証明','契約書','重説','シノケン重説','同居人書類'], full:true},
+      {k:'lifeline_set', l:'ライフライン手配', t:'checks', o:['電気','ガス','水道','ネット'], full:true},
+      {k:'biko', l:'備考', t:'area', full:true},
+    ]},
+  ]},
+
+  { key:'daicho', title:'取引成立台帳', sections:[
+    { h:'取引態様・日付', fields:[
+      {k:'torihiki', l:'取引態様', t:'radio', o:['媒介','代理']},
+      {k:'keiyaku_date', l:'契約成立日', t:'date', pre:'contract_start_date'},
+      {k:'hikiwatashi_date', l:'引渡日', t:'date', pre:'contract_start_date'},
+      {k:'keiyaku_shurui', l:'契約種類', t:'sel', o:['普通借家','定期借家']},
+    ]},
+    { h:'貸主', fields:[
+      {k:'kashinushi_name', l:'貸主（本人）', t:'text'},
+      {k:'kashinushi_addr', l:'住所', t:'text', full:true},
+      {k:'kashinushi_tel', l:'℡', t:'text'},
+    ]},
+    { h:'借主', fields:[
+      {k:'karinushi_name', l:'借主（本人）', t:'text', pre:'customer_name'},
+      {k:'karinushi_addr', l:'住所', t:'text', full:true},
+      {k:'karinushi_tel', l:'℡', t:'text'},
+    ]},
+    { h:'物件・建物', fields:[
+      {k:'bukken_shozai', l:'物件所在地', t:'text', full:true},
+      {k:'meisho', l:'名称（物件名）', t:'text', pre:'property_name'},
+      {k:'goushitsu', l:'号室', t:'text', pre:'room_number'},
+      {k:'kouzou', l:'構造', t:'sel', o:['','木造','軽量鉄骨造','鉄骨造','鉄筋コンクリート造','鉄骨鉄筋コンクリート造','その他']},
+      {k:'yane', l:'屋根', t:'sel', o:['','瓦ぶき','スレートぶき','亜鉛メッキ鋼板ぶき','陸屋根','合金メッキ鋼板ぶき','その他']},
+      {k:'youto', l:'用途', t:'sel', o:['居宅','共同住宅','店舗','事務所','工場','倉庫','その他']},
+      {k:'menseki', l:'延面積（専有面積）㎡', t:'text'},
+      {k:'madori', l:'間取', t:'text'},
+    ]},
+    { h:'設備・付属物', fields:[
+      {k:'setsubi', l:'設備', t:'checks', o:['飲用水','都市ガス','プロパンガス','電気','下水','水洗トイレ','浴室'], full:true},
+      {k:'fuzoku', l:'付属物', t:'checks', o:['電話','車庫','物置','門塀'], full:true},
+      {k:'sonota', l:'その他', t:'text', full:true},
+    ]},
+    { h:'賃貸条件', fields:[
+      {k:'chinryo', l:'賃料', t:'num', pre:'rent'}, {k:'kanrihi', l:'管理費/共益費', t:'num'},
+      {k:'chuusha', l:'駐車場', t:'num'}, {k:'reikin', l:'礼金', t:'num'}, {k:'shikikin', l:'敷金', t:'num'},
+      {k:'hosho', l:'初回保証料', t:'num'}, {k:'kazai', l:'家財保険', t:'num'}, {k:'cleaning', l:'クリーニング費用', t:'num'},
+      {k:'support24', l:'24時間サポート', t:'num'}, {k:'chonaikai', l:'町内会費', t:'num'}, {k:'catv', l:'CATV費用', t:'num'}, {k:'suidou', l:'水道料金', t:'num'},
+    ]},
+  ]},
+
+  { key:'jusetsu', title:'重要事項説明(居住用)', sections:[
+    { h:'契約期間・更新', fields:[
+      {k:'kikan_start', l:'契約期間 開始', t:'date', pre:'contract_start_date'}, {k:'kikan_end', l:'契約期間 終了', t:'date'},
+      {k:'kikan_years', l:'契約年数', t:'num'}, {k:'koushin', l:'更新の可否', t:'sel', o:['可','否']},
+      {k:'koushin_ryo', l:'更新料', t:'text'},
+    ]},
+    { h:'物件・利用条件', fields:[
+      {k:'meisho', l:'名称', t:'text', pre:'property_name'}, {k:'shozai', l:'所在地', t:'text', full:true},
+      {k:'goushitsu', l:'号室', t:'text', pre:'room_number'}, {k:'madori', l:'間取', t:'text'},
+      {k:'menseki', l:'面積㎡', t:'text'}, {k:'kouzou', l:'構造', t:'text'}, {k:'kaidate', l:'階建', t:'text'},
+      {k:'nyukyo_nin', l:'入居人数', t:'num'}, {k:'pet', l:'ペット', t:'sel', o:['禁止','可']},
+      {k:'youto_seigen', l:'用途の制限', t:'text', full:true},
+    ]},
+    { h:'貸主・宅建士', fields:[
+      {k:'kashinushi_name', l:'貸主氏名又は名称', t:'text'}, {k:'kashinushi_addr', l:'貸主住所', t:'text', full:true},
+      {k:'torihiki', l:'取引態様', t:'sel', o:['媒介','代理']},
+      {k:'takken_name', l:'宅建士 氏名', t:'text'}, {k:'takken_no', l:'登録番号', t:'text'},
+      {k:'hosoku', l:'補足説明', t:'area', full:true},
+    ]},
+  ]},
+
+  { key:'jusetsu_biz', title:'重要事項説明(事業用)', sections:[
+    { h:'契約期間・利用条件', fields:[
+      {k:'kikan_start', l:'契約期間 開始', t:'date', pre:'contract_start_date'}, {k:'kikan_end', l:'契約期間 終了', t:'date'},
+      {k:'koushin', l:'更新の可否', t:'sel', o:['可','否']}, {k:'koushin_ryo', l:'更新料', t:'text'},
+      {k:'meisho', l:'名称', t:'text', pre:'property_name'}, {k:'goushitsu', l:'号室', t:'text', pre:'room_number'},
+      {k:'shozai', l:'所在地', t:'text', full:true}, {k:'youto_seigen', l:'用途の制限', t:'text', full:true},
+      {k:'takken_name', l:'宅建士 氏名', t:'text'}, {k:'hosoku', l:'補足説明', t:'area', full:true},
+    ]},
+  ]},
+
+  { key:'keiyakusho', title:'賃貸借契約書', sections:[
+    { h:'物件の表示', fields:[
+      {k:'meisho', l:'名称', t:'text', pre:'property_name'}, {k:'goushitsu', l:'号室', t:'text', pre:'room_number'},
+      {k:'shozai', l:'所在地', t:'text', full:true}, {k:'yukamenseki', l:'床面積㎡', t:'text'},
+      {k:'madori', l:'間取り', t:'text'}, {k:'kouzou', l:'構造', t:'text'}, {k:'kaisuu', l:'階数', t:'text'},
+    ]},
+    { h:'契約期間', fields:[
+      {k:'shiki', l:'始期', t:'date', pre:'contract_start_date'}, {k:'shuki', l:'終期', t:'date'}, {k:'getsu', l:'契約月数', t:'num'},
+    ]},
+    { h:'賃料等', fields:[
+      {k:'chinryo', l:'賃料', t:'num', pre:'rent'}, {k:'kyoekihi', l:'共益費', t:'num'}, {k:'reikin', l:'礼金', t:'num'},
+      {k:'shikikin', l:'敷金', t:'num'}, {k:'chuusha', l:'駐車場', t:'num'}, {k:'shokyaku', l:'償却', t:'text'},
+    ]},
+    { h:'支払・口座', fields:[
+      {k:'shiharaibi', l:'支払日（毎月○日）', t:'text'}, {k:'kinyu', l:'金融機関', t:'text'},
+      {k:'furikomi', l:'振込/引落', t:'sel', o:['振込','引落']}, {k:'kouza_no', l:'口座番号', t:'text'},
+      {k:'kouza_name', l:'口座名義人', t:'text'}, {k:'kanri_gyosha', l:'貸主及び管理業者', t:'text', full:true, pre:'management_company'},
+    ]},
+  ]},
+
+  { key:'seikyu', title:'御請求書(初期費用)', sections:[
+    { h:'宛先・物件', fields:[
+      {k:'atena', l:'宛名', t:'text', pre:'customer_name'}, {k:'bukken', l:'物件名', t:'text', pre:'property_name'},
+      {k:'goushitsu', l:'号室', t:'text', pre:'room_number'}, {k:'keiyaku_start', l:'ご契約開始日', t:'date', pre:'contract_start_date'},
+      {k:'tanto', l:'担当', t:'text', pre:'staff_name'},
+    ]},
+    { h:'内訳（円）', fields:[
+      {k:'hiwari', l:'日割家賃', t:'num'}, {k:'getsugaku', l:'1月分賃料', t:'num'}, {k:'kanri', l:'管理費・共益費', t:'num'},
+      {k:'jigetsu', l:'次月家賃', t:'num'}, {k:'ichiji', l:'一時金その他', t:'num'}, {k:'shikikin', l:'敷金', t:'num'},
+      {k:'reikin', l:'礼金', t:'num'}, {k:'hosho', l:'保証会社契約金', t:'num'}, {k:'kasai', l:'火災保険', t:'num'},
+      {k:'waribiki', l:'割引', t:'num'}, {k:'chukai', l:'仲介手数料', t:'num', pre:'brokerage_fee'},
+    ]},
+    { h:'その他', fields:[{k:'oshirase', l:'お知らせ/振込先', t:'area', full:true}]},
+  ]},
+
+  { key:'ad_seikyu', title:'AD請求書', sections:[
+    { h:'請求内容', fields:[
+      {k:'atesaki', l:'宛先（管理会社）', t:'text', pre:'management_company'}, {k:'kenmei', l:'件名', t:'text'},
+      {k:'keiyaku_start', l:'契約開始日', t:'date', pre:'contract_start_date'},
+      {k:'hinmoku', l:'品目', t:'text', full:true}, {k:'kingaku', l:'金額', t:'num', pre:'ad_yen'},
+      {k:'zeiritsu', l:'適用税率', t:'sel', o:['10%','非課税']},
+    ]},
+    { h:'振込先', fields:[
+      {k:'kinyu', l:'金融機関名', t:'text'}, {k:'shiten', l:'支店名', t:'text'},
+      {k:'shumoku', l:'預金種目', t:'text'}, {k:'kouza_no', l:'口座番号', t:'text'}, {k:'kouza_name', l:'口座名義人', t:'text'},
+    ]},
+  ]},
+
+  { key:'ad_ryoshu', title:'AD領収書', sections:[
+    { h:'領収内容', fields:[
+      {k:'atena', l:'宛名', t:'text', pre:'management_company'}, {k:'goushitsu', l:'号室', t:'text', pre:'room_number'},
+      {k:'tadashi', l:'但し', t:'sel', o:['広告宣伝費','初期費用相殺分']}, {k:'kingaku', l:'領収金額', t:'num', pre:'ad_yen'},
+      {k:'uchiwake_komoku', l:'内訳 項目', t:'text'}, {k:'uchiwake_kingaku', l:'内訳 金額', t:'num'},
+      {k:'biko', l:'備考', t:'text', full:true},
+    ]},
+  ]},
+
+  { key:'ryoshu', title:'領収書(内訳有)', sections:[
+    { h:'宛先・物件', fields:[
+      {k:'atena', l:'宛名', t:'text', pre:'customer_name'}, {k:'bukken', l:'物件名', t:'text', pre:'property_name'},
+      {k:'goushitsu', l:'号室', t:'text', pre:'room_number'}, {k:'chinryo_date', l:'賃料発生日', t:'date', pre:'contract_start_date'},
+      {k:'tadashi', l:'但し', t:'text', full:true}, {k:'kingaku', l:'領収金額', t:'num'},
+    ]},
+    { h:'内訳（円）', fields:[
+      {k:'hiwari', l:'日割賃料', t:'num'}, {k:'getsugaku', l:'月分賃料', t:'num'}, {k:'kanri', l:'管理・共益費', t:'num'},
+      {k:'jigetsu', l:'次月賃料', t:'num'}, {k:'ichiji', l:'一時金その他', t:'num'}, {k:'hosho', l:'保証会社契約金', t:'num'},
+      {k:'kasai', l:'火災保険', t:'num'}, {k:'kagi', l:'鍵交換費用', t:'num'}, {k:'waribiki', l:'割引', t:'num'}, {k:'chukai', l:'仲介手数料', t:'num', pre:'brokerage_fee'},
+    ]},
+  ]},
+
+  { key:'shukkin', title:'出金明細', sections:[
+    { h:'宛先・物件', fields:[
+      {k:'onchu', l:'御中', t:'text', pre:'management_company'}, {k:'tanto', l:'担当', t:'text', pre:'staff_name'},
+      {k:'bukken', l:'物件名', t:'text', pre:'property_name'}, {k:'goushitsu', l:'号室', t:'text', pre:'room_number'},
+      {k:'keiyakusha', l:'ご契約者', t:'text', pre:'customer_name'}, {k:'chinryo_date', l:'賃料発生日', t:'date', pre:'contract_start_date'},
+    ]},
+    { h:'内訳（円）', fields:[
+      {k:'hiwari', l:'日割賃料', t:'num'}, {k:'getsugaku', l:'月分賃料', t:'num'}, {k:'kanri', l:'管理費・共益費', t:'num'},
+      {k:'jigetsu', l:'次月賃料', t:'num'}, {k:'ichiji', l:'一時金その他', t:'num'}, {k:'shikikin', l:'敷金', t:'num'},
+      {k:'reikin', l:'礼金', t:'num'}, {k:'hosho', l:'保証会社契約金', t:'num'}, {k:'kasai', l:'火災保険料', t:'num'},
+      {k:'koukoku', l:'広告宣伝費', t:'num', pre:'ad_yen'},
+    ]},
+  ]},
+
+  { key:'kagi', title:'鍵受領書', sections:[
+    { h:'鍵情報', fields:[
+      {k:'atesaki', l:'宛先', t:'text', pre:'management_company'}, {k:'goushitsu', l:'号室', t:'text', pre:'room_number'},
+      {k:'meaker', l:'メーカー', t:'sel', o:['MIWA','GOAL','その他']}, {k:'kagi_no', l:'鍵番号', t:'text'},
+      {k:'honsu', l:'本数', t:'num'}, {k:'uketori', l:'受取者氏名', t:'text', pre:'customer_name'}, {k:'uketori_date', l:'受取日', t:'date'},
+    ]},
+  ]},
+
+  { key:'lifeline', title:'ライフライン', sections:[
+    { h:'お客様情報', fields:[
+      {k:'kana', l:'お名前(カナ)', t:'text'}, {k:'kanji', l:'漢字', t:'text', pre:'customer_name'},
+      {k:'mail', l:'メールアドレス', t:'text'}, {k:'mobile', l:'携帯番号', t:'text'}, {k:'kinmu', l:'勤務先名', t:'text'},
+      {k:'nenshu', l:'年収', t:'num'}, {k:'birth', l:'生年月日', t:'date'}, {k:'nyukyo', l:'入居日', t:'date', pre:'contract_start_date'},
+    ]},
+    { h:'新住所', fields:[
+      {k:'yubin', l:'郵便番号', t:'text'}, {k:'shinjusho', l:'新住所', t:'text', full:true},
+      {k:'tatemono', l:'建物名', t:'text', pre:'property_name'}, {k:'heya', l:'部屋番号', t:'text', pre:'room_number'},
+      {k:'kanri_kaisha', l:'管理会社名', t:'text', pre:'management_company'}, {k:'kanri_tel', l:'管理会社TEL', t:'text'},
+    ]},
+    { h:'ライフライン', fields:[
+      {k:'denki', l:'でんき', t:'checks', o:['オール電化','建物指定'], full:true},
+      {k:'denki_kaisha', l:'でんき指定 会社名', t:'text'}, {k:'denki_tel', l:'でんき指定 電話', t:'text'},
+      {k:'gas', l:'ガス', t:'sel', o:['都市ガス','プロパンガス','お客さま自身で手配']},
+      {k:'gas_kaisha', l:'ガス会社名', t:'text'}, {k:'gas_tel', l:'ガス会社TEL', t:'text'},
+      {k:'suido', l:'水道', t:'sel', o:['個別契約不要','要手配']},
+      {k:'net', l:'ネット', t:'checks', o:['インターネット無料物件'], full:true},
+      {k:'jikan', l:'連絡希望時間帯', t:'checks', o:['11～13','13～15','15～17','17～20','20時以降'], full:true},
+      {k:'tenpo', l:'店舗名', t:'text'}, {k:'tanto', l:'担当名', t:'text', pre:'staff_name'},
+    ]},
+  ]},
+
+  { key:'cloudlinks', title:'CloudLinks', sections:[
+    { h:'お客様情報・新住所', fields:[
+      {k:'kana', l:'お名前(カナ)', t:'text'}, {k:'kanji', l:'漢字', t:'text', pre:'customer_name'},
+      {k:'renraku', l:'連絡先', t:'text'}, {k:'nyukyo', l:'入居日', t:'date', pre:'contract_start_date'},
+      {k:'yubin', l:'郵便番号', t:'text'}, {k:'shinjusho', l:'新住所', t:'text', full:true},
+      {k:'tatemono', l:'建物名', t:'text', pre:'property_name'}, {k:'heya', l:'部屋番号', t:'text', pre:'room_number'},
+      {k:'kanri_kaisha', l:'管理会社名', t:'text', pre:'management_company'}, {k:'kanri_tel', l:'管理会社TEL', t:'text'},
+    ]},
+    { h:'ライフライン・連絡', fields:[
+      {k:'denki', l:'でんき', t:'checks', o:['オール電化','建物指定'], full:true},
+      {k:'gas', l:'ガス', t:'sel', o:['都市ガス','プロパンガス','お客さま自身で手配']},
+      {k:'net', l:'ネット', t:'checks', o:['インターネット無料物件'], full:true},
+      {k:'jikan', l:'連絡希望時間帯', t:'checks', o:['午前中不可','10～12','13～15','15～17','17～21'], full:true},
+      {k:'tenpo', l:'店舗名', t:'text'}, {k:'tanto', l:'担当名', t:'text', pre:'staff_name'},
+    ]},
+  ]},
+
+  { key:'soufujo', title:'契約書類送付状', sections:[
+    { h:'宛先', fields:[
+      {k:'okyakusama', l:'お客様名', t:'text', pre:'customer_name'}, {k:'goushitsu', l:'号室', t:'text', pre:'room_number'},
+      {k:'keiyaku_start', l:'契約開始日', t:'date', pre:'contract_start_date'},
+    ]},
+    { h:'添付書類（チェック）', fields:[
+      {k:'tenpu', l:'添付書類', t:'checks', o:['賃貸借契約書','駐車場契約書','重要事項説明書','保証会社契約書','個人情報同意書','口座振替用紙','火災保険申込書','暴力団排除条例同意書','入居者名簿'], full:true},
+    ]},
+    { h:'必要書類（チェック）', fields:[
+      {k:'hitsuyo', l:'必要書類', t:'checks', o:['住民票','印鑑証明書','運転免許証コピー','健康保険証コピー','社会保険証コピー','在職証明書','給与明細2ヶ月分','車検証コピー','源泉徴収票'], full:true},
+    ]},
+    { h:'契約金', fields:[
+      {k:'keiyakukin', l:'契約金', t:'num'}, {k:'furikomi', l:'振込先口座', t:'text', full:true}, {k:'kigen', l:'お支払期日', t:'date'},
+    ]},
+  ]},
+];
 
 function showAlert(msg, type='success') {
   const el = document.getElementById('alert-msg');
   el.textContent = msg; el.className = `alert alert-${type} show`;
   setTimeout(() => el.classList.remove('show'), 4000);
 }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fid(dk, fk){ return `f__${dk}__${fk}`; }
 
-async function loadDoc() {
-  let d = {};
-  try {
-    const res = await fetch(`/api/contract-customers/${RID}/document-data`);
-    if (res.ok) d = (await res.json()).data || {};
-  } catch(_) {}
-  TEXT_FIELDS.forEach(k => { const el = document.getElementById('f-'+k); if (el) el.value = (d[k] ?? ''); });
-  // radio
-  document.querySelectorAll('input[name="torihiki"]').forEach(r => r.checked = (r.value === (d.torihiki || '媒介')));
-  // checkbox groups
-  ['setsubi','fuzoku'].forEach(g => {
-    const arr = Array.isArray(d[g]) ? d[g] : [];
-    document.querySelectorAll(`input[data-group="${g}"]`).forEach(c => c.checked = arr.includes(c.value));
+function renderField(dk, f) {
+  const id = fid(dk, f.k);
+  let inner = '';
+  if (f.t === 'num') {
+    inner = `<div class="yen-wrap"><input type="number" id="${id}" min="0"><span>円</span></div>`;
+  } else if (f.t === 'date') {
+    inner = `<input type="date" id="${id}">`;
+  } else if (f.t === 'area') {
+    inner = `<textarea id="${id}" rows="3"></textarea>`;
+  } else if (f.t === 'sel') {
+    inner = `<select id="${id}">${(f.o||[]).map(o=>`<option value="${esc(o)}">${esc(o)||'―'}</option>`).join('')}</select>`;
+  } else if (f.t === 'radio') {
+    inner = `<div class="chk-row">${(f.o||[]).map(o=>`<label><input type="radio" name="${id}" value="${esc(o)}"> ${esc(o)}</label>`).join('')}</div>`;
+  } else if (f.t === 'checks') {
+    inner = `<div class="chk-row" id="${id}">${(f.o||[]).map(o=>`<label><input type="checkbox" value="${esc(o)}"> ${esc(o)}</label>`).join('')}</div>`;
+  } else {
+    inner = `<input type="text" id="${id}">`;
+  }
+  return `<div class="fg ${f.full?'full':''}"><label>${esc(f.l)}</label>${inner}</div>`;
+}
+
+function renderDocs() {
+  const tabs = document.getElementById('tabs');
+  const cont = document.getElementById('docs-container');
+  tabs.innerHTML = DOCS.map((d,i)=>`<button class="tab ${i===0?'active':''}" data-i="${i}" onclick="showTab(${i})">${esc(d.title)}</button>`).join('');
+  cont.innerHTML = DOCS.map((d,i)=>`
+    <div class="doc-card ${i===0?'':'print-hide'}" id="doc-${i}" style="${i===0?'':'display:none;'}">
+      <h2 class="doc-h">${esc(d.title)}</h2>
+      ${d.sections.map(s=>`
+        <div class="sec"><div class="sec-h">${esc(s.h)}</div><div class="sec-b grid">
+          ${s.fields.map(f=>renderField(d.key, f)).join('')}
+        </div></div>`).join('')}
+    </div>`).join('');
+}
+
+let curTab = 0;
+function showTab(i) {
+  curTab = i;
+  document.querySelectorAll('#tabs .tab').forEach((t,j)=>t.classList.toggle('active', j===i));
+  document.querySelectorAll('#docs-container .doc-card').forEach((c,j)=>{
+    c.style.display = (j===i)?'':'none';
+    c.classList.toggle('print-hide', j!==i);
   });
+}
+function printCurrent(){ window.print(); }
+
+function applyData(data) {
+  DOCS.forEach(d => d.sections.forEach(s => s.fields.forEach(f => {
+    const key = `${d.key}.${f.k}`;
+    let v = data[key];
+    if (v === undefined && f.pre) v = CTX[f.pre];
+    const id = fid(d.key, f.k);
+    if (f.t === 'checks') {
+      const arr = Array.isArray(v) ? v : [];
+      document.querySelectorAll(`#${id} input[type="checkbox"]`).forEach(c => c.checked = arr.includes(c.value));
+    } else if (f.t === 'radio') {
+      document.querySelectorAll(`input[name="${id}"]`).forEach(r => r.checked = (r.value === (v ?? (f.o?f.o[0]:''))));
+    } else {
+      const el = document.getElementById(id);
+      if (el) el.value = (v ?? '');
+    }
+  })));
 }
 
 function collect() {
   const out = {};
-  TEXT_FIELDS.forEach(k => { const el = document.getElementById('f-'+k); out[k] = el ? el.value : ''; });
-  const r = document.querySelector('input[name="torihiki"]:checked');
-  out.torihiki = r ? r.value : '';
-  ['setsubi','fuzoku'].forEach(g => {
-    out[g] = [...document.querySelectorAll(`input[data-group="${g}"]:checked`)].map(c => c.value);
-  });
+  DOCS.forEach(d => d.sections.forEach(s => s.fields.forEach(f => {
+    const key = `${d.key}.${f.k}`;
+    const id = fid(d.key, f.k);
+    if (f.t === 'checks') {
+      out[key] = [...document.querySelectorAll(`#${id} input[type="checkbox"]:checked`)].map(c => c.value);
+    } else if (f.t === 'radio') {
+      const r = document.querySelector(`input[name="${id}"]:checked`);
+      out[key] = r ? r.value : '';
+    } else {
+      const el = document.getElementById(id);
+      out[key] = el ? el.value : '';
+    }
+  })));
   return out;
+}
+
+async function loadDoc() {
+  renderDocs();
+  try {
+    const res = await fetch(`/api/contract-customers/${RID}/document-data`);
+    if (res.ok) { const j = await res.json(); CTX = j.ctx || {}; applyData(j.data || {}); }
+  } catch(_) {}
 }
 
 async function saveDoc() {
   try {
     const res = await fetch(`/api/contract-customers/${RID}/document-data`, {
-      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(collect())
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(collect())
     });
     if (!res.ok) throw new Error();
-    showAlert('契約書類を保存しました。');
+    showAlert('契約書類を保存しました（全帳票）。');
   } catch(_) { showAlert('保存に失敗しました。', 'error'); }
 }
 

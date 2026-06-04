@@ -1760,22 +1760,40 @@ def contract_document_edit(rid):
 @app.route("/api/contract-customers/<int:rid>/document-data", methods=["GET"])
 @login_required
 def api_contract_document_get(rid):
-    """契約書類の編集データ（保存済み＋申込からの初期値）を返す"""
+    """契約書類の保存済み編集データと、申込からの初期値コンテキストを返す"""
     allowed_ids = get_allowed_store_ids()
     rec = ApplicationRecord.query.get_or_404(rid)
     if rec.store_id not in allowed_ids:
         return jsonify({'error': '権限がありません'}), 403
     staff = Staff.query.get(rec.staff_id) if rec.staff_id else None
-    data = _contract_doc_defaults(rec, staff)
+    store = Store.query.get(rec.store_id)
+    fd = lambda d: d.isoformat() if d else ''
+    ad_yen = round((rec.rent or 0) * (rec.ad_amount or 0) / 100) if (rec.ad_type or 'amount') == 'percent' else (rec.ad_amount or 0)
+    ctx = {
+        'customer_name': rec.customer_name or '',
+        'property_name': rec.property_name or '',
+        'room_number': rec.room_number or '',
+        'rent': int(rec.rent or 0),
+        'management_company': rec.management_company or '',
+        'staff_name': staff.name if staff else '',
+        'store_name': store.name if store else '',
+        'contract_start_date': fd(rec.contract_start_date),
+        'application_date': fd(rec.application_date),
+        'brokerage_fee': int(rec.brokerage_fee or 0),
+        'option_amount': int(rec.option_amount or 0),
+        'ad_yen': int(ad_yen),
+        'media': rec.media or '',
+    }
+    data = {}
     doc = ContractDocument.query.filter_by(application_id=rid).first()
     if doc and doc.data:
         try:
             saved = json.loads(doc.data)
             if isinstance(saved, dict):
-                data.update(saved)
+                data = saved
         except Exception:
             pass
-    return jsonify({'data': data, 'saved': bool(doc)})
+    return jsonify({'data': data, 'ctx': ctx, 'saved': bool(doc)})
 
 
 @app.route("/api/contract-customers/<int:rid>/document-data", methods=["POST"])
