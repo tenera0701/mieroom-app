@@ -503,8 +503,8 @@ function adAmountYen(r) {
 }
 
 function isFullyApproved(r) {
-  const needAd        = adAmountYen(r) > 0;
-  const needBrokerage = (r.brokerage_fee || 0) > 0;
+  const needAd        = adAmountYen(r) !== 0;
+  const needBrokerage = (r.brokerage_fee || 0) !== 0;
   // 両方承認済みで少なくともどちらかに金額があれば入金済み
   if (r.ad_approved && r.brokerage_approved && (needAd || needBrokerage)) return true;
   // 片方だけの場合の判定
@@ -513,9 +513,9 @@ function isFullyApproved(r) {
 }
 
 function paymentRowBg(r) {
-  const hasBrokerage = (r.brokerage_fee || 0) > 0;
-  const hasOption    = (r.option_amount || 0) > 0;
-  const hasAd        = adAmountYen(r) > 0;
+  const hasBrokerage = (r.brokerage_fee || 0) !== 0;
+  const hasOption    = (r.option_amount || 0) !== 0;
+  const hasAd        = adAmountYen(r) !== 0;
   const bOk = !hasBrokerage || r.brokerage_approved;
   const oOk = !hasOption    || r.option_approved;
   const aOk = !hasAd        || r.ad_approved;
@@ -558,9 +558,9 @@ function buildAppRow(r, colors, isSettled = false) {
     ? `${r.ad_amount ?? 0}% (${Math.round(adYen).toLocaleString()}円)`
     : `${(r.ad_amount || 0).toLocaleString()}円`;
 
-  const brokerageCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved, (r.brokerage_fee || 0) > 0);
-  const optionCell    = buildSettleCell(r, 'option',    r.option_settled,    r.option_approved,    (r.option_amount || 0) > 0);
-  const adCell        = buildSettleCell(r, 'ad',        r.ad_settled,        r.ad_approved,        adYen > 0);
+  const brokerageCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved, (r.brokerage_fee || 0) !== 0);
+  const optionCell    = buildSettleCell(r, 'option',    r.option_settled,    r.option_approved,    (r.option_amount || 0) !== 0);
+  const adCell        = buildSettleCell(r, 'ad',        r.ad_settled,        r.ad_approved,        adYen !== 0);
 
   const canEdit = IS_MANAGER || r.staff_id === CUR_STAFF_ID;
   const opBtns  = canEdit
@@ -742,9 +742,9 @@ function renderUncollectedTable(list) {
     const adDisp = r.ad_type === 'percent'
       ? `${r.ad_amount ?? 0}% (${Math.round(adYen).toLocaleString()}円)`
       : (r.ad_amount ? `${r.ad_amount.toLocaleString()}円` : '―');
-    const bCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved, (r.brokerage_fee || 0) > 0);
-    const oCell = buildSettleCell(r, 'option',    r.option_settled,    r.option_approved,    (r.option_amount || 0) > 0);
-    const aCell = buildSettleCell(r, 'ad',        r.ad_settled,        r.ad_approved,        adYen > 0);
+    const bCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved, (r.brokerage_fee || 0) !== 0);
+    const oCell = buildSettleCell(r, 'option',    r.option_settled,    r.option_approved,    (r.option_amount || 0) !== 0);
+    const aCell = buildSettleCell(r, 'ad',        r.ad_settled,        r.ad_approved,        adYen !== 0);
     tr.innerHTML = `
       <td style="white-space:nowrap;">${r.application_date || '―'}</td>
       <td>${r.staff_name || '―'}</td>
@@ -1124,9 +1124,9 @@ async function runGlobalSearch(q) {
     appData = list;
 
     const unpaid = list.filter(r => {
-      const needB = (r.brokerage_fee || 0) > 0 && !r.brokerage_approved;
-      const needO = (r.option_amount || 0) > 0 && !r.option_approved;
-      const needA = adAmountYen(r) > 0 && !r.ad_approved;
+      const needB = (r.brokerage_fee || 0) !== 0 && !r.brokerage_approved;
+      const needO = (r.option_amount || 0) !== 0 && !r.option_approved;
+      const needA = adAmountYen(r) !== 0 && !r.ad_approved;
       return needB || needO || needA;
     });
     const unc = document.getElementById('unc-count');

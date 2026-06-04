@@ -2123,7 +2123,7 @@ def api_kpi_by_store():
             ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
             _ex('year',  ApplicationRecord.application_date) == year,
             _ex('month', ApplicationRecord.application_date) == month,
-            db.or_(ApplicationRecord.ad_amount > 0, ApplicationRecord.brokerage_fee > 0),
+            db.or_(ApplicationRecord.ad_amount != 0, ApplicationRecord.brokerage_fee != 0),
             db.or_(ApplicationRecord.ad_amount <= 0, ApplicationRecord.ad_approved == True),
             db.or_(ApplicationRecord.brokerage_fee <= 0, ApplicationRecord.brokerage_approved == True),
         ).count()
@@ -4295,17 +4295,17 @@ def api_uncollected_sync_from_applications():
         extract('month', ApplicationRecord.application_date) == month,
         ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
         db.or_(
-            db.and_(ApplicationRecord.ad_amount > 0,       ApplicationRecord.ad_approved == False),
-            db.and_(ApplicationRecord.brokerage_fee > 0,   ApplicationRecord.brokerage_approved == False),
+            db.and_(ApplicationRecord.ad_amount != 0,       ApplicationRecord.ad_approved == False),
+            db.and_(ApplicationRecord.brokerage_fee != 0,   ApplicationRecord.brokerage_approved == False),
         )
     ).all()
 
     added = 0
     for rec in apps:
         pending_amount = 0
-        if (rec.ad_amount or 0) > 0 and not rec.ad_approved:
+        if (rec.ad_amount or 0) != 0 and not rec.ad_approved:
             pending_amount += rec.ad_amount or 0
-        if (rec.brokerage_fee or 0) > 0 and not rec.brokerage_approved:
+        if (rec.brokerage_fee or 0) != 0 and not rec.brokerage_approved:
             pending_amount += rec.brokerage_fee or 0
         pending_amount += rec.option_amount or 0
         if pending_amount <= 0:
@@ -5955,7 +5955,7 @@ def _approved_in_month(rec, field, year, month):
         ok, dt, amt = rec.ad_approved, rec.ad_payment_date, _ad_yen(rec)
     else:
         return False
-    return bool(ok and amt > 0 and dt and dt.year == year and dt.month == month)
+    return bool(ok and amt != 0 and dt and dt.year == year and dt.month == month)
 
 
 @app.route("/api/applications/settled")
@@ -5981,21 +5981,21 @@ def api_applications_settled():
     if year and month:
         # その月に入金日がある方向を持つ案件のみ
         q = q.filter(db.or_(
-            db.and_(ApplicationRecord.brokerage_approved == True, ApplicationRecord.brokerage_fee > 0,
+            db.and_(ApplicationRecord.brokerage_approved == True, ApplicationRecord.brokerage_fee != 0,
                     db.extract('year', ApplicationRecord.brokerage_payment_date) == year,
                     db.extract('month', ApplicationRecord.brokerage_payment_date) == month),
-            db.and_(ApplicationRecord.option_approved == True, ApplicationRecord.option_amount > 0,
+            db.and_(ApplicationRecord.option_approved == True, ApplicationRecord.option_amount != 0,
                     db.extract('year', ApplicationRecord.option_payment_date) == year,
                     db.extract('month', ApplicationRecord.option_payment_date) == month),
-            db.and_(ApplicationRecord.ad_approved == True, ApplicationRecord.ad_amount > 0,
+            db.and_(ApplicationRecord.ad_approved == True, ApplicationRecord.ad_amount != 0,
                     db.extract('year', ApplicationRecord.ad_payment_date) == year,
                     db.extract('month', ApplicationRecord.ad_payment_date) == month),
         ))
     else:
         q = q.filter(db.or_(
-            db.and_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.brokerage_approved == True),
-            db.and_(ApplicationRecord.ad_amount > 0, ApplicationRecord.ad_approved == True),
-            db.and_(ApplicationRecord.option_amount > 0, ApplicationRecord.option_approved == True),
+            db.and_(ApplicationRecord.brokerage_fee != 0, ApplicationRecord.brokerage_approved == True),
+            db.and_(ApplicationRecord.ad_amount != 0, ApplicationRecord.ad_approved == True),
+            db.and_(ApplicationRecord.option_amount != 0, ApplicationRecord.option_approved == True),
         ))
 
     recs = q.order_by(ApplicationRecord.application_date.asc()).all()
@@ -6037,9 +6037,9 @@ def api_applications_unpaid():
         ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
         ApplicationRecord.application_date <= month_end,  # 選択月以前の案件のみ
         db.or_(
-            db.and_(ApplicationRecord.brokerage_fee > 0, ApplicationRecord.brokerage_approved == False),
-            db.and_(ApplicationRecord.ad_amount > 0,     ApplicationRecord.ad_approved == False),
-            db.and_(ApplicationRecord.option_amount > 0, ApplicationRecord.option_approved == False),
+            db.and_(ApplicationRecord.brokerage_fee != 0, ApplicationRecord.brokerage_approved == False),
+            db.and_(ApplicationRecord.ad_amount != 0,     ApplicationRecord.ad_approved == False),
+            db.and_(ApplicationRecord.option_amount != 0, ApplicationRecord.option_approved == False),
         )
     )
     if store_id and store_id in allowed_ids:
@@ -6089,12 +6089,12 @@ def _record_total_amount(r):
 def _record_approved_amount(r):
     """入金済み（承認済み）金額（方向ごとに独立加算）"""
     amt = 0
-    if (r.brokerage_fee or 0) > 0 and r.brokerage_approved:
+    if (r.brokerage_fee or 0) != 0 and r.brokerage_approved:
         amt += r.brokerage_fee or 0
-    if (r.option_amount or 0) > 0 and r.option_approved:
+    if (r.option_amount or 0) != 0 and r.option_approved:
         amt += r.option_amount or 0
     ady = _ad_yen(r)
-    if ady > 0 and r.ad_approved:
+    if ady != 0 and r.ad_approved:
         amt += ady
     return amt
 
@@ -6147,10 +6147,10 @@ def api_applications_summary():
     # 未入金：その月以前の申込で未承認の方向の金額合計
     uncollected = 0
     for r in base.filter(ApplicationRecord.application_date <= month_end).all():
-        if (r.brokerage_fee or 0) > 0 and not r.brokerage_approved: uncollected += r.brokerage_fee or 0
-        if (r.option_amount or 0) > 0 and not r.option_approved:    uncollected += r.option_amount or 0
+        if (r.brokerage_fee or 0) != 0 and not r.brokerage_approved: uncollected += r.brokerage_fee or 0
+        if (r.option_amount or 0) != 0 and not r.option_approved:    uncollected += r.option_amount or 0
         ady = _ad_yen(r)
-        if ady > 0 and not r.ad_approved:                            uncollected += ady
+        if ady != 0 and not r.ad_approved:                            uncollected += ady
 
     expected_sales = sum(_record_total_amount(r) for r in month_recs)
     app_count    = len(month_recs)
