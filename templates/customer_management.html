@@ -545,8 +545,8 @@ function buildSettleCell(r, field, settled, approved, hasAmount = true) {
   if (settled) {
     // 承認待ち（クリックで「承認」「否認」を表示）
     const canAct = IS_MANAGER || r.staff_id === CUR_STAFF_ID;
-    if (canAct) return `<span style="color:#f59e0b;font-weight:700;font-size:11px;cursor:pointer;" title="クリックで承認/否認" onclick="revealApproveDeny(this,${r.id},'${field}')">承認待ち</span>` + dateNote;
-    return '<span style="color:#f59e0b;font-weight:700;font-size:11px;">承認待ち</span>' + dateNote;
+    if (canAct) return `<span style="color:#2563eb;font-weight:700;font-size:11px;cursor:pointer;text-decoration:underline;" title="クリックで承認/否認" onclick="revealApproveDeny(this,${r.id},'${field}')">承認待ち</span>` + dateNote;
+    return '<span style="color:#2563eb;font-weight:700;font-size:11px;">承認待ち</span>' + dateNote;
   }
   const canReport = IS_MANAGER || r.staff_id === CUR_STAFF_ID;
   if (canReport) return `<button onclick="openSettleCalendar(this,${r.id},'${field}')" style="padding:3px 8px;font-size:11px;border:1px solid #d1d5db;border-radius:4px;background:#fff;color:#374151;cursor:pointer;">報告</button>`;
