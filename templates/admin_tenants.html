@@ -121,14 +121,14 @@
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">オプション</label>
-        <div class="space-y-2 border rounded-lg px-3 py-2 bg-gray-50">
+        <select id="c-option-select" onchange="addOpt('c', this.value); this.value='';"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+          <option value="">＋ オプションを追加…</option>
           {% for opt in plan_options %}
-          <label class="flex items-start gap-2 text-sm cursor-pointer">
-            <input type="checkbox" class="c-option mt-0.5" value="{{ opt.key }}">
-            <span><span class="font-medium text-gray-800">{{ opt.name }}</span><br><span class="text-xs text-gray-500">{{ opt.desc }}</span></span>
-          </label>
+          <option value="{{ opt.key }}">{{ opt.name }}</option>
           {% endfor %}
-        </div>
+        </select>
+        <div id="c-option-list" class="mt-2 space-y-1"></div>
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">トライアル期間（日数）</label>
@@ -375,14 +375,14 @@
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">オプション</label>
-        <div class="space-y-2 border rounded-lg px-3 py-2 bg-gray-50">
+        <select id="e-option-select" onchange="addOpt('e', this.value); this.value='';"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+          <option value="">＋ オプションを追加…</option>
           {% for opt in plan_options %}
-          <label class="flex items-start gap-2 text-sm cursor-pointer">
-            <input type="checkbox" class="e-option mt-0.5" value="{{ opt.key }}">
-            <span><span class="font-medium text-gray-800">{{ opt.name }}</span><br><span class="text-xs text-gray-500">{{ opt.desc }}</span></span>
-          </label>
+          <option value="{{ opt.key }}">{{ opt.name }}</option>
           {% endfor %}
-        </div>
+        </select>
+        <div id="e-option-list" class="mt-2 space-y-1"></div>
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">契約開始日</label>
@@ -575,11 +575,37 @@ function escHtml(str) {
 
 // 新規作成
 const OPTION_LABELS = { {% for opt in plan_options %}'{{ opt.key }}': '{{ opt.name }}', {% endfor %} };
+let _cOpts = [], _eOpts = [];
+
+function addOpt(prefix, key) {
+  if (!key) return;
+  const arr = prefix === 'c' ? _cOpts : _eOpts;
+  if (!arr.includes(key)) arr.push(key);
+  renderOptList(prefix);
+}
+function removeOpt(prefix, key) {
+  if (prefix === 'c') _cOpts = _cOpts.filter(k => k !== key);
+  else _eOpts = _eOpts.filter(k => k !== key);
+  renderOptList(prefix);
+}
+function renderOptList(prefix) {
+  const arr = prefix === 'c' ? _cOpts : _eOpts;
+  const box = document.getElementById(prefix + '-option-list');
+  box.innerHTML = arr.length ? arr.map(k =>
+    `<div class="flex items-center justify-between bg-teal-50 border border-teal-200 rounded-lg px-3 py-1.5 text-sm">
+      <span class="text-teal-800 font-medium">${OPTION_LABELS[k] || k}</span>
+      <button type="button" onclick="removeOpt('${prefix}','${k}')" class="text-teal-600 hover:text-red-500 text-xs">削除</button>
+    </div>`).join('')
+    : '<div class="text-xs text-gray-400">オプションなし</div>';
+  // 追加済みは選択肢から無効化
+  const sel = document.getElementById(prefix + '-option-select');
+  if (sel) Array.from(sel.options).forEach(o => { if (o.value) o.disabled = arr.includes(o.value); });
+}
 
 function openCreateModal() {
   document.getElementById('c-name').value = '';
   document.getElementById('c-plan').value = 'standard';
-  document.querySelectorAll('.c-option').forEach(c => c.checked = false);
+  _cOpts = []; renderOptList('c');
   document.getElementById('c-owner-username').value = '';
   document.getElementById('c-owner-email').value = '';
   document.getElementById('c-owner-password').value = '';
@@ -597,7 +623,7 @@ async function createTenant() {
   const body = {
     name: document.getElementById('c-name').value.trim(),
     plan: document.getElementById('c-plan').value,
-    options: Array.from(document.querySelectorAll('.c-option:checked')).map(c => c.value),
+    options: _cOpts.slice(),
     trial_days: parseInt(document.getElementById('c-trial-days').value) || 14,
     owner_username: document.getElementById('c-owner-username').value.trim(),
     owner_email:    document.getElementById('c-owner-email').value.trim(),
@@ -647,8 +673,7 @@ function openEditModal(tid) {
   document.getElementById('e-id').value = tid;
   document.getElementById('e-name').value = t.name;
   document.getElementById('e-plan').value = (t.plan === 'premium' ? 'premium' : 'standard');
-  const tOpts = t.options || [];
-  document.querySelectorAll('.e-option').forEach(c => c.checked = tOpts.includes(c.value));
+  _eOpts = (t.options || []).slice(); renderOptList('e');
   document.getElementById('e-contract-start').value = t.contract_start_date || '';
   document.getElementById('e-active').checked = t.is_active;
   document.getElementById('e-error').classList.add('hidden');
@@ -766,7 +791,7 @@ async function updateTenant() {
   const body = {
     name: document.getElementById('e-name').value.trim(),
     plan: document.getElementById('e-plan').value,
-    options: Array.from(document.querySelectorAll('.e-option:checked')).map(c => c.value),
+    options: _eOpts.slice(),
     is_active: document.getElementById('e-active').checked,
     contract_start_date: document.getElementById('e-contract-start').value || null,
   };
