@@ -745,7 +745,7 @@ function editSettledDate(span, id, field, cur) {
   inp.value = cur || '';
   inp.style.cssText = 'font-size:10px;border:1px solid #0D9488;border-radius:4px;padding:1px 3px;';
   span.replaceWith(inp);
-  inp.focus();
+  inp.focus({ preventScroll: true });
   requestAnimationFrame(() => { try { inp.showPicker(); } catch(_) {} });
   let done = false;
   const finish = async (save) => {
@@ -1252,7 +1252,7 @@ function editCellApp(td, id, field, type, curVal, opts) {
       if (String(v) === String(curVal)) o.selected = true;
       el.appendChild(o);
     });
-    td.innerHTML = ''; td.appendChild(el); el.focus();
+    td.innerHTML = ''; td.appendChild(el); el.focus({ preventScroll: true });
     // 描画後に開く（即時呼び出しだと開かず2クリック必要になるため）
     requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
     el.addEventListener('change', async () => { await patchApp(id, field, el.value); applyLocalUpdate(id, field, el.value); });
@@ -1265,7 +1265,7 @@ function editCellApp(td, id, field, type, curVal, opts) {
     el.type = type; el.value = curVal || '';
     if (field === 'management_company') el.setAttribute('list', 'mgmt-companies');
     el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
-    td.innerHTML = ''; td.appendChild(el); el.focus();
+    td.innerHTML = ''; td.appendChild(el); el.focus({ preventScroll: true });
     if (type === 'text' || type === 'number') el.select();
     let _saved = false;
     const save = async () => { if (_saved) return; _saved = true; await patchApp(id, field, el.value); applyLocalUpdate(id, field, el.value); };

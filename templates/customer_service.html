@@ -473,14 +473,17 @@ function editCell(td, id, field, type, curVal, options) {
   if (type === 'select') {
     el = document.createElement('select');
     el.className = 'edit-input';
-    (options || []).forEach(([v, l]) => {
+    let opts = options || [];
+    // 現在値が選択肢に無い場合でも保持できるよう追加
+    if (curVal && !opts.some(o => String(o[0]) === String(curVal))) opts = opts.concat([[curVal, curVal]]);
+    opts.forEach(([v, l]) => {
       const o = new Option(l || v, v);
-      if (v === curVal) o.selected = true;
+      if (String(v) === String(curVal)) o.selected = true;
       el.appendChild(o);
     });
     td.innerHTML = '';
     td.appendChild(el);
-    el.focus();
+    el.focus({ preventScroll: true });
     // クリックですぐプルダウンを開く（描画後に開く）
     requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
     el.addEventListener('change', async () => {
@@ -497,7 +500,7 @@ function editCell(td, id, field, type, curVal, options) {
     el.className = 'edit-input';
     td.innerHTML = '';
     td.appendChild(el);
-    el.focus();
+    el.focus({ preventScroll: true });
     if (type === 'text') el.select();
     if (type === 'date') requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
 
@@ -531,7 +534,7 @@ function renderTable() {
     return `<tr>
       <td onclick="editCell(this,${r.id},'service_date','date','${r.service_date||''}')">${r.service_date||'―'}</td>
       <td onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${escHtml(staffName(r.staff_id))}</td>
-      <td onclick="editCell(this,${r.id},'echo_media','text','${escHtml(r.echo_media)}')">${escHtml(r.echo_media)||'―'}</td>
+      <td onclick="editCell(this,${r.id},'echo_media','select','${escHtml(r.echo_media)}',CS_MEDIA_PAIRS)">${escHtml(r.echo_media)||'―'}</td>
       <td onclick="editCell(this,${r.id},'customer_name','text','${escHtml(r.customer_name)}')">${escHtml(r.customer_name)||'―'}</td>
       <td class="center" onclick="editCell(this,${r.id},'service_type','select','${r.service_type||''}',SERVICE_TYPES.map(v=>[v,v]))">
         <span class="${svcBadge}">${escHtml(r.service_type)||'―'}</span></td>

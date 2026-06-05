@@ -659,7 +659,7 @@ function editCell(td, id, field, type, curVal, options) {
       if (String(v) === String(curVal)) o.selected = true;
       el.appendChild(o);
     });
-    td.innerHTML = ''; td.appendChild(el); el.focus();
+    td.innerHTML = ''; td.appendChild(el); el.focus({ preventScroll: true });
     // クリックですぐプルダウンを開く（描画後に開く）
     requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
     el.addEventListener('change', async () => {
@@ -672,7 +672,7 @@ function editCell(td, id, field, type, curVal, options) {
     el = document.createElement('input');
     el.type = type; el.value = curVal || '';
     el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
-    td.innerHTML = ''; td.appendChild(el); el.focus();
+    td.innerHTML = ''; td.appendChild(el); el.focus({ preventScroll: true });
     if (type === 'text') el.select();
     if (type === 'date') requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
     const save = async () => { await patchRecord(id, field, el.value); renderTable(); };
