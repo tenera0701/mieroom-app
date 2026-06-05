@@ -340,6 +340,15 @@
         </a>
         {% endif %}
 
+        <a href="/chat"
+           class="nav-item {% if request.path == '/chat' %}active{% endif %}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+          </svg>
+          <span class="nav-label">チャット{% if is_chat_pro %} <span style="font-size:9px;background:#0D9488;color:#fff;border-radius:6px;padding:1px 5px;margin-left:2px;">Pro</span>{% endif %}</span>
+        </a>
+
         <a href="/sales"
            class="nav-item {% if request.path == '/sales' %}active{% endif %}">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">

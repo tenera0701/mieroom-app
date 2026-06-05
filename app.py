@@ -121,8 +121,19 @@ def inject_ui_context():
             'can_view_accounting':  getattr(u, 'can_view_accounting', True),
         }
 
+    def _is_chat_pro():
+        uid = session.get('app_user_id')
+        if not uid:
+            return False
+        u = AppUser.query.get(uid)
+        if not u or u.role == 'super_admin' or not u.tenant_id:
+            return False
+        t = Tenant.query.get(u.tenant_id)
+        return bool(t and t.plan == 'chat_pro')
+
     return {
         'is_premium': _is_premium(),
+        'is_chat_pro': _is_chat_pro(),
         'current_role': session.get('app_user_role', ''),
         'sidebar_stores': _sidebar_stores(),
         'user_perms': _current_user_perms(),
@@ -656,6 +667,55 @@ class MailTemplate(db.Model):
     body       = db.Column(db.Text)
     sort_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ChatChannel(db.Model):
+    """社内チャットのチャンネル（全社 / 店舗別 / グループ）"""
+    __tablename__ = 'chat_channel'
+    id         = db.Column(db.Integer, primary_key=True)
+    tenant_id  = db.Column(db.Integer, db.ForeignKey('tenant.id'))
+    kind       = db.Column(db.String(10))   # 'company' / 'store' / 'group'
+    name       = db.Column(db.String(120))
+    store_id   = db.Column(db.Integer, db.ForeignKey('store.id'), nullable=True)  # kind=store のとき
+    created_by = db.Column(db.Integer, db.ForeignKey('app_user.id'), nullable=True)
+    is_active  = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ChatMember(db.Model):
+    """グループチャンネルのメンバー"""
+    __tablename__ = 'chat_member'
+    id         = db.Column(db.Integer, primary_key=True)
+    channel_id = db.Column(db.Integer, db.ForeignKey('chat_channel.id'))
+    user_id    = db.Column(db.Integer, db.ForeignKey('app_user.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ChatMessage(db.Model):
+    """社内チャットのメッセージ"""
+    __tablename__ = 'chat_message'
+    id         = db.Column(db.Integer, primary_key=True)
+    channel_id = db.Column(db.Integer, db.ForeignKey('chat_channel.id'))
+    tenant_id  = db.Column(db.Integer, db.ForeignKey('tenant.id'))
+    user_id    = db.Column(db.Integer, db.ForeignKey('app_user.id'))
+    user_name  = db.Column(db.String(120))   # 表示名スナップショット
+    body       = db.Column(db.Text)
+    has_attachments = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ChatAttachment(db.Model):
+    """チャットの添付ファイル（チャットProのみ）"""
+    __tablename__ = 'chat_attachment'
+    id           = db.Column(db.Integer, primary_key=True)
+    message_id   = db.Column(db.Integer, db.ForeignKey('chat_message.id'))
+    channel_id   = db.Column(db.Integer, db.ForeignKey('chat_channel.id'))
+    tenant_id    = db.Column(db.Integer, db.ForeignKey('tenant.id'))
+    filename     = db.Column(db.String(300))
+    content_type = db.Column(db.String(120))
+    size         = db.Column(db.Integer, default=0)
+    data         = db.Column(db.LargeBinary)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class MailSetting(db.Model):
@@ -3297,6 +3357,249 @@ def api_echo_status_colors_update():
         sc.row_bg_color = color or '#ffffff'
     db.session.commit()
     return jsonify({'status': 'ok'})
+
+
+# ── 社内チャット ───────────────────────────────────────────
+def _chat_user():
+    uid = session.get('app_user_id')
+    return AppUser.query.get(uid) if uid else None
+
+
+def _chat_is_pro(tenant_id):
+    t = Tenant.query.get(tenant_id) if tenant_id else None
+    return bool(t and t.plan == 'chat_pro')
+
+
+def _chat_retention_days(tenant_id):
+    return 730 if _chat_is_pro(tenant_id) else 60
+
+
+def _chat_display_name(u):
+    if not u:
+        return '不明'
+    if u.staff_id:
+        s = Staff.query.get(u.staff_id)
+        if s and s.name:
+            return s.name
+    return u.username or '不明'
+
+
+def _ensure_base_channels(tenant_id):
+    """全社チャンネル＋全店舗チャンネルを自動作成（無ければ）"""
+    created = False
+    if not ChatChannel.query.filter_by(tenant_id=tenant_id, kind='company').first():
+        db.session.add(ChatChannel(tenant_id=tenant_id, kind='company', name='全社'))
+        created = True
+    for st in Store.query.filter_by(tenant_id=tenant_id, is_active=True).all():
+        if not ChatChannel.query.filter_by(tenant_id=tenant_id, kind='store', store_id=st.id).first():
+            db.session.add(ChatChannel(tenant_id=tenant_id, kind='store', store_id=st.id, name=st.name or '店舗'))
+            created = True
+    if created:
+        db.session.commit()
+
+
+def _can_access_channel(c, user):
+    if not c or not user or c.tenant_id != user.tenant_id or not c.is_active:
+        return False
+    if c.kind == 'company':
+        return True
+    if c.kind == 'store':
+        return user.role == 'owner' or (user.store_id and c.store_id == user.store_id)
+    if c.kind == 'group':
+        if c.created_by == user.id:
+            return True
+        return ChatMember.query.filter_by(channel_id=c.id, user_id=user.id).first() is not None
+    return False
+
+
+def _visible_channels(tenant_id, user):
+    _ensure_base_channels(tenant_id)
+    chans = ChatChannel.query.filter_by(tenant_id=tenant_id, is_active=True).all()
+    my_groups = {m.channel_id for m in ChatMember.query.filter_by(user_id=user.id).all()}
+    out = []
+    for c in chans:
+        if c.kind == 'company':
+            out.append(c)
+        elif c.kind == 'store':
+            if user.role == 'owner' or (user.store_id and c.store_id == user.store_id):
+                out.append(c)
+        elif c.kind == 'group':
+            if c.id in my_groups or c.created_by == user.id:
+                out.append(c)
+    return out
+
+
+def _chat_cleanup_channel(c):
+    """チャンネルの保存期限切れメッセージ（と添付）を削除"""
+    if not c:
+        return
+    cutoff = datetime.utcnow() - timedelta(days=_chat_retention_days(c.tenant_id))
+    old = ChatMessage.query.filter(ChatMessage.channel_id == c.id,
+                                   ChatMessage.created_at < cutoff).all()
+    if not old:
+        return
+    ids = [m.id for m in old]
+    ChatAttachment.query.filter(ChatAttachment.message_id.in_(ids)).delete(synchronize_session=False)
+    ChatMessage.query.filter(ChatMessage.id.in_(ids)).delete(synchronize_session=False)
+    db.session.commit()
+
+
+@app.route("/chat")
+@login_required
+@block_super_admin
+def chat_page():
+    return render_template("chat.html")
+
+
+@app.route("/api/chat/channels", methods=["GET"])
+@login_required
+def api_chat_channels():
+    u = _chat_user()
+    if not u or not u.tenant_id:
+        return jsonify({'channels': [], 'is_pro': False, 'retention_days': 60, 'me': {}})
+    chans = _visible_channels(u.tenant_id, u)
+    order = {'company': 0, 'store': 1, 'group': 2}
+    chans.sort(key=lambda c: (order.get(c.kind, 9), c.name or ''))
+    return jsonify({
+        'channels': [{'id': c.id, 'kind': c.kind, 'name': c.name or '', 'store_id': c.store_id} for c in chans],
+        'is_pro': _chat_is_pro(u.tenant_id),
+        'retention_days': _chat_retention_days(u.tenant_id),
+        'me': {'id': u.id, 'name': _chat_display_name(u)},
+    })
+
+
+@app.route("/api/chat/members", methods=["GET"])
+@login_required
+def api_chat_members():
+    u = _chat_user()
+    if not u or not u.tenant_id:
+        return jsonify([])
+    users = AppUser.query.filter(AppUser.tenant_id == u.tenant_id,
+                                 AppUser.is_active == True,
+                                 AppUser.role != 'super_admin').all()
+    return jsonify([{'id': x.id, 'name': _chat_display_name(x)} for x in users if x.id != u.id])
+
+
+@app.route("/api/chat/channels", methods=["POST"])
+@login_required
+def api_chat_create_group():
+    u = _chat_user()
+    if not u or not u.tenant_id:
+        return jsonify({'error': 'unauthorized'}), 403
+    data = request.get_json() or {}
+    name = (data.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'グループ名を入力してください'}), 400
+    c = ChatChannel(tenant_id=u.tenant_id, kind='group', name=name[:120], created_by=u.id)
+    db.session.add(c)
+    db.session.flush()
+    ids = set()
+    for i in (data.get('member_ids') or []):
+        try:
+            ids.add(int(i))
+        except (TypeError, ValueError):
+            pass
+    ids.add(u.id)  # 作成者は必ずメンバー
+    valid = {x.id for x in AppUser.query.filter(AppUser.tenant_id == u.tenant_id,
+                                                AppUser.id.in_(ids)).all()}
+    for uid in valid:
+        db.session.add(ChatMember(channel_id=c.id, user_id=uid))
+    db.session.commit()
+    return jsonify({'id': c.id})
+
+
+@app.route("/api/chat/channels/<int:cid>/messages", methods=["GET"])
+@login_required
+def api_chat_messages(cid):
+    u = _chat_user()
+    c = ChatChannel.query.get_or_404(cid)
+    if not _can_access_channel(c, u):
+        return jsonify({'error': '権限がありません'}), 403
+    _chat_cleanup_channel(c)
+    after = request.args.get('after', type=int) or 0
+    q = ChatMessage.query.filter_by(channel_id=cid)
+    if after:
+        q = q.filter(ChatMessage.id > after)
+    msgs = q.order_by(ChatMessage.id.asc()).limit(800).all()
+    msg_ids = [m.id for m in msgs]
+    atts_by = {}
+    if msg_ids:
+        for a in ChatAttachment.query.filter(ChatAttachment.message_id.in_(msg_ids)).all():
+            fn = (a.filename or '').lower()
+            atts_by.setdefault(a.message_id, []).append({
+                'id': a.id, 'filename': a.filename or 'ファイル',
+                'content_type': a.content_type or '',
+                'is_image': (a.content_type or '').startswith('image/') or fn.endswith(_IMG_EXTS),
+            })
+    return jsonify({'messages': [{
+        'id': m.id, 'user_id': m.user_id, 'user_name': m.user_name or '',
+        'body': m.body or '', 'mine': m.user_id == u.id,
+        'at': m.created_at.strftime('%Y-%m-%d %H:%M') if m.created_at else '',
+        'attachments': atts_by.get(m.id, []),
+    } for m in msgs]})
+
+
+@app.route("/api/chat/channels/<int:cid>/messages", methods=["POST"])
+@login_required
+def api_chat_send(cid):
+    u = _chat_user()
+    c = ChatChannel.query.get_or_404(cid)
+    if not _can_access_channel(c, u):
+        return jsonify({'error': '権限がありません'}), 403
+    is_pro = _chat_is_pro(u.tenant_id)
+    attachments = []
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        body = (request.form.get('body') or '').strip()
+        files = request.files.getlist('files')
+        if files and not is_pro:
+            return jsonify({'ok': False, 'error': 'ファイル添付はチャットProプランの機能です'})
+        for f in files:
+            if not f or not f.filename:
+                continue
+            raw = f.read()
+            if not raw:
+                continue
+            if len(raw) > 20 * 1024 * 1024:
+                return jsonify({'ok': False, 'error': f'「{f.filename}」が大きすぎます（20MBまで）'})
+            attachments.append((f.filename, f.mimetype or 'application/octet-stream', raw))
+    else:
+        data = request.get_json() or {}
+        body = (data.get('body') or '').strip()
+    if not body and not attachments:
+        return jsonify({'ok': False, 'error': 'メッセージを入力してください'})
+    m = ChatMessage(channel_id=cid, tenant_id=u.tenant_id, user_id=u.id,
+                    user_name=_chat_display_name(u), body=body, has_attachments=bool(attachments))
+    db.session.add(m)
+    db.session.flush()
+    for (fn, ct, raw) in attachments:
+        db.session.add(ChatAttachment(message_id=m.id, channel_id=cid, tenant_id=u.tenant_id,
+                                      filename=fn[:300], content_type=(ct or 'application/octet-stream')[:120],
+                                      size=len(raw), data=raw))
+    db.session.commit()
+    return jsonify({'ok': True, 'id': m.id})
+
+
+@app.route("/api/chat/attachments/<int:aid>", methods=["GET"])
+@login_required
+def api_chat_attachment(aid):
+    u = _chat_user()
+    a = ChatAttachment.query.get_or_404(aid)
+    if not u or a.tenant_id != u.tenant_id:
+        return "権限がありません", 403
+    c = ChatChannel.query.get(a.channel_id)
+    if not _can_access_channel(c, u):
+        return "権限がありません", 403
+    from flask import Response as _Resp
+    ctype = a.content_type or 'application/octet-stream'
+    inline = ctype.startswith('image/') or ctype == 'application/pdf'
+    resp = _Resp(a.data or b'', mimetype=ctype)
+    fn = (a.filename or 'file').replace('"', '')
+    try:
+        from urllib.parse import quote as _q
+        resp.headers['Content-Disposition'] = f"{'inline' if inline else 'attachment'}; filename*=UTF-8''{_q(fn)}"
+    except Exception:
+        resp.headers['Content-Disposition'] = f'{"inline" if inline else "attachment"}; filename="{fn}"'
+    return resp
 
 
 @app.route("/echo-management")

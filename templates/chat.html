@@ -1,0 +1,294 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}チャット | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}社内チャット{% endblock %}
+
+{% block extra_head %}
+<style>
+  .chat-wrap { display:flex; gap:14px; height:calc(100vh - 150px); min-height:480px; }
+  /* 左：チャンネル一覧 */
+  .ch-side { width:240px; flex:none; background:#fff; border:1px solid #e5e7eb; border-radius:12px; display:flex; flex-direction:column; overflow:hidden; }
+  .ch-side-head { padding:12px 14px; border-bottom:1px solid #f1f5f9; display:flex; align-items:center; justify-content:space-between; }
+  .ch-side-head h3 { margin:0; font-size:14px; font-weight:800; color:#111827; }
+  .ch-new-btn { font-size:11px; background:#0D9488; color:#fff; border:none; border-radius:6px; padding:4px 9px; font-weight:700; cursor:pointer; }
+  .ch-list { flex:1; overflow-y:auto; padding:6px; }
+  .ch-group-label { font-size:10px; font-weight:700; color:#94a3b8; padding:10px 8px 4px; text-transform:uppercase; letter-spacing:.04em; }
+  .ch-item { display:flex; align-items:center; gap:8px; padding:9px 10px; border-radius:8px; cursor:pointer; font-size:13px; color:#334155; }
+  .ch-item:hover { background:#f1f5f9; }
+  .ch-item.active { background:#CCFBF1; color:#0F766E; font-weight:700; }
+  .ch-item .ch-ico { width:18px; text-align:center; flex:none; }
+  .ch-item .ch-nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* 右：会話 */
+  .ch-main { flex:1; background:#fff; border:1px solid #e5e7eb; border-radius:12px; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+  .ch-main-head { padding:12px 16px; border-bottom:1px solid #f1f5f9; display:flex; align-items:center; gap:10px; }
+  .ch-main-head .h-ico { width:34px; height:34px; border-radius:9px; background:#CCFBF1; color:#0F766E; display:flex; align-items:center; justify-content:center; font-size:16px; flex:none; }
+  .ch-main-head .h-nm { font-size:15px; font-weight:800; color:#111827; }
+  .ch-main-head .h-sub { font-size:11px; color:#94a3b8; }
+  .ch-body { flex:1; overflow-y:auto; padding:16px; background:#F8FAFC; display:flex; flex-direction:column; gap:10px; }
+  .ch-empty { color:#94a3b8; font-size:13px; text-align:center; margin:auto; }
+  .cm-row { display:flex; flex-direction:column; max-width:70%; }
+  .cm-row.mine { align-self:flex-end; align-items:flex-end; }
+  .cm-name { font-size:11px; color:#64748b; margin:0 6px 2px; font-weight:600; }
+  .cm-bubble { padding:9px 13px; border-radius:14px; font-size:13.5px; line-height:1.6; word-break:break-word; white-space:pre-wrap; box-shadow:0 1px 2px rgba(0,0,0,0.05); }
+  .cm-row.mine .cm-bubble { background:#0D9488; color:#fff; border-bottom-right-radius:4px; }
+  .cm-row.other .cm-bubble { background:#fff; color:#111827; border:1px solid #eef2f7; border-bottom-left-radius:4px; }
+  .cm-time { font-size:10px; color:#94a3b8; margin:2px 6px 0; }
+  .cm-att { margin-top:6px; display:flex; flex-direction:column; gap:6px; }
+  .cm-att img { max-width:230px; max-height:230px; border-radius:9px; display:block; cursor:pointer; }
+  .cm-file { display:inline-flex; align-items:center; gap:6px; font-size:12px; text-decoration:none; padding:6px 10px; border-radius:8px; }
+  .cm-row.mine .cm-file { background:rgba(255,255,255,0.22); color:#fff; }
+  .cm-row.other .cm-file { background:#f1f5f9; color:#0f766e; border:1px solid #e2e8f0; }
+  .cm-date { align-self:center; font-size:11px; color:#94a3b8; background:#eef2f7; padding:2px 12px; border-radius:999px; margin:4px 0; }
+  /* 入力欄 */
+  .ch-compose { border-top:1px solid #f1f5f9; padding:10px 12px; background:#fff; }
+  .ch-att-list { display:none; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+  .ch-att-chip { display:inline-flex; align-items:center; gap:6px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px; padding:4px 8px; font-size:11px; color:#334155; max-width:200px; }
+  .ch-att-chip span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ch-att-chip button { background:none; border:none; color:#94a3b8; cursor:pointer; font-size:14px; padding:0; }
+  .ch-input-bar { display:flex; align-items:flex-end; gap:8px; }
+  .ch-attach-btn { width:40px; height:40px; flex:none; border:1px solid #99F6E4; background:#F0FDFA; color:#0F766E; border-radius:10px; font-size:17px; cursor:pointer; }
+  .ch-attach-btn:disabled { opacity:.4; cursor:not-allowed; }
+  .ch-input { flex:1; border:1px solid #d1d5db; border-radius:12px; padding:10px 14px; font-size:13.5px; font-family:inherit; resize:none; max-height:140px; box-sizing:border-box; outline:none; }
+  .ch-input:focus { border-color:#0D9488; }
+  .ch-send { width:42px; height:42px; flex:none; border:none; border-radius:50%; background:#0D9488; color:#fff; font-size:18px; cursor:pointer; }
+  .ch-send:disabled { opacity:.45; cursor:not-allowed; }
+  .pro-note { font-size:10px; color:#94a3b8; margin-top:4px; }
+  .retain-note { font-size:10px; color:#cbd5e1; }
+  /* モーダル */
+  .gm-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:2000; align-items:center; justify-content:center; }
+  .gm-overlay.active { display:flex; }
+  .gm-box { background:#fff; border-radius:12px; width:440px; max-width:95vw; max-height:84vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
+  .gm-mem { display:flex; align-items:center; gap:8px; padding:7px 4px; border-bottom:1px solid #f3f4f6; font-size:13px; }
+  @media (max-width: 760px) { .ch-side { width:150px; } .cm-row { max-width:86%; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+  <div>
+    <h1 style="font-size:20px;font-weight:800;color:#111827;margin:0;">社内チャット</h1>
+    <p style="font-size:12px;color:#6b7280;margin:3px 0 0;" id="retain-info"></p>
+  </div>
+  {% if not is_chat_pro %}
+  <div style="font-size:11px;color:#92400e;background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:6px 12px;">
+    現在のプランではテキストのみ・60日保存です。画像/PDF添付と2年保存は<b>チャットProプラン</b>でご利用いただけます。
+  </div>
+  {% endif %}
+</div>
+
+<div class="chat-wrap">
+  <!-- 左：チャンネル一覧 -->
+  <div class="ch-side">
+    <div class="ch-side-head">
+      <h3>チャンネル</h3>
+      <button class="ch-new-btn" onclick="openGroupModal()">＋ グループ</button>
+    </div>
+    <div class="ch-list" id="ch-list"><div style="padding:14px;color:#94a3b8;font-size:12px;">読み込み中…</div></div>
+  </div>
+
+  <!-- 右：会話 -->
+  <div class="ch-main">
+    <div class="ch-main-head" id="ch-head" style="display:none;">
+      <div class="h-ico" id="h-ico">#</div>
+      <div style="min-width:0;">
+        <div class="h-nm" id="h-nm">　</div>
+        <div class="h-sub" id="h-sub"></div>
+      </div>
+    </div>
+    <div class="ch-body" id="ch-body"><div class="ch-empty">左のチャンネルを選んでください</div></div>
+    <div class="ch-compose" id="ch-compose" style="display:none;">
+      <div class="ch-att-list" id="ch-att-list"></div>
+      <div class="ch-input-bar">
+        <button class="ch-attach-btn" id="ch-attach-btn" onclick="document.getElementById('ch-file').click()" title="画像・PDFを添付">📎</button>
+        <input type="file" id="ch-file" multiple accept="image/*,application/pdf,.pdf" style="display:none" onchange="onChatFiles(this)">
+        <textarea id="ch-input" class="ch-input" rows="1" placeholder="メッセージを入力…" oninput="cgrow(this)"></textarea>
+        <button class="ch-send" id="ch-send" onclick="sendChat()" title="送信">➤</button>
+      </div>
+      <div class="pro-note" id="pro-note"></div>
+    </div>
+  </div>
+</div>
+
+<!-- グループ作成モーダル -->
+<div class="gm-overlay" id="group-modal">
+  <div class="gm-box">
+    <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="margin:0;font-size:15px;font-weight:700;">グループを作成</h3>
+      <button onclick="closeGroupModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+    <div style="padding:16px 20px;">
+      <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">グループ名</label>
+      <input id="gm-name" type="text" placeholder="例：本店マネージャー陣" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;margin-bottom:12px;" autocomplete="off">
+      <label style="font-size:12px;font-weight:600;color:#374151;display:block;margin-bottom:4px;">メンバー（自分は自動で参加）</label>
+      <div id="gm-members" style="max-height:280px;overflow-y:auto;border:1px solid #f1f5f9;border-radius:8px;padding:4px 10px;"></div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #e5e7eb;text-align:right;">
+      <button onclick="closeGroupModal()" style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer;margin-right:6px;">キャンセル</button>
+      <button onclick="createGroup()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">作成する</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let CH = { channels: [], is_pro: false, retention_days: 60, me: {} };
+let _curCh = null;
+let _lastId = 0;
+let _pollTimer = null;
+let _pendingFiles = [];
+let _members = [];
+
+function escH(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function cgrow(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,140)+'px'; }
+const KIND_ICON = { company:'🏢', store:'🏬', group:'👥' };
+const KIND_LABEL = { company:'全社', store:'店舗別', group:'グループ' };
+
+async function loadChannels(initial){
+  const d = await fetch('/api/chat/channels').then(r=>r.json());
+  CH = d;
+  document.getElementById('retain-info').textContent =
+    `保存期間：${CH.retention_days>=365 ? Math.round(CH.retention_days/365)+'年' : CH.retention_days+'日'}${CH.is_pro?'（チャットPro）':''}`;
+  renderChannelList();
+  if(initial){
+    // 全社を初期選択
+    const first = CH.channels.find(c=>c.kind==='company') || CH.channels[0];
+    if(first) selectChannel(first.id);
+  }
+}
+
+function renderChannelList(){
+  const box = document.getElementById('ch-list');
+  if(!CH.channels.length){ box.innerHTML='<div style="padding:14px;color:#94a3b8;font-size:12px;">チャンネルがありません</div>'; return; }
+  let html='', lastKind='';
+  CH.channels.forEach(c=>{
+    if(c.kind!==lastKind){ html += `<div class="ch-group-label">${KIND_LABEL[c.kind]||''}</div>`; lastKind=c.kind; }
+    html += `<div class="ch-item ${_curCh===c.id?'active':''}" onclick="selectChannel(${c.id})">
+      <span class="ch-ico">${KIND_ICON[c.kind]||'#'}</span><span class="ch-nm">${escH(c.name)}</span></div>`;
+  });
+  box.innerHTML = html;
+}
+
+function selectChannel(cid){
+  _curCh = cid; _lastId = 0; _pendingFiles = []; renderAtt();
+  const c = CH.channels.find(x=>x.id===cid);
+  renderChannelList();
+  document.getElementById('ch-head').style.display='flex';
+  document.getElementById('ch-compose').style.display='block';
+  document.getElementById('h-ico').textContent = KIND_ICON[c.kind]||'#';
+  document.getElementById('h-nm').textContent = c.name;
+  document.getElementById('h-sub').textContent = KIND_LABEL[c.kind]||'';
+  document.getElementById('ch-body').innerHTML = '<div class="ch-empty">読み込み中…</div>';
+  // 添付ボタン：Proのみ
+  const ab = document.getElementById('ch-attach-btn');
+  ab.disabled = !CH.is_pro;
+  document.getElementById('pro-note').textContent = CH.is_pro ? '' : '※ 画像・PDFの添付はチャットProプランの機能です';
+  loadMessages(false);
+  if(_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = setInterval(()=>{ if(_curCh) loadMessages(true); }, 5000);
+}
+
+async function loadMessages(incremental){
+  if(!_curCh) return;
+  try{
+    const url = `/api/chat/channels/${_curCh}/messages` + (incremental && _lastId ? `?after=${_lastId}` : '');
+    const d = await fetch(url).then(r=>r.json());
+    if(d.error) return;
+    const body = document.getElementById('ch-body');
+    if(!incremental){
+      body.innerHTML='';
+      if(!d.messages.length){ body.innerHTML='<div class="ch-empty">まだメッセージはありません。<br>最初のメッセージを送ってみましょう。</div>'; return; }
+    }
+    if(!d.messages.length) return;
+    const nearBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+    let lastDate = body.getAttribute('data-lastdate') || '';
+    d.messages.forEach(m=>{
+      const dl = (m.at||'').slice(0,10).replace(/-/g,'/');
+      if(dl && dl!==lastDate){ body.insertAdjacentHTML('beforeend', `<div class="cm-date">${escH(dl)}</div>`); lastDate=dl; }
+      const cls = m.mine ? 'mine' : 'other';
+      const atts = (m.attachments||[]).map(a => a.is_image
+        ? `<img src="/api/chat/attachments/${a.id}" alt="${escH(a.filename)}" onclick="window.open('/api/chat/attachments/${a.id}','_blank')">`
+        : `<a class="cm-file" href="/api/chat/attachments/${a.id}" target="_blank" rel="noopener">📄 ${escH(a.filename)}</a>`).join('');
+      const attHtml = atts ? `<div class="cm-att">${atts}</div>` : '';
+      const nameHtml = m.mine ? '' : `<div class="cm-name">${escH(m.user_name)}</div>`;
+      const bodyHtml = m.body ? escH(m.body) : '';
+      body.insertAdjacentHTML('beforeend',
+        `<div class="cm-row ${cls}">${nameHtml}<div class="cm-bubble">${bodyHtml}${attHtml}</div><div class="cm-time">${escH((m.at||'').slice(11,16))}</div></div>`);
+      _lastId = Math.max(_lastId, m.id);
+    });
+    body.setAttribute('data-lastdate', lastDate);
+    if(!incremental || nearBottom) body.scrollTop = body.scrollHeight;
+  }catch(_){}
+}
+
+// 添付
+function onChatFiles(input){
+  for(const f of input.files){
+    if(f.size > 20*1024*1024){ alert(`「${f.name}」は20MBを超えています`); continue; }
+    _pendingFiles.push(f);
+  }
+  input.value=''; renderAtt();
+}
+function renderAtt(){
+  const box = document.getElementById('ch-att-list');
+  if(!_pendingFiles.length){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='flex';
+  box.innerHTML = _pendingFiles.map((f,i)=>`<span class="ch-att-chip">${(f.type||'').startsWith('image/')?'🖼️':'📄'}<span title="${escH(f.name)}">${escH(f.name)}</span><button onclick="rmAtt(${i})">✕</button></span>`).join('');
+}
+function rmAtt(i){ _pendingFiles.splice(i,1); renderAtt(); }
+
+async function sendChat(){
+  if(!_curCh) return;
+  const inp = document.getElementById('ch-input');
+  const body = inp.value.trim();
+  if(!body && !_pendingFiles.length){ return; }
+  const btn = document.getElementById('ch-send'); btn.disabled = true;
+  try{
+    const fd = new FormData();
+    fd.append('body', body);
+    _pendingFiles.forEach(f=>fd.append('files', f));
+    const d = await fetch(`/api/chat/channels/${_curCh}/messages`, {method:'POST', body:fd}).then(r=>r.json());
+    if(d.ok){
+      inp.value=''; inp.style.height='auto';
+      _pendingFiles=[]; renderAtt();
+      loadMessages(true);
+    } else {
+      alert(d.error || '送信に失敗しました');
+    }
+  }catch(_){ alert('送信に失敗しました'); }
+  finally{ btn.disabled = false; }
+}
+// Enterで送信（Shift+Enterで改行）
+document.addEventListener('keydown', e=>{
+  if(e.key==='Enter' && !e.shiftKey && document.activeElement && document.activeElement.id==='ch-input'){
+    e.preventDefault(); sendChat();
+  }
+});
+
+// グループ作成
+async function openGroupModal(){
+  document.getElementById('gm-name').value='';
+  _members = await fetch('/api/chat/members').then(r=>r.json());
+  const box = document.getElementById('gm-members');
+  box.innerHTML = _members.length
+    ? _members.map(m=>`<label class="gm-mem"><input type="checkbox" value="${m.id}"> ${escH(m.name)}</label>`).join('')
+    : '<p style="color:#9ca3af;font-size:13px;padding:8px 0;">他のメンバーがいません</p>';
+  document.getElementById('group-modal').classList.add('active');
+}
+function closeGroupModal(){ document.getElementById('group-modal').classList.remove('active'); }
+async function createGroup(){
+  const name = document.getElementById('gm-name').value.trim();
+  if(!name){ alert('グループ名を入力してください'); return; }
+  const ids = Array.from(document.querySelectorAll('#gm-members input:checked')).map(c=>parseInt(c.value));
+  const d = await fetch('/api/chat/channels', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, member_ids:ids})}).then(r=>r.json());
+  if(d.id){
+    closeGroupModal();
+    await loadChannels(false);
+    selectChannel(d.id);
+  } else {
+    alert(d.error || '作成に失敗しました');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{ loadChannels(true); });
+</script>
+{% endblock %}
