@@ -25,7 +25,7 @@ from flask import Flask, redirect, url_for, session, render_template, request, j
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 import anthropic
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -638,10 +638,20 @@ class MailSetting(db.Model):
     enabled          = db.Column(db.Boolean, default=False)  # 自動取込ON/OFF
     default_staff_id = db.Column(db.Integer, nullable=True)  # 取込時のデフォルト担当
     custom_keywords  = db.Column(db.Text)                    # 追加判定キーワード（1行=「語」or「語=媒体名」）
+    import_after     = db.Column(db.DateTime, nullable=True) # この日時以降のメールのみ取込（過去分は取らない）
     last_fetch_at    = db.Column(db.DateTime, nullable=True)
     last_result      = db.Column(db.String(300))
     created_at       = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at       = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ProcessedReaction(db.Model):
+    """取込済み（または削除済み）の反響メールID。削除後の再取込（復活）を防ぐ。"""
+    __tablename__ = 'processed_reaction'
+    id          = db.Column(db.Integer, primary_key=True)
+    store_id    = db.Column(db.Integer, db.ForeignKey('store.id'))
+    external_id = db.Column(db.String(160))
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class PortalSource(db.Model):
@@ -1243,8 +1253,11 @@ def migrate_db():
         if mscols and 'custom_keywords' not in mscols:
             cursor.execute("ALTER TABLE mail_setting ADD COLUMN custom_keywords TEXT")
             print("  Added column mail_setting.custom_keywords")
+        if mscols and 'import_after' not in mscols:
+            cursor.execute("ALTER TABLE mail_setting ADD COLUMN import_after DATETIME")
+            print("  Added column mail_setting.import_after")
     except Exception as e:
-        print(f"  Skip mail_setting.custom_keywords: {e}")
+        print(f"  Skip mail_setting columns: {e}")
 
     conn.commit()
     conn.close()
@@ -1288,6 +1301,7 @@ def migrate_postgres():
         ("echo_record",              "customer_email", "VARCHAR(200)"),
         ("echo_record",              "has_unread_reply", "BOOLEAN DEFAULT FALSE"),
         ("mail_setting",             "custom_keywords", "TEXT"),
+        ("mail_setting",             "import_after",    "TIMESTAMP"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
         ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
         ("tenant", "contract_start_date",     "DATE"),
@@ -2394,6 +2408,19 @@ def test_imap_connection(host, user, password):
         return False, f'接続エラー：{e}'
 
 
+def _msg_datetime(msg):
+    """メールのDateヘッダを naive UTC datetime で返す。無ければ None。"""
+    try:
+        dh = emaillib.utils.parsedate_to_datetime(msg.get('Date'))
+        if not dh:
+            return None
+        if dh.tzinfo:
+            return dh.astimezone(timezone.utc).replace(tzinfo=None)
+        return dh
+    except Exception:
+        return None
+
+
 def fetch_reactions_for_store(store_id, limit=120, since_days=30):
     """指定店舗のGmailから反響メールを取得し EchoRecord へ登録"""
     ms = MailSetting.query.filter_by(store_id=store_id).first()
@@ -2403,6 +2430,12 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
     portal_map = [(p.matcher, p.media)
                   for p in PortalSource.query.filter_by(store_id=store_id, enabled=True).all()
                   if p.matcher and p.media]
+    # 取込開始日時：未設定なら「今」にして、過去メールは取り込まない
+    if ms.import_after is None:
+        ms.import_after = datetime.utcnow()
+        db.session.commit()
+    import_after = ms.import_after
+
     imported = 0
     scanned = 0
     try:
@@ -2410,7 +2443,11 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
         M.login(ms.imap_user, ms.imap_pass)
         M.select('INBOX')
         months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        since = date.today() - timedelta(days=since_days)
+        # IMAP検索は取込開始日以降に限定（過去分を遡らない）
+        since = import_after.date()
+        floor = date.today() - timedelta(days=since_days)
+        if since < floor:
+            since = floor
         since_str = f"{since.day:02d}-{months[since.month - 1]}-{since.year}"
         typ, data = M.search(None, f'(SINCE "{since_str}")')
         ids = data[0].split() if (data and data[0]) else []
@@ -2424,17 +2461,22 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
             except Exception:
                 continue
             scanned += 1
+            # 取込開始日時より前のメールは無視（過去の反響を拾わない）
+            mdt = _msg_datetime(msg)
+            if mdt and import_after and mdt < import_after:
+                continue
             parsed = parse_reaction_email(msg, extra_map, portal_map)
             if not parsed:
                 # 反響でなければ、お客様からの返信かどうかを判定して会話に取り込む
                 try:
-                    if _handle_incoming_reply(store_id, msg):
-                        imported += 0  # 返信は反響件数には含めない
+                    _handle_incoming_reply(store_id, msg)
                 except Exception as e:
                     print(f"reply handle error: {e}")
                 continue
-            exists = EchoRecord.query.filter_by(store_id=store_id, external_id=parsed['external_id']).first()
-            if exists:
+            ext = parsed['external_id']
+            # 取込済み or 削除済み or 既存 → 取り込まない（削除後の復活を防ぐ）
+            if (ProcessedReaction.query.filter_by(store_id=store_id, external_id=ext).first()
+                    or EchoRecord.query.filter_by(store_id=store_id, external_id=ext).first()):
                 continue
             db.session.add(EchoRecord(
                 store_id=store_id,
@@ -2444,10 +2486,11 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                 media=parsed['source'],
                 method='メール',
                 memo=parsed['memo'],
-                has_phone=parsed['has_phone'],
-                external_id=parsed['external_id'],
+                has_phone=False,   # 電話対応は自動で〇にしない
+                external_id=ext,
                 customer_email=parsed.get('email') or None,
             ))
+            db.session.add(ProcessedReaction(store_id=store_id, external_id=ext))
             imported += 1
         db.session.commit()
         try:
@@ -2792,6 +2835,9 @@ def api_mail_settings_save():
     if pw:  # 入力があった時のみ更新（空欄なら既存パスワードを維持）
         ms.imap_pass = pw.replace(' ', '').strip()[:200]
     ms.enabled = bool(data.get('enabled'))
+    # 有効化した時点を取込開始日時にする（過去メールは取り込まない）
+    if ms.enabled and ms.import_after is None:
+        ms.import_after = datetime.utcnow()
     dsid = data.get('default_staff_id')
     ms.default_staff_id = int(dsid) if dsid else None
     ms.custom_keywords = (data.get('custom_keywords') or '')[:5000]
@@ -3047,6 +3093,9 @@ def api_echo_records_update(rid):
 @login_required
 def api_echo_records_delete(rid):
     r = EchoRecord.query.get_or_404(rid)
+    # 自動取込分は「削除済み」として記録し、再取込での復活を防ぐ
+    if r.external_id and not ProcessedReaction.query.filter_by(store_id=r.store_id, external_id=r.external_id).first():
+        db.session.add(ProcessedReaction(store_id=r.store_id, external_id=r.external_id))
     db.session.delete(r)
     db.session.commit()
     return jsonify({'status': 'ok'})
