@@ -1492,6 +1492,27 @@ _DROPDOWN_DEFAULTS = {
 }
 
 
+def dedupe_dropdown_options():
+    """重複したプルダウン選択肢を除去（複数ワーカーの同時seedで二重挿入された分）。
+    (tenant_id, category, value) が同じものは最小idのみ残す。冪等。"""
+    try:
+        seen = set()
+        dup_ids = []
+        for o in DropdownOption.query.order_by(DropdownOption.id).all():
+            key = (o.tenant_id, o.category, o.value)
+            if key in seen:
+                dup_ids.append(o.id)
+            else:
+                seen.add(key)
+        if dup_ids:
+            DropdownOption.query.filter(DropdownOption.id.in_(dup_ids)).delete(synchronize_session=False)
+            db.session.commit()
+            print(f"dropdown dedupe: removed {len(dup_ids)} duplicate(s)")
+    except Exception as e:
+        db.session.rollback()
+        print(f"dedupe_dropdown_options error: {e}")
+
+
 def seed_dropdown_defaults():
     """各カテゴリにデフォルト選択肢が無い場合のみ挿入"""
     try:
@@ -1578,6 +1599,7 @@ with app.app_context():
     ensure_super_admin()
     migrate_tenant_data()
     seed_dropdown_defaults()
+    dedupe_dropdown_options()   # 複数ワーカーの同時seedによる重複を除去
     # plan='chat_pro'（旧仕様）→ オプション 'chat_pro' に変換し、プランは standard に戻す
     try:
         legacy = Tenant.query.filter_by(plan='chat_pro').all()
