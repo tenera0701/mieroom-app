@@ -552,6 +552,7 @@ class ApplicationRecord(db.Model):
     management_company = db.Column(db.String(200))             # 管理会社名
     review_ng = db.Column(db.Boolean, default=False)          # 審査×（True=審査NG→キャンセル）旧フィールド
     review_status = db.Column(db.String(10), nullable=True)  # 審査状態: None=—, 'ok'=○, 'ng'=×
+    past_customer = db.Column(db.Boolean, default=False)     # True=契約終了（顧客管理へ移動）
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1279,6 +1280,7 @@ def migrate_postgres():
         ("application_record", "management_company", "VARCHAR(200)"),
         ("application_record", "review_ng", "BOOLEAN DEFAULT FALSE"),
         ("application_record", "review_status", "VARCHAR(10)"),
+        ("application_record", "past_customer", "BOOLEAN DEFAULT FALSE"),
         ("status_color", "row_bg_color", "VARCHAR(20) DEFAULT '#ffffff'"),
         ("daily_report",             "store_id",     "INTEGER"),
         ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
@@ -1817,12 +1819,69 @@ def api_contract_customers():
         ApplicationRecord.store_id.in_(allowed_ids),
         ApplicationRecord.review_status == 'ok',
         ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
+        db.or_(ApplicationRecord.past_customer == False, ApplicationRecord.past_customer == None),
     )
     if staff_id:
         q = q.filter(ApplicationRecord.staff_id == staff_id)
     recs = q.order_by(ApplicationRecord.application_date.asc(), ApplicationRecord.id.asc()).all()
     staff_map = {s.id: s.name for s in Staff.query.all()}
     return jsonify([_app_record_to_dict(r, staff_map) for r in recs])
+
+
+@app.route("/past-customers")
+@login_required
+@block_super_admin
+def past_customers():
+    """顧客管理（契約終了）ページ"""
+    stores = get_allowed_stores(ignore_active=True)
+    active_ids = get_allowed_store_ids()
+    staff_list = Staff.query.filter(Staff.store_id.in_(active_ids), Staff.is_active == True).all() if active_ids else []
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    cur_role = cur_user.role if cur_user else 'staff'
+    is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
+    store_id = active_ids[0] if active_ids else None
+    return render_template("past_customers.html", stores=stores, staff_list=staff_list,
+                           now=datetime.now(), cur_role=cur_role,
+                           is_manager=is_manager, store_id=store_id)
+
+
+@app.route("/api/past-customers")
+@login_required
+def api_past_customers():
+    """顧客管理（契約終了）一覧"""
+    allowed_ids = get_allowed_store_ids()
+    staff_id = request.args.get('staff_id', type=int)
+    q = request.args.get('q', '').strip()
+    query = ApplicationRecord.query.filter(
+        ApplicationRecord.store_id.in_(allowed_ids),
+        ApplicationRecord.past_customer == True,
+    )
+    if staff_id:
+        query = query.filter(ApplicationRecord.staff_id == staff_id)
+    if q:
+        like = f'%{q}%'
+        query = query.filter(db.or_(
+            ApplicationRecord.customer_name.ilike(like),
+            ApplicationRecord.property_name.ilike(like),
+            ApplicationRecord.room_number.ilike(like),
+        ))
+    recs = query.order_by(ApplicationRecord.application_date.desc()).all()
+    staff_map = {s.id: s.name for s in Staff.query.all()}
+    return jsonify([_app_record_to_dict(r, staff_map) for r in recs])
+
+
+@app.route("/api/contract-customers/<int:rid>/past", methods=["POST"])
+@login_required
+def api_contract_customer_mark_past(rid):
+    """契約終了フラグをトグル"""
+    allowed_ids = get_allowed_store_ids()
+    rec = ApplicationRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed_ids:
+        return jsonify({'error': '権限がありません'}), 403
+    data = request.get_json() or {}
+    rec.past_customer = bool(data.get('past', True))
+    db.session.commit()
+    return jsonify({'ok': True})
 
 
 def _contract_doc_defaults(rec, staff):
@@ -7109,6 +7168,7 @@ def _app_record_to_dict(r, staff_map):
         'management_company': r.management_company or '',
         'review_ng': bool(r.review_ng),
         'review_status': r.review_status or None,
+        'past_customer': bool(r.past_customer),
         'contract_start_date': r.contract_start_date.isoformat() if r.contract_start_date else None,
         'ad_payment_date': r.ad_payment_date.isoformat() if r.ad_payment_date else None,
         'brokerage_fee': r.brokerage_fee or 0,

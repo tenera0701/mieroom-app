@@ -1,0 +1,140 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}顧客管理 | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}顧客管理{% endblock %}
+
+{% block extra_head %}
+<style>
+  :root { --primary:#0D9488; --primary-dark:#0F766E; --primary-light:#CCFBF1; }
+  .page-title { font-size:22px; font-weight:800; color:#111827; margin:0; }
+  .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+  .filter { border:1px solid #d1d5db; border-radius:6px; padding:7px 10px; font-size:13px; }
+  .table-section { background:#fff; border-radius:12px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,0.06); border:1px solid #e5e7eb; }
+  .table-section-header { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .table-section-header h2 { font-size:15px; font-weight:800; color:#111827; margin:0; border-left:4px solid var(--primary); padding-left:10px; }
+  .table-wrapper { overflow-x:auto; border-radius:8px; border:1px solid #e5e7eb; }
+  table { width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap; }
+  thead th { background:#F0FDFA; padding:8px 10px; text-align:center; font-weight:700; color:#374151; border-bottom:2px solid #d1fae5; }
+  tbody tr { border-bottom:1px solid #f3f4f6; }
+  tbody tr:hover { background:#F0FDFA; }
+  tbody td { padding:8px; text-align:center; color:#111827; }
+  .alert { padding:10px 16px; border-radius:8px; font-size:13px; margin-bottom:14px; display:none; }
+  .alert.show { display:block; }
+  .alert-success { background:var(--primary-light); color:var(--primary-dark); border:1px solid #5EEAD4; }
+  .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1400px; margin:0 auto;">
+  <div id="alert-msg" class="alert"></div>
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">顧客管理</h1>
+      <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">契約が終了したお客様の管理ファイル</p>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <input type="text" id="search-input" placeholder="🔍 お客様名・物件名・号室で検索" class="filter" style="min-width:240px;" oninput="filterList()">
+      <select id="filter-staff" class="filter" onchange="filterList()">
+        <option value="">全スタッフ</option>
+        {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <div class="table-section">
+    <div class="table-section-header">
+      <h2>契約終了顧客一覧</h2>
+      <span id="pc-count" style="font-size:12px;background:#CCFBF1;color:#0F766E;border-radius:12px;padding:2px 10px;font-weight:700;">0件</span>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>契約開始日</th><th>担当</th><th>物件名</th><th>号室</th><th>お客様名</th>
+            <th>賃料</th><th>管理会社</th><th>申込日</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="pc-tbody">
+          <tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:24px;">読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let pcData = [];
+
+function showAlert(msg, type='success') {
+  const el = document.getElementById('alert-msg');
+  el.textContent = msg; el.className = `alert alert-${type} show`;
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+function yen(v) { return v ? Math.round(v).toLocaleString() + '円' : '―'; }
+function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function loadList() {
+  try {
+    const res = await fetch('/api/past-customers');
+    pcData = res.ok ? await res.json() : [];
+  } catch(_) { pcData = []; }
+  filterList();
+}
+
+function filterList() {
+  const q = (document.getElementById('search-input')?.value || '').toLowerCase();
+  const staffId = document.getElementById('filter-staff').value;
+  const filtered = pcData.filter(r => {
+    const matchQ = !q ||
+      (r.customer_name || '').toLowerCase().includes(q) ||
+      (r.property_name || '').toLowerCase().includes(q) ||
+      (r.room_number   || '').toLowerCase().includes(q);
+    const matchS = !staffId || String(r.staff_id) === staffId;
+    return matchQ && matchS;
+  });
+  render(filtered);
+}
+
+function render(list) {
+  const tbody = document.getElementById('pc-tbody');
+  document.getElementById('pc-count').textContent = list.length + '件';
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:24px;">該当する顧客はいません</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map(r => `
+    <tr>
+      <td style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
+      <td>${esc(r.staff_name) || '―'}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;">${esc(r.property_name) || '―'}</td>
+      <td>${esc(r.room_number) || '―'}</td>
+      <td>${esc(r.customer_name) || '―'}</td>
+      <td style="text-align:right;">${yen(r.rent)}</td>
+      <td>${esc(r.management_company) || '―'}</td>
+      <td style="white-space:nowrap;">${r.application_date || '―'}</td>
+      <td>
+        <button onclick="restoreContract(${r.id})" style="padding:4px 10px;font-size:11px;background:#CCFBF1;border:1px solid #5EEAD4;border-radius:6px;cursor:pointer;color:#0F766E;font-weight:600;">契約管理へ戻す</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function restoreContract(id) {
+  if (!confirm('この顧客を契約管理に戻しますか？')) return;
+  try {
+    const res = await fetch(`/api/contract-customers/${id}/past`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({past: false})
+    });
+    if (!res.ok) throw new Error();
+    showAlert('契約管理に戻しました。');
+    loadList();
+  } catch(_) { showAlert('処理に失敗しました。', 'error'); }
+}
+
+document.addEventListener('DOMContentLoaded', loadList);
+</script>
+{% endblock %}
