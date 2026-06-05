@@ -367,47 +367,89 @@
         </a>
         {% endif %}
 
-        <a href="/contract-customers"
-           class="nav-item {% if request.path == '/contract-customers' %}active{% endif %}">
+        <a href="/floorplan"
+           class="nav-item {% if request.path == '/floorplan' %}active{% endif %}">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+              d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z M4 10h16 M10 10v10 M14 4v6"/>
           </svg>
-          <span class="nav-label">契約中顧客管理</span>
+          <span class="nav-label">間取り作成</span>
         </a>
 
-        {% if role != 'staff' and user_perms.get('can_view_accounting', true) %}
-        <a href="/accounting"
-           class="nav-item {% if request.path == '/accounting' %}active{% endif %}">
+        {# ── 事務作業グループ（クリックで開閉） ── #}
+        {% set in_clerical = request.path in ['/contract-customers', '/accounting', '/daily-report', '/leave-management'] %}
+        <a href="#" id="clerical-toggle" class="nav-item" onclick="toggleClerical(event)">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+              d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/>
           </svg>
-          <span class="nav-label">経理・PL管理</span>
-        </a>
-        {% endif %}
-
-        {% if user_perms.get('can_view_daily_report', true) %}
-        <a href="/daily-report"
-           class="nav-item {% if request.path == '/daily-report' %}active{% endif %}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          <span class="nav-label">事務作業</span>
+          <svg id="clerical-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+               style="width:14px;height:14px;margin-left:auto;transition:transform .2s;transform:rotate({{ '90deg' if in_clerical else '0deg' }});">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
           </svg>
-          <span class="nav-label">日報</span>
         </a>
-        {% endif %}
-
-        {% if role != 'staff' and user_perms.get('can_view_leave', true) %}
-        <a href="/leave-management"
-           class="nav-item {% if request.path == '/leave-management' %}active{% endif %}">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-          </svg>
-          <span class="nav-label">有給管理</span>
-        </a>
-        {% endif %}
+        <div id="clerical-group" style="{% if not in_clerical %}display:none;{% endif %}">
+          <a href="/contract-customers"
+             class="nav-item {% if request.path == '/contract-customers' %}active{% endif %}"
+             style="padding-left:36px; font-size:12px; opacity:0.9;">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <span class="nav-label">└ 契約中顧客管理</span>
+          </a>
+          {% if role != 'staff' and user_perms.get('can_view_accounting', true) %}
+          <a href="/accounting"
+             class="nav-item {% if request.path == '/accounting' %}active{% endif %}"
+             style="padding-left:36px; font-size:12px; opacity:0.9;">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+            </svg>
+            <span class="nav-label">└ 経理・PL管理</span>
+          </a>
+          {% endif %}
+          {% if user_perms.get('can_view_daily_report', true) %}
+          <a href="/daily-report"
+             class="nav-item {% if request.path == '/daily-report' %}active{% endif %}"
+             style="padding-left:36px; font-size:12px; opacity:0.9;">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <span class="nav-label">└ 日報</span>
+          </a>
+          {% endif %}
+          {% if role != 'staff' and user_perms.get('can_view_leave', true) %}
+          <a href="/leave-management"
+             class="nav-item {% if request.path == '/leave-management' %}active{% endif %}"
+             style="padding-left:36px; font-size:12px; opacity:0.9;">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span class="nav-label">└ 有給管理</span>
+          </a>
+          {% endif %}
+        </div>
+        <script>
+          (function(){
+            var inClerical = {{ 'true' if in_clerical else 'false' }};
+            try {
+              if (!inClerical && localStorage.getItem('clericalOpen') === '1') {
+                var g=document.getElementById('clerical-group');
+                var c=document.getElementById('clerical-chevron');
+                if(g){ g.style.display=''; }
+                if(c){ c.style.transform='rotate(90deg)'; }
+              }
+            } catch(_){}
+          })();
+          function toggleClerical(e){
+            e.preventDefault();
+            var g=document.getElementById('clerical-group');
+            var c=document.getElementById('clerical-chevron');
+            var open = g.style.display !== 'none';
+            if(open){ g.style.display='none'; if(c) c.style.transform='rotate(0deg)'; try{ localStorage.setItem('clericalOpen','0'); }catch(_){} }
+            else { g.style.display=''; if(c) c.style.transform='rotate(90deg)'; try{ localStorage.setItem('clericalOpen','1'); }catch(_){} }
+          }
+        </script>
 
         <div class="nav-section-label">設定</div>
 

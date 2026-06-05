@@ -1,0 +1,244 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}間取り作成 | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}間取り作成{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
+<style>
+  :root { --primary:#0D9488; --primary-dark:#0F766E; }
+  .fp-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:10px; }
+  .fp-title { font-size:20px; font-weight:800; color:#111827; margin:0; }
+  .fp-sub { font-size:12px; color:#6b7280; margin:2px 0 0; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; margin-bottom:12px; }
+  .tb-btn { display:inline-flex; align-items:center; gap:5px; border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:7px; padding:7px 11px; font-size:12px; font-weight:600; cursor:pointer; }
+  .tb-btn:hover { background:#F0FDFA; border-color:#5EEAD4; }
+  .tb-btn.primary { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .tb-btn.primary:hover { background:var(--primary-dark); }
+  .tb-btn.danger { color:#ef4444; border-color:#fca5a5; }
+  .tb-sep { width:1px; height:24px; background:#e5e7eb; margin:0 2px; }
+  .tb-color { width:30px; height:30px; border:1px solid #d1d5db; border-radius:6px; padding:2px; cursor:pointer; }
+  .layout { display:grid; grid-template-columns:1fr 240px; gap:14px; align-items:start; }
+  @media (max-width:900px){ .layout { grid-template-columns:1fr; } }
+  .canvas-wrap { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px; overflow:auto; }
+  .side { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:12px; }
+  .side h3 { font-size:13px; font-weight:800; color:#0F766E; margin:0 0 8px; }
+  .name-input { width:100%; border:1px solid #d1d5db; border-radius:6px; padding:7px 9px; font-size:13px; margin-bottom:8px; box-sizing:border-box; }
+  .saved-item { display:flex; align-items:center; justify-content:space-between; gap:6px; padding:7px 8px; border:1px solid #eef2f2; border-radius:6px; margin-bottom:6px; }
+  .saved-item .nm { font-size:12px; font-weight:600; color:#111827; cursor:pointer; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .saved-item .dt { font-size:10px; color:#9ca3af; }
+  .saved-del { border:none; background:none; color:#ef4444; cursor:pointer; font-size:14px; }
+  .hint { font-size:11px; color:#9ca3af; margin-top:8px; line-height:1.6; }
+  .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
+  .alert.show { display:block; }
+  .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
+  .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1300px;margin:0 auto;">
+  <div id="alert-msg" class="alert"></div>
+  <div class="fp-head">
+    <div>
+      <h1 class="fp-title">間取り作成</h1>
+      <p class="fp-sub">間取り画像を取り込んで、テキスト・部屋・線・ロゴを編集 → 画像で書き出し</p>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <label class="tb-btn">📷 背景画像
+      <input type="file" accept="image/*" onchange="addBg(event)" style="display:none;">
+    </label>
+    <button class="tb-btn" onclick="addText()">＋ テキスト</button>
+    <button class="tb-btn" onclick="addRoom()">＋ 部屋(枠)</button>
+    <button class="tb-btn" onclick="addLine()">＋ 線</button>
+    <label class="tb-btn">＋ ロゴ
+      <input type="file" accept="image/*" onchange="addLogo(event)" style="display:none;">
+    </label>
+    <span class="tb-sep"></span>
+    <input type="color" class="tb-color" id="color-picker" value="#0D9488" title="選択中の色" onchange="applyColor(this.value)">
+    <button class="tb-btn" onclick="bringFront()">最前面へ</button>
+    <button class="tb-btn" onclick="sendBack()">最背面へ</button>
+    <button class="tb-btn danger" onclick="delSel()">🗑 削除</button>
+    <span class="tb-sep"></span>
+    <button class="tb-btn" onclick="exportPNG()">🖼 画像で書き出し</button>
+  </div>
+
+  <div class="layout">
+    <div class="canvas-wrap">
+      <canvas id="fp-canvas" width="940" height="660"></canvas>
+    </div>
+    <div class="side">
+      <h3>保存</h3>
+      <input type="text" id="fp-name" class="name-input" placeholder="間取り名（例: グランドメゾン 505）">
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <button class="tb-btn primary" style="flex:1;justify-content:center;" onclick="saveFp()">💾 保存</button>
+        <button class="tb-btn" onclick="newFp()">新規</button>
+      </div>
+      <h3>保存済み</h3>
+      <div id="saved-list"><p style="font-size:12px;color:#9ca3af;">なし</p></div>
+      <p class="hint">
+        ・図形/文字はドラッグで移動、四隅で拡大縮小、文字はダブルクリックで編集。<br>
+        ・選択して上の色で色変更。<br>
+        ・「画像で書き出し」でPNG保存できます。
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let canvas, currentId = null;
+
+function showAlert(msg, type='success') {
+  const el = document.getElementById('alert-msg');
+  el.textContent = msg; el.className = `alert alert-${type} show`;
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+function initCanvas() {
+  canvas = new fabric.Canvas('fp-canvas', { backgroundColor: '#ffffff', preserveObjectStacking: true });
+}
+
+function addBg(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    fabric.Image.fromURL(ev.target.result, img => {
+      const scale = Math.min(canvas.width / img.width, canvas.height / img.height, 1);
+      img.set({ left: (canvas.width - img.width*scale)/2, top: (canvas.height - img.height*scale)/2, scaleX: scale, scaleY: scale });
+      img.set('isBg', true);
+      canvas.add(img); canvas.sendToBack(img); canvas.setActiveObject(img); canvas.renderAll();
+    });
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+function addText() {
+  const t = new fabric.IText('テキスト', { left: 60, top: 60, fontSize: 22, fill: getColor(), fontFamily: 'sans-serif' });
+  canvas.add(t); canvas.setActiveObject(t); canvas.renderAll();
+}
+
+function addRoom() {
+  const r = new fabric.Rect({ left: 80, top: 80, width: 160, height: 120,
+    fill: 'rgba(13,148,136,0.10)', stroke: getColor(), strokeWidth: 2 });
+  canvas.add(r); canvas.setActiveObject(r); canvas.renderAll();
+}
+
+function addLine() {
+  const l = new fabric.Line([60, 200, 260, 200], { stroke: getColor(), strokeWidth: 3 });
+  canvas.add(l); canvas.setActiveObject(l); canvas.renderAll();
+}
+
+function addLogo(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    fabric.Image.fromURL(ev.target.result, img => {
+      const scale = Math.min(160 / img.width, 160 / img.height, 1);
+      img.set({ left: canvas.width - img.width*scale - 16, top: 16, scaleX: scale, scaleY: scale });
+      canvas.add(img); canvas.setActiveObject(img); canvas.renderAll();
+    });
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+function getColor() { return document.getElementById('color-picker').value; }
+
+function applyColor(c) {
+  const o = canvas.getActiveObject(); if (!o) return;
+  if (o.type === 'i-text' || o.type === 'text') o.set('fill', c);
+  else if (o.type === 'line') o.set('stroke', c);
+  else o.set('stroke', c);
+  canvas.renderAll();
+}
+
+function delSel() {
+  const objs = canvas.getActiveObjects();
+  objs.forEach(o => canvas.remove(o));
+  canvas.discardActiveObject(); canvas.renderAll();
+}
+function bringFront() { const o = canvas.getActiveObject(); if (o) { canvas.bringToFront(o); canvas.renderAll(); } }
+function sendBack() { const o = canvas.getActiveObject(); if (o) { canvas.sendToBack(o); canvas.renderAll(); } }
+
+function exportPNG() {
+  canvas.discardActiveObject(); canvas.renderAll();
+  const url = canvas.toDataURL({ format: 'png', multiplier: 2 });
+  const a = document.createElement('a');
+  const nm = (document.getElementById('fp-name').value || '間取り').replace(/[\\/:*?"<>|]/g, '_');
+  a.href = url; a.download = nm + '.png'; a.click();
+}
+
+async function saveFp() {
+  const name = document.getElementById('fp-name').value.trim() || '無題';
+  const payload = { id: currentId, name, data: JSON.stringify(canvas.toJSON(['isBg'])) };
+  try {
+    const res = await fetch('/api/floorplans', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if (!res.ok) throw new Error();
+    const j = await res.json(); currentId = j.id;
+    showAlert('間取りを保存しました。'); loadList();
+  } catch(_) { showAlert('保存に失敗しました。', 'error'); }
+}
+
+function newFp() {
+  if (!confirm('新規作成します。保存していない変更は失われます。よろしいですか？')) return;
+  currentId = null; document.getElementById('fp-name').value = '';
+  canvas.clear(); canvas.backgroundColor = '#ffffff'; canvas.renderAll();
+}
+
+async function loadList() {
+  try {
+    const res = await fetch('/api/floorplans');
+    const list = res.ok ? await res.json() : [];
+    const el = document.getElementById('saved-list');
+    if (!list.length) { el.innerHTML = '<p style="font-size:12px;color:#9ca3af;">なし</p>'; return; }
+    el.innerHTML = list.map(f => `
+      <div class="saved-item">
+        <div>
+          <div class="nm" onclick="loadFp(${f.id})" title="クリックで開く">${escFp(f.name)}</div>
+          <div class="dt">${f.updated_at}</div>
+        </div>
+        <button class="saved-del" onclick="delFp(${f.id})" title="削除">✕</button>
+      </div>`).join('');
+  } catch(_) {}
+}
+function escFp(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function loadFp(id) {
+  try {
+    const res = await fetch(`/api/floorplans/${id}`);
+    if (!res.ok) return;
+    const f = await res.json();
+    currentId = f.id; document.getElementById('fp-name').value = f.name || '';
+    canvas.clear();
+    if (f.data) canvas.loadFromJSON(JSON.parse(f.data), () => canvas.renderAll());
+    else canvas.renderAll();
+    showAlert('間取りを読み込みました。');
+  } catch(_) { showAlert('読み込みに失敗しました。', 'error'); }
+}
+
+async function delFp(id) {
+  if (!confirm('この間取りを削除しますか？')) return;
+  try {
+    await fetch(`/api/floorplans/${id}`, { method: 'DELETE' });
+    if (currentId === id) { currentId = null; }
+    loadList();
+  } catch(_) {}
+}
+
+// Deleteキーで選択削除
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Delete' || e.key === 'Backspace') && canvas) {
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
+    const o = canvas.getActiveObject();
+    if (o && !(o.isEditing)) { delSel(); e.preventDefault(); }
+  }
+});
+
+document.addEventListener('DOMContentLoaded', () => { initCanvas(); loadList(); });
+</script>
+{% endblock %}

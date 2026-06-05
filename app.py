@@ -9,6 +9,14 @@ import os
 import json
 import random
 import tempfile
+import re
+import socket
+import threading
+import time
+import hashlib
+import imaplib
+import email as emaillib
+from email.header import decode_header as _decode_header
 from functools import wraps
 from flask import Flask, redirect, url_for, session, render_template, request, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
@@ -556,6 +564,17 @@ class ContractDocument(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class FloorPlan(db.Model):
+    """間取り（編集可能なキャンバスデータ。data は fabric.js のJSON）"""
+    __tablename__ = 'floor_plan'
+    id = db.Column(db.Integer, primary_key=True)
+    store_id = db.Column(db.Integer)
+    name = db.Column(db.String(200))
+    data = db.Column(db.Text)   # fabric.js canvas JSON（背景画像のbase64含む）
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class EchoRecord(db.Model):
     """反響管理表（追客進捗管理）"""
     __tablename__ = 'echo_record'
@@ -581,7 +600,25 @@ class EchoRecord(db.Model):
     has_phone     = db.Column(db.Boolean, default=False)  # 電話対応有無
     has_line      = db.Column(db.Boolean, default=False)  # LINE追加
     memo          = db.Column(db.Text)
+    external_id   = db.Column(db.String(160), nullable=True)  # 反響メール一意ID（重複取込防止）
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class MailSetting(db.Model):
+    """店舗ごとの反響メール自動取込設定（IMAP）"""
+    __tablename__ = 'mail_setting'
+    id               = db.Column(db.Integer, primary_key=True)
+    store_id         = db.Column(db.Integer, db.ForeignKey('store.id'), unique=True)
+    imap_host        = db.Column(db.String(120), default='imap.gmail.com')
+    imap_user        = db.Column(db.String(200))   # 連携するGmailアドレス
+    imap_pass        = db.Column(db.String(200))   # アプリパスワード
+    enabled          = db.Column(db.Boolean, default=False)  # 自動取込ON/OFF
+    default_staff_id = db.Column(db.Integer, nullable=True)  # 取込時のデフォルト担当
+    custom_keywords  = db.Column(db.Text)                    # 追加判定キーワード（1行=「語」or「語=媒体名」）
+    last_fetch_at    = db.Column(db.DateTime, nullable=True)
+    last_result      = db.Column(db.String(300))
+    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at       = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class CustomerServiceRecord(db.Model):
@@ -1143,6 +1180,26 @@ def migrate_db():
         except Exception as e:
             print(f"  Skip daily_report.store_id: {e}")
 
+    # echo_record の external_id カラムを追加（反響メール重複取込防止）
+    cursor.execute("PRAGMA table_info(echo_record)")
+    er_cols = {r[1] for r in cursor.fetchall()}
+    if 'external_id' not in er_cols:
+        try:
+            cursor.execute("ALTER TABLE echo_record ADD COLUMN external_id VARCHAR(160)")
+            print("  Added column echo_record.external_id")
+        except Exception as e:
+            print(f"  Skip echo_record.external_id: {e}")
+
+    # mail_setting の custom_keywords カラムを追加
+    try:
+        cursor.execute("PRAGMA table_info(mail_setting)")
+        mscols = {r[1] for r in cursor.fetchall()}
+        if mscols and 'custom_keywords' not in mscols:
+            cursor.execute("ALTER TABLE mail_setting ADD COLUMN custom_keywords TEXT")
+            print("  Added column mail_setting.custom_keywords")
+    except Exception as e:
+        print(f"  Skip mail_setting.custom_keywords: {e}")
+
     conn.commit()
     conn.close()
 
@@ -1180,6 +1237,8 @@ def migrate_postgres():
         ("status_color", "row_bg_color", "VARCHAR(20) DEFAULT '#ffffff'"),
         ("daily_report",             "store_id",     "INTEGER"),
         ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
+        ("echo_record",              "external_id",  "VARCHAR(160)"),
+        ("mail_setting",             "custom_keywords", "TEXT"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
         ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
         ("tenant", "contract_start_date",     "DATE"),
@@ -1816,6 +1875,696 @@ def api_contract_document_save(rid):
     doc.updated_at = datetime.utcnow()
     db.session.commit()
     return jsonify({'status': 'ok'})
+
+
+# ── 間取り作成 ──────────────────────────────────────────
+@app.route("/floorplan")
+@login_required
+@block_super_admin
+def floorplan_page():
+    """間取り作成ページ"""
+    return render_template("floorplan.html")
+
+
+@app.route("/api/floorplans", methods=["GET"])
+@login_required
+def api_floorplans_list():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    q = FloorPlan.query
+    if sid:
+        q = q.filter(FloorPlan.store_id == sid)
+    items = q.order_by(FloorPlan.updated_at.desc()).all()
+    return jsonify([{'id': f.id, 'name': f.name or '無題',
+                     'updated_at': f.updated_at.strftime('%Y-%m-%d %H:%M') if f.updated_at else ''}
+                    for f in items])
+
+
+@app.route("/api/floorplans", methods=["POST"])
+@login_required
+def api_floorplans_create():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    data = request.get_json() or {}
+    fp_id = data.get('id')
+    fp = FloorPlan.query.get(fp_id) if fp_id else None
+    if fp:
+        if fp.store_id != sid:
+            return jsonify({'error': '権限がありません'}), 403
+    else:
+        fp = FloorPlan(store_id=sid)
+        db.session.add(fp)
+    fp.name = (data.get('name') or '無題')[:200]
+    fp.data = data.get('data') or ''
+    fp.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': fp.id})
+
+
+@app.route("/api/floorplans/<int:fid>", methods=["GET"])
+@login_required
+def api_floorplans_get(fid):
+    allowed = get_allowed_store_ids()
+    fp = FloorPlan.query.get_or_404(fid)
+    if fp.store_id not in allowed:
+        return jsonify({'error': '権限がありません'}), 403
+    return jsonify({'id': fp.id, 'name': fp.name, 'data': fp.data or ''})
+
+
+@app.route("/api/floorplans/<int:fid>", methods=["DELETE"])
+@login_required
+def api_floorplans_delete(fid):
+    allowed = get_allowed_store_ids()
+    fp = FloorPlan.query.get_or_404(fid)
+    if fp.store_id not in allowed:
+        return jsonify({'error': '権限がありません'}), 403
+    db.session.delete(fp)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── 反響メール自動取込（IMAP） ─────────────────────────────
+
+# ① 差出人ドメイン/アドレス → 媒体名（部分一致）
+PORTAL_DOMAIN_MAP = [
+    ('smocca',   'スモッカ'),
+    ('suumo',    'SUUMO'),
+    ('recruit',  'SUUMO'),
+    ('homes',    "HOME'S"),
+    ('lifull',   "HOME'S"),
+    ('athome',   'アットホーム'),
+    ('at-home',  'アットホーム'),
+    ('chintai',  'CHINTAI'),
+    ('apaman',   'アパマンショップ'),
+    ('canary',   'カナリー'),
+    ('cnary',    'カナリー'),
+    ('ielove',   'いえらぶ'),
+    ('eheya',    'エイブル'),
+    ('pittat',   'ピタットハウス'),
+]
+
+# ② 差出人名/件名/本文に含まれるキーワード → 媒体名（ドメインで判定できない場合）
+PORTAL_KEYWORD_MAP = [
+    ('スモッカ',     'スモッカ'),
+    ('SUUMO',        'SUUMO'),
+    ('スーモ',       'SUUMO'),
+    ("HOME'S",       "HOME'S"),
+    ('ホームズ',     "HOME'S"),
+    ('アットホーム', 'アットホーム'),
+    ('カナリー',     'カナリー'),
+    ('CHINTAI',      'CHINTAI'),
+    ('アパマン',     'アパマンショップ'),
+    ('いえらぶ',     'いえらぶ'),
+    ('エイブル',     'エイブル'),
+    ('ピタット',     'ピタットハウス'),
+]
+
+# 項目ラベルの同義語 → 正規キー（媒体差を吸収）
+_FIELD_SYNONYMS = {
+    'name':      ['氏名(漢字)', '氏名（漢字）', '氏名', 'お名前', '名前', 'ご氏名', 'お客様名', 'お客さま名'],
+    'phone':     ['電話番号', 'tel', '電話', 'お電話番号', '携帯電話', '携帯番号', '連絡先電話番号', 'ご連絡先'],
+    'email':     ['メールアドレス', 'email', 'e-mail', 'mail', 'メール', 'eメール'],
+    'property':  ['物件名', '建物名', 'マンション名'],
+    'room':      ['部屋番号', '号室'],
+    'rent':      ['賃料', '家賃'],
+    'address':   ['住所', '所在地', '物件所在地'],
+    'madori':    ['間取り', '間取'],
+    'menseki':   ['面積', '専有面積'],
+    'station':   ['最寄駅', '最寄り駅'],
+    'datetime':  ['お問合わせ日時', 'お問い合わせ日時', 'お問合せ日時', '問合せ日時', '問い合わせ日時', '受付日時', '反響日時', '受信日時'],
+    'extid':     ['スモッカ反響id', '反響id', '問い合わせ番号', 'お問い合わせ番号', '受付番号', '反響番号', '問合せ番号'],
+    'inquiry':   ['お問合せ内容', 'お問い合わせ内容', '物件に関するお問合せ内容', 'お問合せ', 'ご要望', '希望内容'],
+    'bukken_no': ['物件管理番号', '物件番号', '管理番号'],
+    'note':      ['備考', 'その他', 'ご質問', 'メッセージ', 'コメント'],
+}
+
+
+def _norm_label(s):
+    return (s or '').replace(' ', '').replace('　', '').strip().lower()
+
+
+# 正規化済みラベル → キー
+_LABEL_TO_KEY = {}
+for _k, _syns in _FIELD_SYNONYMS.items():
+    for _s in _syns:
+        _LABEL_TO_KEY[_norm_label(_s)] = _k
+
+
+def _decode_mime(s):
+    if not s:
+        return ''
+    try:
+        out = ''
+        for txt, enc in _decode_header(s):
+            if isinstance(txt, bytes):
+                out += txt.decode(enc or 'utf-8', errors='replace')
+            else:
+                out += txt
+        return out
+    except Exception:
+        return str(s)
+
+
+def _email_plain_body(msg):
+    """メールから本文(プレーンテキスト)を取得"""
+    body = ''
+    if msg.is_multipart():
+        for part in msg.walk():
+            if part.get_content_type() == 'text/plain' and 'attachment' not in str(part.get('Content-Disposition') or ''):
+                payload = part.get_payload(decode=True)
+                if payload:
+                    charset = part.get_content_charset() or 'utf-8'
+                    try:
+                        body += payload.decode(charset, errors='replace')
+                    except Exception:
+                        body += payload.decode('utf-8', errors='replace')
+        if not body:
+            for part in msg.walk():
+                if part.get_content_type() == 'text/html':
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        charset = part.get_content_charset() or 'utf-8'
+                        body += re.sub(r'<[^>]+>', ' ', payload.decode(charset, errors='replace'))
+    else:
+        payload = msg.get_payload(decode=True)
+        if payload:
+            charset = msg.get_content_charset() or 'utf-8'
+            body = payload.decode(charset, errors='replace')
+    return body
+
+
+def parse_custom_keywords(text):
+    """設定の追加キーワード文字列を [(キーワード, 媒体名), ...] に変換。
+    1行＝「語」または「語=媒体名」「語,媒体名」「語：媒体名」。"""
+    rules = []
+    for raw in (text or '').replace('\r', '\n').split('\n'):
+        line = raw.strip()
+        if not line:
+            continue
+        m = re.split(r'[=＝,，：:]', line, 1)
+        kw = m[0].strip()
+        media = m[1].strip() if len(m) > 1 and m[1].strip() else kw
+        if kw:
+            rules.append((kw, media))
+    return rules
+
+
+def _detect_source(from_addr, subject='', body='', extra_map=None):
+    """媒体名を ①ドメイン → ②追加キーワード → ③標準キーワード の順で判定。不明なら None。"""
+    a = (from_addr or '').lower()
+    for key, name in PORTAL_DOMAIN_MAP:
+        if key in a:
+            return name
+    hay = f"{from_addr}\n{subject}\n{body[:800]}".upper()
+    for key, name in (extra_map or []):
+        if key and key.upper() in hay:
+            return name
+    for key, name in PORTAL_KEYWORD_MAP:
+        if key.upper() in hay:
+            return name
+    return None
+
+
+def _from_display_name(from_addr):
+    """差出人名（または ドメイン名）を媒体名のフォールバックとして返す"""
+    s = from_addr or ''
+    m = re.match(r'\s*"?([^"<]+?)"?\s*<', s)
+    if m:
+        nm = m.group(1).strip()
+        if nm and '@' not in nm:
+            return nm[:40]
+    md = re.search(r'@([\w.-]+)', s)
+    if md:
+        parts = md.group(1).split('.')
+        if len(parts) >= 2:
+            return parts[-2]
+    return 'その他反響'
+
+
+def parse_reaction_email(msg, extra_map=None):
+    """反響メールを解析。反響メールでなければ None を返す。
+    未知の媒体でも、氏名/連絡先＋物件などの構造があれば取り込む。"""
+    from_addr = _decode_mime(msg.get('From', ''))
+    subject = _decode_mime(msg.get('Subject', ''))
+    body = _email_plain_body(msg)
+    if not body:
+        return None
+
+    fields = {}
+    for raw_line in body.splitlines():
+        line = raw_line.strip()
+        if not line or ('：' not in line and ':' not in line):
+            continue
+        parts = re.split(r'[：:]', line, 1)
+        if len(parts) != 2:
+            continue
+        label = _norm_label(parts[0])
+        value = parts[1].strip()
+        if not label or value in ('', '－', '-', 'ー', '−'):
+            continue
+        key = _LABEL_TO_KEY.get(label)
+        if key and key not in fields:
+            fields[key] = value
+
+    name = fields.get('name', '')
+
+    # 反響メール判定：連絡先＋物件情報の両方が取れていれば反響とみなす（未知媒体も対象）
+    contact = name or fields.get('phone') or fields.get('email')
+    prop = (fields.get('property') or fields.get('extid')
+            or fields.get('bukken_no') or fields.get('inquiry'))
+    if not (contact and prop):
+        return None
+    source = _detect_source(from_addr, subject, body, extra_map) or _from_display_name(from_addr)
+
+    # 反響日時
+    edate = None
+    dt_raw = fields.get('datetime', '')
+    mdt = re.search(r'(\d{4})[/\-年](\d{1,2})[/\-月](\d{1,2})', dt_raw)
+    if mdt:
+        try:
+            edate = date(int(mdt.group(1)), int(mdt.group(2)), int(mdt.group(3)))
+        except Exception:
+            edate = None
+    if edate is None:
+        try:
+            dh = emaillib.utils.parsedate_to_datetime(msg.get('Date'))
+            if dh:
+                edate = dh.date()
+        except Exception:
+            edate = None
+    if edate is None:
+        edate = date.today()
+
+    # 一意ID（重複取込防止）
+    raw_id = fields.get('extid', '')
+    if raw_id:
+        ext = f"{source}:{raw_id}"
+    else:
+        basis = f"{source}|{name}|{fields.get('property','')}|{fields.get('bukken_no','')}|{dt_raw}"
+        ext = 'h:' + hashlib.md5(basis.encode('utf-8')).hexdigest()[:20]
+
+    # 自由記述（お問合せ内容・備考）も拾う
+    def _grab(markers):
+        for mk in markers:
+            i = body.find(mk)
+            if i < 0:
+                continue
+            collected = []
+            for ln in body[i + len(mk):].splitlines():
+                s = ln.strip().lstrip('・').strip()
+                if not s:
+                    if collected:
+                        break
+                    continue
+                # 区切り線/セクション見出し/ラベル行で終了
+                if s.startswith('＜') or s.startswith('■') or set(s) <= set('-—─=＝_＿ 　'):
+                    if collected:
+                        break
+                    continue
+                if '：' in s or ':' in s:
+                    if collected:
+                        break
+                    continue
+                collected.append(s)
+                if len(collected) >= 4:
+                    break
+            if collected:
+                return ' '.join(collected)[:300]
+        return ''
+
+    inquiry_free = fields.get('inquiry') or _grab(['＜物件に関するお問合せ内容＞', '物件に関するお問合せ内容', '＜お問合せ内容＞', 'お問合せ内容'])
+    biko_free = fields.get('note') or _grab(['■備考', '＜問い合わせ詳細＞', '備考'])
+
+    # メモ生成（拾えた項目のみ）
+    memo_lines = []
+    for lbl, key in [('物件', 'property'), ('部屋番号', 'room'), ('賃料', 'rent'),
+                     ('間取り', 'madori'), ('面積', 'menseki'), ('最寄駅', 'station'),
+                     ('住所', 'address'), ('物件管理番号', 'bukken_no'),
+                     ('電話', 'phone'), ('メール', 'email')]:
+        v = fields.get(key)
+        if v:
+            memo_lines.append(f"{lbl}：{v}")
+    if inquiry_free:
+        memo_lines.append(f"お問合せ内容：{inquiry_free}")
+    if biko_free:
+        memo_lines.append(f"備考：{biko_free}")
+    if raw_id:
+        memo_lines.append(f"反響ID：{raw_id}")
+
+    return {
+        'source': source,
+        'name': name or '（氏名不明）',
+        'date': edate,
+        'memo': '\n'.join(memo_lines),
+        'external_id': ext,
+        'has_phone': bool(fields.get('phone')),
+    }
+
+
+def test_imap_connection(host, user, password):
+    try:
+        M = imaplib.IMAP4_SSL(host or 'imap.gmail.com')
+        M.login(user, password)
+        M.select('INBOX')
+        try:
+            M.logout()
+        except Exception:
+            pass
+        return True, '接続に成功しました'
+    except imaplib.IMAP4.error as e:
+        return False, f'ログインに失敗しました（メールアドレス／アプリパスワードをご確認ください）: {e}'
+    except Exception as e:
+        return False, f'接続エラー：{e}'
+
+
+def fetch_reactions_for_store(store_id, limit=120, since_days=30):
+    """指定店舗のGmailから反響メールを取得し EchoRecord へ登録"""
+    ms = MailSetting.query.filter_by(store_id=store_id).first()
+    if not ms or not ms.imap_user or not ms.imap_pass:
+        return {'ok': False, 'error': '未設定', 'imported': 0, 'scanned': 0}
+    extra_map = parse_custom_keywords(ms.custom_keywords)
+    imported = 0
+    scanned = 0
+    try:
+        M = imaplib.IMAP4_SSL(ms.imap_host or 'imap.gmail.com')
+        M.login(ms.imap_user, ms.imap_pass)
+        M.select('INBOX')
+        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        since = date.today() - timedelta(days=since_days)
+        since_str = f"{since.day:02d}-{months[since.month - 1]}-{since.year}"
+        typ, data = M.search(None, f'(SINCE "{since_str}")')
+        ids = data[0].split() if (data and data[0]) else []
+        ids = ids[-limit:]
+        for num in reversed(ids):
+            try:
+                typ, md = M.fetch(num, '(BODY.PEEK[])')
+                if not md or not md[0]:
+                    continue
+                msg = emaillib.message_from_bytes(md[0][1])
+            except Exception:
+                continue
+            scanned += 1
+            parsed = parse_reaction_email(msg, extra_map)
+            if not parsed:
+                continue
+            exists = EchoRecord.query.filter_by(store_id=store_id, external_id=parsed['external_id']).first()
+            if exists:
+                continue
+            db.session.add(EchoRecord(
+                store_id=store_id,
+                staff_id=ms.default_staff_id or None,
+                list_name=parsed['name'],
+                echo_date=parsed['date'],
+                media=parsed['source'],
+                method='メール',
+                memo=parsed['memo'],
+                has_phone=parsed['has_phone'],
+                external_id=parsed['external_id'],
+            ))
+            imported += 1
+        db.session.commit()
+        try:
+            M.close()
+            M.logout()
+        except Exception:
+            pass
+        ms.last_fetch_at = datetime.utcnow()
+        ms.last_result = f"取得OK：{imported}件追加 / {scanned}件確認（{datetime.now():%m/%d %H:%M}）"
+        db.session.commit()
+        return {'ok': True, 'imported': imported, 'scanned': scanned}
+    except imaplib.IMAP4.error as e:
+        db.session.rollback()
+        try:
+            ms.last_result = f"ログイン失敗：{e}"
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return {'ok': False, 'error': f'ログインに失敗しました（メールアドレス／アプリパスワードをご確認ください）', 'imported': imported, 'scanned': scanned}
+    except Exception as e:
+        db.session.rollback()
+        try:
+            ms.last_result = f"エラー：{e}"
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        return {'ok': False, 'error': str(e), 'imported': imported, 'scanned': scanned}
+
+
+# ── 自動取込サービス：IMAP IDLE（リアルタイム push） ──
+# gunicorn複数ワーカーでもソケットlockで1プロセスのみがIDLE接続を保持する。
+_MAIL_SERVICE_STARTED = False
+_IS_LEADER = False
+
+
+def _imap_idle_wait(M, timeout, stop_event):
+    """IMAP IDLE で新着を待つ。新着通知→True / タイムアウト→False。"""
+    tag = M._new_tag()
+    M.send(tag + b' IDLE\r\n')
+    M.readline()  # '+ idling'
+    got = False
+    sock = M.socket()
+    old_to = sock.gettimeout()
+    end = time.time() + timeout
+    try:
+        sock.settimeout(5)
+        while not stop_event.is_set() and time.time() < end:
+            try:
+                line = M.readline()
+            except socket.timeout:
+                continue
+            except Exception:
+                break
+            if not line:
+                break
+            u = line.upper()
+            if b'EXISTS' in u or b'RECENT' in u:
+                got = True
+                break
+    finally:
+        try:
+            sock.settimeout(old_to)
+        except Exception:
+            pass
+        try:
+            M.send(b'DONE\r\n')
+            for _ in range(10):
+                l = M.readline()
+                if not l or l.upper().startswith(tag.upper()):
+                    break
+        except Exception:
+            pass
+    return got
+
+
+def _idle_worker(store_id, stop_event):
+    """1店舗ぶんのIMAP接続を保持し、新着が来たら即フェッチ。切断時は自動再接続。"""
+    backoff = 5
+    while not stop_event.is_set():
+        M = None
+        try:
+            with app.app_context():
+                ms = MailSetting.query.filter_by(store_id=store_id).first()
+                if not ms or not ms.enabled or not ms.imap_user or not ms.imap_pass:
+                    return
+                host, user, pw = (ms.imap_host or 'imap.gmail.com'), ms.imap_user, ms.imap_pass
+            M = imaplib.IMAP4_SSL(host)
+            M.login(user, pw)
+            M.select('INBOX')
+            with app.app_context():   # 接続直後にキャッチアップ
+                fetch_reactions_for_store(store_id)
+            backoff = 5
+            has_idle = b'IDLE' in (M.capabilities or ())
+            while not stop_event.is_set():
+                if has_idle:
+                    _imap_idle_wait(M, 1500, stop_event)   # 最大25分でIDLE更新
+                else:
+                    stop_event.wait(60)                    # IDLE非対応→60秒間隔
+                if stop_event.is_set():
+                    break
+                with app.app_context():
+                    fetch_reactions_for_store(store_id)
+        except Exception as e:
+            print(f"idle worker store={store_id} reconnect: {e}")
+            stop_event.wait(backoff)
+            backoff = min(backoff * 2, 300)
+        finally:
+            try:
+                if M:
+                    M.logout()
+            except Exception:
+                pass
+
+
+class _IdleManager:
+    def __init__(self):
+        self.workers = {}   # store_id -> {'thread','stop','sig'}
+        self.lock = threading.Lock()
+
+    @staticmethod
+    def _sig(ms):
+        return ((ms.imap_host or 'imap.gmail.com'), ms.imap_user, ms.imap_pass)
+
+    def sync(self):
+        """有効店舗のIDLEワーカーを起動／無効・変更・停止したものを停止。"""
+        try:
+            with app.app_context():
+                enabled = {ms.store_id: self._sig(ms)
+                           for ms in MailSetting.query.filter_by(enabled=True).all()
+                           if ms.imap_user and ms.imap_pass}
+        except Exception as e:
+            print(f"idle sync query error: {e}")
+            return
+        with self.lock:
+            for sid in list(self.workers.keys()):
+                w = self.workers[sid]
+                if sid not in enabled or enabled[sid] != w['sig'] or not w['thread'].is_alive():
+                    w['stop'].set()
+                    del self.workers[sid]
+            for sid, sig in enabled.items():
+                if sid not in self.workers:
+                    ev = threading.Event()
+                    t = threading.Thread(target=_idle_worker, args=(sid, ev), daemon=True)
+                    self.workers[sid] = {'thread': t, 'stop': ev, 'sig': sig}
+                    t.start()
+                    print(f"idle worker started store={sid}")
+
+
+idle_manager = _IdleManager()
+
+
+def _mail_sync_loop():
+    time.sleep(20)
+    cnt = 0
+    while True:
+        try:
+            idle_manager.sync()
+            cnt += 1
+            if cnt % 20 == 0:   # 約10分ごとに保険フェッチ（IDLE取りこぼし対策）
+                with app.app_context():
+                    for ms in MailSetting.query.filter_by(enabled=True).all():
+                        if ms.imap_user and ms.imap_pass:
+                            try:
+                                fetch_reactions_for_store(ms.store_id)
+                            except Exception:
+                                pass
+        except Exception as e:
+            print(f"mail sync loop error: {e}")
+        time.sleep(30)
+
+
+def start_mail_service():
+    """ソケットlockでリーダーを1プロセスだけ選出し、IDLEサービスを開始。"""
+    global _MAIL_SERVICE_STARTED, _IS_LEADER
+    if _MAIL_SERVICE_STARTED:
+        return
+    try:
+        lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        lock.bind(('127.0.0.1', 47625))
+        globals()['_MAIL_LOCK'] = lock   # GC防止のため保持
+    except OSError:
+        _MAIL_SERVICE_STARTED = True      # 非リーダーは以後起動しない
+        return
+    _MAIL_SERVICE_STARTED = True
+    _IS_LEADER = True
+    threading.Thread(target=_mail_sync_loop, daemon=True).start()
+    print("mail IDLE service started (leader)")
+
+
+def request_mail_sync():
+    """設定保存時などに即時で有効店舗のワーカーを同期（リーダーのみ実行）。"""
+    if _IS_LEADER:
+        threading.Thread(target=idle_manager.sync, daemon=True).start()
+
+
+# ── 反響メール取込 設定ページ・API ──
+@app.route("/mail-settings")
+@login_required
+@block_super_admin
+def mail_settings_page():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    staff_list = Staff.query.filter(Staff.store_id == sid, Staff.is_active == True).all() if sid else []
+    return render_template("mail_settings.html", staff_list=staff_list)
+
+
+@app.route("/api/mail-settings", methods=["GET"])
+@login_required
+def api_mail_settings_get():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    ms = MailSetting.query.filter_by(store_id=sid).first() if sid else None
+    if not ms:
+        return jsonify({'imap_user': '', 'imap_host': 'imap.gmail.com', 'enabled': False,
+                        'default_staff_id': None, 'has_password': False, 'custom_keywords': '',
+                        'last_result': '', 'last_fetch_at': None})
+    return jsonify({
+        'imap_user': ms.imap_user or '',
+        'imap_host': ms.imap_host or 'imap.gmail.com',
+        'enabled': bool(ms.enabled),
+        'default_staff_id': ms.default_staff_id,
+        'has_password': bool(ms.imap_pass),
+        'custom_keywords': ms.custom_keywords or '',
+        'last_result': ms.last_result or '',
+        'last_fetch_at': ms.last_fetch_at.strftime('%Y-%m-%d %H:%M') if ms.last_fetch_at else None,
+    })
+
+
+@app.route("/api/mail-settings", methods=["POST"])
+@login_required
+def api_mail_settings_save():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    if not sid:
+        return jsonify({'error': 'unauthorized'}), 403
+    data = request.get_json() or {}
+    ms = MailSetting.query.filter_by(store_id=sid).first()
+    if not ms:
+        ms = MailSetting(store_id=sid)
+        db.session.add(ms)
+    ms.imap_user = (data.get('imap_user') or '').strip()[:200]
+    ms.imap_host = ((data.get('imap_host') or '').strip() or 'imap.gmail.com')[:120]
+    pw = data.get('imap_pass')
+    if pw:  # 入力があった時のみ更新（空欄なら既存パスワードを維持）
+        ms.imap_pass = pw.replace(' ', '').strip()[:200]
+    ms.enabled = bool(data.get('enabled'))
+    dsid = data.get('default_staff_id')
+    ms.default_staff_id = int(dsid) if dsid else None
+    ms.custom_keywords = (data.get('custom_keywords') or '')[:5000]
+    ms.updated_at = datetime.utcnow()
+    db.session.commit()
+    start_mail_service()   # 未起動なら起動
+    request_mail_sync()    # 設定変更を即反映（リーダーのみ）
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/mail-settings/test", methods=["POST"])
+@login_required
+def api_mail_settings_test():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    data = request.get_json() or {}
+    user = (data.get('imap_user') or '').strip()
+    host = (data.get('imap_host') or 'imap.gmail.com').strip()
+    pw = (data.get('imap_pass') or '')
+    if not pw:  # 未入力なら保存済みパスワードでテスト
+        ms = MailSetting.query.filter_by(store_id=sid).first() if sid else None
+        pw = ms.imap_pass if ms else ''
+    pw = (pw or '').replace(' ', '').strip()
+    if not user or not pw:
+        return jsonify({'ok': False, 'message': 'メールアドレスとアプリパスワードを入力してください'})
+    ok, msg = test_imap_connection(host, user, pw)
+    return jsonify({'ok': ok, 'message': msg})
+
+
+@app.route("/api/mail-settings/fetch", methods=["POST"])
+@login_required
+def api_mail_settings_fetch():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    if not sid:
+        return jsonify({'ok': False, 'error': 'unauthorized'}), 403
+    res = fetch_reactions_for_store(sid)
+    return jsonify(res)
 
 
 @app.route("/echo-management")
@@ -7120,6 +7869,13 @@ def api_hq_ai_summary():
         return jsonify({'summary': msg.content[0].text})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# 反響メール自動取込サービス（IMAP IDLE）を起動（複数ワーカーでも1つのみ）
+try:
+    start_mail_service()
+except Exception as _e:
+    print(f"start_mail_service error: {_e}")
 
 
 if __name__ == "__main__":
