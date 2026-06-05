@@ -1030,7 +1030,7 @@ async function renderTemplatePop(){
     const open = !!_openFolders[name];
     const items = g[name].map(t=>`<div class="tpl-item" onclick="applyTemplate(${t.id})"><div class="t-title">${escHtml(t.title)}</div><div class="t-prev">${escHtml((t.body||'').replace(/\n/g,' '))}</div></div>`).join('');
     return `<div style="border-bottom:1px solid #f3f4f6;">
-      <div onclick="toggleFolder(${idx})" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:pointer;font-size:13px;font-weight:700;color:#0F766E;">
+      <div onclick="toggleFolder(event,${idx})" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:pointer;font-size:13px;font-weight:700;color:#0F766E;">
         <span>${open?'📂':'📁'} ${escHtml(name)}</span>
         <span style="color:#9ca3af;font-size:11px;font-weight:500;">${g[name].length}件 ${open?'▾':'▸'}</span>
       </div>
@@ -1038,7 +1038,7 @@ async function renderTemplatePop(){
     </div>`;
   }).join('');
 }
-function toggleFolder(idx){ const n=_popFolders[idx]; if(n==null) return; _openFolders[n]=!_openFolders[n]; renderTemplatePop(); }
+function toggleFolder(ev, idx){ if(ev){ ev.stopPropagation(); } const n=_popFolders[idx]; if(n==null) return; _openFolders[n]=!_openFolders[n]; renderTemplatePop(); }
 function applyTemplate(id){
   const t = _templates.find(x=>x.id===id);
   if(!t) return;

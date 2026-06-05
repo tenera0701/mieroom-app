@@ -533,12 +533,12 @@ function escApp(s) {
 /* ===================================================
    行ビルダー
 =================================================== */
-// 申込日以外の日付を「5/2」形式（M/D）で表示
+// 申込日以外の日付を「6月6日」形式（M月D日）で表示
 function mdDate(s){
   if(!s) return '―';
   const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
   if(!m) return s;
-  return parseInt(m[2],10) + '/' + parseInt(m[3],10);
+  return parseInt(m[2],10) + '月' + parseInt(m[3],10) + '日';
 }
 
 function buildSettleCell(r, field, settled, approved, hasAmount = true) {

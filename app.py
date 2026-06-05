@@ -1996,6 +1996,21 @@ def executive_dashboard():
                            store_id=store_id, now=datetime.now())
 
 
+def resolve_cur_staff_id(user):
+    """ログインユーザーに対応する担当スタッフIDを返す。
+    staff_id 未設定でも、同店舗で氏名が完全一致するスタッフが1人だけなら補完する。"""
+    if not user:
+        return None
+    if getattr(user, 'staff_id', None):
+        return user.staff_id
+    if user.role == 'staff' and user.store_id and user.username:
+        matches = Staff.query.filter_by(store_id=user.store_id, name=user.username,
+                                        is_active=True).all()
+        if len(matches) == 1:
+            return matches[0].id
+    return None
+
+
 @app.route("/sales")
 @login_required
 @block_super_admin
@@ -2007,7 +2022,7 @@ def sales_management():
     year, month = current_ym()
     cur_user = AppUser.query.get(session.get('app_user_id'))
     cur_role = cur_user.role if cur_user else 'staff'
-    cur_staff_id = cur_user.staff_id if cur_user else None
+    cur_staff_id = resolve_cur_staff_id(cur_user)
     is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
     store_id = allowed_ids[0] if allowed_ids else None
     media_types = MediaType.query.filter_by(store_id=store_id, is_active=True).order_by(MediaType.sort_order, MediaType.name).all() if store_id else []
@@ -2029,7 +2044,7 @@ def customer_management():
     year, month = current_ym()
     cur_user = AppUser.query.get(session.get('app_user_id'))
     cur_role = cur_user.role if cur_user else 'staff'
-    cur_staff_id = cur_user.staff_id if cur_user else None
+    cur_staff_id = resolve_cur_staff_id(cur_user)
     is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
     store_id = active_ids[0] if active_ids else None
     media_types = MediaType.query.filter_by(store_id=store_id, is_active=True).order_by(MediaType.sort_order, MediaType.name).all() if store_id else []
@@ -2050,7 +2065,7 @@ def contract_customers():
     staff_list = Staff.query.filter(Staff.store_id.in_(active_ids), Staff.is_active == True).all() if active_ids else []
     cur_user = AppUser.query.get(session.get('app_user_id'))
     cur_role = cur_user.role if cur_user else 'staff'
-    cur_staff_id = cur_user.staff_id if cur_user else None
+    cur_staff_id = resolve_cur_staff_id(cur_user)
     is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
     store_id = active_ids[0] if active_ids else None
     return render_template("contract_customers.html", stores=stores, staff_list=staff_list,
@@ -2087,7 +2102,7 @@ def past_customers():
     staff_list = Staff.query.filter(Staff.store_id.in_(active_ids), Staff.is_active == True).all() if active_ids else []
     cur_user = AppUser.query.get(session.get('app_user_id'))
     cur_role = cur_user.role if cur_user else 'staff'
-    cur_staff_id = cur_user.staff_id if cur_user else None
+    cur_staff_id = resolve_cur_staff_id(cur_user)
     is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
     store_id = active_ids[0] if active_ids else None
     return render_template("past_customers.html", stores=stores, staff_list=staff_list,
@@ -3844,7 +3859,7 @@ def echo_management():
     store_id = active_ids[0] if active_ids else None
     cur_user = AppUser.query.get(session.get('app_user_id'))
     cur_role = cur_user.role if cur_user else 'staff'
-    cur_staff_id = cur_user.staff_id if cur_user else None
+    cur_staff_id = resolve_cur_staff_id(cur_user)
     is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
     return render_template("echo_management.html",
                            stores=stores, staff_list=staff_list,
@@ -4006,7 +4021,7 @@ def customer_service():
     store_id = active_ids[0] if active_ids else None
     cur_user = AppUser.query.get(session.get('app_user_id'))
     cur_role = cur_user.role if cur_user else 'staff'
-    cur_staff_id = cur_user.staff_id if cur_user else None
+    cur_staff_id = resolve_cur_staff_id(cur_user)
     is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
     return render_template("customer_service.html",
                            stores=stores, staff_list=staff_list,
