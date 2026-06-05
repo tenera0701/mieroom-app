@@ -60,7 +60,7 @@
   .btn-del { border-color:#fca5a5; color:#ef4444; }
   .btn-del:hover { background:#fee2e2; }
 
-  .edit-input { width:100%; min-width:70px; border:1px solid #0D9488; border-radius:4px;
+  .edit-input { width:100%; min-width:0; max-width:100%; border:1px solid #0D9488; border-radius:4px;
                 padding:2px 5px; font-size:12px; box-sizing:border-box; }
 
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center; }
@@ -446,6 +446,12 @@ function applySearch(q) {
 function escHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+// 単一引用符のJS文字列（HTML属性内）に安全に埋め込むためのエスケープ（例: HOME'S）
+function escJs(s) {
+  return String(s==null?'':s)
+    .replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 
 /* ── インライン編集 ── */
 async function patchRecord(id, field, value) {
@@ -534,15 +540,15 @@ function renderTable() {
     return `<tr>
       <td onclick="editCell(this,${r.id},'service_date','date','${r.service_date||''}')">${r.service_date||'―'}</td>
       <td onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${escHtml(staffName(r.staff_id))}</td>
-      <td onclick="editCell(this,${r.id},'echo_media','select','${escHtml(r.echo_media)}',CS_MEDIA_PAIRS)">${escHtml(r.echo_media)||'―'}</td>
-      <td onclick="editCell(this,${r.id},'customer_name','text','${escHtml(r.customer_name)}')">${escHtml(r.customer_name)||'―'}</td>
+      <td onclick="editCell(this,${r.id},'echo_media','select','${escJs(r.echo_media)}',CS_MEDIA_PAIRS)">${escHtml(r.echo_media)||'―'}</td>
+      <td onclick="editCell(this,${r.id},'customer_name','text','${escJs(r.customer_name)}')">${escHtml(r.customer_name)||'―'}</td>
       <td class="center" onclick="editCell(this,${r.id},'service_type','select','${r.service_type||''}',SERVICE_TYPES.map(v=>[v,v]))">
         <span class="${svcBadge}">${escHtml(r.service_type)||'―'}</span></td>
       <td class="center" onclick="editCell(this,${r.id},'visit_count','number','${r.visit_count||0}')">${r.visit_count||0}</td>
       <td class="center" onclick="editCell(this,${r.id},'status','select','${r.status||'追客中'}',STATUS_LIST.map(v=>[v,v]))">
         <span class="${stsBadge}">${escHtml(r.status||'追客中')}</span></td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(r.memo)}"
-          onclick="editCell(this,${r.id},'memo','text','${escHtml(r.memo)}')">${escHtml(r.memo)||''}</td>
+          onclick="editCell(this,${r.id},'memo','text','${escJs(r.memo)}')">${escHtml(r.memo)||''}</td>
       <td class="center no-edit" style="white-space:nowrap;">
         <button class="btn-sm btn-del" onclick="deleteRecord(${r.id})">削除</button>
       </td>

@@ -653,7 +653,7 @@ function editCell(td, id, field, type, curVal, options) {
   let el;
   if (type === 'select') {
     el = document.createElement('select');
-    el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px;font-size:12px;';
+    el.style.cssText = 'width:100%;min-width:0;max-width:100%;border:1px solid #0D9488;border-radius:4px;padding:2px;font-size:12px;';
     (options || []).forEach(([v, l]) => {
       const o = new Option(l || v, v);
       if (String(v) === String(curVal)) o.selected = true;
@@ -671,7 +671,7 @@ function editCell(td, id, field, type, curVal, options) {
   } else {
     el = document.createElement('input');
     el.type = type; el.value = curVal || '';
-    el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
+    el.style.cssText = 'width:100%;min-width:0;max-width:100%;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
     td.innerHTML = ''; td.appendChild(el); el.focus({ preventScroll: true });
     if (type === 'text') el.select();
     if (type === 'date') requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
@@ -707,10 +707,10 @@ function renderTable() {
     <tr class="${rowCls}" style="${rowStyle}" data-needsreply="${r.needs_reply ? 1 : 0}">
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${escHtml(r.staff_name || '―')}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'echo_date','date','${r.echo_date||''}')">${r.echo_date ? fmtMD(r.echo_date) : '―'}</td>
-      <td style="cursor:pointer;text-align:center;" title="クリックで状況を変更" onclick="editCell(this,${r.id},'status','select','${escHtml(r.status)}',ECHO_STATUS_PAIRS)">${statusChip}</td>
-      <td class="left" style="max-width:100px;cursor:pointer;" title="${escHtml(r.list_name)}" onclick="editCell(this,${r.id},'list_name','text','${escHtml(r.list_name)}')">${escHtml(r.list_name) || '―'}</td>
-      <td style="cursor:pointer;" onclick="editCell(this,${r.id},'media','select','${escHtml(r.media)}',ECHO_MEDIA_PAIRS)">${escHtml(r.media) || '―'}</td>
-      <td style="cursor:pointer;" onclick="editCell(this,${r.id},'method','select','${escHtml(r.method)}',ECHO_METHOD_PAIRS)">${escHtml(r.method) || '―'}</td>
+      <td style="cursor:pointer;text-align:center;" title="クリックで状況を変更" onclick="editCell(this,${r.id},'status','select','${escJs(r.status)}',ECHO_STATUS_PAIRS)">${statusChip}</td>
+      <td class="left" style="max-width:100px;cursor:pointer;" title="${escHtml(r.list_name)}" onclick="editCell(this,${r.id},'list_name','text','${escJs(r.list_name)}')">${escHtml(r.list_name) || '―'}</td>
+      <td style="cursor:pointer;" onclick="editCell(this,${r.id},'media','select','${escJs(r.media)}',ECHO_MEDIA_PAIRS)">${escHtml(r.media) || '―'}</td>
+      <td style="cursor:pointer;" onclick="editCell(this,${r.id},'method','select','${escJs(r.method)}',ECHO_METHOD_PAIRS)">${escHtml(r.method) || '―'}</td>
       <td style="cursor:pointer;" title="電話番号の有無（クリックで切替）" onclick="toggleFlag(${r.id},'has_phone_number',${!!r.has_phone_number})">${r.has_phone_number ? '<span class="chk-yes">〇</span>' : '<span style="color:#ef4444;font-weight:800;">×</span>'}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'first_contact_date','date','${r.first_contact_date||''}')">${r.first_contact_date ? fmtMD(r.first_contact_date) : '―'}</td>
       ${[1,2,3,4,5].map(i => `<td style="cursor:pointer;" onclick="editCell(this,${r.id},'followup_${i}','date','${r['followup_'+i]||''}')">${r['followup_'+i] ? `<span class="followup-date">${shortDate(r['followup_'+i])}</span>` : '<span class="followup-empty">—</span>'}</td>`).join('')}
@@ -734,6 +734,12 @@ function renderTable() {
 
 function escHtml(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+// 単一引用符のJS文字列（HTML属性内）に安全に埋め込むためのエスケープ（例: HOME'S）
+function escJs(s) {
+  return String(s==null?'':s)
+    .replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function applyEchoSearch(q) {

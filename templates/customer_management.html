@@ -1246,7 +1246,7 @@ function editCellApp(td, id, field, type, curVal, opts) {
   let el;
   if (type === 'select') {
     el = document.createElement('select');
-    el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px;font-size:12px;';
+    el.style.cssText = 'width:100%;min-width:0;max-width:100%;border:1px solid #0D9488;border-radius:4px;padding:2px;font-size:12px;';
     (opts || []).forEach(([v, l]) => {
       const o = new Option(l || v, v);
       if (String(v) === String(curVal)) o.selected = true;
@@ -1264,7 +1264,7 @@ function editCellApp(td, id, field, type, curVal, opts) {
     el = document.createElement('input');
     el.type = type; el.value = curVal || '';
     if (field === 'management_company') el.setAttribute('list', 'mgmt-companies');
-    el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
+    el.style.cssText = 'width:100%;min-width:0;max-width:100%;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
     td.innerHTML = ''; td.appendChild(el); el.focus({ preventScroll: true });
     if (type === 'text' || type === 'number') el.select();
     let _saved = false;
