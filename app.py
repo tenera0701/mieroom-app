@@ -3007,6 +3007,15 @@ def api_echo_records_list():
         q = q.filter_by(staff_id=staff_id)
     records = q.order_by(EchoRecord.echo_date.asc(), EchoRecord.id.asc()).all()
 
+    # 各反響の「最後のメッセージの向き」を取得（最後が受信＝未返信）
+    rec_ids = [r.id for r in records]
+    last_dir = {}
+    if rec_ids:
+        for m in (MailMessage.query
+                  .filter(MailMessage.echo_id.in_(rec_ids))
+                  .order_by(MailMessage.created_at.asc(), MailMessage.id.asc()).all()):
+            last_dir[m.echo_id] = m.direction
+
     def fd(d): return d.strftime('%Y-%m-%d') if d else None
     def sname(sid): s = Staff.query.get(sid); return s.name if s else ''
     return jsonify([{
@@ -3020,6 +3029,7 @@ def api_echo_records_list():
         'memo': r.memo or '',
         'customer_email': r.customer_email or '',
         'has_unread_reply': bool(r.has_unread_reply),
+        'needs_reply': last_dir.get(r.id) == 'in',
         'has_phone_number': bool(r.has_phone_number),
     } for r in records])
 

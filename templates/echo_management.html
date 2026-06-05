@@ -53,9 +53,9 @@
   th.th-expand-btn:hover { color:#0F766E; background:#F0FDFA; }
 
   /* サマリーカード（統一） */
-  .sum-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:12px 18px; min-width:120px; }
-  .sum-label { font-size:11px; font-weight:600; color:#6b7280; text-transform:uppercase; margin-bottom:4px; }
-  .sum-val { font-size:20px; font-weight:800; color:#111827; }
+  .sum-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:9px 18px; min-width:120px; }
+  .sum-label { font-size:11px; font-weight:600; color:#6b7280; text-transform:uppercase; margin-bottom:2px; }
+  .sum-val { font-size:30px; font-weight:800; color:#111827; line-height:1.15; }
   .sum-unit { font-size:11px; color:#6b7280; margin-left:3px; }
   .sum-rate { font-size:12px; color:#0F766E; margin-left:6px; font-weight:700; }
 
@@ -152,6 +152,15 @@
   </div>
 
   <div id="alert-msg" class="alert"></div>
+
+  <!-- 未返信メールのアラート -->
+  <div id="unreplied-bar" style="display:none;align-items:center;justify-content:space-between;gap:10px;background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:11px 16px;margin-bottom:12px;">
+    <div style="display:flex;align-items:center;gap:10px;color:#854d0e;font-size:13px;font-weight:600;">
+      <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="#ca8a04" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <span>お客様から返信があり、未返信のメールが <b id="unreplied-count">0</b> 件あります</span>
+    </div>
+    <button onclick="showUnrepliedOnly()" style="flex:none;background:#fff;border:1px solid #ca8a04;color:#854d0e;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">確認する</button>
+  </div>
 
   <!-- 検索バー -->
   <div style="margin-bottom:12px;">
@@ -477,6 +486,26 @@ function updateSummary() {
   document.getElementById('sum-line').innerHTML     = cv(lineCount);
   document.getElementById('sum-reply').innerHTML    = cv(replyCount);
   document.getElementById('sum-phone').innerHTML    = cv(phoneCount);
+
+  // 未返信メールのアラート
+  const unreplied = records.filter(r => r.needs_reply).length;
+  const bar = document.getElementById('unreplied-bar');
+  if (bar) {
+    document.getElementById('unreplied-count').textContent = unreplied;
+    bar.style.display = unreplied > 0 ? 'flex' : 'none';
+  }
+}
+
+let _unrepliedOnly = false;
+function showUnrepliedOnly(){
+  _unrepliedOnly = !_unrepliedOnly;
+  const tbody = document.getElementById('echo-tbody');
+  tbody.querySelectorAll('tr').forEach(tr => {
+    if (tr.querySelector('td[colspan]')) return;
+    tr.style.display = (!_unrepliedOnly || tr.getAttribute('data-needsreply') === '1') ? '' : 'none';
+  });
+  const btn = document.querySelector('#unreplied-bar button');
+  if (btn) btn.textContent = _unrepliedOnly ? 'すべて表示' : '確認する';
 }
 
 const STAFF_OPTIONS = [['','― 未選択 ―'], {% for s in staff_list %}[{{ s.id }}, '{{ s.name }}'],{% endfor %}];
@@ -556,7 +585,7 @@ function renderTable() {
     // flag class takes priority over no-followup for color; combine if no flag
     const rowCls  = flagCls ? flagCls : nfCls;
     return `
-    <tr class="${rowCls}">
+    <tr class="${rowCls}" data-needsreply="${r.needs_reply ? 1 : 0}">
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${escHtml(r.staff_name || '―')}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'echo_date','date','${r.echo_date||''}')">${r.echo_date ? fmtMD(r.echo_date) : '―'}</td>
       <td class="left" style="max-width:100px;cursor:pointer;" title="${escHtml(r.list_name)}" onclick="editCell(this,${r.id},'list_name','text','${escHtml(r.list_name)}')">${escHtml(r.list_name) || '―'}</td>
@@ -574,7 +603,7 @@ function renderTable() {
       <td style="white-space:nowrap;">
         <button class="btn-sm" onclick="openMail(${r.id})"
           style="border:1px solid #5EEAD4;background:#F0FDFA;color:#0F766E;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;position:relative;">
-          ✉️ メール${r.has_unread_reply ? '<span style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;font-size:9px;border-radius:8px;padding:0 4px;">返信</span>' : ''}
+          ✉️ メール${r.needs_reply ? '<span style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;font-size:9px;border-radius:8px;padding:0 4px;white-space:nowrap;">未返信</span>' : ''}
         </button>
         <button class="btn-sm btn-del" onclick="deleteRecord(${r.id})">削除</button>
       </td>
