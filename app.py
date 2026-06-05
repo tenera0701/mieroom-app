@@ -2069,6 +2069,13 @@ PORTAL_DOMAIN_MAP = [
     ('pittat',   'ピタットハウス'),
 ]
 
+# 通知系（反響ではない）の件名キーワード → 取り込まない
+NEG_SUBJECT_KEYWORDS = [
+    '内見予約', '来店予約', '予約完了', '予約が完了', '予約確定', '予約受付', '予約のお知らせ',
+    'ご予約', '申込完了', '申込が完了', 'お申込み完了', '申込受付', '申込のお知らせ',
+    'キャンセル', '解約', '完了しました', '完了のお知らせ', '確定しました', '取消',
+]
+
 # ② 差出人名/件名/本文に含まれるキーワード → 媒体名（ドメインで判定できない場合）
 PORTAL_KEYWORD_MAP = [
     ('スモッカ',     'スモッカ'),
@@ -2087,7 +2094,8 @@ PORTAL_KEYWORD_MAP = [
 
 # 項目ラベルの同義語 → 正規キー（媒体差を吸収）
 _FIELD_SYNONYMS = {
-    'name':      ['氏名(漢字)', '氏名（漢字）', '氏名', 'お名前', '名前', 'ご氏名', 'お客様名', 'お客さま名'],
+    'name':      ['氏名(漢字)', '氏名（漢字）', '氏名', 'お名前', 'お名前(漢字)', 'お名前（漢字）', '名前', 'ご氏名',
+                  'お客様名', 'お客さま名', 'お客様氏名', 'ご担当者名', '申込者名', '申込者', 'お申込者', 'ご入居者名', '反響者名'],
     'phone':     ['電話番号', 'tel', '電話', 'お電話番号', '携帯電話', '携帯番号', '連絡先電話番号', 'ご連絡先'],
     'email':     ['メールアドレス', 'email', 'e-mail', 'mail', 'メール', 'eメール'],
     'property':  ['物件名', '建物名', 'マンション名'],
@@ -2255,18 +2263,23 @@ def parse_reaction_email(msg, extra_map=None, portal_map=None):
             portal_media = media
             break
 
+    # 通知系（内見予約・申込完了・キャンセル等）は反響ではない → 除外
+    if any(k in subject for k in NEG_SUBJECT_KEYWORDS):
+        return None
+
     # 件名が「お問合せ受付」等の反響を示すか（表記ゆれを統一して判定）
     subj_norm = _normalize_inquiry_terms(subject)
     subj_is_inquiry = any(k in subj_norm for k in ('問合せ', '受付', '反響'))
+    has_name = bool(name)
 
     if portal_media is not None:
-        # 登録ポータルからの受信は信頼扱い：形式が多少違っても確実に取り込む
-        if not (contact or prop):
+        # 登録ポータルからの受信は信頼扱い：氏名か物件があれば取り込む
+        if not (has_name or prop):
             return None
         source = portal_media
     else:
-        # 通常は「連絡先＋物件」。件名が反響を示す場合は連絡先か物件どちらかでも取り込む
-        if not ((contact and prop) or (subj_is_inquiry and (contact or prop))):
+        # 未登録の差出人は精度重視：お客様の氏名が必須（＋物件 or 件名が反響）
+        if not (has_name and (prop or subj_is_inquiry)):
             return None
         source = _detect_source(from_addr, subject, body, extra_map) or _from_display_name(from_addr)
 

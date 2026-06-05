@@ -328,6 +328,24 @@
     </div>
   </div>
 </div>
+
+<!-- メモ編集モーダル -->
+<div class="modal-overlay" id="memo-modal">
+  <div class="modal" style="max-width:560px;width:94%;display:flex;flex-direction:column;">
+    <div class="modal-header">
+      <h3 style="font-size:15px;">メモ</h3>
+      <button class="modal-close" onclick="closeMemo()">✕</button>
+    </div>
+    <div style="padding:16px 18px;">
+      <textarea id="memo-text" rows="12" placeholder="メモを入力…"
+        style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:11px 13px;font-size:13px;line-height:1.6;box-sizing:border-box;font-family:inherit;resize:vertical;min-height:220px;"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeMemo()">キャンセル</button>
+      <button class="btn-save" onclick="saveMemo()">保存する</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -556,7 +574,7 @@ function renderTable() {
       <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_reply',${!!r.has_reply})">${r.has_reply ? '<span class="chk-yes">〇</span>' : '<span class="chk-no">—</span>'}</td>
       <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_phone',${!!r.has_phone})">${r.has_phone ? '<span class="chk-yes">〇</span>' : '<span class="chk-no">—</span>'}</td>
       <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_line',${!!r.has_line})">${r.has_line ? '<span class="chk-yes">〇</span>' : '<span class="chk-no">—</span>'}</td>
-      <td class="left" style="max-width:100px;cursor:pointer;" title="${escHtml(r.memo)}" onclick="editCell(this,${r.id},'memo','text','${escHtml(r.memo)}')">${escHtml(r.memo) || ''}</td>
+      <td class="left" style="max-width:140px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="クリックで開く" onclick="openMemoEdit(${r.id})">${escHtml((r.memo||'').replace(/\n/g,' / ')) || '<span style="color:#cbd5e1;">（クリックで入力）</span>'}</td>
       <td style="white-space:nowrap;">
         <button class="btn-sm" onclick="openMail(${r.id})"
           style="border:1px solid #5EEAD4;background:#F0FDFA;color:#0F766E;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;position:relative;">
@@ -729,6 +747,29 @@ async function deleteRecord(id) {
 // スタッフ名をレコードに付加
 async function enrichStaffNames() {
   // staff_id → name マップ (staff_list はサーバー側で渡す)
+}
+
+// ── メモ編集（大きく開く） ──
+let _memoId = null;
+function openMemoEdit(id){
+  const r = records.find(x => x.id === id);
+  if(!r) return;
+  _memoId = id;
+  document.getElementById('memo-text').value = r.memo || '';
+  document.getElementById('memo-modal').classList.add('active');
+  setTimeout(()=>document.getElementById('memo-text').focus(), 50);
+}
+function closeMemo(){
+  document.getElementById('memo-modal').classList.remove('active');
+  _memoId = null;
+}
+async function saveMemo(){
+  if(!_memoId) return;
+  const v = document.getElementById('memo-text').value;
+  await patchRecord(_memoId, 'memo', v);
+  renderTable();
+  closeMemo();
+  showAlert('メモを保存しました');
 }
 
 // ── メール会話（チャット風） ──
