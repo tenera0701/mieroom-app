@@ -1274,11 +1274,26 @@ function editCellApp(td, id, field, type, curVal, opts) {
     td.innerHTML = ''; td.appendChild(el); el.focus({ preventScroll: true });
     // 描画後に開く（即時呼び出しだと開かず2クリック必要になるため）
     requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
-    el.addEventListener('change', async () => { await patchApp(id, field, el.value); applyLocalUpdate(id, field, el.value); });
-    el.addEventListener('blur',   () => { if (!td.querySelector('select')) return; });
+    let changed = false;
+    el.addEventListener('change', async () => { changed = true; await patchApp(id, field, el.value); applyLocalUpdate(id, field, el.value); });
+    // 値を変えずに別の場所を押したら元の表示に戻す（編集欄が残らないように）
+    el.addEventListener('blur', () => { if (!changed && td.querySelector('select')) td.innerHTML = prev; });
   } else if (type === 'checkbox') {
     const newVal = !curVal;
     patchApp(id, field, newVal).then(() => applyLocalUpdate(id, field, newVal));
+  } else if (type === 'date') {
+    // flatpickrで1クリックでカレンダーを表示（ネイティブのshowPickerは不安定なため）
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.readOnly = true; inp.setAttribute('data-fp', '1');
+    inp.style.cssText = 'width:1px;height:1px;opacity:0;border:none;padding:0;margin:0;';
+    td.innerHTML = ''; td.appendChild(inp);
+    let done = false;
+    const fp = flatpickr(inp, {
+      dateFormat: 'Y-m-d', defaultDate: curVal || null, clickOpens: true, disableMobile: true,
+      onChange: function (sel, str) { if (done || !str) return; done = true; patchApp(id, field, str).then(() => applyLocalUpdate(id, field, str)); },
+      onClose: function () { setTimeout(function () { if (!done) { try { fp.destroy(); } catch (e) {} td.innerHTML = prev; } }, 150); }
+    });
+    fp.open();
   } else {
     el = document.createElement('input');
     el.type = type; el.value = curVal || '';
@@ -1288,11 +1303,6 @@ function editCellApp(td, id, field, type, curVal, opts) {
     if (type === 'text' || type === 'number') el.select();
     let _saved = false;
     const save = async () => { if (_saved) return; _saved = true; await patchApp(id, field, el.value); applyLocalUpdate(id, field, el.value); };
-    if (type === 'date') {
-      // 1クリックでカレンダーを即表示（描画後に開く）。選択したら即保存
-      requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
-      el.addEventListener('change', save);
-    }
     el.addEventListener('blur', save);
     el.addEventListener('keydown', e => { if (e.key === 'Enter') el.blur(); if (e.key === 'Escape') { _saved = true; td.innerHTML = prev; } });
   }

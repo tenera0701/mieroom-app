@@ -518,6 +518,19 @@ function editCell(td, id, field, type, curVal, options) {
       renderTable();
     });
     el.addEventListener('blur', () => { if (td.querySelector('select')) renderTable(); });
+  } else if (type === 'date') {
+    // flatpickrで1クリックでカレンダーを表示
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.readOnly = true; inp.setAttribute('data-fp', '1');
+    inp.style.cssText = 'width:1px;height:1px;opacity:0;border:none;padding:0;margin:0;';
+    td.innerHTML = ''; td.appendChild(inp);
+    let done = false;
+    const fp = flatpickr(inp, {
+      dateFormat: 'Y-m-d', defaultDate: curVal || null, clickOpens: true, disableMobile: true,
+      onChange: function (sel, str) { if (done || !str) return; done = true; patchRecord(id, field, str).then(() => renderTable()); },
+      onClose: function () { setTimeout(function () { if (!done) { try { fp.destroy(); } catch (e) {} renderTable(); } }, 150); }
+    });
+    fp.open();
   } else {
     el = document.createElement('input');
     el.type = type;
@@ -527,7 +540,6 @@ function editCell(td, id, field, type, curVal, options) {
     td.appendChild(el);
     el.focus({ preventScroll: true });
     if (type === 'text') el.select();
-    if (type === 'date') requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
 
     const save = async () => {
       const val = el.value;
