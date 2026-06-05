@@ -647,32 +647,14 @@ async function patchRecord(id, field, value) {
   }
 }
 
-// 編集時に列幅が広がらないよう、現在の列幅でテーブルを固定レイアウトにする
-function lockTableCols(cell) {
-  const table = cell.closest('table');
-  if (!table || table.__colsLocked) return;
-  const row = cell.parentElement;
-  if (!row || !row.cells.length) return;
-  const widths = Array.from(row.cells).map(c => c.getBoundingClientRect().width);
-  const totalW = table.getBoundingClientRect().width;
-  const existing = table.querySelector('colgroup');
-  if (existing) existing.remove();
-  const cg = document.createElement('colgroup');
-  widths.forEach(w => { const col = document.createElement('col'); col.style.width = w + 'px'; cg.appendChild(col); });
-  table.insertBefore(cg, table.firstChild);
-  table.style.width = totalW + 'px';
-  table.style.tableLayout = 'fixed';
-  table.__colsLocked = true;
-}
-
 function editCell(td, id, field, type, curVal, options) {
   if (td.querySelector('input,select')) return;
-  lockTableCols(td);
   const prev = td.innerHTML;
   let el;
   if (type === 'select') {
+    const _cw = Math.round(td.getBoundingClientRect().width);  // 現在のセル幅で固定し列が広がらないように
     el = document.createElement('select');
-    el.style.cssText = 'width:100%;min-width:0;max-width:100%;border:1px solid #0D9488;border-radius:4px;padding:2px;font-size:12px;';
+    el.style.cssText = 'width:100%;min-width:0;max-width:' + _cw + 'px;box-sizing:border-box;border:1px solid #0D9488;border-radius:4px;padding:2px;font-size:12px;';
     (options || []).forEach(([v, l]) => {
       const o = new Option(l || v, v);
       if (String(v) === String(curVal)) o.selected = true;
