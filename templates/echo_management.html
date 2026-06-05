@@ -466,7 +466,14 @@ async function patchRecord(id, field, value) {
     });
     if (!res.ok) throw new Error();
     const rec = records.find(r => r.id === id);
-    if (rec) rec[field] = value;
+    if (rec) {
+      rec[field] = value;
+      // 担当を変えたら表示名も即更新（再描画で「―」に戻らないように）
+      if (field === 'staff_id') {
+        const opt = STAFF_OPTIONS.find(([v]) => String(v) === String(value));
+        rec.staff_name = opt ? opt[1] : '';
+      }
+    }
     updateSummary();
   } catch(e) {
     showAlert('保存に失敗しました', 'error');
@@ -483,7 +490,7 @@ function editCell(td, id, field, type, curVal, options) {
     el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px;font-size:12px;';
     (options || []).forEach(([v, l]) => {
       const o = new Option(l || v, v);
-      if (v === curVal) o.selected = true;
+      if (String(v) === String(curVal)) o.selected = true;
       el.appendChild(o);
     });
     td.innerHTML = ''; td.appendChild(el); el.focus();
