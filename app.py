@@ -8570,10 +8570,21 @@ def api_applications_unsettle(rid):
 @app.route("/api/pending-approvals")
 @login_required
 def api_pending_approvals():
-    """店長向け：承認待ち件数"""
+    """通知ベル件数。
+    super_admin / sys_admin: 新規問合せ（トライアル申込）件数 → 問合せ管理へ
+    owner / store_manager: 入金承認待ち件数 → 営業分析へ"""
     cur_user = AppUser.query.get(session.get('app_user_id'))
-    if not cur_user or cur_user.role not in ('owner', 'store_manager', 'super_admin'):
-        return jsonify({'count': 0})
+    if not cur_user:
+        return jsonify({'count': 0, 'url': '/sales'})
+    # 管理アカウント：新規問合せ件数
+    if cur_user.role in ('super_admin', 'sys_admin'):
+        try:
+            count = TrialApplication.query.filter_by(status='new').count()
+        except Exception:
+            count = 0
+        return jsonify({'count': count, 'url': '/admin/applications'})
+    if cur_user.role not in ('owner', 'store_manager'):
+        return jsonify({'count': 0, 'url': '/sales'})
     allowed_ids = get_allowed_store_ids()
     count = ApplicationRecord.query.filter(
         ApplicationRecord.store_id.in_(allowed_ids),
@@ -8583,7 +8594,7 @@ def api_pending_approvals():
             db.and_(ApplicationRecord.option_settled == True, ApplicationRecord.option_approved == False)
         )
     ).count()
-    return jsonify({'count': count})
+    return jsonify({'count': count, 'url': '/sales'})
 
 
 # ── 媒体マスター API ──────────────────────────────────────

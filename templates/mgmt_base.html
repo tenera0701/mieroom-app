@@ -658,12 +658,15 @@
       }
     })();
 
-    // 承認待ちバッジ更新（店長以上のみ有効）
+    // 通知バッジ更新（管理者=新規問合せ / 店長以上=入金承認待ち）
+    let _notifUrl = '/sales';
     async function updateApprovalBadge() {
       try {
         const res = await fetch('/api/pending-approvals');
         if (!res.ok) return;
-        const { count } = await res.json();
+        const data = await res.json();
+        const count = data.count || 0;
+        if (data.url) _notifUrl = data.url;
         const badge = document.getElementById('notif-badge');
         if (!badge) return;
         if (count > 0) {
@@ -677,11 +680,11 @@
     updateApprovalBadge();
     setInterval(updateApprovalBadge, 60000); // 1分ごとに更新
 
-    // 鈴クリックで営業管理ページへ
+    // 鈴クリックで該当ページへ（管理者=問合せ管理 / 店長=営業分析）
     const notifBtn = document.getElementById('topbar-notif');
     if (notifBtn) {
       notifBtn.addEventListener('click', function() {
-        window.location.href = '/sales';
+        window.location.href = _notifUrl;
       });
     }
 
