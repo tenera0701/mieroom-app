@@ -52,6 +52,13 @@
   th.th-expand-btn { cursor:pointer; color:#0D9488; font-size:16px; font-weight:900; padding:4px 10px; }
   th.th-expand-btn:hover { color:#0F766E; background:#F0FDFA; }
 
+  /* サマリーカード（統一） */
+  .sum-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:12px 18px; min-width:120px; }
+  .sum-label { font-size:11px; font-weight:600; color:#6b7280; text-transform:uppercase; margin-bottom:4px; }
+  .sum-val { font-size:20px; font-weight:800; color:#111827; }
+  .sum-unit { font-size:11px; color:#6b7280; margin-left:3px; }
+  .sum-rate { font-size:12px; color:#0F766E; margin-left:6px; font-weight:700; }
+
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center; }
   .modal-overlay.active { display:flex; }
 
@@ -160,32 +167,13 @@
     </div>
   </div>
 
-  <!-- サマリーカード -->
+  <!-- サマリーカード（総反響数に対する割合） -->
   <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
-    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 18px;min-width:110px;">
-      <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin-bottom:4px;">総反響数</div>
-      <div style="font-size:20px;font-weight:800;color:#111827;" id="sum-total">0<span style="font-size:11px;color:#6b7280;margin-left:3px;">件</span></div>
-    </div>
-    <div style="background:#fff;border:1px solid #5EEAD4;border-radius:10px;padding:12px 18px;min-width:110px;">
-      <div style="font-size:11px;font-weight:600;color:#0F766E;text-transform:uppercase;margin-bottom:4px;">電話番号あり</div>
-      <div style="font-size:20px;font-weight:800;color:#0F766E;" id="sum-phonenum-count">0<span style="font-size:11px;color:#6b7280;margin-left:3px;">件</span><span id="sum-phonenum-rate" style="font-size:12px;color:#6b7280;margin-left:6px;font-weight:600;"></span></div>
-    </div>
-    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 18px;min-width:110px;">
-      <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin-bottom:4px;">LINE追加率</div>
-      <div style="font-size:20px;font-weight:800;color:#111827;" id="sum-line-rate">0<span style="font-size:11px;color:#6b7280;margin-left:3px;">%</span></div>
-    </div>
-    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 18px;min-width:110px;">
-      <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin-bottom:4px;">LINE追加数</div>
-      <div style="font-size:20px;font-weight:800;color:#111827;" id="sum-line-count">0<span style="font-size:11px;color:#6b7280;margin-left:3px;">件</span></div>
-    </div>
-    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 18px;min-width:110px;">
-      <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin-bottom:4px;">返信率</div>
-      <div style="font-size:20px;font-weight:800;color:#111827;" id="sum-reply-rate">0<span style="font-size:11px;color:#6b7280;margin-left:3px;">%</span></div>
-    </div>
-    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 18px;min-width:110px;">
-      <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin-bottom:4px;">電話対応率</div>
-      <div style="font-size:20px;font-weight:800;color:#111827;" id="sum-phone-rate">0<span style="font-size:11px;color:#6b7280;margin-left:3px;">%</span></div>
-    </div>
+    <div class="sum-card"><div class="sum-label">総反響数</div><div class="sum-val" id="sum-total">0<span class="sum-unit">件</span></div></div>
+    <div class="sum-card"><div class="sum-label">電話番号あり</div><div class="sum-val" id="sum-phonenum">0<span class="sum-unit">件</span></div></div>
+    <div class="sum-card"><div class="sum-label">LINE追加数</div><div class="sum-val" id="sum-line">0<span class="sum-unit">件</span></div></div>
+    <div class="sum-card"><div class="sum-label">返信数</div><div class="sum-val" id="sum-reply">0<span class="sum-unit">件</span></div></div>
+    <div class="sum-card"><div class="sum-label">電話対応数</div><div class="sum-val" id="sum-phone">0<span class="sum-unit">件</span></div></div>
   </div>
 
   <!-- 色分けの凡例 -->
@@ -483,12 +471,12 @@ function updateSummary() {
   const phoneCount = records.filter(r => r.has_phone).length;
   const phoneNumCount = records.filter(r => r.has_phone_number).length;
   const pct = (n) => total ? Math.round(n / total * 100) : 0;
-  document.getElementById('sum-total').innerHTML      = `${total}<span style="font-size:11px;color:#6b7280;margin-left:3px;">件</span>`;
-  document.getElementById('sum-phonenum-count').innerHTML = `${phoneNumCount}<span style="font-size:11px;color:#6b7280;margin-left:3px;">件</span><span id="sum-phonenum-rate" style="font-size:12px;color:#6b7280;margin-left:6px;font-weight:600;">(${pct(phoneNumCount)}%)</span>`;
-  document.getElementById('sum-line-count').innerHTML = `${lineCount}<span style="font-size:11px;color:#6b7280;margin-left:3px;">件</span>`;
-  document.getElementById('sum-line-rate').innerHTML  = `${pct(lineCount)}<span style="font-size:11px;color:#6b7280;margin-left:3px;">%</span>`;
-  document.getElementById('sum-reply-rate').innerHTML = `${pct(replyCount)}<span style="font-size:11px;color:#6b7280;margin-left:3px;">%</span>`;
-  document.getElementById('sum-phone-rate').innerHTML = `${pct(phoneCount)}<span style="font-size:11px;color:#6b7280;margin-left:3px;">%</span>`;
+  const cv = (n) => `${n}<span class="sum-unit">件</span><span class="sum-rate">(${pct(n)}%)</span>`;
+  document.getElementById('sum-total').innerHTML    = `${total}<span class="sum-unit">件</span>`;
+  document.getElementById('sum-phonenum').innerHTML = cv(phoneNumCount);
+  document.getElementById('sum-line').innerHTML     = cv(lineCount);
+  document.getElementById('sum-reply').innerHTML    = cv(replyCount);
+  document.getElementById('sum-phone').innerHTML    = cv(phoneCount);
 }
 
 const STAFF_OPTIONS = [['','― 未選択 ―'], {% for s in staff_list %}[{{ s.id }}, '{{ s.name }}'],{% endfor %}];
