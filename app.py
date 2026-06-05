@@ -1328,6 +1328,7 @@ def migrate_db():
         ('management_company', 'VARCHAR(200)'),
         ('review_ng', 'BOOLEAN DEFAULT 0'),
         ('review_status', 'VARCHAR(10)'),
+        ('past_customer', 'BOOLEAN DEFAULT 0'),
     ]:
         if col_name not in ar_cols:
             try:

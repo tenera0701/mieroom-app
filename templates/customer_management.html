@@ -425,6 +425,7 @@ const CANCEL_STATUSES = ['キャンセル', 'キャンセル振替'];
 let appData = [];
 let statusColors = {};
 let _APP_STAFF_PAIRS = [];
+let _APP_MEDIA_PAIRS = [];   // 媒体プルダウン用 [name, name]
 let _isSearchMode = false;
 let _searchTimer = null;
 let salesYear  = {{ year }};
@@ -541,6 +542,13 @@ function mdDate(s){
   return parseInt(m[2],10) + '月' + parseInt(m[3],10) + '日';
 }
 
+// 媒体プルダウンの選択肢（現在値がマスタに無くても選べるよう補完）
+function _ensureMediaPair(cur){
+  let pairs = _APP_MEDIA_PAIRS.length ? _APP_MEDIA_PAIRS.slice() : [['', '― 選択 ―']];
+  if (cur && !pairs.some(p => String(p[0]) === String(cur))) pairs.push([cur, cur]);
+  return pairs;
+}
+
 function buildSettleCell(r, field, settled, approved, hasAmount = true) {
   if (!hasAmount) return '<span style="color:#d1d5db;font-size:11px;">—</span>';
   const dateField = field === 'brokerage' ? 'brokerage_payment_date' : field === 'option' ? 'option_payment_date' : 'ad_payment_date';
@@ -587,7 +595,7 @@ function buildAppRow(r, colors, isSettled = false) {
   tr.innerHTML = `
     <td data-f="application_date" data-t="date"   data-v="${r.application_date||''}"   style="white-space:nowrap;">${r.application_date || '―'}</td>
     <td data-f="staff_id"         data-t="staff"  data-v="${r.staff_id||''}"            data-mgr="1">${r.staff_name || '―'}</td>
-    <td data-f="media"            data-t="text"   data-v="${escApp(r.media)}"           >${r.media || '―'}</td>
+    <td data-f="media"            data-t="media"  data-v="${escApp(r.media)}"           >${r.media || '―'}</td>
     <td data-f="property_name"    data-t="text"   data-v="${escApp(r.property_name)}"   >${r.property_name || '―'}</td>
     <td data-f="room_number"      data-t="text"   data-v="${escApp(r.room_number)}"     >${r.room_number || '―'}</td>
     <td data-f="customer_name"    data-t="text"   data-v="${escApp(r.customer_name)}"   >${r.customer_name || '―'}</td>
@@ -618,6 +626,7 @@ function buildAppRow(r, colors, isSettled = false) {
         if (type === 'bool') editCellApp(td, r.id, field, 'checkbox', val === 'true');
         else if (type === 'status') editCellApp(td, r.id, field, 'select', val, STATUS_KEYS.map(k => [k, k]));
         else if (type === 'staff')  editCellApp(td, r.id, field, 'select', val, _APP_STAFF_PAIRS);
+        else if (type === 'media')  editCellApp(td, r.id, field, 'select', val, _ensureMediaPair(val));
         else editCellApp(td, r.id, field, type, val);
       });
     });
@@ -807,6 +816,11 @@ async function loadApplications() {
     try {
       const sr = await fetch('/api/staff');
       if (sr.ok) _APP_STAFF_PAIRS = (await sr.json()).map(s => [s.id, s.name]);
+    } catch(_) {}
+    // 媒体プルダウン更新
+    try {
+      const mr = await fetch('/api/media-types');
+      if (mr.ok) _APP_MEDIA_PAIRS = [['', '― 選択 ―']].concat((await mr.json()).map(m => [m.name, m.name]));
     } catch(_) {}
     renderApplications(appData, statusColors);
     loadSettled().catch(()=>{});
@@ -1214,6 +1228,7 @@ function editCellApp(td, id, field, type, curVal, opts) {
       el.appendChild(o);
     });
     td.innerHTML = ''; td.appendChild(el); el.focus();
+    try { el.showPicker(); } catch(_) {}   // クリックですぐプルダウンを開く
     el.addEventListener('change', async () => { await patchApp(id, field, el.value); applyLocalUpdate(id, field, el.value); });
     el.addEventListener('blur',   () => { if (!td.querySelector('select')) return; });
   } else if (type === 'checkbox') {
