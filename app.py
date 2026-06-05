@@ -783,6 +783,8 @@ class MailSetting(db.Model):
     import_after     = db.Column(db.DateTime, nullable=True) # この日時以降のメールのみ取込（過去分は取らない）
     last_fetch_at    = db.Column(db.DateTime, nullable=True)
     last_result      = db.Column(db.String(300))
+    oauth_refresh_token = db.Column(db.Text, nullable=True)     # Google OAuth リフレッシュトークン
+    oauth_email      = db.Column(db.String(200), nullable=True) # OAuthで連携したGmailアドレス
     created_at       = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at       = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1421,6 +1423,12 @@ def migrate_db():
         if mscols and 'import_after' not in mscols:
             cursor.execute("ALTER TABLE mail_setting ADD COLUMN import_after DATETIME")
             print("  Added column mail_setting.import_after")
+        if mscols and 'oauth_refresh_token' not in mscols:
+            cursor.execute("ALTER TABLE mail_setting ADD COLUMN oauth_refresh_token TEXT")
+            print("  Added column mail_setting.oauth_refresh_token")
+        if mscols and 'oauth_email' not in mscols:
+            cursor.execute("ALTER TABLE mail_setting ADD COLUMN oauth_email VARCHAR(200)")
+            print("  Added column mail_setting.oauth_email")
     except Exception as e:
         print(f"  Skip mail_setting columns: {e}")
 
@@ -1480,6 +1488,8 @@ def migrate_postgres():
         ("mail_message",             "opened_at",       "TIMESTAMP"),
         ("mail_setting",             "custom_keywords", "TEXT"),
         ("mail_setting",             "import_after",    "TIMESTAMP"),
+        ("mail_setting",             "oauth_refresh_token", "TEXT"),
+        ("mail_setting",             "oauth_email",     "VARCHAR(200)"),
         ("mail_template",            "category",        "VARCHAR(120) DEFAULT ''"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
         ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
@@ -2703,6 +2713,86 @@ class _IMAP4SSLIPv4(imaplib.IMAP4_SSL):
         return self.ssl_context.wrap_socket(sock, server_hostname=self.host)
 
 
+# ── Google OAuth / Gmail API ─────────────────────────────────
+# RailwayがSMTP送信ポートを塞ぐ環境向け：送信はGmail API(HTTPS)、受信はIMAP+XOAUTH2。
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
+GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '')
+GOOGLE_OAUTH_SCOPE = 'https://mail.google.com/'   # IMAP + Gmail API send を包含
+_google_token_cache = {}   # refresh_token -> (access_token, expiry_epoch)
+
+
+def _http_post_form(url, data):
+    import urllib.request, urllib.parse, json as _json
+    body = urllib.parse.urlencode(data).encode()
+    req = urllib.request.Request(url, data=body,
+                                 headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                                 method='POST')
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        return _json.loads(resp.read().decode('utf-8'))
+
+
+def _google_access_token(refresh_token):
+    """refresh_token から access_token を取得（キャッシュ付き）"""
+    import time as _t
+    if not refresh_token:
+        raise RuntimeError('Google連携が未設定です')
+    cached = _google_token_cache.get(refresh_token)
+    if cached and cached[1] - 60 > _t.time():
+        return cached[0]
+    res = _http_post_form('https://oauth2.googleapis.com/token', {
+        'client_id': GOOGLE_CLIENT_ID,
+        'client_secret': GOOGLE_CLIENT_SECRET,
+        'refresh_token': refresh_token,
+        'grant_type': 'refresh_token',
+    })
+    at = res.get('access_token')
+    if not at:
+        raise RuntimeError('アクセストークンの取得に失敗しました')
+    _google_token_cache[refresh_token] = (at, _t.time() + int(res.get('expires_in', 3600)))
+    return at
+
+
+def _gmail_profile_email(access_token):
+    import urllib.request, json as _json
+    req = urllib.request.Request('https://gmail.googleapis.com/gmail/v1/users/me/profile',
+                                 headers={'Authorization': 'Bearer ' + access_token})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        return _json.loads(resp.read().decode('utf-8')).get('emailAddress')
+
+
+def _gmail_api_send(refresh_token, raw_message_bytes):
+    """Gmail API でメール送信（SMTPが使えない環境向け）"""
+    import urllib.request, json as _json, base64
+    token = _google_access_token(refresh_token)
+    raw = base64.urlsafe_b64encode(raw_message_bytes).decode()
+    body = _json.dumps({'raw': raw}).encode()
+    req = urllib.request.Request('https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
+                                 data=body,
+                                 headers={'Authorization': 'Bearer ' + token,
+                                          'Content-Type': 'application/json'},
+                                 method='POST')
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return _json.loads(resp.read().decode('utf-8'))
+
+
+def _open_imap_raw(host, imap_user, imap_pass, oauth_refresh_token=None, oauth_email=None):
+    """認証済みIMAP接続を返す（OAuth(XOAUTH2)優先・無ければapp-password）"""
+    M = _IMAP4SSLIPv4(host or 'imap.gmail.com')
+    if oauth_refresh_token:
+        at = _google_access_token(oauth_refresh_token)
+        user = oauth_email or imap_user
+        auth_str = f'user={user}\x01auth=Bearer {at}\x01\x01'
+        M.authenticate('XOAUTH2', lambda _x: auth_str.encode())
+    else:
+        M.login(imap_user, imap_pass)
+    return M
+
+
+def _open_imap(ms):
+    return _open_imap_raw(ms.imap_host, ms.imap_user, ms.imap_pass,
+                          ms.oauth_refresh_token, ms.oauth_email)
+
+
 def test_imap_connection(host, user, password):
     try:
         M = _IMAP4SSLIPv4(host or 'imap.gmail.com')
@@ -2735,7 +2825,7 @@ def _msg_datetime(msg):
 def fetch_reactions_for_store(store_id, limit=120, since_days=30):
     """指定店舗のGmailから反響メールを取得し EchoRecord へ登録"""
     ms = MailSetting.query.filter_by(store_id=store_id).first()
-    if not ms or not ms.imap_user or not ms.imap_pass:
+    if not ms or not ((ms.imap_user and ms.imap_pass) or ms.oauth_refresh_token):
         return {'ok': False, 'error': '未設定', 'imported': 0, 'scanned': 0}
     extra_map = parse_custom_keywords(ms.custom_keywords)
     portal_map = [(p.matcher, p.media)
@@ -2750,8 +2840,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
     imported = 0
     scanned = 0
     try:
-        M = _IMAP4SSLIPv4(ms.imap_host or 'imap.gmail.com')
-        M.login(ms.imap_user, ms.imap_pass)
+        M = _open_imap(ms)
         M.select('INBOX')
         months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
         # IMAP検索は取込開始日以降に限定（過去分を遡らない）
@@ -2947,8 +3036,10 @@ def send_mail_for_store(store_id, echo_id, subject, body, attachments=None, base
     attachments: [(filename, content_type, bytes), ...]
     base_url: 既読トラッキング用ピクセルの絶対URLベース"""
     ms = MailSetting.query.filter_by(store_id=store_id).first()
-    if not ms or not ms.imap_user or not ms.imap_pass:
+    use_oauth = bool(ms and ms.oauth_refresh_token)
+    if not ms or not (use_oauth or (ms.imap_user and ms.imap_pass)):
         return {'ok': False, 'error': 'メール設定が未設定です'}
+    sender = (ms.oauth_email or ms.imap_user or '').strip()
     rec = EchoRecord.query.filter_by(id=echo_id, store_id=store_id).first()
     if not rec:
         return {'ok': False, 'error': '対象の反響が見つかりません'}
@@ -2965,7 +3056,7 @@ def send_mail_for_store(store_id, echo_id, subject, body, attachments=None, base
     # 先に会話レコードを作成してIDを採番（既読ピクセルURLに使う）
     mm = MailMessage(
         store_id=store_id, echo_id=echo_id, direction='out',
-        from_addr=ms.imap_user, to_addr=to_addr,
+        from_addr=sender, to_addr=to_addr,
         subject=subject or '', body=body or '',
         message_id=msg_id, is_read=True,
     )
@@ -2978,7 +3069,7 @@ def send_mail_for_store(store_id, echo_id, subject, body, attachments=None, base
 
     msg = MIMEMultipart('mixed')
     msg['Subject'] = subject or '（無題）'
-    msg['From'] = ms.imap_user
+    msg['From'] = sender
     msg['To'] = to_addr
     msg['Message-ID'] = msg_id
     if last_in and last_in.message_id:
@@ -3002,8 +3093,11 @@ def send_mail_for_store(store_id, echo_id, subject, body, attachments=None, base
         msg.attach(part)
 
     try:
-        host = (ms.imap_host or 'imap.gmail.com').replace('imap.', 'smtp.')
-        _smtp_deliver(host, ms.imap_user, ms.imap_pass, ms.imap_user, [to_addr], msg.as_string())
+        if use_oauth:
+            _gmail_api_send(ms.oauth_refresh_token, msg.as_bytes())
+        else:
+            host = (ms.imap_host or 'imap.gmail.com').replace('imap.', 'smtp.')
+            _smtp_deliver(host, ms.imap_user, ms.imap_pass, sender, [to_addr], msg.as_string())
     except Exception as e:
         db.session.rollback()
         return {'ok': False, 'error': f'送信に失敗しました：{e}'}
@@ -3072,11 +3166,13 @@ def _idle_worker(store_id, stop_event):
         try:
             with app.app_context():
                 ms = MailSetting.query.filter_by(store_id=store_id).first()
-                if not ms or not ms.enabled or not ms.imap_user or not ms.imap_pass:
+                has_cred = ms and (ms.imap_pass or ms.oauth_refresh_token)
+                if not ms or not ms.enabled or not has_cred:
                     return
-                host, user, pw = (ms.imap_host or 'imap.gmail.com'), ms.imap_user, ms.imap_pass
-            M = _IMAP4SSLIPv4(host)
-            M.login(user, pw)
+                host = ms.imap_host or 'imap.gmail.com'
+                user, pw = ms.imap_user, ms.imap_pass
+                o_rt, o_em = ms.oauth_refresh_token, ms.oauth_email
+            M = _open_imap_raw(host, user, pw, o_rt, o_em)
             M.select('INBOX')
             with app.app_context():   # 接続直後にキャッチアップ
                 fetch_reactions_for_store(store_id)
@@ -3110,7 +3206,8 @@ class _IdleManager:
 
     @staticmethod
     def _sig(ms):
-        return ((ms.imap_host or 'imap.gmail.com'), ms.imap_user, ms.imap_pass)
+        return ((ms.imap_host or 'imap.gmail.com'), ms.imap_user, ms.imap_pass,
+                bool(ms.oauth_refresh_token), ms.oauth_email)
 
     def sync(self):
         """有効店舗のIDLEワーカーを起動／無効・変更・停止したものを停止。"""
@@ -3118,7 +3215,7 @@ class _IdleManager:
             with app.app_context():
                 enabled = {ms.store_id: self._sig(ms)
                            for ms in MailSetting.query.filter_by(enabled=True).all()
-                           if ms.imap_user and ms.imap_pass}
+                           if (ms.imap_user and ms.imap_pass) or ms.oauth_refresh_token}
         except Exception as e:
             print(f"idle sync query error: {e}")
             return
@@ -3150,7 +3247,7 @@ def _mail_sync_loop():
             if cnt % 20 == 0:   # 約10分ごとに保険フェッチ（IDLE取りこぼし対策）
                 with app.app_context():
                     for ms in MailSetting.query.filter_by(enabled=True).all():
-                        if ms.imap_user and ms.imap_pass:
+                        if (ms.imap_user and ms.imap_pass) or ms.oauth_refresh_token:
                             try:
                                 fetch_reactions_for_store(ms.store_id)
                             except Exception:
@@ -3201,10 +3298,12 @@ def api_mail_settings_get():
     allowed = get_allowed_store_ids()
     sid = allowed[0] if allowed else None
     ms = MailSetting.query.filter_by(store_id=sid).first() if sid else None
+    oauth_available = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
     if not ms:
         return jsonify({'imap_user': '', 'imap_host': 'imap.gmail.com', 'enabled': False,
                         'default_staff_id': None, 'has_password': False, 'custom_keywords': '',
-                        'last_result': '', 'last_fetch_at': None})
+                        'last_result': '', 'last_fetch_at': None,
+                        'oauth_available': oauth_available, 'oauth_connected': False, 'oauth_email': ''})
     return jsonify({
         'imap_user': ms.imap_user or '',
         'imap_host': ms.imap_host or 'imap.gmail.com',
@@ -3214,6 +3313,9 @@ def api_mail_settings_get():
         'custom_keywords': ms.custom_keywords or '',
         'last_result': ms.last_result or '',
         'last_fetch_at': ms.last_fetch_at.strftime('%Y-%m-%d %H:%M') if ms.last_fetch_at else None,
+        'oauth_available': oauth_available,
+        'oauth_connected': bool(ms.oauth_refresh_token),
+        'oauth_email': ms.oauth_email or '',
     })
 
 
@@ -3245,6 +3347,110 @@ def api_mail_settings_save():
     db.session.commit()
     start_mail_service()   # 未起動なら起動
     request_mail_sync()    # 設定変更を即反映（リーダーのみ）
+    return jsonify({'status': 'ok'})
+
+
+# ── Google OAuth 連携（送信=Gmail API / 受信=IMAP XOAUTH2）──
+def _oauth_redirect_uri():
+    base = (request.url_root or APP_BASE_URL).rstrip('/')
+    # 本番httpsを強制（Railwayはhttps終端でhostヘッダがhttpになることがある）
+    if base.startswith('http://') and 'localhost' not in base and '127.0.0.1' not in base:
+        base = 'https://' + base[len('http://'):]
+    return base + '/oauth/google/callback'
+
+
+@app.route("/oauth/google/start")
+@login_required
+@block_super_admin
+def oauth_google_start():
+    if not (GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET):
+        return "Google連携が未設定です（管理者にGOOGLE_CLIENT_ID/SECRETの設定を依頼してください）", 400
+    import urllib.parse, secrets as _secrets
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    if not sid:
+        return "店舗が選択されていません", 400
+    state = f"{sid}.{_secrets.token_urlsafe(16)}"
+    session['oauth_state'] = state
+    params = {
+        'client_id': GOOGLE_CLIENT_ID,
+        'redirect_uri': _oauth_redirect_uri(),
+        'response_type': 'code',
+        'scope': GOOGLE_OAUTH_SCOPE,
+        'access_type': 'offline',
+        'prompt': 'consent',           # 毎回 refresh_token を確実に得る
+        'include_granted_scopes': 'true',
+        'state': state,
+        'login_hint': '',
+    }
+    url = 'https://accounts.google.com/o/oauth2/v2/auth?' + urllib.parse.urlencode(params)
+    return redirect(url)
+
+
+@app.route("/oauth/google/callback")
+@login_required
+@block_super_admin
+def oauth_google_callback():
+    err = request.args.get('error')
+    if err:
+        return redirect(url_for('mail_settings_page') + '?oauth=error')
+    code = request.args.get('code')
+    state = request.args.get('state') or ''
+    if not code or not state or state != session.get('oauth_state'):
+        return redirect(url_for('mail_settings_page') + '?oauth=state_error')
+    try:
+        sid = int(state.split('.')[0])
+    except Exception:
+        return redirect(url_for('mail_settings_page') + '?oauth=state_error')
+    allowed = get_allowed_store_ids()
+    if sid not in allowed:
+        return redirect(url_for('mail_settings_page') + '?oauth=forbidden')
+    try:
+        tok = _http_post_form('https://oauth2.googleapis.com/token', {
+            'code': code,
+            'client_id': GOOGLE_CLIENT_ID,
+            'client_secret': GOOGLE_CLIENT_SECRET,
+            'redirect_uri': _oauth_redirect_uri(),
+            'grant_type': 'authorization_code',
+        })
+        refresh = tok.get('refresh_token')
+        access = tok.get('access_token')
+        if not refresh:
+            # 既に同意済みで refresh_token が返らないケース
+            return redirect(url_for('mail_settings_page') + '?oauth=no_refresh')
+        email = _gmail_profile_email(access) if access else ''
+    except Exception as e:
+        print(f"oauth callback error: {e}")
+        return redirect(url_for('mail_settings_page') + '?oauth=token_error')
+
+    ms = MailSetting.query.filter_by(store_id=sid).first()
+    if not ms:
+        ms = MailSetting(store_id=sid)
+        db.session.add(ms)
+    ms.oauth_refresh_token = refresh
+    ms.oauth_email = email or ms.oauth_email
+    if email:
+        ms.imap_user = email   # 表示・XOAUTH2用
+    ms.imap_host = 'imap.gmail.com'
+    ms.updated_at = datetime.utcnow()
+    db.session.commit()
+    session.pop('oauth_state', None)
+    start_mail_service()
+    request_mail_sync()
+    return redirect(url_for('mail_settings_page') + '?oauth=ok')
+
+
+@app.route("/api/mail-settings/google-disconnect", methods=["POST"])
+@login_required
+@block_super_admin
+def api_google_disconnect():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    ms = MailSetting.query.filter_by(store_id=sid).first() if sid else None
+    if ms:
+        ms.oauth_refresh_token = None
+        ms.oauth_email = None
+        db.session.commit()
     return jsonify({'status': 'ok'})
 
 
