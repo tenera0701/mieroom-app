@@ -189,8 +189,8 @@
     </div>
     <!-- 色凡例 -->
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;">
-      <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#f0fdf4;display:inline-block;border:1px solid #86efac;"></span>両方入金済み</span>
-      <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fffbeb;display:inline-block;border:1px solid #fcd34d;"></span>一部入金済み（✗は未入金）</span>
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d1fae5;display:inline-block;border:1px solid #6ee7b7;"></span>両方入金済み</span>
+      <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>一部入金済み（✗は未入金）</span>
       <span style="font-size:11px;color:#9ca3af;">💡 入金日欄は入金確認後に入力してください</span>
     </div>
     <div id="settled-body-wrap">
@@ -703,7 +703,7 @@ function renderSettled(list, colors) {
     const fullyPaid = (!hasBrok || r.brokerage_approved)
                    && (!hasOpt  || r.option_approved)
                    && (!hasAd   || r.ad_approved);
-    tr.style.background = fullyPaid ? '#f0fdf4' : '#fffbeb';
+    tr.style.background = fullyPaid ? '#d1fae5' : '#fef3c7';
     tr.style.textAlign  = 'center';
     tr.innerHTML =
       '<td style="white-space:nowrap;">' + (r.application_date || '―') + '</td>' +
