@@ -2689,9 +2689,23 @@ def parse_reaction_email(msg, extra_map=None, portal_map=None):
     }
 
 
+def _ipv4_addr(host, port):
+    """ホストのIPv4アドレス (ip, port) を返す。IPv6に経路が無い環境への対策。"""
+    infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+    return infos[0][4]
+
+
+class _IMAP4SSLIPv4(imaplib.IMAP4_SSL):
+    """imap.gmail.com に必ずIPv4で接続するIMAP4_SSL（本番のIPv6経路なし対策）"""
+    def _create_socket(self, timeout=None):
+        sock = socket.create_connection(_ipv4_addr(self.host, self.port),
+                                        timeout, getattr(self, 'source_address', None))
+        return self.ssl_context.wrap_socket(sock, server_hostname=self.host)
+
+
 def test_imap_connection(host, user, password):
     try:
-        M = imaplib.IMAP4_SSL(host or 'imap.gmail.com')
+        M = _IMAP4SSLIPv4(host or 'imap.gmail.com')
         M.login(user, password)
         M.select('INBOX')
         try:
@@ -2736,7 +2750,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
     imported = 0
     scanned = 0
     try:
-        M = imaplib.IMAP4_SSL(ms.imap_host or 'imap.gmail.com')
+        M = _IMAP4SSLIPv4(ms.imap_host or 'imap.gmail.com')
         M.login(ms.imap_user, ms.imap_pass)
         M.select('INBOX')
         months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -2882,23 +2896,17 @@ def _handle_incoming_reply(store_id, msg):
     return True
 
 
-def _smtp_ipv4_addr(host, port):
-    """ホストのIPv4アドレスを返す（IPv6で到達不可な環境への対策）"""
-    infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
-    return infos[0][4]
-
-
 class _SMTPSSLIPv4(smtplib.SMTP_SSL):
     """smtp.gmail.com に必ずIPv4で接続するSMTP_SSL（証明書はホスト名で検証）"""
     def _get_socket(self, host, port, timeout):
-        sock = socket.create_connection(_smtp_ipv4_addr(host, port), timeout, self.source_address)
+        sock = socket.create_connection(_ipv4_addr(host, port), timeout, self.source_address)
         return self.context.wrap_socket(sock, server_hostname=self._host)
 
 
 class _SMTPIPv4(smtplib.SMTP):
     """IPv4固定のSMTP（587 STARTTLS フォールバック用）"""
     def _get_socket(self, host, port, timeout):
-        return socket.create_connection(_smtp_ipv4_addr(host, port), timeout, self.source_address)
+        return socket.create_connection(_ipv4_addr(host, port), timeout, self.source_address)
 
 
 def _smtp_deliver(host, user, pw, from_addr, to_addrs, msg_string):
@@ -3067,7 +3075,7 @@ def _idle_worker(store_id, stop_event):
                 if not ms or not ms.enabled or not ms.imap_user or not ms.imap_pass:
                     return
                 host, user, pw = (ms.imap_host or 'imap.gmail.com'), ms.imap_user, ms.imap_pass
-            M = imaplib.IMAP4_SSL(host)
+            M = _IMAP4SSLIPv4(host)
             M.login(user, pw)
             M.select('INBOX')
             with app.app_context():   # 接続直後にキャッチアップ
