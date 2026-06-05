@@ -153,11 +153,6 @@
       </div>
     </div>
     <div id="app-body-wrap">
-      <!-- 色凡例 -->
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;font-size:11px;">
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#d1fae5;display:inline-block;border:1px solid #6ee7b7;"></span>全入金済</span>
-        <span style="display:flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef3c7;display:inline-block;border:1px solid #fcd34d;"></span>一部入金済（仲手・その他費用・ADのいずれか）</span>
-      </div>
       <div class="table-wrapper">
         <table>
           <thead>
@@ -173,6 +168,10 @@
             <tr><td colspan="22" style="text-align:center;color:#9ca3af;padding:24px;">データなし</td></tr>
           </tbody>
         </table>
+      </div>
+      <!-- ステータス色の凡例（色設定と連動）-->
+      <div id="status-legend" style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:11px;color:#6b7280;align-items:center;">
+        <span style="font-weight:600;color:#9ca3af;">ステータス色：</span>
       </div>
     </div>
   </div>
@@ -572,11 +571,9 @@ function buildSettleCell(r, field, settled, approved, hasAmount = true) {
 function buildAppRow(r, colors, isSettled = false) {
   const sc = colors[r.status] || STATUS_DEFAULTS[r.status] || { bg: '#fff', text: '#111827', row_bg: '#fff' };
   const tr = document.createElement('tr');
-  const isCancel = CANCEL_STATUSES.includes(r.status);
-  const payBg = paymentRowBg(r);
   const rowBg = sc.row_bg || sc.bg || '#fff';   // ステータス別の行背景色（カスタム可）
-  // キャンセルは行背景色を優先（入金色より）、それ以外は入金色＞行背景色
-  tr.style.cssText = `background:${isCancel ? rowBg : (payBg || rowBg)};color:${sc.text};`;
+  // 行背景はステータスの色設定のみで決まる（入金状況では変えない）
+  tr.style.cssText = `background:${rowBg};color:${sc.text};`;
 
   const adYen = adAmountYen(r);
   const adLabel = r.ad_type === 'percent'
@@ -646,6 +643,20 @@ function renderApplications(list, colors) {
   } else {
     list.forEach(r => tbody.appendChild(buildAppRow(r, colors, false)));
   }
+  renderStatusLegend(colors);
+}
+
+// 申込一覧表の下に出すステータス色の凡例（色設定と連動）
+function renderStatusLegend(colors) {
+  const box = document.getElementById('status-legend');
+  if (!box) return;
+  const items = STATUS_KEYS.map(key => {
+    const c = (colors && colors[key]) || STATUS_DEFAULTS[key] || { row_bg:'#fff', bg:'#fff', text:'#111827' };
+    const sw = c.row_bg || c.bg || '#fff';
+    return `<span style="display:flex;align-items:center;gap:5px;">`
+      + `<span style="width:14px;height:14px;border-radius:3px;background:${sw};display:inline-block;border:1px solid #d1d5db;"></span>${key}</span>`;
+  }).join('');
+  box.innerHTML = `<span style="font-weight:600;color:#9ca3af;">ステータス色：</span>${items}`;
 }
 
 function renderSettled(list, colors) {
