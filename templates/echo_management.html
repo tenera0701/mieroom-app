@@ -52,6 +52,34 @@
 
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center; }
   .modal-overlay.active { display:flex; }
+
+  /* ── チャット風メールUI ── */
+  .chat-window { background:#fff; border-radius:16px; width:480px; max-width:96vw; height:80vh; max-height:680px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 70px rgba(0,0,0,0.28); }
+  .chat-head { display:flex; align-items:center; gap:10px; padding:12px 14px; background:linear-gradient(135deg,#0D9488,#0F766E); color:#fff; }
+  .chat-avatar { width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.25); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; flex:none; }
+  .chat-name { font-size:14px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .chat-sub  { font-size:11px; opacity:0.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .chat-head .modal-close { color:#fff; background:none; border:none; font-size:18px; cursor:pointer; opacity:0.9; }
+  .chat-body { flex:1; overflow-y:auto; padding:14px 12px; background:#EAF2F1; display:flex; flex-direction:column; gap:2px; }
+  .chat-date { align-self:center; background:rgba(15,118,110,0.12); color:#0F766E; font-size:10px; font-weight:700; padding:2px 10px; border-radius:999px; margin:8px 0; }
+  .msg-row { display:flex; margin:2px 0; }
+  .msg-row.out { justify-content:flex-end; }
+  .msg-row.in  { justify-content:flex-start; }
+  .bubble { max-width:76%; padding:8px 11px; border-radius:14px; font-size:13px; line-height:1.5; word-break:break-word; white-space:pre-wrap; position:relative; box-shadow:0 1px 1px rgba(0,0,0,0.06); }
+  .msg-row.out .bubble { background:#0D9488; color:#fff; border-bottom-right-radius:4px; }
+  .msg-row.in  .bubble { background:#fff; color:#111827; border-bottom-left-radius:4px; }
+  .bubble .b-subj { font-size:10px; font-weight:700; opacity:0.8; margin-bottom:3px; }
+  .bubble .b-time { font-size:9px; opacity:0.7; margin-top:4px; text-align:right; }
+  .chat-empty { margin:auto; color:#6b7280; font-size:12px; text-align:center; }
+  .chat-compose { border-top:1px solid #e5e7eb; padding:8px 10px; background:#fff; }
+  .chat-warn { font-size:12px; color:#b91c1c; background:#fee2e2; border:1px solid #fca5a5; border-radius:8px; padding:7px 10px; margin-bottom:7px; }
+  .chat-subj { width:100%; border:1px solid #e5e7eb; border-radius:8px; padding:6px 10px; font-size:12px; box-sizing:border-box; margin-bottom:7px; color:#374151; }
+  .chat-input-bar { display:flex; align-items:flex-end; gap:8px; }
+  .chat-input { flex:1; border:1px solid #d1d5db; border-radius:18px; padding:9px 14px; font-size:13px; font-family:inherit; resize:none; max-height:120px; box-sizing:border-box; outline:none; }
+  .chat-input:focus { border-color:#0D9488; }
+  .chat-send { width:42px; height:42px; flex:none; border:none; border-radius:50%; background:#0D9488; color:#fff; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .chat-send:hover { background:#0F766E; }
+  .chat-send:disabled { opacity:0.45; cursor:not-allowed; }
   .modal { background:#fff; border-radius:12px; width:680px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
   .modal-header { padding:16px 24px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; }
   .modal-header h3 { font-size:16px; font-weight:700; margin:0; }
@@ -267,27 +295,24 @@
   </div>
 </div>
 
-<!-- メール会話モーダル -->
+<!-- メール会話（チャット風） -->
 <div class="modal-overlay" id="mail-modal">
-  <div class="modal" style="max-width:640px;width:94%;display:flex;flex-direction:column;max-height:88vh;">
-    <div class="modal-header">
-      <h3 id="mail-title" style="font-size:15px;">メールやり取り</h3>
+  <div class="chat-window">
+    <div class="chat-head">
+      <div class="chat-avatar" id="chat-avatar">客</div>
+      <div style="flex:1;min-width:0;">
+        <div class="chat-name" id="mail-title">メール</div>
+        <div class="chat-sub" id="chat-sub"></div>
+      </div>
       <button class="modal-close" onclick="closeMail()">✕</button>
     </div>
-    <div id="mail-thread" style="flex:1;overflow-y:auto;background:#F8FAFC;padding:14px 16px;min-height:180px;">
-    </div>
-    <div style="border-top:1px solid #e5e7eb;padding:12px 16px;">
-      <div id="mail-noaddr" style="display:none;font-size:12px;color:#b91c1c;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:8px 10px;margin-bottom:8px;">
-        このお客様のメールアドレスが未登録のため送信できません。
-      </div>
-      <input type="text" id="mail-subject" placeholder="件名"
-        style="width:100%;border:1px solid #d1d5db;border-radius:7px;padding:8px 10px;font-size:13px;box-sizing:border-box;margin-bottom:8px;">
-      <textarea id="mail-body" rows="4" placeholder="本文を入力…"
-        style="width:100%;border:1px solid #d1d5db;border-radius:7px;padding:8px 10px;font-size:13px;box-sizing:border-box;font-family:inherit;resize:vertical;"></textarea>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
-        <span id="mail-to" style="font-size:11px;color:#6b7280;"></span>
-        <button id="mail-send-btn" onclick="sendMail()"
-          style="background:#0D9488;color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">📤 送信</button>
+    <div class="chat-body" id="mail-thread"></div>
+    <div class="chat-compose">
+      <div id="mail-noaddr" class="chat-warn" style="display:none;">このお客様のメールアドレスが未登録のため送信できません。</div>
+      <input type="text" id="mail-subject" class="chat-subj" placeholder="件名">
+      <div class="chat-input-bar">
+        <textarea id="mail-body" class="chat-input" rows="1" placeholder="メッセージを入力…" oninput="autoGrow(this)"></textarea>
+        <button id="mail-send-btn" class="chat-send" onclick="sendMail()" title="送信">➤</button>
       </div>
     </div>
   </div>
@@ -688,80 +713,102 @@ async function enrichStaffNames() {
   // staff_id → name マップ (staff_list はサーバー側で渡す)
 }
 
-// ── メール会話 ──
+// ── メール会話（チャット風） ──
 let _mailEchoId = null;
+let _mailTimer = null;
+let _mailCount = -1;
+
+function autoGrow(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
+
 function openMail(id){
-  _mailEchoId = id;
+  _mailEchoId = id; _mailCount = -1;
   document.getElementById('mail-subject').value = '';
-  document.getElementById('mail-body').value = '';
-  document.getElementById('mail-thread').innerHTML = '<div style="color:#9ca3af;font-size:12px;text-align:center;padding:20px;">読み込み中…</div>';
+  const body = document.getElementById('mail-body'); body.value=''; body.style.height='auto';
+  document.getElementById('chat-sub').textContent = '';
+  document.getElementById('mail-thread').innerHTML = '<div class="chat-empty">読み込み中…</div>';
   document.getElementById('mail-modal').classList.add('active');
-  loadMailThread(id);
+  loadMailThread(id, false);
+  if(_mailTimer) clearInterval(_mailTimer);
+  _mailTimer = setInterval(()=>{ if(_mailEchoId) loadMailThread(_mailEchoId, true); }, 12000); // 新着を自動取得
 }
 function closeMail(){
   document.getElementById('mail-modal').classList.remove('active');
+  if(_mailTimer){ clearInterval(_mailTimer); _mailTimer=null; }
   _mailEchoId = null;
   loadRecords(); // バッジ更新（既読化反映）
 }
-async function loadMailThread(id){
+
+function chatDateLabel(at){ return (at||'').slice(0,10).replace(/-/g,'/'); }
+
+async function loadMailThread(id, silent){
   try{
     const r = await fetch(`/api/echo-records/${id}/messages`);
     const d = await r.json();
-    document.getElementById('mail-title').textContent = `メール：${d.customer_name||''}`;
-    const hasAddr = !!(d.customer_email);
+    // ヘッダ
+    document.getElementById('mail-title').textContent = d.customer_name || 'お客様';
+    document.getElementById('chat-avatar').textContent = (d.customer_name||'客').trim().charAt(0) || '客';
+    document.getElementById('chat-sub').textContent = d.customer_email ? `${d.media||''}  ${d.customer_email}` : (d.media||'');
+    const hasAddr = !!d.customer_email;
     document.getElementById('mail-noaddr').style.display = hasAddr ? 'none' : 'block';
     document.getElementById('mail-send-btn').disabled = !hasAddr;
-    document.getElementById('mail-send-btn').style.opacity = hasAddr ? '1' : '0.5';
-    document.getElementById('mail-to').textContent = hasAddr ? `送信先：${d.customer_email}` : '';
-    // 件名の初期値（返信ならRe:）
-    const lastSubj = d.messages.length ? d.messages[d.messages.length-1].subject : '';
-    if(!document.getElementById('mail-subject').value){
+    // 件名の初期値（返信ならRe:）— 入力中は上書きしない
+    if(!silent && !document.getElementById('mail-subject').value){
+      const lastSubj = d.messages.length ? d.messages[d.messages.length-1].subject : '';
       document.getElementById('mail-subject').value = lastSubj ? (lastSubj.startsWith('Re:')?lastSubj:('Re: '+lastSubj)) : 'お問い合わせありがとうございます';
     }
     const box = document.getElementById('mail-thread');
     if(!d.messages.length){
-      box.innerHTML = '<div style="color:#9ca3af;font-size:12px;text-align:center;padding:24px;">まだやり取りはありません。下から最初のメールを送信できます。</div>';
+      box.innerHTML = '<div class="chat-empty">まだやり取りはありません。<br>下のバーから最初のメッセージを送れます。</div>';
+      _mailCount = 0;
       return;
     }
-    box.innerHTML = d.messages.map(m=>{
-      const out = m.direction==='out';
-      const align = out ? 'flex-end' : 'flex-start';
-      const bg = out ? '#0D9488' : '#fff';
-      const col = out ? '#fff' : '#111827';
-      const brd = out ? '#0D9488' : '#e5e7eb';
-      return `<div style="display:flex;justify-content:${align};margin-bottom:10px;">
-        <div style="max-width:78%;background:${bg};color:${col};border:1px solid ${brd};border-radius:10px;padding:8px 11px;">
-          ${m.subject?`<div style="font-size:11px;font-weight:700;opacity:.85;margin-bottom:3px;">${escHtml(m.subject)}</div>`:''}
-          <div style="font-size:13px;white-space:pre-wrap;word-break:break-word;">${escHtml(m.body)}</div>
-          <div style="font-size:10px;opacity:.7;margin-top:4px;text-align:right;">${out?'送信':'受信'}・${escHtml(m.at)}</div>
-        </div>
-      </div>`;
-    }).join('');
-    box.scrollTop = box.scrollHeight;
+    // 件数が変わらなければ再描画しない（チラつき防止）
+    if(silent && d.messages.length === _mailCount) return;
+    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+    let html = '', lastDate = '';
+    d.messages.forEach(m=>{
+      const dl = chatDateLabel(m.at);
+      if(dl && dl !== lastDate){ html += `<div class="chat-date">${escHtml(dl)}</div>`; lastDate = dl; }
+      const cls = m.direction==='out' ? 'out' : 'in';
+      const tm = (m.at||'').slice(11,16);
+      html += `<div class="msg-row ${cls}"><div class="bubble">${m.subject?`<div class="b-subj">${escHtml(m.subject)}</div>`:''}<div>${escHtml(m.body)}</div><div class="b-time">${cls==='out'?'送信':'受信'}・${escHtml(tm)}</div></div></div>`;
+    });
+    box.innerHTML = html;
+    if(!silent || nearBottom || d.messages.length !== _mailCount) box.scrollTop = box.scrollHeight;
+    _mailCount = d.messages.length;
   }catch(_){
-    document.getElementById('mail-thread').innerHTML = '<div style="color:#b91c1c;font-size:12px;text-align:center;padding:20px;">読み込みに失敗しました</div>';
+    if(!silent) document.getElementById('mail-thread').innerHTML = '<div class="chat-empty" style="color:#b91c1c;">読み込みに失敗しました</div>';
   }
 }
+
 async function sendMail(){
   if(!_mailEchoId) return;
   const subject = document.getElementById('mail-subject').value.trim();
-  const body = document.getElementById('mail-body').value.trim();
-  if(!body){ showAlert('本文を入力してください','error'); return; }
+  const bodyEl = document.getElementById('mail-body');
+  const body = bodyEl.value.trim();
+  if(!body){ showAlert('メッセージを入力してください','error'); return; }
   const btn = document.getElementById('mail-send-btn');
-  btn.disabled = true; btn.textContent = '送信中…';
+  btn.disabled = true;
   try{
     const r = await fetch(`/api/echo-records/${_mailEchoId}/send`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject,body})});
     const d = await r.json();
     if(d.ok){
-      document.getElementById('mail-body').value = '';
-      showAlert('送信しました');
-      loadMailThread(_mailEchoId);
+      bodyEl.value=''; bodyEl.style.height='auto';
+      _mailCount = -1; // 強制再描画
+      loadMailThread(_mailEchoId, false);
     }else{
       showAlert(d.error||'送信に失敗しました','error');
     }
   }catch(_){ showAlert('送信に失敗しました','error'); }
-  finally{ btn.disabled = false; btn.textContent = '📤 送信'; }
+  finally{ btn.disabled = false; }
 }
+
+// Enterで送信（Shift+Enterで改行）
+document.addEventListener('keydown', e=>{
+  if(e.key==='Enter' && !e.shiftKey && document.activeElement && document.activeElement.id==='mail-body'){
+    e.preventDefault(); sendMail();
+  }
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   updateLabel();
