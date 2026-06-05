@@ -516,6 +516,19 @@
       }).then(() => location.reload());
     }
 
+    // ===== ファイルを枠外にドロップしてもブラウザが開かないようガード =====
+    ['dragover','drop'].forEach(function(ev){
+      window.addEventListener(ev, function(e){ e.preventDefault(); }, false);
+    });
+
+    // ===== 日付入力は1クリックでカレンダーを表示 =====
+    document.addEventListener('click', function(e){
+      const t = e.target;
+      if (t && t.tagName === 'INPUT' && t.type === 'date') {
+        try { t.showPicker(); } catch(_){}
+      }
+    }, true);
+
     // ===== チャット未読バッジ =====
     window.updateChatNavBadge = function(total){
       const b = document.getElementById('chat-nav-badge');

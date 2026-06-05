@@ -533,11 +533,19 @@ function escApp(s) {
 /* ===================================================
    行ビルダー
 =================================================== */
+// 申込日以外の日付を「5/2」形式（M/D）で表示
+function mdDate(s){
+  if(!s) return '―';
+  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!m) return s;
+  return parseInt(m[2],10) + '/' + parseInt(m[3],10);
+}
+
 function buildSettleCell(r, field, settled, approved, hasAmount = true) {
   if (!hasAmount) return '<span style="color:#d1d5db;font-size:11px;">—</span>';
   const dateField = field === 'brokerage' ? 'brokerage_payment_date' : field === 'option' ? 'option_payment_date' : 'ad_payment_date';
   const payDate = r[dateField] || '';
-  const dateNote = payDate ? `<div style="font-size:10px;color:#6b7280;">${payDate}</div>` : '';
+  const dateNote = payDate ? `<div style="font-size:10px;color:#6b7280;">${mdDate(payDate)}</div>` : '';
   if (approved) {
     // 承認済（クリックで取消ボタンを表示。常時は出さない）
     return `<span style="color:#0D9488;font-weight:700;font-size:11px;cursor:pointer;" title="クリックで取消" onclick="revealUndo(this,${r.id},'${field}')">承認済</span>` + dateNote;
@@ -586,10 +594,10 @@ function buildAppRow(r, colors, isSettled = false) {
     <td data-f="rent"             data-t="number" data-v="${r.rent||0}"                  style="text-align:right;">${r.rent ? r.rent.toLocaleString()+'円' : '―'}</td>
     <td data-f="management_company" data-t="text" data-v="${escApp(r.management_company)}">${r.management_company || '―'}</td>
     <td style="text-align:center;cursor:pointer;" onclick="showReviewMenu(event,${r.id},'${r.review_status||''}')"><span style="font-weight:700;font-size:13px;${r.review_status==='ok'?'color:#0D9488':r.review_status==='ng'?'color:#dc2626':'color:#9ca3af'}">${r.review_status==='ok'?'○':r.review_status==='ng'?'×':'—'}</span></td>
-    <td data-f="contract_start_date" data-t="date" data-v="${r.contract_start_date||''}" style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
+    <td data-f="contract_start_date" data-t="date" data-v="${r.contract_start_date||''}" style="white-space:nowrap;">${mdDate(r.contract_start_date)}</td>
     <td data-f="brokerage_fee"    data-t="number" data-v="${r.brokerage_fee||0}"         style="text-align:right;">${r.brokerage_fee ? r.brokerage_fee.toLocaleString()+'円' : '―'}</td>
     <td data-f="ad_amount"        data-t="number" data-v="${r.ad_amount||0}"             style="text-align:right;">${adLabel}</td>
-    <td data-f="ad_payment_date"  data-t="date"   data-v="${r.ad_payment_date||''}"      style="white-space:nowrap;">${r.ad_payment_date || '―'}</td>
+    <td data-f="ad_payment_date"  data-t="date"   data-v="${r.ad_payment_date||''}"      style="white-space:nowrap;">${mdDate(r.ad_payment_date)}</td>
     <td data-f="option_amount"    data-t="number" data-v="${r.option_amount||0}"         style="text-align:right;">${r.option_amount ? r.option_amount.toLocaleString()+'円' : '―'}</td>
     <td data-f="lifeline"         data-t="bool"   data-v="${!!r.lifeline}"               style="text-align:center;">${r.lifeline ? '●' : '×'}</td>
     <td data-f="moving"           data-t="bool"   data-v="${!!r.moving}"                 style="text-align:center;">${r.moving ? '●' : '×'}</td>
@@ -643,7 +651,7 @@ function renderSettled(list, colors) {
   // 入金セル: その月に入金があれば「✓入金済＋日付(クリックで変更可)」/ なければ ×
   const payCell = (paidThisMonth, dateStr, id, field, fkey) => {
     if (paidThisMonth) {
-      const ds = dateStr || '日付未設定';
+      const ds = dateStr ? mdDate(dateStr) : '日付未設定';
       return '<div style="display:flex;flex-direction:column;align-items:center;gap:1px;">' +
         '<span style="color:#0D9488;font-weight:700;font-size:11px;cursor:pointer;" title="クリックで取消" ' +
         'onclick="revealUndoSettled(this,' + id + ',&quot;' + fkey + '&quot;)">入金済</span>' +
@@ -677,7 +685,7 @@ function renderSettled(list, colors) {
       '<td>' + (r.room_number || '―') + '</td>' +
       '<td>' + (r.customer_name || '―') + '</td>' +
       '<td>' + (r.management_company || '―') + '</td>' +
-      '<td style="white-space:nowrap;">' + (r.contract_start_date || '―') + '</td>' +
+      '<td style="white-space:nowrap;">' + mdDate(r.contract_start_date) + '</td>' +
       '<td>' + chk(r.lifeline) + '</td>' +
       '<td>' + chk(r.moving) + '</td>' +
       '<td>' + chk(r.fire_insurance) + '</td>' +
@@ -763,11 +771,11 @@ function renderUncollectedTable(list) {
       <td>${r.customer_name || '―'}</td>
       <td style="text-align:right;">${r.rent ? r.rent.toLocaleString()+'円' : '―'}</td>
       <td>${r.management_company || '―'}</td>
-      <td style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
+      <td style="white-space:nowrap;">${mdDate(r.contract_start_date)}</td>
       <td style="text-align:right;">${r.brokerage_fee ? r.brokerage_fee.toLocaleString()+'円' : '―'}</td>
       <td style="text-align:right;">${r.option_amount ? r.option_amount.toLocaleString()+'円' : '―'}</td>
       <td style="text-align:right;">${adDisp}</td>
-      <td style="white-space:nowrap;">${r.ad_payment_date || '―'}</td>
+      <td style="white-space:nowrap;">${mdDate(r.ad_payment_date)}</td>
       <td style="text-align:center;white-space:nowrap;">${bCell}</td>
       <td style="text-align:center;white-space:nowrap;">${oCell}</td>
       <td style="text-align:center;white-space:nowrap;">${aCell}</td>

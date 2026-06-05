@@ -53,7 +53,9 @@
   .modal-overlay.active { display:flex; }
 
   /* ── チャット風メールUI ── */
-  .chat-window { background:#fff; border-radius:16px; width:480px; max-width:96vw; height:80vh; max-height:680px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 70px rgba(0,0,0,0.28); }
+  .chat-window { background:#fff; border-radius:16px; width:480px; max-width:96vw; height:80vh; max-height:680px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 70px rgba(0,0,0,0.28); position:relative; }
+  .chat-window.dnd-over { outline:3px dashed #0D9488; outline-offset:-6px; }
+  .chat-window.dnd-over::after { content:'📎 ここにドロップで添付'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(204,251,241,0.78); color:#0F766E; font-size:16px; font-weight:800; pointer-events:none; z-index:50; }
   .chat-head { display:flex; align-items:center; gap:10px; padding:12px 14px; background:linear-gradient(135deg,#0D9488,#0F766E); color:#fff; }
   .chat-avatar { width:38px; height:38px; border-radius:50%; background:rgba(255,255,255,0.25); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; flex:none; }
   .chat-name { font-size:14px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -936,6 +938,7 @@ function openMail(id){
   document.getElementById('chat-sub').textContent = '';
   document.getElementById('mail-thread').innerHTML = '<div class="chat-empty">読み込み中…</div>';
   document.getElementById('mail-modal').classList.add('active');
+  setupMailDnD();
   loadMailThread(id, false);
   loadTemplates();
   if(_mailTimer) clearInterval(_mailTimer);
@@ -944,12 +947,30 @@ function openMail(id){
 
 // ── 添付ファイル ──
 function onPickFiles(input){
-  for(const f of input.files){
+  acceptMailFiles(input.files);
+  input.value='';
+}
+function acceptMailFiles(files){
+  for(const f of files){
     if(f.size > 20*1024*1024){ showAlert(`「${f.name}」は20MBを超えています`,'error'); continue; }
     _pendingFiles.push(f);
   }
-  input.value='';
   renderAttachList();
+}
+// ドラッグ＆ドロップで添付
+function setupMailDnD(){
+  const zone = document.querySelector('#mail-modal .chat-window');
+  if(!zone || zone.dataset.dnd) return;
+  zone.dataset.dnd = '1';
+  ['dragenter','dragover'].forEach(ev=>zone.addEventListener(ev, e=>{
+    e.preventDefault(); e.stopPropagation(); zone.classList.add('dnd-over');
+  }));
+  zone.addEventListener('dragleave', e=>{ if(zone.contains(e.relatedTarget)) return; zone.classList.remove('dnd-over'); });
+  zone.addEventListener('drop', e=>{
+    e.preventDefault(); e.stopPropagation(); zone.classList.remove('dnd-over');
+    const f = e.dataTransfer && e.dataTransfer.files;
+    if(f && f.length) acceptMailFiles(f);
+  });
 }
 function renderAttachList(){
   const box = document.getElementById('mail-attach-list');

@@ -20,7 +20,9 @@
   .ch-badge { flex:none; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:#ef4444; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
   .ch-item.active .ch-nm { font-weight:700; }
   /* 右：会話 */
-  .ch-main { flex:1; background:#fff; border:1px solid #e5e7eb; border-radius:12px; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+  .ch-main { flex:1; background:#fff; border:1px solid #e5e7eb; border-radius:12px; display:flex; flex-direction:column; overflow:hidden; min-width:0; position:relative; }
+  .ch-main.dnd-over { outline:2px dashed #0D9488; outline-offset:-5px; }
+  .ch-main.dnd-over::after { content:'📎 ここにドロップで添付'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(204,251,241,0.75); color:#0F766E; font-size:15px; font-weight:800; pointer-events:none; z-index:40; }
   .ch-main-head { padding:12px 16px; border-bottom:1px solid #f1f5f9; display:flex; align-items:center; gap:10px; }
   .ch-main-head .h-ico { width:34px; height:34px; border-radius:9px; background:#CCFBF1; color:#0F766E; display:flex; align-items:center; justify-content:center; font-size:16px; flex:none; }
   .ch-main-head .h-nm { font-size:15px; font-weight:800; color:#111827; }
@@ -252,11 +254,35 @@ async function loadMessages(incremental){
 
 // 添付
 function onChatFiles(input){
-  for(const f of input.files){
+  acceptChatFiles(input.files);
+  input.value='';
+}
+function acceptChatFiles(files){
+  if(!_curCh) return;
+  if(!CH.is_pro){ alert('ファイル添付はチャットProプランの機能です'); return; }
+  for(const f of files){
     if(f.size > 20*1024*1024){ alert(`「${f.name}」は20MBを超えています`); continue; }
     _pendingFiles.push(f);
   }
-  input.value=''; renderAtt();
+  renderAtt();
+}
+// ドラッグ＆ドロップで添付
+function setupChatDnD(){
+  const zone = document.querySelector('.ch-main');
+  if(!zone) return;
+  ['dragenter','dragover'].forEach(ev=>zone.addEventListener(ev, e=>{
+    if(!_curCh) return;
+    e.preventDefault(); e.stopPropagation(); zone.classList.add('dnd-over');
+  }));
+  zone.addEventListener('dragleave', e=>{
+    if(zone.contains(e.relatedTarget)) return;
+    zone.classList.remove('dnd-over');
+  });
+  zone.addEventListener('drop', e=>{
+    e.preventDefault(); e.stopPropagation(); zone.classList.remove('dnd-over');
+    const f = e.dataTransfer && e.dataTransfer.files;
+    if(f && f.length) acceptChatFiles(f);
+  });
 }
 function renderAtt(){
   const box = document.getElementById('ch-att-list');
@@ -323,6 +349,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   loadChannels(true).then(refreshUnread);
   if(_unreadTimer) clearInterval(_unreadTimer);
   _unreadTimer = setInterval(refreshUnread, 15000);
+  setupChatDnD();
 });
 </script>
 {% endblock %}
