@@ -2821,6 +2821,58 @@ def _handle_incoming_reply(store_id, msg):
     return True
 
 
+def _smtp_ipv4_addr(host, port):
+    """ホストのIPv4アドレスを返す（IPv6で到達不可な環境への対策）"""
+    infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+    return infos[0][4]
+
+
+class _SMTPSSLIPv4(smtplib.SMTP_SSL):
+    """smtp.gmail.com に必ずIPv4で接続するSMTP_SSL（証明書はホスト名で検証）"""
+    def _get_socket(self, host, port, timeout):
+        sock = socket.create_connection(_smtp_ipv4_addr(host, port), timeout, self.source_address)
+        return self.context.wrap_socket(sock, server_hostname=self._host)
+
+
+class _SMTPIPv4(smtplib.SMTP):
+    """IPv4固定のSMTP（587 STARTTLS フォールバック用）"""
+    def _get_socket(self, host, port, timeout):
+        return socket.create_connection(_smtp_ipv4_addr(host, port), timeout, self.source_address)
+
+
+def _smtp_deliver(host, user, pw, from_addr, to_addrs, msg_string):
+    """IPv4でSMTP送信。465(SSL)失敗時は587(STARTTLS)へフォールバック。"""
+    import ssl as _ssl
+    ctx = _ssl.create_default_context()
+    last_err = None
+    # 1) 465 SMTPS（IPv4）
+    try:
+        s = _SMTPSSLIPv4(host, 465, local_hostname='mieroom.cloud', timeout=40, context=ctx)
+        try:
+            s.login(user, pw)
+            s.sendmail(from_addr, to_addrs, msg_string)
+        finally:
+            try: s.quit()
+            except Exception: pass
+        return
+    except Exception as e:
+        last_err = e
+    # 2) 587 STARTTLS（IPv4）フォールバック
+    try:
+        s = _SMTPIPv4(host, 587, local_hostname='mieroom.cloud', timeout=40)
+        try:
+            s.ehlo(); s.starttls(context=ctx); s.ehlo()
+            s.login(user, pw)
+            s.sendmail(from_addr, to_addrs, msg_string)
+        finally:
+            try: s.quit()
+            except Exception: pass
+        return
+    except Exception as e2:
+        last_err = e2
+    raise last_err
+
+
 def send_mail_for_store(store_id, echo_id, subject, body, attachments=None, base_url=None):
     """店舗のGmail(SMTP)からお客様へ送信し、会話に保存。
     attachments: [(filename, content_type, bytes), ...]
@@ -2882,10 +2934,7 @@ def send_mail_for_store(store_id, echo_id, subject, body, attachments=None, base
 
     try:
         host = (ms.imap_host or 'imap.gmail.com').replace('imap.', 'smtp.')
-        s = smtplib.SMTP_SSL(host, 465, timeout=40)
-        s.login(ms.imap_user, ms.imap_pass)
-        s.sendmail(ms.imap_user, [to_addr], msg.as_string())
-        s.quit()
+        _smtp_deliver(host, ms.imap_user, ms.imap_pass, ms.imap_user, [to_addr], msg.as_string())
     except Exception as e:
         db.session.rollback()
         return {'ok': False, 'error': f'送信に失敗しました：{e}'}
