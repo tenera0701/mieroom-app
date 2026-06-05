@@ -1172,6 +1172,12 @@ function applyLocalUpdate(id, field, value) {
     // 数値フィールドは数値に変換
     rec[field] = (field === 'rent' || field === 'brokerage_fee' || field === 'ad_amount' || field === 'option_amount')
       ? (parseFloat(value) || 0) : value;
+    // 担当(staff_id)変更時は表示名(staff_name)も即時更新し、idは数値で保持
+    if (field === 'staff_id') {
+      const pair = _APP_STAFF_PAIRS.find(p => String(p[0]) === String(value));
+      rec.staff_name = pair ? pair[1] : '-';
+      rec.staff_id = value ? (parseInt(value) || value) : null;
+    }
   }
   renderApplications(appData, statusColors);
   loadSettled().catch(() => {});
