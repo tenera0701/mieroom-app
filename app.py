@@ -621,6 +621,17 @@ class MailSetting(db.Model):
     updated_at       = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class PortalSource(db.Model):
+    """店舗ごとのポータル登録（差出人アドレス/ドメイン → 媒体名）"""
+    __tablename__ = 'portal_source'
+    id         = db.Column(db.Integer, primary_key=True)
+    store_id   = db.Column(db.Integer, db.ForeignKey('store.id'))
+    matcher    = db.Column(db.String(200))   # 差出人アドレス or @ドメイン（部分一致）
+    media      = db.Column(db.String(100))   # 媒体名
+    enabled    = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class CustomerServiceRecord(db.Model):
     """接客管理表"""
     __tablename__ = 'customer_service_record'
@@ -1999,8 +2010,17 @@ _FIELD_SYNONYMS = {
 }
 
 
+# 「問合せ／問い合わせ／問い合せ／問合わせ」等の表記ゆれを「問合せ」に統一
+_INQUIRY_RE = re.compile(r'問\s*い?\s*合\s*わ?\s*せ')
+
+
+def _normalize_inquiry_terms(s):
+    return _INQUIRY_RE.sub('問合せ', s or '')
+
+
 def _norm_label(s):
-    return (s or '').replace(' ', '').replace('　', '').strip().lower()
+    s = (s or '').replace(' ', '').replace('　', '').strip().lower()
+    return _normalize_inquiry_terms(s)
 
 
 # 正規化済みラベル → キー
@@ -2101,8 +2121,9 @@ def _from_display_name(from_addr):
     return 'その他反響'
 
 
-def parse_reaction_email(msg, extra_map=None):
+def parse_reaction_email(msg, extra_map=None, portal_map=None):
     """反響メールを解析。反響メールでなければ None を返す。
+    登録ポータル（portal_map）からの受信は信頼扱いで確実に取り込む。
     未知の媒体でも、氏名/連絡先＋物件などの構造があれば取り込む。"""
     from_addr = _decode_mime(msg.get('From', ''))
     subject = _decode_mime(msg.get('Subject', ''))
@@ -2127,14 +2148,32 @@ def parse_reaction_email(msg, extra_map=None):
             fields[key] = value
 
     name = fields.get('name', '')
-
-    # 反響メール判定：連絡先＋物件情報の両方が取れていれば反響とみなす（未知媒体も対象）
     contact = name or fields.get('phone') or fields.get('email')
     prop = (fields.get('property') or fields.get('extid')
             or fields.get('bukken_no') or fields.get('inquiry'))
-    if not (contact and prop):
-        return None
-    source = _detect_source(from_addr, subject, body, extra_map) or _from_display_name(from_addr)
+
+    # 媒体判定（優先度：登録ポータル ＞ ドメイン ＞ 追加KW ＞ 標準KW ＞ 差出人名）
+    portal_media = None
+    _fa = (from_addr or '').lower()
+    for matcher, media in (portal_map or []):
+        if matcher and matcher.lower() in _fa:
+            portal_media = media
+            break
+
+    # 件名が「お問合せ受付」等の反響を示すか（表記ゆれを統一して判定）
+    subj_norm = _normalize_inquiry_terms(subject)
+    subj_is_inquiry = any(k in subj_norm for k in ('問合せ', '受付', '反響'))
+
+    if portal_media is not None:
+        # 登録ポータルからの受信は信頼扱い：形式が多少違っても確実に取り込む
+        if not (contact or prop):
+            return None
+        source = portal_media
+    else:
+        # 通常は「連絡先＋物件」。件名が反響を示す場合は連絡先か物件どちらかでも取り込む
+        if not ((contact and prop) or (subj_is_inquiry and (contact or prop))):
+            return None
+        source = _detect_source(from_addr, subject, body, extra_map) or _from_display_name(from_addr)
 
     # 反響日時
     edate = None
@@ -2163,14 +2202,17 @@ def parse_reaction_email(msg, extra_map=None):
         basis = f"{source}|{name}|{fields.get('property','')}|{fields.get('bukken_no','')}|{dt_raw}"
         ext = 'h:' + hashlib.md5(basis.encode('utf-8')).hexdigest()[:20]
 
-    # 自由記述（お問合せ内容・備考）も拾う
+    # 自由記述（お問合せ内容・備考）も拾う（表記ゆれを統一した本文で検索）
+    nbody = _normalize_inquiry_terms(body)
+
     def _grab(markers):
         for mk in markers:
-            i = body.find(mk)
+            nmk = _normalize_inquiry_terms(mk)
+            i = nbody.find(nmk)
             if i < 0:
                 continue
             collected = []
-            for ln in body[i + len(mk):].splitlines():
+            for ln in nbody[i + len(nmk):].splitlines():
                 s = ln.strip().lstrip('・').strip()
                 if not s:
                     if collected:
@@ -2243,6 +2285,9 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
     if not ms or not ms.imap_user or not ms.imap_pass:
         return {'ok': False, 'error': '未設定', 'imported': 0, 'scanned': 0}
     extra_map = parse_custom_keywords(ms.custom_keywords)
+    portal_map = [(p.matcher, p.media)
+                  for p in PortalSource.query.filter_by(store_id=store_id, enabled=True).all()
+                  if p.matcher and p.media]
     imported = 0
     scanned = 0
     try:
@@ -2264,7 +2309,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
             except Exception:
                 continue
             scanned += 1
-            parsed = parse_reaction_email(msg, extra_map)
+            parsed = parse_reaction_email(msg, extra_map, portal_map)
             if not parsed:
                 continue
             exists = EchoRecord.query.filter_by(store_id=store_id, external_id=parsed['external_id']).first()
@@ -2565,6 +2610,38 @@ def api_mail_settings_fetch():
         return jsonify({'ok': False, 'error': 'unauthorized'}), 403
     res = fetch_reactions_for_store(sid)
     return jsonify(res)
+
+
+@app.route("/api/portal-sources", methods=["GET"])
+@login_required
+def api_portal_sources_get():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    items = (PortalSource.query.filter_by(store_id=sid).order_by(PortalSource.id.asc()).all()
+             if sid else [])
+    return jsonify([{'matcher': p.matcher or '', 'media': p.media or '', 'enabled': bool(p.enabled)}
+                    for p in items])
+
+
+@app.route("/api/portal-sources", methods=["POST"])
+@login_required
+def api_portal_sources_save():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    if not sid:
+        return jsonify({'error': 'unauthorized'}), 403
+    data = request.get_json() or {}
+    rows = data.get('sources') or []
+    PortalSource.query.filter_by(store_id=sid).delete()
+    for r in rows:
+        m = (r.get('matcher') or '').strip()[:200]
+        md = (r.get('media') or '').strip()[:100]
+        if m and md:
+            db.session.add(PortalSource(store_id=sid, matcher=m, media=md,
+                                        enabled=bool(r.get('enabled', True))))
+    db.session.commit()
+    request_mail_sync()
+    return jsonify({'status': 'ok'})
 
 
 @app.route("/echo-management")
