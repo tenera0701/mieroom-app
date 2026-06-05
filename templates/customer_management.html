@@ -728,6 +728,7 @@ function editSettledDate(span, id, field, cur) {
   inp.style.cssText = 'font-size:10px;border:1px solid #0D9488;border-radius:4px;padding:1px 3px;';
   span.replaceWith(inp);
   inp.focus();
+  requestAnimationFrame(() => { try { inp.showPicker(); } catch(_) {} });
   let done = false;
   const finish = async (save) => {
     if (done) return; done = true;
@@ -1228,7 +1229,8 @@ function editCellApp(td, id, field, type, curVal, opts) {
       el.appendChild(o);
     });
     td.innerHTML = ''; td.appendChild(el); el.focus();
-    try { el.showPicker(); } catch(_) {}   // クリックですぐプルダウンを開く
+    // 描画後に開く（即時呼び出しだと開かず2クリック必要になるため）
+    requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
     el.addEventListener('change', async () => { await patchApp(id, field, el.value); applyLocalUpdate(id, field, el.value); });
     el.addEventListener('blur',   () => { if (!td.querySelector('select')) return; });
   } else if (type === 'checkbox') {
@@ -1244,8 +1246,8 @@ function editCellApp(td, id, field, type, curVal, opts) {
     let _saved = false;
     const save = async () => { if (_saved) return; _saved = true; await patchApp(id, field, el.value); applyLocalUpdate(id, field, el.value); };
     if (type === 'date') {
-      // 1クリックでカレンダーを即表示し、選択したら即保存
-      try { el.showPicker(); } catch(_) {}
+      // 1クリックでカレンダーを即表示（描画後に開く）。選択したら即保存
+      requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
       el.addEventListener('change', save);
     }
     el.addEventListener('blur', save);
