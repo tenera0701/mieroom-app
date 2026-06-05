@@ -25,24 +25,14 @@
   td.left   { text-align:left; }
   .chk-yes  { color:#0D9488; font-weight:700; }
   .chk-no   { color:#d1d5db; }
-  /* フラグ行カラー（優先順: LINE > 電話 > 返信） */
-  tbody tr.row-line  { background:#CCFBF1 !important; }
-  tbody tr.row-phone { background:#dbeafe !important; }
-  tbody tr.row-reply { background:#fef9c3 !important; }
-  tbody tr.row-line:hover  { background:#99F6E4 !important; }
-  tbody tr.row-phone:hover { background:#bfdbfe !important; }
-  tbody tr.row-reply:hover { background:#fde68a !important; }
   .btn-sm   { padding:3px 8px; font-size:11px; border:1px solid #d1d5db; border-radius:4px; background:#fff; cursor:pointer; }
   .btn-sm:hover { background:#f3f4f6; }
   .btn-del  { border-color:#fca5a5; color:#ef4444; }
   .btn-del:hover { background:#fee2e2; }
   .followup-date { font-size:11px; color:#059669; font-weight:600; }
   .followup-empty { color:#e5e7eb; font-size:11px; }
-  /* 追客未対応行（3日超）— 赤で目立たせる */
-  tbody tr.row-no-followup { background:#fecaca !important; }
-  tbody tr.row-no-followup:hover { background:#fca5a5 !important; }
-  tbody tr.row-no-followup td { color:#991b1b; }
-  tbody tr.row-no-followup td:first-child { box-shadow: inset 4px 0 0 #dc2626; }
+  /* 未返信（お客様から返信あり・こちら未返信）の行を赤い左ラインで即可視化 */
+  tbody tr.row-unreplied td:first-child { box-shadow: inset 4px 0 0 #dc2626; }
   /* 追客列の表示制御 */
   .followup-extra { display:none; }
   .followup-extra.visible { display:table-cell; }
@@ -201,14 +191,11 @@
     <div class="sum-card"><div class="sum-label">電話対応数</div><div class="sum-val" id="sum-phone">0<span class="sum-unit">件</span></div></div>
   </div>
 
-  <!-- 色分けの凡例 -->
+  <!-- 色分けの凡例（状況タグのみ） -->
   <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:0 2px 8px;font-size:11px;color:#6b7280;">
     <span style="font-weight:700;color:#374151;">色分け：</span>
-    <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#dbeafe;border:1px solid #93c5fd;display:inline-block;"></span>電話対応</span>
-    <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#CCFBF1;border:1px solid #5EEAD4;display:inline-block;"></span>LINE追加</span>
-    <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef9c3;border:1px solid #fde047;display:inline-block;"></span>返信あり</span>
-    <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fecaca;border:1px solid #dc2626;display:inline-block;"></span><span style="color:#dc2626;font-weight:700;">要追客（3日以上）</span></span>
-    <span style="color:#9ca3af;">※「状況」タグを設定すると、その色が優先されます（色は⚙から変更可）</span>
+    <span>行の色は「状況」タグで変わります（色は状況見出しの⚙から変更可）</span>
+    <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fff;border-left:4px solid #dc2626;border-top:1px solid #e5e7eb;border-right:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;display:inline-block;"></span><span style="color:#dc2626;font-weight:700;">未返信（お客様から返信あり）</span></span>
   </div>
 
   <div class="table-wrap">
@@ -697,12 +684,9 @@ function renderTable() {
   }
   tbody.innerHTML = records.map(r => {
     const statusColor = r.status ? (STATUS_COLORS[r.status] || '') : '';
-    const flagCls = r.has_line ? 'row-line' : r.has_phone ? 'row-phone' : r.has_reply ? 'row-reply' : '';
-    const nfCls   = needsFollowup(r) ? 'row-no-followup' : '';
-    // 状況タグの色を最優先。未設定なら従来の対応フラグ／要追客の色。
-    let rowCls = '', rowStyle = '';
-    if (statusColor) { rowStyle = `background:${statusColor};`; }
-    else { rowCls = flagCls ? flagCls : nfCls; }
+    // 行の色は「状況」タグのみ。未返信は赤い左ラインで可視化（背景色とは別）。
+    const rowStyle = statusColor ? `background:${statusColor};` : '';
+    const rowCls   = r.needs_reply ? 'row-unreplied' : '';
     const statusChip = r.status
       ? `<span style="display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;background:${statusColor||'#e5e7eb'};border:1px solid rgba(0,0,0,0.08);color:#1f2937;white-space:nowrap;">${escHtml(r.status)}</span>`
       : '<span style="color:#cbd5e1;font-size:11px;">― 未設定 ―</span>';
