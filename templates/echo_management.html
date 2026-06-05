@@ -89,6 +89,22 @@
   .chat-send { width:42px; height:42px; flex:none; border:none; border-radius:50%; background:#0D9488; color:#fff; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
   .chat-send:hover { background:#0F766E; }
   .chat-send:disabled { opacity:0.45; cursor:not-allowed; }
+  .chat-tools { display:flex; gap:6px; margin:6px 0; }
+  .chat-tool-btn { background:#F0FDFA; border:1px solid #99F6E4; color:#0F766E; border-radius:14px; padding:4px 12px; font-size:12px; font-weight:700; cursor:pointer; }
+  .chat-tool-btn:hover { background:#CCFBF1; }
+  .att-chip { display:inline-flex; align-items:center; gap:6px; background:#f1f5f9; border:1px solid #e2e8f0; border-radius:8px; padding:4px 8px; font-size:11px; color:#334155; max-width:180px; }
+  .att-chip span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .att-chip button { background:none; border:none; color:#94a3b8; cursor:pointer; font-size:14px; line-height:1; padding:0; }
+  .tpl-item { padding:8px 10px; border-radius:8px; cursor:pointer; }
+  .tpl-item:hover { background:#F0FDFA; }
+  .tpl-item .t-title { font-size:13px; font-weight:700; color:#111827; }
+  .tpl-item .t-prev { font-size:11px; color:#6b7280; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bubble .b-att { margin-top:6px; display:flex; flex-direction:column; gap:6px; }
+  .bubble .b-att img { max-width:200px; max-height:200px; border-radius:8px; display:block; cursor:pointer; }
+  .bubble .b-file { display:inline-flex; align-items:center; gap:6px; font-size:12px; text-decoration:none; padding:5px 9px; border-radius:8px; }
+  .msg-row.out .b-file { background:rgba(255,255,255,0.22); color:#fff; }
+  .msg-row.in  .b-file { background:#f1f5f9; color:#0f766e; border:1px solid #e2e8f0; }
+  .b-read { font-size:10px; color:#bbf7d0; margin-top:2px; text-align:right; }
   .modal { background:#fff; border-radius:12px; width:680px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
   .modal-header { padding:16px 24px; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between; }
   .modal-header h3 { font-size:16px; font-weight:700; margin:0; }
@@ -192,6 +208,7 @@
     <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#CCFBF1;border:1px solid #5EEAD4;display:inline-block;"></span>LINE追加</span>
     <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fef9c3;border:1px solid #fde047;display:inline-block;"></span>返信あり</span>
     <span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:12px;height:12px;border-radius:3px;background:#fecaca;border:1px solid #dc2626;display:inline-block;"></span><span style="color:#dc2626;font-weight:700;">要追客（3日以上）</span></span>
+    <span style="color:#9ca3af;">※「状況」タグを設定すると、その色が優先されます（色は⚙から変更可）</span>
   </div>
 
   <div class="table-wrap">
@@ -200,6 +217,9 @@
         <tr>
           <th>担当者</th>
           <th>反響日</th>
+          <th style="white-space:nowrap;">状況
+            <button type="button" onclick="openStatusMgr()" title="状況タグと色を管理" style="font-size:10px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;padding:0 5px;cursor:pointer;color:#374151;">⚙</button>
+          </th>
           <th>顧客名</th>
           <th>媒体</th>
           <th>手段</th>
@@ -224,7 +244,7 @@
         </tr>
       </thead>
       <tbody id="echo-tbody">
-        <tr class="empty-row"><td colspan="23">読み込み中...</td></tr>
+        <tr class="empty-row"><td colspan="24">読み込み中...</td></tr>
       </tbody>
     </table>
   </div>
@@ -320,13 +340,58 @@
       <button class="modal-close" onclick="closeMail()">✕</button>
     </div>
     <div class="chat-body" id="mail-thread"></div>
-    <div class="chat-compose">
+    <div class="chat-compose" style="position:relative;">
       <div id="mail-noaddr" class="chat-warn" style="display:none;">このお客様のメールアドレスが未登録のため送信できません。</div>
+
+      <!-- テンプレ選択ポップオーバー -->
+      <div id="template-pop" style="display:none;position:absolute;left:10px;right:10px;bottom:100%;margin-bottom:6px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.18);max-height:280px;overflow-y:auto;z-index:30;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #f3f4f6;">
+          <span style="font-size:13px;font-weight:700;color:#374151;">返信テンプレート</span>
+          <button onclick="openTemplateMgr()" style="font-size:11px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:5px;padding:3px 8px;cursor:pointer;color:#374151;">＋ 管理</button>
+        </div>
+        <div id="template-pop-list" style="padding:6px;"></div>
+      </div>
+
       <input type="text" id="mail-subject" class="chat-subj" placeholder="件名">
+
+      <!-- 添付プレビュー -->
+      <div id="mail-attach-list" style="display:none;flex-wrap:wrap;gap:6px;margin:6px 2px 0;"></div>
+
+      <div class="chat-tools">
+        <button type="button" class="chat-tool-btn" onclick="toggleTemplatePicker()" title="返信テンプレートを挿入">📋 テンプレ</button>
+        <button type="button" class="chat-tool-btn" onclick="document.getElementById('mail-file').click()" title="PDF・画像を添付">📎 添付</button>
+        <input type="file" id="mail-file" multiple accept="image/*,application/pdf,.pdf" style="display:none" onchange="onPickFiles(this)">
+      </div>
+
       <div class="chat-input-bar">
         <textarea id="mail-body" class="chat-input" rows="1" placeholder="メッセージを入力…" oninput="autoGrow(this)"></textarea>
         <button id="mail-send-btn" class="chat-send" onclick="sendMail()" title="送信">➤</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── テンプレート管理モーダル ── -->
+<div id="template-mgr-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:2100;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;width:560px;max-width:95vw;max-height:86vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="margin:0;font-size:15px;font-weight:700;">返信テンプレートの管理</h3>
+      <button onclick="closeTemplateMgr()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+    <div style="padding:14px 20px;">
+      <div id="template-mgr-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+      <div style="margin-top:16px;border-top:1px dashed #e5e7eb;padding-top:14px;">
+        <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px;">新しいテンプレートを追加</div>
+        <input id="tpl-new-title" type="text" placeholder="テンプレ名（例：内見のご案内）" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;margin-bottom:6px;box-sizing:border-box;" autocomplete="off">
+        <input id="tpl-new-subject" type="text" placeholder="件名（任意）" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;margin-bottom:6px;box-sizing:border-box;" autocomplete="off">
+        <textarea id="tpl-new-body" rows="4" placeholder="本文" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;font-family:inherit;resize:vertical;"></textarea>
+        <div style="text-align:right;margin-top:8px;">
+          <button onclick="addTemplate()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">追加する</button>
+        </div>
+      </div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #e5e7eb;text-align:right;">
+      <button onclick="closeTemplateMgr()" style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;">閉じる</button>
     </div>
   </div>
 </div>
@@ -407,15 +472,21 @@ function fmtMD(s) {
 /* ── ドロップダウン管理 ──────────────────── */
 let ECHO_MEDIA_PAIRS  = [];
 let ECHO_METHOD_PAIRS = [];
+let ECHO_STATUS_PAIRS = [['','― 未設定 ―']];
+let STATUS_COLORS = {};   // { 状況名: 行背景色 }
 let _dgrCategory = '', _dgrSelectId = '', _dgrOpts = [];
 
 async function loadDropdownOpts() {
-  const [r1, r2] = await Promise.all([
+  const [r1, r2, r3, colors] = await Promise.all([
     fetch('/api/dropdown/echo_media').then(r => r.json()),
     fetch('/api/dropdown/echo_method').then(r => r.json()),
+    fetch('/api/dropdown/echo_status').then(r => r.json()),
+    fetch('/api/echo-status-colors').then(r => r.json()),
   ]);
   ECHO_MEDIA_PAIRS  = r1.map(o => [o.value, o.value]);
   ECHO_METHOD_PAIRS = r2.map(o => [o.value, o.value]);
+  ECHO_STATUS_PAIRS = [['','― 未設定 ―']].concat(r3.map(o => [o.value, o.value]));
+  STATUS_COLORS = colors || {};
   fillSelect('f-media',  r1);
   fillSelect('f-method', r2);
 }
@@ -457,6 +528,51 @@ async function delDgrOpt(id) {
   await fetch(`/api/dropdown/item/${id}`, { method:'DELETE' });
   await renderDgrList();
   await loadDropdownOpts();
+}
+
+/* ── 状況タグ＋色 管理 ── */
+async function openStatusMgr(){
+  await renderStatusMgr();
+  document.getElementById('status-mgr-modal').style.display = 'flex';
+}
+function closeStatusMgr(){
+  document.getElementById('status-mgr-modal').style.display = 'none';
+  loadDropdownOpts().then(() => renderTable());   // 反映
+}
+async function renderStatusMgr(){
+  const [opts, colors] = await Promise.all([
+    fetch('/api/dropdown/echo_status').then(r=>r.json()),
+    fetch('/api/echo-status-colors').then(r=>r.json()),
+  ]);
+  STATUS_COLORS = colors || {};
+  const list = document.getElementById('status-mgr-list');
+  list.innerHTML = opts.length ? opts.map(o=>{
+    const c = STATUS_COLORS[o.value] || '#ffffff';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f3f4f6;">
+      <input type="color" value="${c}" title="行の色" onchange="setStatusColor('${encodeURIComponent(o.value)}',this.value)" style="width:36px;height:30px;border:1px solid #d1d5db;border-radius:6px;padding:1px;cursor:pointer;background:#fff;">
+      <span style="flex:1;display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:700;background:${c};border:1px solid rgba(0,0,0,0.08);color:#1f2937;">${escHtml(o.value)}</span>
+      <button onclick="delStatusOpt(${o.id})" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:5px;padding:4px 10px;cursor:pointer;font-size:12px;">削除</button>
+    </div>`;
+  }).join('') : '<p style="color:#9ca3af;font-size:13px;">状況タグがありません。下から追加してください。</p>';
+}
+async function addStatusOpt(){
+  const inp = document.getElementById('status-mgr-input');
+  const val = inp.value.trim();
+  if(!val) return;
+  await fetch('/api/dropdown/echo_status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value:val})});
+  inp.value='';
+  await renderStatusMgr();
+}
+async function delStatusOpt(id){
+  if(!confirm('この状況タグを削除しますか？')) return;
+  await fetch(`/api/dropdown/item/${id}`,{method:'DELETE'});
+  await renderStatusMgr();
+}
+async function setStatusColor(encVal, color){
+  const val = decodeURIComponent(encVal);
+  STATUS_COLORS[val] = color;
+  await fetch('/api/echo-status-colors',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({colors:{[val]:color}})});
+  await renderStatusMgr();
 }
 
 async function loadRecords() {
@@ -576,18 +692,25 @@ async function toggleFlag(id, field, curVal) {
 function renderTable() {
   const tbody = document.getElementById('echo-tbody');
   if (!records.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="23">データがありません</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="24">データがありません</td></tr>';
     return;
   }
   tbody.innerHTML = records.map(r => {
+    const statusColor = r.status ? (STATUS_COLORS[r.status] || '') : '';
     const flagCls = r.has_line ? 'row-line' : r.has_phone ? 'row-phone' : r.has_reply ? 'row-reply' : '';
     const nfCls   = needsFollowup(r) ? 'row-no-followup' : '';
-    // flag class takes priority over no-followup for color; combine if no flag
-    const rowCls  = flagCls ? flagCls : nfCls;
+    // 状況タグの色を最優先。未設定なら従来の対応フラグ／要追客の色。
+    let rowCls = '', rowStyle = '';
+    if (statusColor) { rowStyle = `background:${statusColor};`; }
+    else { rowCls = flagCls ? flagCls : nfCls; }
+    const statusChip = r.status
+      ? `<span style="display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;background:${statusColor||'#e5e7eb'};border:1px solid rgba(0,0,0,0.08);color:#1f2937;white-space:nowrap;">${escHtml(r.status)}</span>`
+      : '<span style="color:#cbd5e1;font-size:11px;">― 未設定 ―</span>';
     return `
-    <tr class="${rowCls}" data-needsreply="${r.needs_reply ? 1 : 0}">
+    <tr class="${rowCls}" style="${rowStyle}" data-needsreply="${r.needs_reply ? 1 : 0}">
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${escHtml(r.staff_name || '―')}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'echo_date','date','${r.echo_date||''}')">${r.echo_date ? fmtMD(r.echo_date) : '―'}</td>
+      <td style="cursor:pointer;text-align:center;" title="クリックで状況を変更" onclick="editCell(this,${r.id},'status','select','${escHtml(r.status)}',ECHO_STATUS_PAIRS)">${statusChip}</td>
       <td class="left" style="max-width:100px;cursor:pointer;" title="${escHtml(r.list_name)}" onclick="editCell(this,${r.id},'list_name','text','${escHtml(r.list_name)}')">${escHtml(r.list_name) || '―'}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'media','select','${escHtml(r.media)}',ECHO_MEDIA_PAIRS)">${escHtml(r.media) || '―'}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'method','select','${escHtml(r.method)}',ECHO_METHOD_PAIRS)">${escHtml(r.method) || '―'}</td>
@@ -801,19 +924,112 @@ async function saveMemo(){
 let _mailEchoId = null;
 let _mailTimer = null;
 let _mailCount = -1;
+let _mailSig = '';
+let _pendingFiles = [];
+let _templates = [];
 
 function autoGrow(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
 
 function openMail(id){
-  _mailEchoId = id; _mailCount = -1;
+  _mailEchoId = id; _mailCount = -1; _mailSig = '';
+  _pendingFiles = []; renderAttachList();
+  closeTemplatePicker();
   document.getElementById('mail-subject').value = '';
   const body = document.getElementById('mail-body'); body.value=''; body.style.height='auto';
   document.getElementById('chat-sub').textContent = '';
   document.getElementById('mail-thread').innerHTML = '<div class="chat-empty">読み込み中…</div>';
   document.getElementById('mail-modal').classList.add('active');
   loadMailThread(id, false);
+  loadTemplates();
   if(_mailTimer) clearInterval(_mailTimer);
-  _mailTimer = setInterval(()=>{ if(_mailEchoId) loadMailThread(_mailEchoId, true); }, 12000); // 新着を自動取得
+  _mailTimer = setInterval(()=>{ if(_mailEchoId) loadMailThread(_mailEchoId, true); }, 12000); // 新着・既読を自動取得
+}
+
+// ── 添付ファイル ──
+function onPickFiles(input){
+  for(const f of input.files){
+    if(f.size > 20*1024*1024){ showAlert(`「${f.name}」は20MBを超えています`,'error'); continue; }
+    _pendingFiles.push(f);
+  }
+  input.value='';
+  renderAttachList();
+}
+function renderAttachList(){
+  const box = document.getElementById('mail-attach-list');
+  if(!box) return;
+  if(!_pendingFiles.length){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='flex';
+  box.innerHTML = _pendingFiles.map((f,i)=>`<span class="att-chip">${(f.type||'').startsWith('image/')?'🖼️':'📄'}<span title="${escHtml(f.name)}">${escHtml(f.name)}</span><button onclick="removeAtt(${i})" title="削除">✕</button></span>`).join('');
+}
+function removeAtt(i){ _pendingFiles.splice(i,1); renderAttachList(); }
+
+// ── 返信テンプレート ──
+async function loadTemplates(){
+  try{ _templates = await fetch('/api/mail-templates').then(r=>r.json()); }catch(_){ _templates=[]; }
+}
+function toggleTemplatePicker(){
+  const pop = document.getElementById('template-pop');
+  if(pop.style.display==='block'){ pop.style.display='none'; return; }
+  renderTemplatePop();
+  pop.style.display='block';
+}
+function closeTemplatePicker(){ const p=document.getElementById('template-pop'); if(p) p.style.display='none'; }
+async function renderTemplatePop(){
+  if(!_templates.length) await loadTemplates();
+  const list = document.getElementById('template-pop-list');
+  list.innerHTML = _templates.length
+    ? _templates.map(t=>`<div class="tpl-item" onclick="applyTemplate(${t.id})"><div class="t-title">${escHtml(t.title)}</div><div class="t-prev">${escHtml((t.body||'').replace(/\n/g,' '))}</div></div>`).join('')
+    : '<div style="padding:10px;color:#9ca3af;font-size:12px;">テンプレートがありません。「＋管理」から追加できます。</div>';
+}
+function applyTemplate(id){
+  const t = _templates.find(x=>x.id===id);
+  if(!t) return;
+  const subjEl = document.getElementById('mail-subject');
+  if(t.subject && !subjEl.value.trim()) subjEl.value = t.subject;
+  const bodyEl = document.getElementById('mail-body');
+  bodyEl.value = (bodyEl.value ? bodyEl.value + '\n' : '') + (t.body||'');
+  autoGrow(bodyEl);
+  closeTemplatePicker();
+  bodyEl.focus();
+}
+async function openTemplateMgr(){
+  await loadTemplates();
+  renderTemplateMgr();
+  document.getElementById('template-mgr-modal').style.display='flex';
+}
+function closeTemplateMgr(){
+  document.getElementById('template-mgr-modal').style.display='none';
+  renderTemplatePop();
+}
+function renderTemplateMgr(){
+  const box = document.getElementById('template-mgr-list');
+  box.innerHTML = _templates.length ? _templates.map(t=>`
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;">
+      <input value="${escHtml(t.title)}" onchange="updateTemplate(${t.id},'title',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:13px;font-weight:700;margin-bottom:5px;box-sizing:border-box;">
+      <input value="${escHtml(t.subject)}" placeholder="件名（任意）" onchange="updateTemplate(${t.id},'subject',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px;margin-bottom:5px;box-sizing:border-box;">
+      <textarea rows="3" onchange="updateTemplate(${t.id},'body',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px;box-sizing:border-box;font-family:inherit;resize:vertical;">${escHtml(t.body)}</textarea>
+      <div style="text-align:right;margin-top:5px;"><button onclick="delTemplate(${t.id})" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:5px;padding:4px 10px;font-size:12px;cursor:pointer;">削除</button></div>
+    </div>`).join('') : '<p style="color:#9ca3af;font-size:13px;">テンプレートがありません。下から追加してください。</p>';
+}
+async function addTemplate(){
+  const title=document.getElementById('tpl-new-title').value.trim();
+  const subject=document.getElementById('tpl-new-subject').value.trim();
+  const body=document.getElementById('tpl-new-body').value.trim();
+  if(!title||!body){ showAlert('テンプレ名と本文を入力してください','error'); return; }
+  await fetch('/api/mail-templates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,subject,body})});
+  document.getElementById('tpl-new-title').value='';
+  document.getElementById('tpl-new-subject').value='';
+  document.getElementById('tpl-new-body').value='';
+  await loadTemplates(); renderTemplateMgr();
+}
+async function updateTemplate(id,field,value){
+  await fetch(`/api/mail-templates/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:value})});
+  const t=_templates.find(x=>x.id===id); if(t) t[field]=value;
+}
+async function delTemplate(id){
+  if(!confirm('このテンプレートを削除しますか？')) return;
+  await fetch(`/api/mail-templates/${id}`,{method:'DELETE'});
+  await loadTemplates(); renderTemplateMgr();
 }
 function closeMail(){
   document.getElementById('mail-modal').classList.remove('active');
@@ -846,8 +1062,10 @@ async function loadMailThread(id, silent){
       _mailCount = 0;
       return;
     }
-    // 件数が変わらなければ再描画しない（チラつき防止）
-    if(silent && d.messages.length === _mailCount) return;
+    // 件数も既読状態も変わらなければ再描画しない（チラつき防止）
+    const sig = d.messages.map(m => m.direction + (m.read ? 'R' : '') + '|' + (m.attachments||[]).length).join(',');
+    if(silent && d.messages.length === _mailCount && sig === _mailSig) return;
+    _mailSig = sig;
     const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
     let html = '', lastDate = '';
     d.messages.forEach(m=>{
@@ -855,7 +1073,14 @@ async function loadMailThread(id, silent){
       if(dl && dl !== lastDate){ html += `<div class="chat-date">${escHtml(dl)}</div>`; lastDate = dl; }
       const cls = m.direction==='out' ? 'out' : 'in';
       const tm = (m.at||'').slice(11,16);
-      html += `<div class="msg-row ${cls}"><div class="bubble">${m.subject?`<div class="b-subj">${escHtml(m.subject)}</div>`:''}<div>${escHtml(m.body)}</div><div class="b-time">${cls==='out'?'送信':'受信'}・${escHtml(tm)}</div></div></div>`;
+      const atts = (m.attachments||[]).map(a => a.is_image
+        ? `<img src="/api/mail-attachments/${a.id}" alt="${escHtml(a.filename)}" onclick="window.open('/api/mail-attachments/${a.id}','_blank')">`
+        : `<a class="b-file" href="/api/mail-attachments/${a.id}" target="_blank" rel="noopener">📄 ${escHtml(a.filename)}</a>`
+      ).join('');
+      const attHtml = atts ? `<div class="b-att">${atts}</div>` : '';
+      const bodyHtml = m.body ? `<div>${escHtml(m.body)}</div>` : '';
+      const readHtml = (cls==='out' && m.read) ? `<div class="b-read">既読${m.read_at?'・'+escHtml((m.read_at||'').slice(11,16)):''}</div>` : '';
+      html += `<div class="msg-row ${cls}"><div class="bubble">${m.subject?`<div class="b-subj">${escHtml(m.subject)}</div>`:''}${bodyHtml}${attHtml}<div class="b-time">${cls==='out'?'送信':'受信'}・${escHtml(tm)}</div>${readHtml}</div></div>`;
     });
     box.innerHTML = html;
     if(!silent || nearBottom || d.messages.length !== _mailCount) box.scrollTop = box.scrollHeight;
@@ -870,15 +1095,20 @@ async function sendMail(){
   const subject = document.getElementById('mail-subject').value.trim();
   const bodyEl = document.getElementById('mail-body');
   const body = bodyEl.value.trim();
-  if(!body){ showAlert('メッセージを入力してください','error'); return; }
+  if(!body && !_pendingFiles.length){ showAlert('メッセージを入力してください','error'); return; }
   const btn = document.getElementById('mail-send-btn');
   btn.disabled = true;
   try{
-    const r = await fetch(`/api/echo-records/${_mailEchoId}/send`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject,body})});
+    const fd = new FormData();
+    fd.append('subject', subject);
+    fd.append('body', body);
+    _pendingFiles.forEach(f => fd.append('files', f));
+    const r = await fetch(`/api/echo-records/${_mailEchoId}/send`,{method:'POST',body:fd});
     const d = await r.json();
     if(d.ok){
       bodyEl.value=''; bodyEl.style.height='auto';
-      _mailCount = -1; // 強制再描画
+      _pendingFiles = []; renderAttachList();
+      _mailCount = -1; _mailSig = ''; // 強制再描画
       loadMailThread(_mailEchoId, false);
     }else{
       showAlert(d.error||'送信に失敗しました','error');
@@ -892,6 +1122,15 @@ document.addEventListener('keydown', e=>{
   if(e.key==='Enter' && !e.shiftKey && document.activeElement && document.activeElement.id==='mail-body'){
     e.preventDefault(); sendMail();
   }
+});
+
+// テンプレポップオーバーの外側クリックで閉じる
+document.addEventListener('click', e=>{
+  const pop = document.getElementById('template-pop');
+  if(!pop || pop.style.display!=='block') return;
+  if(pop.contains(e.target)) return;
+  if(e.target.closest && e.target.closest('.chat-tool-btn')) return;
+  pop.style.display='none';
 });
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -919,6 +1158,29 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
     <div style="padding:12px 20px;border-top:1px solid #e5e7eb;text-align:right;">
       <button onclick="closeDgr()" style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer;">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 状況タグ＋色 管理モーダル ── -->
+<div id="status-mgr-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:2000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;width:420px;max-width:95vw;max-height:82vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="margin:0;font-size:15px;font-weight:700;">状況タグと行カラーの管理</h3>
+      <button onclick="closeStatusMgr()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+    <div style="padding:14px 20px;">
+      <p style="margin:0 0 10px;font-size:12px;color:#6b7280;">左の■をクリックすると、その状況の行の背景色を変更できます。</p>
+      <div id="status-mgr-list" style="min-height:50px;"></div>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <input id="status-mgr-input" type="text" placeholder="新しい状況タグ（例：契約）"
+          style="flex:1;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:14px;outline:none;"
+          onkeydown="if(event.key==='Enter'){addStatusOpt();}" autocomplete="off">
+        <button onclick="addStatusOpt()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;">追加</button>
+      </div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #e5e7eb;text-align:right;">
+      <button onclick="closeStatusMgr()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">完了</button>
     </div>
   </div>
 </div>

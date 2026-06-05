@@ -19,6 +19,9 @@ import smtplib
 import email as emaillib
 from email.header import decode_header as _decode_header
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders as _email_encoders
 from email.utils import parseaddr as _parseaddr
 from functools import wraps
 from flask import Flask, redirect, url_for, session, render_template, request, jsonify, make_response
@@ -608,6 +611,7 @@ class EchoRecord(db.Model):
     customer_email = db.Column(db.String(200), nullable=True) # お客様メール（送信先）
     has_unread_reply = db.Column(db.Boolean, default=False)   # 未読の返信あり
     has_phone_number = db.Column(db.Boolean, default=False)   # 電話番号の有無（〇/×）
+    status        = db.Column(db.String(40), nullable=True)   # 状況タグ（追客中/申込/終了 など）
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -625,7 +629,33 @@ class MailMessage(db.Model):
     message_id  = db.Column(db.String(300))    # メールのMessage-ID
     in_reply_to = db.Column(db.String(300))
     is_read     = db.Column(db.Boolean, default=True)
+    opened_at   = db.Column(db.DateTime, nullable=True)   # 送信メールを相手が開いた日時（既読）
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class MailAttachment(db.Model):
+    """メールの添付ファイル（PDF/画像など）。本文と一緒に保存。"""
+    __tablename__ = 'mail_attachment'
+    id           = db.Column(db.Integer, primary_key=True)
+    message_id   = db.Column(db.Integer, db.ForeignKey('mail_message.id'))
+    store_id     = db.Column(db.Integer, db.ForeignKey('store.id'))
+    filename     = db.Column(db.String(300))
+    content_type = db.Column(db.String(120))
+    size         = db.Column(db.Integer, default=0)
+    data         = db.Column(db.LargeBinary)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class MailTemplate(db.Model):
+    """返信テンプレート（テナント別）。"""
+    __tablename__ = 'mail_template'
+    id         = db.Column(db.Integer, primary_key=True)
+    tenant_id  = db.Column(db.Integer, nullable=True)
+    title      = db.Column(db.String(120))
+    subject    = db.Column(db.String(300))
+    body       = db.Column(db.Text)
+    sort_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class MailSetting(db.Model):
@@ -1252,6 +1282,22 @@ def migrate_db():
             print("  Added column echo_record.has_phone_number")
         except Exception as e:
             print(f"  Skip echo_record.has_phone_number: {e}")
+    if 'status' not in er_cols:
+        try:
+            cursor.execute("ALTER TABLE echo_record ADD COLUMN status VARCHAR(40)")
+            print("  Added column echo_record.status")
+        except Exception as e:
+            print(f"  Skip echo_record.status: {e}")
+
+    # mail_message の opened_at カラムを追加（既読トラッキング）
+    try:
+        cursor.execute("PRAGMA table_info(mail_message)")
+        mmcols = {r[1] for r in cursor.fetchall()}
+        if mmcols and 'opened_at' not in mmcols:
+            cursor.execute("ALTER TABLE mail_message ADD COLUMN opened_at DATETIME")
+            print("  Added column mail_message.opened_at")
+    except Exception as e:
+        print(f"  Skip mail_message.opened_at: {e}")
 
     # mail_setting の custom_keywords カラムを追加
     try:
@@ -1308,6 +1354,8 @@ def migrate_postgres():
         ("echo_record",              "customer_email", "VARCHAR(200)"),
         ("echo_record",              "has_unread_reply", "BOOLEAN DEFAULT FALSE"),
         ("echo_record",              "has_phone_number", "BOOLEAN DEFAULT FALSE"),
+        ("echo_record",              "status",          "VARCHAR(40)"),
+        ("mail_message",             "opened_at",       "TIMESTAMP"),
         ("mail_setting",             "custom_keywords", "TEXT"),
         ("mail_setting",             "import_after",    "TIMESTAMP"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
@@ -1337,6 +1385,7 @@ def migrate_postgres():
 _DROPDOWN_DEFAULTS = {
     'echo_media':      ['SUUMO', "HOME'S", 'アットホーム', 'カナリー', 'Instagram', 'TikTok', '自社HP', '電話', 'SNS', '紹介', 'その他'],
     'echo_method':     ['メール', '電話', 'LINE', 'チャット', 'その他'],
+    'echo_status':     ['追客中', '申込', '終了'],
     'cs_media':        ['SUUMO', "HOME'S", 'アットホーム', 'カナリー', 'Instagram', 'TikTok', '自社HP', '電話', 'SNS', '紹介', 'その他'],
     'cs_service_type': ['来店', '電話', 'メール', 'オンライン', 'LINE', 'その他'],
     'cs_status':       ['追客中', '申込', '他決', 'キャンセル'],
@@ -2198,6 +2247,51 @@ def _email_plain_body(msg):
     return body
 
 
+def _email_attachments(msg):
+    """受信メールから添付ファイル [(filename, content_type, bytes), ...] を取り出す。"""
+    out = []
+    if not msg.is_multipart():
+        return out
+    for part in msg.walk():
+        if part.get_content_maintype() == 'multipart':
+            continue
+        cd = str(part.get('Content-Disposition') or '')
+        fname = part.get_filename()
+        if fname:
+            try:
+                fname = _decode_mime(fname)
+            except Exception:
+                pass
+        # 添付 or インライン画像のみ（本文テキスト/HTMLは除外）
+        is_attach = ('attachment' in cd.lower()) or bool(fname)
+        if not is_attach:
+            continue
+        try:
+            raw = part.get_payload(decode=True)
+        except Exception:
+            raw = None
+        if not raw:
+            continue
+        ctype = part.get_content_type() or 'application/octet-stream'
+        if not fname:
+            ext = (ctype.split('/')[-1] or 'bin')[:6]
+            fname = f'attachment.{ext}'
+        out.append((fname[:300], ctype[:120], raw))
+    return out
+
+
+APP_BASE_URL = os.getenv('APP_BASE_URL', 'https://app.mieroom.cloud')
+_IMG_EXTS = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp')
+
+
+def _text_to_html(text):
+    """プレーンテキスト本文をHTMLに（改行→<br>、エスケープ）"""
+    safe = (str(text or '')
+            .replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
+    safe = safe.replace('\n', '<br>')
+    return f'<div style="font-size:14px;line-height:1.7;color:#111827;white-space:normal;">{safe}</div>'
+
+
 def parse_custom_keywords(text):
     """設定の追加キーワード文字列を [(キーワード, 媒体名), ...] に変換。
     1行＝「語」または「語=媒体名」「語,媒体名」「語：媒体名」。"""
@@ -2565,7 +2659,7 @@ def _handle_incoming_reply(store_id, msg):
         return False  # 既存反響に紐づかない → 取り込まない
 
     body = _email_plain_body(msg)
-    db.session.add(MailMessage(
+    mm = MailMessage(
         store_id=store_id, echo_id=echo_id, direction='in',
         from_addr=_decode_mime(msg.get('From', ''))[:300],
         to_addr=_decode_mime(msg.get('To', ''))[:300],
@@ -2573,7 +2667,19 @@ def _handle_incoming_reply(store_id, msg):
         body=body, message_id=message_id[:300] or None,
         in_reply_to=(msg.get('In-Reply-To') or '')[:300] or None,
         is_read=False,
-    ))
+    )
+    db.session.add(mm)
+    db.session.flush()  # mm.id 採番（添付の紐付け用）
+    # 受信した添付ファイルを保存
+    try:
+        for (fname, ctype, raw) in _email_attachments(msg):
+            if raw and len(raw) <= 20 * 1024 * 1024:   # 20MB上限
+                db.session.add(MailAttachment(
+                    message_id=mm.id, store_id=store_id,
+                    filename=fname, content_type=ctype,
+                    size=len(raw), data=raw))
+    except Exception as e:
+        print(f"  添付保存スキップ: {e}")
     rec = EchoRecord.query.get(echo_id)
     if rec:
         rec.has_unread_reply = True
@@ -2581,8 +2687,10 @@ def _handle_incoming_reply(store_id, msg):
     return True
 
 
-def send_mail_for_store(store_id, echo_id, subject, body):
-    """店舗のGmail(SMTP)からお客様へ送信し、会話に保存。"""
+def send_mail_for_store(store_id, echo_id, subject, body, attachments=None, base_url=None):
+    """店舗のGmail(SMTP)からお客様へ送信し、会話に保存。
+    attachments: [(filename, content_type, bytes), ...]
+    base_url: 既読トラッキング用ピクセルの絶対URLベース"""
     ms = MailSetting.query.filter_by(store_id=store_id).first()
     if not ms or not ms.imap_user or not ms.imap_pass:
         return {'ok': False, 'error': 'メール設定が未設定です'}
@@ -2599,30 +2707,61 @@ def send_mail_for_store(store_id, echo_id, subject, body):
                .order_by(MailMessage.id.desc()).first())
     msg_id = f"<mieroom-{echo_id}-{int(time.time()*1000)}@mieroom.cloud>"
 
-    mime = MIMEText(body or '', 'plain', 'utf-8')
-    mime['Subject'] = subject or '（無題）'
-    mime['From'] = ms.imap_user
-    mime['To'] = to_addr
-    mime['Message-ID'] = msg_id
-    if last_in and last_in.message_id:
-        mime['In-Reply-To'] = last_in.message_id
-        mime['References'] = last_in.message_id
-
-    try:
-        host = (ms.imap_host or 'imap.gmail.com').replace('imap.', 'smtp.')
-        s = smtplib.SMTP_SSL(host, 465, timeout=20)
-        s.login(ms.imap_user, ms.imap_pass)
-        s.sendmail(ms.imap_user, [to_addr], mime.as_string())
-        s.quit()
-    except Exception as e:
-        return {'ok': False, 'error': f'送信に失敗しました：{e}'}
-
-    db.session.add(MailMessage(
+    # 先に会話レコードを作成してIDを採番（既読ピクセルURLに使う）
+    mm = MailMessage(
         store_id=store_id, echo_id=echo_id, direction='out',
         from_addr=ms.imap_user, to_addr=to_addr,
         subject=subject or '', body=body or '',
         message_id=msg_id, is_read=True,
-    ))
+    )
+    db.session.add(mm)
+    db.session.flush()
+
+    base = (base_url or APP_BASE_URL).rstrip('/')
+    pixel = f'<img src="{base}/m/o/{mm.id}.gif" width="1" height="1" alt="" style="display:none">'
+    html_body = _text_to_html(body or '') + pixel
+
+    msg = MIMEMultipart('mixed')
+    msg['Subject'] = subject or '（無題）'
+    msg['From'] = ms.imap_user
+    msg['To'] = to_addr
+    msg['Message-ID'] = msg_id
+    if last_in and last_in.message_id:
+        msg['In-Reply-To'] = last_in.message_id
+        msg['References'] = last_in.message_id
+
+    alt = MIMEMultipart('alternative')
+    alt.attach(MIMEText(body or '', 'plain', 'utf-8'))
+    alt.attach(MIMEText(html_body, 'html', 'utf-8'))
+    msg.attach(alt)
+
+    atts = attachments or []
+    for (fname, ctype, raw) in atts:
+        maintype, _, subtype = (ctype or 'application/octet-stream').partition('/')
+        if not subtype:
+            maintype, subtype = 'application', 'octet-stream'
+        part = MIMEBase(maintype, subtype)
+        part.set_payload(raw)
+        _email_encoders.encode_base64(part)
+        part.add_header('Content-Disposition', 'attachment', filename=str(fname))
+        msg.attach(part)
+
+    try:
+        host = (ms.imap_host or 'imap.gmail.com').replace('imap.', 'smtp.')
+        s = smtplib.SMTP_SSL(host, 465, timeout=40)
+        s.login(ms.imap_user, ms.imap_pass)
+        s.sendmail(ms.imap_user, [to_addr], msg.as_string())
+        s.quit()
+    except Exception as e:
+        db.session.rollback()
+        return {'ok': False, 'error': f'送信に失敗しました：{e}'}
+
+    # 添付を保存（送信成功後）
+    for (fname, ctype, raw) in atts:
+        db.session.add(MailAttachment(
+            message_id=mm.id, store_id=store_id,
+            filename=str(fname)[:300], content_type=(ctype or 'application/octet-stream')[:120],
+            size=len(raw), data=raw))
     db.session.commit()
     return {'ok': True}
 
@@ -2939,6 +3078,19 @@ def api_echo_messages(rid):
         changed = True
     if changed:
         db.session.commit()
+    # 添付ファイルをメッセージ単位で取得（1クエリ）
+    msg_ids = [m.id for m in msgs]
+    atts_by_msg = {}
+    if msg_ids:
+        for a in MailAttachment.query.filter(MailAttachment.message_id.in_(msg_ids)).all():
+            fn = (a.filename or '').lower()
+            atts_by_msg.setdefault(a.message_id, []).append({
+                'id': a.id,
+                'filename': a.filename or 'ファイル',
+                'content_type': a.content_type or '',
+                'size': a.size or 0,
+                'is_image': (a.content_type or '').startswith('image/') or fn.endswith(_IMG_EXTS),
+            })
     return jsonify({
         'customer_name': rec.list_name or '',
         'customer_email': rec.customer_email or '',
@@ -2949,6 +3101,9 @@ def api_echo_messages(rid):
             'body': m.body or '',
             'from': m.from_addr or '',
             'at': m.created_at.strftime('%Y-%m-%d %H:%M') if m.created_at else '',
+            'read': bool(m.opened_at) if m.direction == 'out' else None,
+            'read_at': m.opened_at.strftime('%Y-%m-%d %H:%M') if m.opened_at else '',
+            'attachments': atts_by_msg.get(m.id, []),
         } for m in msgs],
     })
 
@@ -2960,13 +3115,188 @@ def api_echo_send(rid):
     rec = EchoRecord.query.get_or_404(rid)
     if rec.store_id not in allowed:
         return jsonify({'error': '権限がありません'}), 403
-    data = request.get_json() or {}
-    subject = (data.get('subject') or '').strip()
-    body = (data.get('body') or '').strip()
-    if not body:
+
+    # JSON / multipart(添付あり) 両対応
+    attachments = []
+    if request.content_type and 'multipart/form-data' in request.content_type:
+        subject = (request.form.get('subject') or '').strip()
+        body = (request.form.get('body') or '').strip()
+        for f in request.files.getlist('files'):
+            if not f or not f.filename:
+                continue
+            raw = f.read()
+            if not raw:
+                continue
+            if len(raw) > 20 * 1024 * 1024:
+                return jsonify({'ok': False, 'error': f'添付「{f.filename}」が大きすぎます（20MBまで）'})
+            attachments.append((f.filename, f.mimetype or 'application/octet-stream', raw))
+    else:
+        data = request.get_json() or {}
+        subject = (data.get('subject') or '').strip()
+        body = (data.get('body') or '').strip()
+
+    if not body and not attachments:
         return jsonify({'ok': False, 'error': '本文を入力してください'})
-    res = send_mail_for_store(rec.store_id, rid, subject, body)
+    res = send_mail_for_store(rec.store_id, rid, subject, body,
+                              attachments=attachments,
+                              base_url=request.url_root)
     return jsonify(res)
+
+
+@app.route("/api/mail-attachments/<int:aid>", methods=["GET"])
+@login_required
+def api_mail_attachment(aid):
+    allowed = get_allowed_store_ids()
+    a = MailAttachment.query.get_or_404(aid)
+    if a.store_id not in allowed:
+        return "権限がありません", 403
+    from flask import Response as _Resp
+    ctype = a.content_type or 'application/octet-stream'
+    inline = ctype.startswith('image/') or ctype == 'application/pdf'
+    disp = 'inline' if inline else 'attachment'
+    fn = (a.filename or 'file').replace('"', '')
+    resp = _Resp(a.data or b'', mimetype=ctype)
+    try:
+        from urllib.parse import quote as _q
+        resp.headers['Content-Disposition'] = f"{disp}; filename*=UTF-8''{_q(fn)}"
+    except Exception:
+        resp.headers['Content-Disposition'] = f'{disp}; filename="{fn}"'
+    return resp
+
+
+@app.route("/m/o/<int:mid>.gif", methods=["GET"])
+def mail_open_pixel(mid):
+    """送信メール内のトラッキングピクセル。読み込まれたら既読(opened_at)を記録。"""
+    try:
+        m = MailMessage.query.get(mid)
+        if m and m.direction == 'out' and not m.opened_at:
+            m.opened_at = datetime.utcnow()
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+    # 1x1 透明GIF
+    gif = (b'GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9'
+           b'\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00'
+           b'\x02\x02D\x01\x00;')
+    from flask import Response as _Resp
+    resp = _Resp(gif, mimetype='image/gif')
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    resp.headers['Pragma'] = 'no-cache'
+    return resp
+
+
+# ── 返信テンプレート API ──────────────────────────────────
+_MAIL_TEMPLATE_DEFAULTS = [
+    ('お問い合わせ御礼', 'お問い合わせありがとうございます',
+     'この度はお問い合わせいただき、誠にありがとうございます。\n担当させていただきます。\n\nご希望条件など改めて確認させていただきたく存じます。\n何卒よろしくお願いいたします。'),
+    ('内見のご案内', '内見のご案内',
+     'お世話になっております。\nご内見の日程について、下記のいずれかでご都合いかがでしょうか。\n\n・候補日①：\n・候補日②：\n\nご返信お待ちしております。'),
+    ('追客フォロー', 'その後のご状況はいかがでしょうか',
+     'お世話になっております。\nその後、お部屋探しのご状況はいかがでしょうか。\n新着のお部屋もございますので、ご希望条件を改めてお聞かせいただけますと幸いです。\n\nよろしくお願いいたします。'),
+]
+
+
+@app.route("/api/mail-templates", methods=["GET"])
+@login_required
+def api_mail_templates_get():
+    tenant_id = _get_tenant_id()
+    if MailTemplate.query.filter_by(tenant_id=tenant_id).count() == 0:
+        for i, (t, s, b) in enumerate(_MAIL_TEMPLATE_DEFAULTS):
+            db.session.add(MailTemplate(tenant_id=tenant_id, title=t, subject=s, body=b, sort_order=i))
+        db.session.commit()
+    items = (MailTemplate.query.filter_by(tenant_id=tenant_id)
+             .order_by(MailTemplate.sort_order, MailTemplate.id).all())
+    return jsonify([{'id': t.id, 'title': t.title or '', 'subject': t.subject or '',
+                     'body': t.body or ''} for t in items])
+
+
+@app.route("/api/mail-templates", methods=["POST"])
+@login_required
+def api_mail_templates_add():
+    data = request.get_json() or {}
+    title = (data.get('title') or '').strip()
+    body = (data.get('body') or '').strip()
+    if not title or not body:
+        return jsonify({'error': 'タイトルと本文を入力してください'}), 400
+    tenant_id = _get_tenant_id()
+    mx = db.session.query(db.func.max(MailTemplate.sort_order)).filter_by(tenant_id=tenant_id).scalar() or 0
+    t = MailTemplate(tenant_id=tenant_id, title=title[:120],
+                     subject=(data.get('subject') or '')[:300], body=body, sort_order=mx + 1)
+    db.session.add(t)
+    db.session.commit()
+    return jsonify({'id': t.id})
+
+
+@app.route("/api/mail-templates/<int:tid>", methods=["PUT"])
+@login_required
+def api_mail_templates_update(tid):
+    tenant_id = _get_tenant_id()
+    t = MailTemplate.query.get_or_404(tid)
+    if t.tenant_id != tenant_id:
+        return jsonify({'error': 'forbidden'}), 403
+    data = request.get_json() or {}
+    if 'title' in data:
+        t.title = (data.get('title') or '')[:120]
+    if 'subject' in data:
+        t.subject = (data.get('subject') or '')[:300]
+    if 'body' in data:
+        t.body = data.get('body') or ''
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/mail-templates/<int:tid>", methods=["DELETE"])
+@login_required
+def api_mail_templates_delete(tid):
+    tenant_id = _get_tenant_id()
+    t = MailTemplate.query.get_or_404(tid)
+    if t.tenant_id != tenant_id:
+        return jsonify({'error': 'forbidden'}), 403
+    db.session.delete(t)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── 状況タグの行カラー API（反響管理表）──────────────────────
+ECHO_STATUS_PALETTE = ['#CCFBF1', '#dbeafe', '#fef9c3', '#fde4cf', '#e9d5ff',
+                       '#fecaca', '#d1fae5', '#fbcfe8', '#e0e7ff', '#cffafe']
+
+
+@app.route("/api/echo-status-colors", methods=["GET"])
+@login_required
+def api_echo_status_colors_get():
+    allowed = get_allowed_store_ids()
+    store_id = allowed[0] if allowed else 1
+    tenant_id = _get_tenant_id()
+    opts = (DropdownOption.query.filter(
+                DropdownOption.category == 'echo_status',
+                db.or_(DropdownOption.tenant_id == tenant_id, DropdownOption.tenant_id == None))
+            .order_by(DropdownOption.sort_order, DropdownOption.id).all())
+    result = {}
+    for i, o in enumerate(opts):
+        sc = StatusColor.query.filter_by(store_id=store_id, status_key='echo:' + o.value).first()
+        result[o.value] = (sc.row_bg_color if (sc and sc.row_bg_color)
+                           else ECHO_STATUS_PALETTE[i % len(ECHO_STATUS_PALETTE)])
+    return jsonify(result)
+
+
+@app.route("/api/echo-status-colors", methods=["PUT"])
+@login_required
+def api_echo_status_colors_update():
+    allowed = get_allowed_store_ids()
+    store_id = allowed[0] if allowed else 1
+    data = request.get_json() or {}
+    colors = data.get('colors') if isinstance(data.get('colors'), dict) else data
+    for key, color in (colors or {}).items():
+        if not isinstance(color, str):
+            continue
+        sc = StatusColor.query.filter_by(store_id=store_id, status_key='echo:' + key).first()
+        if not sc:
+            sc = StatusColor(store_id=store_id, status_key='echo:' + key)
+            db.session.add(sc)
+        sc.row_bg_color = color or '#ffffff'
+    db.session.commit()
+    return jsonify({'status': 'ok'})
 
 
 @app.route("/echo-management")
@@ -3031,6 +3361,7 @@ def api_echo_records_list():
         'has_unread_reply': bool(r.has_unread_reply),
         'needs_reply': last_dir.get(r.id) == 'in',
         'has_phone_number': bool(r.has_phone_number),
+        'status': r.status or '',
     } for r in records])
 
 
@@ -3105,6 +3436,8 @@ def api_echo_records_update(rid):
         r.has_line = bool(data.get('has_line'))
     if 'has_phone_number' in data:
         r.has_phone_number = bool(data.get('has_phone_number'))
+    if 'status' in data:
+        r.status = (data.get('status') or '') or None
     if 'memo' in data:
         r.memo = data.get('memo')
     db.session.commit()
