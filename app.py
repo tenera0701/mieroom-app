@@ -128,8 +128,7 @@ def inject_ui_context():
         u = AppUser.query.get(uid)
         if not u or u.role == 'super_admin' or not u.tenant_id:
             return False
-        t = Tenant.query.get(u.tenant_id)
-        return bool(t and t.plan == 'chat_pro')
+        return tenant_has_option(u.tenant_id, 'chat_pro')
 
     return {
         'is_premium': _is_premium(),
@@ -158,6 +157,46 @@ class Tenant(db.Model):
     subscription_status = db.Column(db.String(20), default='trial')  # trial / active / locked / cancelled
     contract_start_date = db.Column(db.Date, nullable=True)  # 契約開始日
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class TenantOption(db.Model):
+    """テナントに紐づくオプション（プランに追加するアドオン）。
+    複数付与可能。option_key は PLAN_OPTION_DEFS のキー。"""
+    __tablename__ = 'tenant_option'
+    id          = db.Column(db.Integer, primary_key=True)
+    tenant_id   = db.Column(db.Integer, db.ForeignKey('tenant.id'))
+    option_key  = db.Column(db.String(40))
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# 利用可能なオプション一覧（今後ここに追加していく）
+PLAN_OPTION_DEFS = [
+    {'key': 'chat_pro', 'name': 'チャットPro',
+     'desc': 'チャットで画像・PDFの添付が可能になり、メッセージを2年間保存（通常はテキストのみ・60日保存）'},
+]
+
+
+def tenant_option_keys(tenant_id):
+    if not tenant_id:
+        return set()
+    return {o.option_key for o in TenantOption.query.filter_by(tenant_id=tenant_id).all()}
+
+
+def tenant_has_option(tenant_id, key):
+    if not tenant_id:
+        return False
+    return TenantOption.query.filter_by(tenant_id=tenant_id, option_key=key).first() is not None
+
+
+def set_tenant_options(tenant_id, keys):
+    """テナントのオプションを keys（有効なキーのみ）で置き換える"""
+    valid = {d['key'] for d in PLAN_OPTION_DEFS}
+    want = {k for k in (keys or []) if k in valid}
+    cur = tenant_option_keys(tenant_id)
+    for k in want - cur:
+        db.session.add(TenantOption(tenant_id=tenant_id, option_key=k))
+    for k in cur - want:
+        TenantOption.query.filter_by(tenant_id=tenant_id, option_key=k).delete()
 
 
 class Store(db.Model):
@@ -1539,6 +1578,19 @@ with app.app_context():
     ensure_super_admin()
     migrate_tenant_data()
     seed_dropdown_defaults()
+    # plan='chat_pro'（旧仕様）→ オプション 'chat_pro' に変換し、プランは standard に戻す
+    try:
+        legacy = Tenant.query.filter_by(plan='chat_pro').all()
+        for t in legacy:
+            if not TenantOption.query.filter_by(tenant_id=t.id, option_key='chat_pro').first():
+                db.session.add(TenantOption(tenant_id=t.id, option_key='chat_pro'))
+            t.plan = 'standard'
+        if legacy:
+            db.session.commit()
+            print(f"chat_pro plan→option 変換: {len(legacy)}件")
+    except Exception as e:
+        db.session.rollback()
+        print(f"chat_pro migrate error: {e}")
     # 無効なPLCustomItemテンプレートをクリーンアップ（数字のみの名前など）
     try:
         invalid_items = PLCustomItem.query.filter(
@@ -3366,8 +3418,7 @@ def _chat_user():
 
 
 def _chat_is_pro(tenant_id):
-    t = Tenant.query.get(tenant_id) if tenant_id else None
-    return bool(t and t.plan == 'chat_pro')
+    return tenant_has_option(tenant_id, 'chat_pro')
 
 
 def _chat_retention_days(tenant_id):
@@ -7003,7 +7054,7 @@ def admin_tenants():
     cur_user = AppUser.query.get(session.get('app_user_id'))
     is_super_admin = cur_user and cur_user.role == 'super_admin'
     return render_template("admin_tenants.html", tenants=tenants, now=datetime.now(),
-                           is_super_admin=is_super_admin)
+                           is_super_admin=is_super_admin, plan_options=PLAN_OPTION_DEFS)
 
 
 @app.route("/admin/applications")
@@ -7060,6 +7111,7 @@ def api_tenants_get():
             'id': t.id,
             'name': t.name,
             'plan': t.plan,
+            'options': sorted(tenant_option_keys(t.id)),
             'is_active': t.is_active,
             'subscription_status': t.subscription_status or 'trial',
             'trial_ends_at': t.trial_ends_at.strftime('%Y-%m-%dT%H:%M:%S') if t.trial_ends_at else None,
@@ -7115,6 +7167,8 @@ def api_tenants_post():
         is_active=True,
     )
     db.session.add(owner)
+    db.session.flush()
+    set_tenant_options(tenant.id, data.get('options') or [])
     db.session.commit()
     return jsonify({'status': 'ok', 'id': tenant.id})
 
@@ -7129,6 +7183,8 @@ def api_tenant_update(tid):
         tenant.name = data['name'].strip()
     if 'plan' in data:
         tenant.plan = data['plan']
+    if 'options' in data:
+        set_tenant_options(tid, data['options'])
     if 'is_active' in data:
         tenant.is_active = bool(data['is_active'])
     if 'contract_start_date' in data:

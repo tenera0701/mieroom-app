@@ -117,8 +117,18 @@
         <select id="c-plan" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
           <option value="standard">スタンダード</option>
           <option value="premium">プレミアム</option>
-          <option value="chat_pro">チャットPro</option>
         </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">オプション</label>
+        <div class="space-y-2 border rounded-lg px-3 py-2 bg-gray-50">
+          {% for opt in plan_options %}
+          <label class="flex items-start gap-2 text-sm cursor-pointer">
+            <input type="checkbox" class="c-option mt-0.5" value="{{ opt.key }}">
+            <span><span class="font-medium text-gray-800">{{ opt.name }}</span><br><span class="text-xs text-gray-500">{{ opt.desc }}</span></span>
+          </label>
+          {% endfor %}
+        </div>
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">トライアル期間（日数）</label>
@@ -361,8 +371,18 @@
         <select id="e-plan" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
           <option value="standard">スタンダード</option>
           <option value="premium">プレミアム</option>
-          <option value="chat_pro">チャットPro</option>
         </select>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">オプション</label>
+        <div class="space-y-2 border rounded-lg px-3 py-2 bg-gray-50">
+          {% for opt in plan_options %}
+          <label class="flex items-start gap-2 text-sm cursor-pointer">
+            <input type="checkbox" class="e-option mt-0.5" value="{{ opt.key }}">
+            <span><span class="font-medium text-gray-800">{{ opt.name }}</span><br><span class="text-xs text-gray-500">{{ opt.desc }}</span></span>
+          </label>
+          {% endfor %}
+        </div>
       </div>
       <div>
         <label class="block text-sm font-medium text-gray-700 mb-1">契約開始日</label>
@@ -514,9 +534,10 @@ function renderSection(listId, filtered, label) {
           <div>
             <div class="flex items-center gap-2 flex-wrap">
               <span class="font-bold text-gray-800 text-lg">${escHtml(t.name)}</span>
-              <span class="text-xs px-2 py-0.5 rounded-full ${t.plan === 'premium' ? 'bg-yellow-100 text-yellow-700' : (t.plan === 'chat_pro' ? 'bg-teal-100 text-teal-700' : 'bg-gray-100 text-gray-600')}">
-                ${t.plan === 'premium' ? 'プレミアム' : (t.plan === 'chat_pro' ? 'チャットPro' : 'スタンダード')}
+              <span class="text-xs px-2 py-0.5 rounded-full ${t.plan === 'premium' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'}">
+                ${t.plan === 'premium' ? 'プレミアム' : 'スタンダード'}
               </span>
+              ${(t.options || []).map(k => `<span class="text-xs px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">${OPTION_LABELS[k] || k}</span>`).join('')}
               ${trialBadge(t)}
             </div>
             <div class="text-sm text-gray-500 mt-1 flex flex-wrap gap-4">
@@ -553,9 +574,12 @@ function escHtml(str) {
 }
 
 // 新規作成
+const OPTION_LABELS = { {% for opt in plan_options %}'{{ opt.key }}': '{{ opt.name }}', {% endfor %} };
+
 function openCreateModal() {
   document.getElementById('c-name').value = '';
   document.getElementById('c-plan').value = 'standard';
+  document.querySelectorAll('.c-option').forEach(c => c.checked = false);
   document.getElementById('c-owner-username').value = '';
   document.getElementById('c-owner-email').value = '';
   document.getElementById('c-owner-password').value = '';
@@ -573,6 +597,7 @@ async function createTenant() {
   const body = {
     name: document.getElementById('c-name').value.trim(),
     plan: document.getElementById('c-plan').value,
+    options: Array.from(document.querySelectorAll('.c-option:checked')).map(c => c.value),
     trial_days: parseInt(document.getElementById('c-trial-days').value) || 14,
     owner_username: document.getElementById('c-owner-username').value.trim(),
     owner_email:    document.getElementById('c-owner-email').value.trim(),
@@ -621,7 +646,9 @@ function openEditModal(tid) {
   if (!t) return;
   document.getElementById('e-id').value = tid;
   document.getElementById('e-name').value = t.name;
-  document.getElementById('e-plan').value = t.plan;
+  document.getElementById('e-plan').value = (t.plan === 'premium' ? 'premium' : 'standard');
+  const tOpts = t.options || [];
+  document.querySelectorAll('.e-option').forEach(c => c.checked = tOpts.includes(c.value));
   document.getElementById('e-contract-start').value = t.contract_start_date || '';
   document.getElementById('e-active').checked = t.is_active;
   document.getElementById('e-error').classList.add('hidden');
@@ -739,6 +766,7 @@ async function updateTenant() {
   const body = {
     name: document.getElementById('e-name').value.trim(),
     plan: document.getElementById('e-plan').value,
+    options: Array.from(document.querySelectorAll('.e-option:checked')).map(c => c.value),
     is_active: document.getElementById('e-active').checked,
     contract_start_date: document.getElementById('e-contract-start').value || null,
   };
