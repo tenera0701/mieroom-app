@@ -647,14 +647,22 @@ async function patchRecord(id, field, value) {
   }
 }
 
+// 編集欄を元のセルの幅・高さに合わせ、クリックで行や列が動かないようにする
+function cellEditBox(td) {
+  const cs = getComputedStyle(td);
+  const padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+  const rect = td.getBoundingClientRect();
+  return { w: Math.round(rect.width), h: Math.max(16, Math.round(rect.height - padV)) };
+}
+
 function editCell(td, id, field, type, curVal, options) {
   if (td.querySelector('input,select')) return;
   const prev = td.innerHTML;
+  const _box = cellEditBox(td);
   let el;
   if (type === 'select') {
-    const _cw = Math.round(td.getBoundingClientRect().width);  // 現在のセル幅で固定し列が広がらないように
     el = document.createElement('select');
-    el.style.cssText = 'width:100%;min-width:0;max-width:' + _cw + 'px;box-sizing:border-box;border:1px solid #0D9488;border-radius:4px;padding:2px;font-size:12px;';
+    el.style.cssText = 'width:100%;min-width:0;max-width:' + _box.w + 'px;height:' + _box.h + 'px;box-sizing:border-box;border:1px solid #0D9488;border-radius:4px;padding:0 2px;font-size:12px;';
     (options || []).forEach(([v, l]) => {
       const o = new Option(l || v, v);
       if (String(v) === String(curVal)) o.selected = true;
@@ -685,7 +693,7 @@ function editCell(td, id, field, type, curVal, options) {
   } else {
     el = document.createElement('input');
     el.type = type; el.value = curVal || '';
-    el.style.cssText = 'width:100%;min-width:0;max-width:100%;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
+    el.style.cssText = 'width:100%;min-width:0;max-width:' + _box.w + 'px;height:' + _box.h + 'px;border:1px solid #0D9488;border-radius:4px;padding:0 5px;font-size:12px;box-sizing:border-box;';
     td.innerHTML = ''; td.appendChild(el); el.focus({ preventScroll: true });
     if (type === 'text') el.select();
     const save = async () => { await patchRecord(id, field, el.value); renderTable(); };
