@@ -5015,7 +5015,7 @@ def _auto_lead_media_stats(store_id, year, month):
     def slot(media):
         key = media or '不明'
         if key not in agg:
-            agg[key] = dict(media=key, inquiries=0, replies=0, line_added=0, visits=0,
+            agg[key] = dict(id=None, media=key, inquiries=0, replies=0, line_added=0, visits=0,
                             applications=0, contracts=0, cancellations=0, cancel_amount=0,
                             estimated_sales=0, ad_cost=0)
         return agg[key]
@@ -5068,8 +5068,23 @@ def _auto_lead_media_stats(store_id, year, month):
         if cv.item_type == '広告費' and (cv.amount or 0):
             slot(cv.item_name)['ad_cost'] += cv.amount or 0
 
-    # idは持たない（自動集計のため編集不可）
-    return [SimpleNamespace(id=None, **v) for v in agg.values()]
+    # 手動入力・Excel取込（LeadMediaStat）をマージ（自動集計に加算）。手動分はidを持たせ編集可能に
+    for ms in LeadMediaStat.query.filter_by(store_id=store_id, year=year, month=month).all():
+        s = slot(ms.media)
+        s['id'] = ms.id
+        s['inquiries']       += ms.inquiries or 0
+        s['replies']         += ms.replies or 0
+        s['line_added']      += ms.line_added or 0
+        s['visits']          += ms.visits or 0
+        s['applications']    += ms.applications or 0
+        s['contracts']       += ms.contracts or 0
+        s['cancellations']   += ms.cancellations or 0
+        s['cancel_amount']   += ms.cancel_amount or 0
+        s['estimated_sales'] += ms.estimated_sales or 0
+        s['ad_cost']         += ms.ad_cost or 0
+
+    # 自動集計分はid=None（編集不可）、手動入力分はLeadMediaStatのid（編集可）
+    return [SimpleNamespace(**v) for v in agg.values()]
 
 
 @app.route("/api/leads/monthly-stats")

@@ -471,12 +471,22 @@ async function patchRecord(id, field, value) {
   }
 }
 
-// 編集欄を元のセルの幅・高さに合わせ、クリックで行や列が動かないようにする
+// 編集欄を元のセルの高さに合わせる（クリックで行や列が動かないように）
 function cellEditBox(td) {
   const cs = getComputedStyle(td);
   const padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
   const rect = td.getBoundingClientRect();
   return { w: Math.round(rect.width), h: Math.max(16, Math.round(rect.height - padV)) };
+}
+// 編集欄を「固定高さの枠＋絶対配置」で包む。絶対配置なのでセルの行高・列幅を一切変えない
+function editorWrap(el, box) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:relative;width:100%;height:' + box.h + 'px;overflow:hidden;';
+  el.style.position = 'absolute';
+  el.style.left = '0'; el.style.top = '0'; el.style.right = '0'; el.style.bottom = '0';
+  el.style.width = '100%'; el.style.height = '100%'; el.style.boxSizing = 'border-box';
+  wrap.appendChild(el);
+  return wrap;
 }
 
 function editCell(td, id, field, type, curVal, options) {
@@ -488,9 +498,6 @@ function editCell(td, id, field, type, curVal, options) {
   if (type === 'select') {
     el = document.createElement('select');
     el.className = 'edit-input';
-    el.style.maxWidth = _box.w + 'px';
-    el.style.height = _box.h + 'px';
-    el.style.padding = '0 5px';
     let opts = options || [];
     // 現在値が選択肢に無い場合でも保持できるよう追加
     if (curVal && !opts.some(o => String(o[0]) === String(curVal))) opts = opts.concat([[curVal, curVal]]);
@@ -500,7 +507,7 @@ function editCell(td, id, field, type, curVal, options) {
       el.appendChild(o);
     });
     td.innerHTML = '';
-    td.appendChild(el);
+    td.appendChild(editorWrap(el, _box));
     el.focus({ preventScroll: true });
     // クリックですぐプルダウンを開く（描画後に開く）
     requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
@@ -529,11 +536,8 @@ function editCell(td, id, field, type, curVal, options) {
     el.type = type;
     el.value = curVal || '';
     el.className = 'edit-input';
-    el.style.maxWidth = _box.w + 'px';
-    el.style.height = _box.h + 'px';
-    el.style.padding = '0 5px';
     td.innerHTML = '';
-    td.appendChild(el);
+    td.appendChild(editorWrap(el, _box));
     el.focus({ preventScroll: true });
     if (type === 'text') el.select();
 
