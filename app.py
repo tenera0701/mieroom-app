@@ -8799,6 +8799,87 @@ def api_pending_approvals():
     return jsonify({'count': count, 'url': '/sales'})
 
 
+@app.route("/api/admin/net-diagnose")
+@login_required
+def api_net_diagnose():
+    """本番サーバーからGmail等への到達性を計測する診断（送受信不可の原因切り分け用）。"""
+    import socket as _sock, time as _t, ssl as _ssl
+    out = {}
+
+    # 1) DNS解決（A / AAAA）
+    dns = {}
+    for h in ['smtp.gmail.com', 'imap.gmail.com', 'www.google.com', 'api.resend.com']:
+        e = {'A': [], 'AAAA': []}
+        for fam, label in [(_sock.AF_INET, 'A'), (_sock.AF_INET6, 'AAAA')]:
+            try:
+                infos = _sock.getaddrinfo(h, None, fam, _sock.SOCK_STREAM)
+                e[label] = sorted({i[4][0] for i in infos})
+            except Exception as ex:
+                e[label] = f'ERR {type(ex).__name__}: {ex}'
+        dns[h] = e
+    out['dns'] = dns
+
+    # 2) TCP接続プローブ（family指定）
+    def probe(host, port, family):
+        t0 = _t.time()
+        try:
+            infos = _sock.getaddrinfo(host, port, family, _sock.SOCK_STREAM)
+            if not infos:
+                return {'ok': False, 'err': 'no address'}
+            af, _st, _pr, _cn, addr = infos[0]
+            s = _sock.socket(af, _sock.SOCK_STREAM)
+            s.settimeout(8)
+            s.connect(addr)
+            s.close()
+            return {'ok': True, 'ms': int((_t.time() - t0) * 1000), 'addr': addr[0]}
+        except Exception as ex:
+            return {'ok': False, 'err': f'{type(ex).__name__}: {ex}', 'ms': int((_t.time() - t0) * 1000)}
+
+    probes = {}
+    for host, port in [('smtp.gmail.com', 465), ('smtp.gmail.com', 587), ('smtp.gmail.com', 25),
+                       ('imap.gmail.com', 993), ('www.google.com', 443), ('api.resend.com', 443)]:
+        probes[f'{host}:{port}/v4'] = probe(host, port, _sock.AF_INET)
+        probes[f'{host}:{port}/v6'] = probe(host, port, _sock.AF_INET6)
+    out['probes'] = probes
+
+    # 3) create_connection（smtplib/imaplibの既定動作と同じ AF_UNSPEC）
+    def probe_unspec(host, port):
+        t0 = _t.time()
+        try:
+            s = _sock.create_connection((host, port), timeout=8)
+            peer = s.getpeername()[0]
+            s.close()
+            return {'ok': True, 'fam': ('v6' if ':' in peer else 'v4'), 'peer': peer, 'ms': int((_t.time() - t0) * 1000)}
+        except Exception as ex:
+            return {'ok': False, 'err': f'{type(ex).__name__}: {ex}', 'ms': int((_t.time() - t0) * 1000)}
+    out['create_connection'] = {
+        'smtp.gmail.com:465': probe_unspec('smtp.gmail.com', 465),
+        'smtp.gmail.com:587': probe_unspec('smtp.gmail.com', 587),
+        'imap.gmail.com:993': probe_unspec('imap.gmail.com', 993),
+    }
+
+    # 4) フルSMTPハンドシェイク（IPv4、ログイン手前まで）
+    smtp_hs = {}
+    for port in [465, 587]:
+        t0 = _t.time()
+        try:
+            if port == 465:
+                s = _SMTPSSLIPv4('smtp.gmail.com', 465, local_hostname='mieroom.cloud', timeout=12,
+                                 context=_ssl.create_default_context())
+            else:
+                s = _SMTPIPv4('smtp.gmail.com', 587, local_hostname='mieroom.cloud', timeout=12)
+                s.ehlo(); s.starttls(context=_ssl.create_default_context()); s.ehlo()
+            code = s.noop()[0]
+            try: s.quit()
+            except Exception: pass
+            smtp_hs[f'{port}'] = {'ok': True, 'noop': code, 'ms': int((_t.time() - t0) * 1000)}
+        except Exception as ex:
+            smtp_hs[f'{port}'] = {'ok': False, 'err': f'{type(ex).__name__}: {ex}', 'ms': int((_t.time() - t0) * 1000)}
+    out['smtp_handshake_ipv4'] = smtp_hs
+
+    return jsonify(out)
+
+
 # ── 媒体マスター API ──────────────────────────────────────
 
 @app.route("/api/media-types", methods=["GET"])
