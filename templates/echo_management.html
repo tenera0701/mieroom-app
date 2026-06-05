@@ -660,6 +660,8 @@ function editCell(td, id, field, type, curVal, options) {
       el.appendChild(o);
     });
     td.innerHTML = ''; td.appendChild(el); el.focus();
+    // クリックですぐプルダウンを開く（描画後に開く）
+    requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
     el.addEventListener('change', async () => {
       const val = el.value;
       await patchRecord(id, field, val);
@@ -672,6 +674,7 @@ function editCell(td, id, field, type, curVal, options) {
     el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
     td.innerHTML = ''; td.appendChild(el); el.focus();
     if (type === 'text') el.select();
+    if (type === 'date') requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
     const save = async () => { await patchRecord(id, field, el.value); renderTable(); };
     el.addEventListener('blur', save);
     el.addEventListener('keydown', e => {

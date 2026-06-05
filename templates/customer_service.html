@@ -481,6 +481,8 @@ function editCell(td, id, field, type, curVal, options) {
     td.innerHTML = '';
     td.appendChild(el);
     el.focus();
+    // クリックですぐプルダウンを開く（描画後に開く）
+    requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
     el.addEventListener('change', async () => {
       const val = el.value;
       td.innerHTML = prev; // restore optimistically
@@ -497,6 +499,7 @@ function editCell(td, id, field, type, curVal, options) {
     td.appendChild(el);
     el.focus();
     if (type === 'text') el.select();
+    if (type === 'date') requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
 
     const save = async () => {
       const val = el.value;
