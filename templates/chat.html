@@ -80,7 +80,9 @@
   <div class="ch-side">
     <div class="ch-side-head">
       <h3>チャンネル</h3>
+      {% if current_role in ['owner', 'store_manager'] %}
       <button class="ch-new-btn" onclick="openGroupModal()">＋ グループ</button>
+      {% endif %}
     </div>
     <div class="ch-list" id="ch-list"><div style="padding:14px;color:#94a3b8;font-size:12px;">読み込み中…</div></div>
   </div>

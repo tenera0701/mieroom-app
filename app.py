@@ -3486,6 +3486,8 @@ def api_chat_create_group():
     u = _chat_user()
     if not u or not u.tenant_id:
         return jsonify({'error': 'unauthorized'}), 403
+    if u.role not in ('owner', 'store_manager'):
+        return jsonify({'error': 'グループの作成はオーナー・店長のみ可能です'}), 403
     data = request.get_json() or {}
     name = (data.get('name') or '').strip()
     if not name:
