@@ -166,6 +166,10 @@
       <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin-bottom:4px;">総反響数</div>
       <div style="font-size:20px;font-weight:800;color:#111827;" id="sum-total">0<span style="font-size:11px;color:#6b7280;margin-left:3px;">件</span></div>
     </div>
+    <div style="background:#fff;border:1px solid #5EEAD4;border-radius:10px;padding:12px 18px;min-width:110px;">
+      <div style="font-size:11px;font-weight:600;color:#0F766E;text-transform:uppercase;margin-bottom:4px;">電話番号あり</div>
+      <div style="font-size:20px;font-weight:800;color:#0F766E;" id="sum-phonenum-count">0<span style="font-size:11px;color:#6b7280;margin-left:3px;">件</span><span id="sum-phonenum-rate" style="font-size:12px;color:#6b7280;margin-left:6px;font-weight:600;"></span></div>
+    </div>
     <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 18px;min-width:110px;">
       <div style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin-bottom:4px;">LINE追加率</div>
       <div style="font-size:20px;font-weight:800;color:#111827;" id="sum-line-rate">0<span style="font-size:11px;color:#6b7280;margin-left:3px;">%</span></div>
@@ -198,10 +202,11 @@
       <thead>
         <tr>
           <th>担当者</th>
-          <th>顧客名</th>
           <th>反響日</th>
+          <th>顧客名</th>
           <th>媒体</th>
           <th>手段</th>
+          <th title="電話番号の有無">番号有無</th>
           <th>初回対応日</th>
           <th title="追客①">追①</th>
           <th title="追客②">追②</th>
@@ -222,7 +227,7 @@
         </tr>
       </thead>
       <tbody id="echo-tbody">
-        <tr class="empty-row"><td colspan="22">読み込み中...</td></tr>
+        <tr class="empty-row"><td colspan="23">読み込み中...</td></tr>
       </tbody>
     </table>
   </div>
@@ -476,8 +481,10 @@ function updateSummary() {
   const lineCount  = records.filter(r => r.has_line).length;
   const replyCount = records.filter(r => r.has_reply).length;
   const phoneCount = records.filter(r => r.has_phone).length;
+  const phoneNumCount = records.filter(r => r.has_phone_number).length;
   const pct = (n) => total ? Math.round(n / total * 100) : 0;
   document.getElementById('sum-total').innerHTML      = `${total}<span style="font-size:11px;color:#6b7280;margin-left:3px;">件</span>`;
+  document.getElementById('sum-phonenum-count').innerHTML = `${phoneNumCount}<span style="font-size:11px;color:#6b7280;margin-left:3px;">件</span><span id="sum-phonenum-rate" style="font-size:12px;color:#6b7280;margin-left:6px;font-weight:600;">(${pct(phoneNumCount)}%)</span>`;
   document.getElementById('sum-line-count').innerHTML = `${lineCount}<span style="font-size:11px;color:#6b7280;margin-left:3px;">件</span>`;
   document.getElementById('sum-line-rate').innerHTML  = `${pct(lineCount)}<span style="font-size:11px;color:#6b7280;margin-left:3px;">%</span>`;
   document.getElementById('sum-reply-rate').innerHTML = `${pct(replyCount)}<span style="font-size:11px;color:#6b7280;margin-left:3px;">%</span>`;
@@ -552,7 +559,7 @@ async function toggleFlag(id, field, curVal) {
 function renderTable() {
   const tbody = document.getElementById('echo-tbody');
   if (!records.length) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="22">データがありません</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="23">データがありません</td></tr>';
     return;
   }
   tbody.innerHTML = records.map(r => {
@@ -563,10 +570,11 @@ function renderTable() {
     return `
     <tr class="${rowCls}">
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${escHtml(r.staff_name || '―')}</td>
-      <td class="left" style="max-width:100px;cursor:pointer;" title="${escHtml(r.list_name)}" onclick="editCell(this,${r.id},'list_name','text','${escHtml(r.list_name)}')">${escHtml(r.list_name) || '―'}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'echo_date','date','${r.echo_date||''}')">${r.echo_date ? fmtMD(r.echo_date) : '―'}</td>
+      <td class="left" style="max-width:100px;cursor:pointer;" title="${escHtml(r.list_name)}" onclick="editCell(this,${r.id},'list_name','text','${escHtml(r.list_name)}')">${escHtml(r.list_name) || '―'}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'media','select','${escHtml(r.media)}',ECHO_MEDIA_PAIRS)">${escHtml(r.media) || '―'}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'method','select','${escHtml(r.method)}',ECHO_METHOD_PAIRS)">${escHtml(r.method) || '―'}</td>
+      <td style="cursor:pointer;" title="電話番号の有無（クリックで切替）" onclick="toggleFlag(${r.id},'has_phone_number',${!!r.has_phone_number})">${r.has_phone_number ? '<span class="chk-yes">〇</span>' : '<span style="color:#ef4444;font-weight:800;">×</span>'}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'first_contact_date','date','${r.first_contact_date||''}')">${r.first_contact_date ? fmtMD(r.first_contact_date) : '―'}</td>
       ${[1,2,3,4,5].map(i => `<td style="cursor:pointer;" onclick="editCell(this,${r.id},'followup_${i}','date','${r['followup_'+i]||''}')">${r['followup_'+i] ? `<span class="followup-date">${shortDate(r['followup_'+i])}</span>` : '<span class="followup-empty">—</span>'}</td>`).join('')}
       ${[6,7,8,9,10].map(i => `<td class="followup-extra${_visibleFollowups >= i ? ' visible' : ''}" style="cursor:pointer;" onclick="editCell(this,${r.id},'followup_${i}','date','${r['followup_'+i]||''}')">${r['followup_'+i] ? `<span class="followup-date">${shortDate(r['followup_'+i])}</span>` : '<span class="followup-empty">—</span>'}</td>`).join('')}

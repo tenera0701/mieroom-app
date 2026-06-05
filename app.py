@@ -607,6 +607,7 @@ class EchoRecord(db.Model):
     external_id   = db.Column(db.String(160), nullable=True)  # 反響メール一意ID（重複取込防止）
     customer_email = db.Column(db.String(200), nullable=True) # お客様メール（送信先）
     has_unread_reply = db.Column(db.Boolean, default=False)   # 未読の返信あり
+    has_phone_number = db.Column(db.Boolean, default=False)   # 電話番号の有無（〇/×）
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -1245,6 +1246,12 @@ def migrate_db():
             print("  Added column echo_record.has_unread_reply")
         except Exception as e:
             print(f"  Skip echo_record.has_unread_reply: {e}")
+    if 'has_phone_number' not in er_cols:
+        try:
+            cursor.execute("ALTER TABLE echo_record ADD COLUMN has_phone_number BOOLEAN DEFAULT 0")
+            print("  Added column echo_record.has_phone_number")
+        except Exception as e:
+            print(f"  Skip echo_record.has_phone_number: {e}")
 
     # mail_setting の custom_keywords カラムを追加
     try:
@@ -1300,6 +1307,7 @@ def migrate_postgres():
         ("echo_record",              "external_id",  "VARCHAR(160)"),
         ("echo_record",              "customer_email", "VARCHAR(200)"),
         ("echo_record",              "has_unread_reply", "BOOLEAN DEFAULT FALSE"),
+        ("echo_record",              "has_phone_number", "BOOLEAN DEFAULT FALSE"),
         ("mail_setting",             "custom_keywords", "TEXT"),
         ("mail_setting",             "import_after",    "TIMESTAMP"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
@@ -2487,6 +2495,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                 method='メール',
                 memo=parsed['memo'],
                 has_phone=False,   # 電話対応は自動で〇にしない
+                has_phone_number=bool(parsed.get('has_phone')),  # 電話番号の有無
                 external_id=ext,
                 customer_email=parsed.get('email') or None,
             ))
@@ -3011,6 +3020,7 @@ def api_echo_records_list():
         'memo': r.memo or '',
         'customer_email': r.customer_email or '',
         'has_unread_reply': bool(r.has_unread_reply),
+        'has_phone_number': bool(r.has_phone_number),
     } for r in records])
 
 
@@ -3083,6 +3093,8 @@ def api_echo_records_update(rid):
         r.has_phone = bool(data.get('has_phone'))
     if 'has_line' in data:
         r.has_line = bool(data.get('has_line'))
+    if 'has_phone_number' in data:
+        r.has_phone_number = bool(data.get('has_phone_number'))
     if 'memo' in data:
         r.memo = data.get('memo')
     db.session.commit()
