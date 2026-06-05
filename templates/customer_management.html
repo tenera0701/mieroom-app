@@ -696,7 +696,14 @@ function renderSettled(list, colors) {
     const chk = v => v ? '●' : '×';
 
     const tr = document.createElement('tr');
-    tr.style.background = '#f0fdf4';
+    // 該当する入金方向（金額あり）が全て承認済みなら緑（両方入金済み）、一部未入金なら黄色
+    const hasBrok = (r.brokerage_fee || 0) !== 0;
+    const hasOpt  = optAmt !== 0;
+    const hasAd   = adYen !== 0;
+    const fullyPaid = (!hasBrok || r.brokerage_approved)
+                   && (!hasOpt  || r.option_approved)
+                   && (!hasAd   || r.ad_approved);
+    tr.style.background = fullyPaid ? '#f0fdf4' : '#fffbeb';
     tr.style.textAlign  = 'center';
     tr.innerHTML =
       '<td style="white-space:nowrap;">' + (r.application_date || '―') + '</td>' +
