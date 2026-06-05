@@ -637,6 +637,17 @@ async function createTenant() {
   const res = await fetch('/api/tenants', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
   const json = await res.json();
   if (!res.ok) { errEl.textContent = json.error || 'エラーが発生しました'; errEl.classList.remove('hidden'); return; }
+  // 問合せからの発行なら、その問合せを「契約済」に更新
+  if (_pendingAppId) {
+    try {
+      await fetch(`/api/admin/applications/${_pendingAppId}`, {
+        method: 'PATCH', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ status: 'contracted' })
+      });
+    } catch (e) {}
+    _pendingAppId = null;
+    alert(`クライアントを発行しました。\n\n会社名：${body.name}\nログインID：${body.owner_username}\n初期パスワード：${body.owner_password}\n\n（このログイン情報をクライアントへお伝えください）`);
+  }
   closeCreateModal();
   loadTenants();
 }
@@ -1187,7 +1198,32 @@ async function deleteStore(sid, sname) {
   loadTenants();
 }
 
-document.addEventListener('DOMContentLoaded', loadTenants);
+document.addEventListener('DOMContentLoaded', function(){ loadTenants(); prefillFromInquiry(); });
+
+// 問合せ管理からの「クライアント発行」: URLパラメータで作成フォームを自動入力して開く
+let _pendingAppId = null;
+function _suggestUsername(email){
+  let base = (email && email.includes('@')) ? email.split('@')[0] : '';
+  return (base || '').replace(/[^a-zA-Z0-9_.]/g, '').toLowerCase();
+}
+function _genPassword(){
+  const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = ''; for (let i = 0; i < 10; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+function prefillFromInquiry(){
+  const p = new URLSearchParams(location.search);
+  if (p.get('new') !== '1') return;
+  _pendingAppId = p.get('app_id') || null;
+  openCreateModal();
+  document.getElementById('c-name').value = p.get('company') || '';
+  document.getElementById('c-owner-email').value = p.get('email') || '';
+  document.getElementById('c-owner-username').value = _suggestUsername(p.get('email') || '');
+  const pw = document.getElementById('c-owner-password');
+  pw.type = 'text';                 // 控えやすいよう表示
+  pw.value = _genPassword();        // 初期パスワードを自動生成
+  history.replaceState({}, '', '/admin/tenants');  // URLをクリーンに
+}
 
 // ===== アカウント設定 =====
 function openMyAccountModal() {

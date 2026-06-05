@@ -99,6 +99,8 @@
           </td>
           <td class="px-4 py-3 text-center">
             <div class="flex items-center justify-center gap-2">
+              <button onclick="issueClient({{ a.id }}, this)"
+                      class="text-xs bg-teal-600 hover:bg-teal-700 text-white px-3 py-1 rounded-lg font-medium whitespace-nowrap">クライアント発行</button>
               {% if a.message %}
               <button onclick="showMessage({{ a.id }}, `{{ a.message | replace('`','\\`') }}`)"
                       class="text-xs text-teal-600 hover:underline">内容を見る</button>
@@ -181,6 +183,16 @@ function deleteApp(id, btn) {
         btn.closest('tr').remove();
       }
     });
+}
+
+function issueClient(id, btn) {
+  const row = btn.closest('tr');
+  const company = row.dataset.company || '';
+  const email   = row.dataset.email || '';
+  const name    = row.dataset.name || '';
+  const params = new URLSearchParams({ new: '1', app_id: id, company: company, email: email, contact: name });
+  // クライアント管理画面の新規作成フォームを自動入力で開く
+  location.href = '/admin/tenants?' + params.toString();
 }
 
 function filterTable() {
