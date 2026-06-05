@@ -64,11 +64,29 @@
       transition: width 0.2s ease;
       overflow-y: auto;
     }
+    /* サイドバーのスクロールバーを背景色に合わせる（白いトラックを消す） */
+    #sidebar, #sidebar nav, #sidebar * {
+      scrollbar-width: thin;
+      scrollbar-color: #2a6b67 #0D4A48;
+    }
+    #sidebar::-webkit-scrollbar,
+    #sidebar nav::-webkit-scrollbar { width: 8px; height: 8px; }
+    #sidebar::-webkit-scrollbar-track,
+    #sidebar nav::-webkit-scrollbar-track { background: #0D4A48; }
+    #sidebar::-webkit-scrollbar-thumb,
+    #sidebar nav::-webkit-scrollbar-thumb { background: #2a6b67; border-radius: 4px; }
+    #sidebar::-webkit-scrollbar-thumb:hover,
+    #sidebar nav::-webkit-scrollbar-thumb:hover { background: #38807b; }
+    #sidebar::-webkit-scrollbar-corner,
+    #sidebar nav::-webkit-scrollbar-corner { background: #0D4A48; }
     #sidebar.collapsed { width: 64px; }
     #sidebar.collapsed .nav-label,
     #sidebar.collapsed .logo-text,
     #sidebar.collapsed .user-info { display: none; }
-    #sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; }
+    #sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0 !important; }
+    /* 折りたたみ時：サブ項目のインラインpadding-leftや矢印を打ち消してアイコンを中央に */
+    #sidebar.collapsed .nav-item svg { margin: 0 !important; }
+    #sidebar.collapsed #clerical-chevron { display: none !important; }
     #sidebar.collapsed .logo-wrap { justify-content: center; padding: 12px 0; }
     #sidebar.collapsed .nav-section-label { display: none; }
     /* ロゴ切替: 展開=文字あり、折りたたみ=文字なし */
@@ -308,7 +326,6 @@
               d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
           </svg>
           <span class="nav-label">本部ダッシュボード</span>
-          <span style="margin-left:auto;font-size:9px;background:#f59e0b;color:#fff;border-radius:3px;padding:1px 4px;font-weight:700;">PRO</span>
         </a>
         {% endif %}
 
