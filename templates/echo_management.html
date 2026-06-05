@@ -266,6 +266,32 @@
     </div>
   </div>
 </div>
+
+<!-- メール会話モーダル -->
+<div class="modal-overlay" id="mail-modal">
+  <div class="modal" style="max-width:640px;width:94%;display:flex;flex-direction:column;max-height:88vh;">
+    <div class="modal-header">
+      <h3 id="mail-title" style="font-size:15px;">メールやり取り</h3>
+      <button class="modal-close" onclick="closeMail()">✕</button>
+    </div>
+    <div id="mail-thread" style="flex:1;overflow-y:auto;background:#F8FAFC;padding:14px 16px;min-height:180px;">
+    </div>
+    <div style="border-top:1px solid #e5e7eb;padding:12px 16px;">
+      <div id="mail-noaddr" style="display:none;font-size:12px;color:#b91c1c;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px;padding:8px 10px;margin-bottom:8px;">
+        このお客様のメールアドレスが未登録のため送信できません。
+      </div>
+      <input type="text" id="mail-subject" placeholder="件名"
+        style="width:100%;border:1px solid #d1d5db;border-radius:7px;padding:8px 10px;font-size:13px;box-sizing:border-box;margin-bottom:8px;">
+      <textarea id="mail-body" rows="4" placeholder="本文を入力…"
+        style="width:100%;border:1px solid #d1d5db;border-radius:7px;padding:8px 10px;font-size:13px;box-sizing:border-box;font-family:inherit;resize:vertical;"></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+        <span id="mail-to" style="font-size:11px;color:#6b7280;"></span>
+        <button id="mail-send-btn" onclick="sendMail()"
+          style="background:#0D9488;color:#fff;border:none;border-radius:7px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">📤 送信</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -489,6 +515,10 @@ function renderTable() {
       <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_line',${!!r.has_line})">${r.has_line ? '<span class="chk-yes">〇</span>' : '<span class="chk-no">—</span>'}</td>
       <td class="left" style="max-width:100px;cursor:pointer;" title="${escHtml(r.memo)}" onclick="editCell(this,${r.id},'memo','text','${escHtml(r.memo)}')">${escHtml(r.memo) || ''}</td>
       <td style="white-space:nowrap;">
+        <button class="btn-sm" onclick="openMail(${r.id})"
+          style="border:1px solid #5EEAD4;background:#F0FDFA;color:#0F766E;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;position:relative;">
+          ✉️ メール${r.has_unread_reply ? '<span style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;font-size:9px;border-radius:8px;padding:0 4px;">返信</span>' : ''}
+        </button>
         <button class="btn-sm btn-del" onclick="deleteRecord(${r.id})">削除</button>
       </td>
     </tr>
@@ -656,6 +686,81 @@ async function deleteRecord(id) {
 // スタッフ名をレコードに付加
 async function enrichStaffNames() {
   // staff_id → name マップ (staff_list はサーバー側で渡す)
+}
+
+// ── メール会話 ──
+let _mailEchoId = null;
+function openMail(id){
+  _mailEchoId = id;
+  document.getElementById('mail-subject').value = '';
+  document.getElementById('mail-body').value = '';
+  document.getElementById('mail-thread').innerHTML = '<div style="color:#9ca3af;font-size:12px;text-align:center;padding:20px;">読み込み中…</div>';
+  document.getElementById('mail-modal').classList.add('active');
+  loadMailThread(id);
+}
+function closeMail(){
+  document.getElementById('mail-modal').classList.remove('active');
+  _mailEchoId = null;
+  loadRecords(); // バッジ更新（既読化反映）
+}
+async function loadMailThread(id){
+  try{
+    const r = await fetch(`/api/echo-records/${id}/messages`);
+    const d = await r.json();
+    document.getElementById('mail-title').textContent = `メール：${d.customer_name||''}`;
+    const hasAddr = !!(d.customer_email);
+    document.getElementById('mail-noaddr').style.display = hasAddr ? 'none' : 'block';
+    document.getElementById('mail-send-btn').disabled = !hasAddr;
+    document.getElementById('mail-send-btn').style.opacity = hasAddr ? '1' : '0.5';
+    document.getElementById('mail-to').textContent = hasAddr ? `送信先：${d.customer_email}` : '';
+    // 件名の初期値（返信ならRe:）
+    const lastSubj = d.messages.length ? d.messages[d.messages.length-1].subject : '';
+    if(!document.getElementById('mail-subject').value){
+      document.getElementById('mail-subject').value = lastSubj ? (lastSubj.startsWith('Re:')?lastSubj:('Re: '+lastSubj)) : 'お問い合わせありがとうございます';
+    }
+    const box = document.getElementById('mail-thread');
+    if(!d.messages.length){
+      box.innerHTML = '<div style="color:#9ca3af;font-size:12px;text-align:center;padding:24px;">まだやり取りはありません。下から最初のメールを送信できます。</div>';
+      return;
+    }
+    box.innerHTML = d.messages.map(m=>{
+      const out = m.direction==='out';
+      const align = out ? 'flex-end' : 'flex-start';
+      const bg = out ? '#0D9488' : '#fff';
+      const col = out ? '#fff' : '#111827';
+      const brd = out ? '#0D9488' : '#e5e7eb';
+      return `<div style="display:flex;justify-content:${align};margin-bottom:10px;">
+        <div style="max-width:78%;background:${bg};color:${col};border:1px solid ${brd};border-radius:10px;padding:8px 11px;">
+          ${m.subject?`<div style="font-size:11px;font-weight:700;opacity:.85;margin-bottom:3px;">${escHtml(m.subject)}</div>`:''}
+          <div style="font-size:13px;white-space:pre-wrap;word-break:break-word;">${escHtml(m.body)}</div>
+          <div style="font-size:10px;opacity:.7;margin-top:4px;text-align:right;">${out?'送信':'受信'}・${escHtml(m.at)}</div>
+        </div>
+      </div>`;
+    }).join('');
+    box.scrollTop = box.scrollHeight;
+  }catch(_){
+    document.getElementById('mail-thread').innerHTML = '<div style="color:#b91c1c;font-size:12px;text-align:center;padding:20px;">読み込みに失敗しました</div>';
+  }
+}
+async function sendMail(){
+  if(!_mailEchoId) return;
+  const subject = document.getElementById('mail-subject').value.trim();
+  const body = document.getElementById('mail-body').value.trim();
+  if(!body){ showAlert('本文を入力してください','error'); return; }
+  const btn = document.getElementById('mail-send-btn');
+  btn.disabled = true; btn.textContent = '送信中…';
+  try{
+    const r = await fetch(`/api/echo-records/${_mailEchoId}/send`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subject,body})});
+    const d = await r.json();
+    if(d.ok){
+      document.getElementById('mail-body').value = '';
+      showAlert('送信しました');
+      loadMailThread(_mailEchoId);
+    }else{
+      showAlert(d.error||'送信に失敗しました','error');
+    }
+  }catch(_){ showAlert('送信に失敗しました','error'); }
+  finally{ btn.disabled = false; btn.textContent = '📤 送信'; }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

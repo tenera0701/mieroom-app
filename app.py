@@ -15,8 +15,11 @@ import threading
 import time
 import hashlib
 import imaplib
+import smtplib
 import email as emaillib
 from email.header import decode_header as _decode_header
+from email.mime.text import MIMEText
+from email.utils import parseaddr as _parseaddr
 from functools import wraps
 from flask import Flask, redirect, url_for, session, render_template, request, jsonify, make_response
 from flask_sqlalchemy import SQLAlchemy
@@ -601,7 +604,26 @@ class EchoRecord(db.Model):
     has_line      = db.Column(db.Boolean, default=False)  # LINE追加
     memo          = db.Column(db.Text)
     external_id   = db.Column(db.String(160), nullable=True)  # 反響メール一意ID（重複取込防止）
+    customer_email = db.Column(db.String(200), nullable=True) # お客様メール（送信先）
+    has_unread_reply = db.Column(db.Boolean, default=False)   # 未読の返信あり
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class MailMessage(db.Model):
+    """反響ごとのメール会話（送信・受信）"""
+    __tablename__ = 'mail_message'
+    id          = db.Column(db.Integer, primary_key=True)
+    store_id    = db.Column(db.Integer, db.ForeignKey('store.id'))
+    echo_id     = db.Column(db.Integer, db.ForeignKey('echo_record.id'))
+    direction   = db.Column(db.String(4))      # 'out'（送信）/ 'in'（受信）
+    from_addr   = db.Column(db.String(300))
+    to_addr     = db.Column(db.String(300))
+    subject     = db.Column(db.String(500))
+    body        = db.Column(db.Text)
+    message_id  = db.Column(db.String(300))    # メールのMessage-ID
+    in_reply_to = db.Column(db.String(300))
+    is_read     = db.Column(db.Boolean, default=True)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class MailSetting(db.Model):
@@ -1200,6 +1222,18 @@ def migrate_db():
             print("  Added column echo_record.external_id")
         except Exception as e:
             print(f"  Skip echo_record.external_id: {e}")
+    if 'customer_email' not in er_cols:
+        try:
+            cursor.execute("ALTER TABLE echo_record ADD COLUMN customer_email VARCHAR(200)")
+            print("  Added column echo_record.customer_email")
+        except Exception as e:
+            print(f"  Skip echo_record.customer_email: {e}")
+    if 'has_unread_reply' not in er_cols:
+        try:
+            cursor.execute("ALTER TABLE echo_record ADD COLUMN has_unread_reply BOOLEAN DEFAULT 0")
+            print("  Added column echo_record.has_unread_reply")
+        except Exception as e:
+            print(f"  Skip echo_record.has_unread_reply: {e}")
 
     # mail_setting の custom_keywords カラムを追加
     try:
@@ -1249,6 +1283,8 @@ def migrate_postgres():
         ("daily_report",             "store_id",     "INTEGER"),
         ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
         ("echo_record",              "external_id",  "VARCHAR(160)"),
+        ("echo_record",              "customer_email", "VARCHAR(200)"),
+        ("echo_record",              "has_unread_reply", "BOOLEAN DEFAULT FALSE"),
         ("mail_setting",             "custom_keywords", "TEXT"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
         ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
@@ -2253,6 +2289,12 @@ def parse_reaction_email(msg, extra_map=None, portal_map=None):
     if raw_id:
         memo_lines.append(f"反響ID：{raw_id}")
 
+    # メールアドレス抽出（値に紛れた場合も拾う）
+    cust_email = fields.get('email', '')
+    if cust_email:
+        m_em = re.search(r'[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}', cust_email)
+        cust_email = m_em.group(0) if m_em else ''
+
     return {
         'source': source,
         'name': name or '（氏名不明）',
@@ -2260,6 +2302,7 @@ def parse_reaction_email(msg, extra_map=None, portal_map=None):
         'memo': '\n'.join(memo_lines),
         'external_id': ext,
         'has_phone': bool(fields.get('phone')),
+        'email': cust_email,
     }
 
 
@@ -2311,6 +2354,12 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
             scanned += 1
             parsed = parse_reaction_email(msg, extra_map, portal_map)
             if not parsed:
+                # 反響でなければ、お客様からの返信かどうかを判定して会話に取り込む
+                try:
+                    if _handle_incoming_reply(store_id, msg):
+                        imported += 0  # 返信は反響件数には含めない
+                except Exception as e:
+                    print(f"reply handle error: {e}")
                 continue
             exists = EchoRecord.query.filter_by(store_id=store_id, external_id=parsed['external_id']).first()
             if exists:
@@ -2325,6 +2374,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                 memo=parsed['memo'],
                 has_phone=parsed['has_phone'],
                 external_id=parsed['external_id'],
+                customer_email=parsed.get('email') or None,
             ))
             imported += 1
         db.session.commit()
@@ -2353,6 +2403,104 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
         except Exception:
             db.session.rollback()
         return {'ok': False, 'error': str(e), 'imported': imported, 'scanned': scanned}
+
+
+# ── メール会話（送信／返信取り込み） ─────────────────────
+
+def _addr_only(header_val):
+    """ヘッダ値からメールアドレスのみ抽出"""
+    try:
+        return (_parseaddr(_decode_mime(header_val or ''))[1] or '').strip().lower()
+    except Exception:
+        return ''
+
+
+def _handle_incoming_reply(store_id, msg):
+    """反響でない受信メールが、既存反響への返信か判定して会話に取り込む。取り込んだら True。"""
+    message_id = (msg.get('Message-ID') or '').strip()
+    if message_id and MailMessage.query.filter_by(store_id=store_id, message_id=message_id).first():
+        return False  # 取り込み済み
+
+    refs = f"{msg.get('In-Reply-To','')} {msg.get('References','')}"
+    echo_id = None
+    m = re.search(r'mieroom-(\d+)-', refs)
+    if m:
+        eid = int(m.group(1))
+        rec = EchoRecord.query.filter_by(id=eid, store_id=store_id).first()
+        if rec:
+            echo_id = rec.id
+    if echo_id is None:
+        from_email = _addr_only(msg.get('From'))
+        if from_email:
+            rec = (EchoRecord.query
+                   .filter_by(store_id=store_id, customer_email=from_email)
+                   .order_by(EchoRecord.id.desc()).first())
+            if rec:
+                echo_id = rec.id
+    if echo_id is None:
+        return False  # 既存反響に紐づかない → 取り込まない
+
+    body = _email_plain_body(msg)
+    db.session.add(MailMessage(
+        store_id=store_id, echo_id=echo_id, direction='in',
+        from_addr=_decode_mime(msg.get('From', ''))[:300],
+        to_addr=_decode_mime(msg.get('To', ''))[:300],
+        subject=_decode_mime(msg.get('Subject', ''))[:500],
+        body=body, message_id=message_id[:300] or None,
+        in_reply_to=(msg.get('In-Reply-To') or '')[:300] or None,
+        is_read=False,
+    ))
+    rec = EchoRecord.query.get(echo_id)
+    if rec:
+        rec.has_unread_reply = True
+    db.session.commit()
+    return True
+
+
+def send_mail_for_store(store_id, echo_id, subject, body):
+    """店舗のGmail(SMTP)からお客様へ送信し、会話に保存。"""
+    ms = MailSetting.query.filter_by(store_id=store_id).first()
+    if not ms or not ms.imap_user or not ms.imap_pass:
+        return {'ok': False, 'error': 'メール設定が未設定です'}
+    rec = EchoRecord.query.filter_by(id=echo_id, store_id=store_id).first()
+    if not rec:
+        return {'ok': False, 'error': '対象の反響が見つかりません'}
+    to_addr = (rec.customer_email or '').strip()
+    if not to_addr:
+        return {'ok': False, 'error': 'お客様のメールアドレスが未登録です'}
+
+    # スレッド情報（最後の受信メッセージに返信する形）
+    last_in = (MailMessage.query
+               .filter_by(store_id=store_id, echo_id=echo_id, direction='in')
+               .order_by(MailMessage.id.desc()).first())
+    msg_id = f"<mieroom-{echo_id}-{int(time.time()*1000)}@mieroom.cloud>"
+
+    mime = MIMEText(body or '', 'plain', 'utf-8')
+    mime['Subject'] = subject or '（無題）'
+    mime['From'] = ms.imap_user
+    mime['To'] = to_addr
+    mime['Message-ID'] = msg_id
+    if last_in and last_in.message_id:
+        mime['In-Reply-To'] = last_in.message_id
+        mime['References'] = last_in.message_id
+
+    try:
+        host = (ms.imap_host or 'imap.gmail.com').replace('imap.', 'smtp.')
+        s = smtplib.SMTP_SSL(host, 465, timeout=20)
+        s.login(ms.imap_user, ms.imap_pass)
+        s.sendmail(ms.imap_user, [to_addr], mime.as_string())
+        s.quit()
+    except Exception as e:
+        return {'ok': False, 'error': f'送信に失敗しました：{e}'}
+
+    db.session.add(MailMessage(
+        store_id=store_id, echo_id=echo_id, direction='out',
+        from_addr=ms.imap_user, to_addr=to_addr,
+        subject=subject or '', body=body or '',
+        message_id=msg_id, is_read=True,
+    ))
+    db.session.commit()
+    return {'ok': True}
 
 
 # ── 自動取込サービス：IMAP IDLE（リアルタイム push） ──
@@ -2644,6 +2792,56 @@ def api_portal_sources_save():
     return jsonify({'status': 'ok'})
 
 
+@app.route("/api/echo-records/<int:rid>/messages", methods=["GET"])
+@login_required
+def api_echo_messages(rid):
+    allowed = get_allowed_store_ids()
+    rec = EchoRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed:
+        return jsonify({'error': '権限がありません'}), 403
+    msgs = (MailMessage.query.filter_by(echo_id=rid)
+            .order_by(MailMessage.created_at.asc(), MailMessage.id.asc()).all())
+    # 受信を既読化
+    changed = False
+    for m in msgs:
+        if m.direction == 'in' and not m.is_read:
+            m.is_read = True
+            changed = True
+    if rec.has_unread_reply:
+        rec.has_unread_reply = False
+        changed = True
+    if changed:
+        db.session.commit()
+    return jsonify({
+        'customer_name': rec.list_name or '',
+        'customer_email': rec.customer_email or '',
+        'media': rec.media or '',
+        'messages': [{
+            'direction': m.direction,
+            'subject': m.subject or '',
+            'body': m.body or '',
+            'from': m.from_addr or '',
+            'at': m.created_at.strftime('%Y-%m-%d %H:%M') if m.created_at else '',
+        } for m in msgs],
+    })
+
+
+@app.route("/api/echo-records/<int:rid>/send", methods=["POST"])
+@login_required
+def api_echo_send(rid):
+    allowed = get_allowed_store_ids()
+    rec = EchoRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed:
+        return jsonify({'error': '権限がありません'}), 403
+    data = request.get_json() or {}
+    subject = (data.get('subject') or '').strip()
+    body = (data.get('body') or '').strip()
+    if not body:
+        return jsonify({'ok': False, 'error': '本文を入力してください'})
+    res = send_mail_for_store(rec.store_id, rid, subject, body)
+    return jsonify(res)
+
+
 @app.route("/echo-management")
 @login_required
 @block_super_admin
@@ -2693,6 +2891,8 @@ def api_echo_records_list():
         **{f'followup_{i}': fd(getattr(r, f'followup_{i}')) for i in range(1, 11)},
         'has_reply': r.has_reply, 'has_phone': r.has_phone, 'has_line': r.has_line,
         'memo': r.memo or '',
+        'customer_email': r.customer_email or '',
+        'has_unread_reply': bool(r.has_unread_reply),
     } for r in records])
 
 
