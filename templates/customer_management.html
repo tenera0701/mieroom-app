@@ -1240,8 +1240,27 @@ async function setReviewStatus(id, status) {
   loadSettled().catch(()=>{});
 }
 
+// 編集時に列幅が広がらないよう、現在の列幅でテーブルを固定レイアウトにする
+function lockTableCols(cell) {
+  const table = cell.closest('table');
+  if (!table || table.__colsLocked) return;
+  const row = cell.parentElement;
+  if (!row || !row.cells.length) return;
+  const widths = Array.from(row.cells).map(c => c.getBoundingClientRect().width);
+  const totalW = table.getBoundingClientRect().width;
+  const existing = table.querySelector('colgroup');
+  if (existing) existing.remove();
+  const cg = document.createElement('colgroup');
+  widths.forEach(w => { const col = document.createElement('col'); col.style.width = w + 'px'; cg.appendChild(col); });
+  table.insertBefore(cg, table.firstChild);
+  table.style.width = totalW + 'px';
+  table.style.tableLayout = 'fixed';
+  table.__colsLocked = true;
+}
+
 function editCellApp(td, id, field, type, curVal, opts) {
   if (td.querySelector('input,select')) return;
+  lockTableCols(td);
   const prev = td.innerHTML;
   let el;
   if (type === 'select') {
