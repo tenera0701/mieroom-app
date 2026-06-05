@@ -37,7 +37,15 @@
   .steps { background:#F8FAFC; border:1px solid #e5e7eb; border-radius:10px; padding:14px 16px; font-size:12px; color:#374151; line-height:1.8; }
   .steps b { color:#0F766E; }
   .steps ol { margin:6px 0 0; padding-left:20px; }
-  .steps a { color:#0D9488; }
+  .steps a { color:#0D9488; text-decoration:underline; }
+  .man-step { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:12px 14px; margin-top:12px; }
+  .man-head { font-size:13px; font-weight:800; color:#0F766E; display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+  .man-no { display:inline-block; background:#0D9488; color:#fff; font-size:11px; font-weight:700; padding:2px 9px; border-radius:999px; white-space:nowrap; }
+  .man-body { font-size:12px; color:#374151; line-height:1.85; }
+  .man-body ol, .man-body ul { margin:6px 0 0; padding-left:20px; }
+  .man-body li { margin-bottom:4px; }
+  .man-tip { margin-top:8px; background:#FEF9C3; border:1px solid #FDE047; border-radius:8px; padding:7px 10px; color:#92400e; }
+  .man-note { margin-top:14px; background:#ECFDF5; border:1px solid #A7F3D0; border-radius:8px; padding:9px 12px; color:#065F46; }
   .badge { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; background:#ECFDF5; color:#0F766E; border:1px solid #A7F3D0; }
 </style>
 {% endblock %}
@@ -125,17 +133,70 @@
 
   <!-- 手順 -->
   <div class="card">
-    <h2>🔑 アプリパスワードの作り方</h2>
+    <h2>🔑 アプリパスワードの作り方（かんたんマニュアル）</h2>
     <div class="steps">
-      <b>連携するGmailアカウントで以下を実施してください（初回1回のみ）。</b>
-      <ol>
-        <li>Googleアカウントの「セキュリティ」で <b>2段階認証</b> をオンにする</li>
-        <li><a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">アプリパスワード発行ページ</a> を開く</li>
-        <li>アプリ名（例：<b>反響取込</b>）を入力して「作成」</li>
-        <li>表示された <b>16桁のパスワード</b> を上の「アプリパスワード」欄に貼り付け</li>
-        <li>「接続テスト」→ 成功したら「設定を保存」</li>
-      </ol>
-      ※ アプリパスワードはこのアプリの取込専用です。いつでもGoogle側で無効化できます。
+      <p style="margin:0 0 4px;"><b>「アプリパスワード」とは？</b><br>
+      Gmailのメールを安全に自動取込するための、<b>このアプリ専用の16桁の合言葉</b>です。普段ログインに使うGoogleのパスワードとは別物で、漏れても本体アカウントは安全。いつでも無効化できます。</p>
+      <p style="margin:6px 0 0;color:#6b7280;">⏱ 所要 約5分／連携したいGmailアカウントで、最初に1回だけ行えばOKです。<br>
+      ※ スマホよりパソコンでの作業をおすすめします。</p>
+
+      <!-- ステップ1 -->
+      <div class="man-step">
+        <div class="man-head"><span class="man-no">STEP 1</span> 2段階認証プロセスをオンにする</div>
+        <div class="man-body">
+          まずGoogleアカウントのセキュリティをONにします（既にオンの方は STEP 2 へ）。
+          <ol>
+            <li>連携したいGmailにログインした状態で、<a href="https://myaccount.google.com/security" target="_blank" rel="noopener">Googleアカウントのセキュリティ設定</a> を開きます。</li>
+            <li>「Googleへのログイン」の中の <b>「2段階認証プロセス」</b> をクリックします。</li>
+            <li>画面の案内に沿って、携帯電話番号などで設定します。</li>
+            <li>表示が <b>「オン」</b> になれば完了です。</li>
+          </ol>
+          <div class="man-tip">💡 ここがオンになっていないと、次の「アプリパスワード」の画面が出てきません。</div>
+        </div>
+      </div>
+
+      <!-- ステップ2 -->
+      <div class="man-step">
+        <div class="man-head"><span class="man-no">STEP 2</span> 16桁のアプリパスワードを発行する</div>
+        <div class="man-body">
+          <ol>
+            <li><a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">アプリパスワードの発行ページ</a> を開きます（パスワードの再入力を求められたら入力してください）。</li>
+            <li><b>「アプリ名」</b> の欄に、わかりやすい名前を入力します（例：<b>ミエルーム反響取込</b>）。</li>
+            <li><b>「作成」</b> ボタンを押します。</li>
+            <li>画面に <b>16桁のパスワード</b>（4文字ずつ・スペース区切りで表示）が出ます。これをコピーします。<br>
+              <span style="color:#6b7280;">例）<code style="background:#eef2f7;padding:1px 6px;border-radius:4px;">abcd efgh ijkl mnop</code></span></li>
+          </ol>
+          <div class="man-tip">⚠️ この16桁は<b>この画面を閉じると二度と表示されません</b>。閉じる前にコピー（または控え）してください。万一控え忘れても、もう一度 STEP 2 で新しく作り直せます。</div>
+        </div>
+      </div>
+
+      <!-- ステップ3 -->
+      <div class="man-step">
+        <div class="man-head"><span class="man-no">STEP 3</span> このアプリに貼り付けて接続テスト</div>
+        <div class="man-body">
+          <ol>
+            <li>このページ上部の <b>「Gmailアドレス」</b> に、連携するメールアドレスを入力します。</li>
+            <li><b>「アプリパスワード」</b> 欄に、STEP 2 でコピーした16桁を貼り付けます。<br>
+              <span style="color:#6b7280;">※ 間のスペースは自動で取り除かれるので、そのまま貼ってOKです。</span></li>
+            <li><b>「🔌 接続テスト」</b> を押します。<b>「成功」</b> と出れば連携完了です。</li>
+            <li><b>「💾 設定を保存」</b> を押します。「自動取込」をオンにすると、以降は届いた反響メールが自動で取り込まれます。</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- うまくいかない時 -->
+      <div class="man-step">
+        <div class="man-head"><span class="man-no" style="background:#b45309;">困ったとき</span> うまくいかない場合</div>
+        <div class="man-body">
+          <ul style="margin:6px 0 0;padding-left:18px;">
+            <li><b>「アプリパスワード」のページが開けない／項目が見当たらない</b><br>→ STEP 1 の2段階認証がまだ完了していない可能性があります。先にオンにしてから開き直してください。</li>
+            <li><b>会社・学校のアカウント（Google Workspace）で作成できない</b><br>→ 管理者がアプリパスワードを禁止している場合があります。管理者に許可を依頼するか、個人のGmailでお試しください。</li>
+            <li><b>「接続テスト」が失敗する</b><br>→ メールアドレスの打ち間違い、または<b>通常のログインパスワードを入れている</b>ことが多いです。必ず STEP 2 の<b>16桁のアプリパスワード</b>を使ってください。</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="man-note">🔒 アプリパスワードはこのアプリのメール取込専用です。Googleの「アプリパスワード」ページからいつでも削除（無効化）できます。削除すると取込は止まりますが、Google本体のパスワードやアカウントには影響しません。</div>
     </div>
   </div>
 </div>
