@@ -1218,9 +1218,15 @@ function editCellApp(td, id, field, type, curVal, opts) {
     el.style.cssText = 'width:100%;min-width:70px;border:1px solid #0D9488;border-radius:4px;padding:2px 5px;font-size:12px;box-sizing:border-box;';
     td.innerHTML = ''; td.appendChild(el); el.focus();
     if (type === 'text' || type === 'number') el.select();
-    const save = async () => { await patchApp(id, field, el.value); applyLocalUpdate(id, field, el.value); };
+    let _saved = false;
+    const save = async () => { if (_saved) return; _saved = true; await patchApp(id, field, el.value); applyLocalUpdate(id, field, el.value); };
+    if (type === 'date') {
+      // 1クリックでカレンダーを即表示し、選択したら即保存
+      try { el.showPicker(); } catch(_) {}
+      el.addEventListener('change', save);
+    }
     el.addEventListener('blur', save);
-    el.addEventListener('keydown', e => { if (e.key === 'Enter') el.blur(); if (e.key === 'Escape') td.innerHTML = prev; });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') el.blur(); if (e.key === 'Escape') { _saved = true; td.innerHTML = prev; } });
   }
 }
 

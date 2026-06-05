@@ -67,6 +67,8 @@
 {% block extra_scripts %}
 <script>
 let pcData = [];
+const CUR_STAFF_ID = {{ cur_staff_id or 'null' }};
+const IS_MANAGER = {{ 'true' if is_manager else 'false' }};
 
 function showAlert(msg, type='success') {
   const el = document.getElementById('alert-msg');
@@ -135,6 +137,13 @@ async function restoreContract(id) {
   } catch(_) { showAlert('処理に失敗しました。', 'error'); }
 }
 
-document.addEventListener('DOMContentLoaded', loadList);
+document.addEventListener('DOMContentLoaded', () => {
+  // スタッフ本人ログイン時は自分を初期選択
+  if (!IS_MANAGER && CUR_STAFF_ID) {
+    const sel = document.getElementById('filter-staff');
+    if (sel) sel.value = String(CUR_STAFF_ID);
+  }
+  loadList();
+});
 </script>
 {% endblock %}

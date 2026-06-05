@@ -366,9 +366,15 @@
       <button onclick="closeTemplateMgr()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
     </div>
     <div style="padding:14px 20px;">
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px;">
+        <input id="tpl-new-folder" type="text" placeholder="新しいフォルダ名（例：SUUMO）" style="flex:1;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;" autocomplete="off" onkeydown="if(event.key==='Enter')createFolder()">
+        <button onclick="createFolder()" style="background:#0F766E;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">＋ フォルダ作成</button>
+      </div>
       <div id="template-mgr-list" style="display:flex;flex-direction:column;gap:10px;"></div>
       <div style="margin-top:16px;border-top:1px dashed #e5e7eb;padding-top:14px;">
         <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px;">新しいテンプレートを追加</div>
+        <input id="tpl-new-category" type="text" list="tpl-folder-list" placeholder="フォルダ名（例：SUUMO）未入力なら「未分類」" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;margin-bottom:6px;box-sizing:border-box;" autocomplete="off">
+        <datalist id="tpl-folder-list"></datalist>
         <input id="tpl-new-title" type="text" placeholder="テンプレ名（例：内見のご案内）" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;margin-bottom:6px;box-sizing:border-box;" autocomplete="off">
         <input id="tpl-new-subject" type="text" placeholder="件名（任意）" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;margin-bottom:6px;box-sizing:border-box;" autocomplete="off">
         <textarea id="tpl-new-body" rows="4" placeholder="本文" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:13px;box-sizing:border-box;font-family:inherit;resize:vertical;"></textarea>
@@ -405,6 +411,8 @@
 {% block scripts %}
 <script>
 const STORE_ID = {{ store_id or 0 }};
+const CUR_STAFF_ID = {{ cur_staff_id or 'null' }};
+const IS_MANAGER = {{ 'true' if is_manager else 'false' }};
 let currentYear  = {{ year }};
 let currentMonth = {{ month }};
 let records = [];
@@ -790,6 +798,11 @@ function openModal(id) {
   document.getElementById('edit-id').value = '';
   document.getElementById('modal-title').textContent = '反響追加';
   clearForm();
+  // スタッフ本人ログイン時は担当を自分で初期化
+  if (!IS_MANAGER && CUR_STAFF_ID) {
+    const sel = document.getElementById('f-staff');
+    if (sel) sel.value = String(CUR_STAFF_ID);
+  }
   document.getElementById('record-modal').classList.add('active');
 }
 
@@ -947,10 +960,37 @@ function renderAttachList(){
 }
 function removeAtt(i){ _pendingFiles.splice(i,1); renderAttachList(); }
 
-// ── 返信テンプレート ──
+// ── 返信テンプレート（フォルダ対応）──
+const TPL_UNCAT = '未分類';
+let _openFolders = {};   // ポップオーバーのフォルダ開閉状態
+let _newFolders = [];    // 管理画面で作成した空フォルダ（セッション中のみ）
+let _popFolders = [];    // ポップオーバー描画用フォルダ名配列
+let _mgrFolders = [];    // 管理画面描画用フォルダ名配列
+
 async function loadTemplates(){
   try{ _templates = await fetch('/api/mail-templates').then(r=>r.json()); }catch(_){ _templates=[]; }
 }
+function _folderCat(t){ return (t.category||'').trim() || TPL_UNCAT; }
+function groupTemplates(extra){
+  const g = {};
+  (extra||[]).forEach(f=>{ if(f) g[f]=[]; });
+  _templates.forEach(t=>{ const c=_folderCat(t); (g[c]=g[c]||[]).push(t); });
+  return g;
+}
+function sortedFolderNames(g){
+  return Object.keys(g).sort((a,b)=> a===TPL_UNCAT?1 : b===TPL_UNCAT?-1 : a.localeCompare(b,'ja'));
+}
+function folderList(){
+  const set = new Set();
+  _templates.forEach(t=>{ const c=(t.category||'').trim(); if(c) set.add(c); });
+  _newFolders.forEach(f=>{ if(f) set.add(f); });
+  return Array.from(set).sort((a,b)=>a.localeCompare(b,'ja'));
+}
+function populateFolderDatalist(){
+  const dl=document.getElementById('tpl-folder-list');
+  if(dl) dl.innerHTML = folderList().map(f=>`<option value="${escHtml(f)}">`).join('');
+}
+
 function toggleTemplatePicker(){
   const pop = document.getElementById('template-pop');
   if(pop.style.display==='block'){ pop.style.display='none'; return; }
@@ -961,10 +1001,23 @@ function closeTemplatePicker(){ const p=document.getElementById('template-pop');
 async function renderTemplatePop(){
   if(!_templates.length) await loadTemplates();
   const list = document.getElementById('template-pop-list');
-  list.innerHTML = _templates.length
-    ? _templates.map(t=>`<div class="tpl-item" onclick="applyTemplate(${t.id})"><div class="t-title">${escHtml(t.title)}</div><div class="t-prev">${escHtml((t.body||'').replace(/\n/g,' '))}</div></div>`).join('')
-    : '<div style="padding:10px;color:#9ca3af;font-size:12px;">テンプレートがありません。「＋管理」から追加できます。</div>';
+  const g = groupTemplates();
+  const names = sortedFolderNames(g);
+  _popFolders = names;
+  if(!names.length){ list.innerHTML='<div style="padding:10px;color:#9ca3af;font-size:12px;">テンプレートがありません。「＋管理」から追加できます。</div>'; return; }
+  list.innerHTML = names.map((name,idx)=>{
+    const open = !!_openFolders[name];
+    const items = g[name].map(t=>`<div class="tpl-item" onclick="applyTemplate(${t.id})"><div class="t-title">${escHtml(t.title)}</div><div class="t-prev">${escHtml((t.body||'').replace(/\n/g,' '))}</div></div>`).join('');
+    return `<div style="border-bottom:1px solid #f3f4f6;">
+      <div onclick="toggleFolder(${idx})" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;cursor:pointer;font-size:13px;font-weight:700;color:#0F766E;">
+        <span>${open?'📂':'📁'} ${escHtml(name)}</span>
+        <span style="color:#9ca3af;font-size:11px;font-weight:500;">${g[name].length}件 ${open?'▾':'▸'}</span>
+      </div>
+      <div style="display:${open?'block':'none'};padding:0 4px 4px;">${items}</div>
+    </div>`;
+  }).join('');
 }
+function toggleFolder(idx){ const n=_popFolders[idx]; if(n==null) return; _openFolders[n]=!_openFolders[n]; renderTemplatePop(); }
 function applyTemplate(id){
   const t = _templates.find(x=>x.id===id);
   if(!t) return;
@@ -983,32 +1036,82 @@ async function openTemplateMgr(){
 }
 function closeTemplateMgr(){
   document.getElementById('template-mgr-modal').style.display='none';
+  _openFolders = {};
   renderTemplatePop();
 }
+function tplCard(t){
+  return `<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;">
+    <input value="${escHtml(t.title)}" onchange="updateTemplate(${t.id},'title',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:13px;font-weight:700;margin-bottom:5px;box-sizing:border-box;">
+    <input value="${escHtml(t.subject)}" placeholder="件名（任意）" onchange="updateTemplate(${t.id},'subject',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px;margin-bottom:5px;box-sizing:border-box;">
+    <textarea rows="3" onchange="updateTemplate(${t.id},'body',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px;box-sizing:border-box;font-family:inherit;resize:vertical;">${escHtml(t.body)}</textarea>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;gap:8px;">
+      <label style="font-size:11px;color:#6b7280;display:flex;align-items:center;gap:4px;flex:1;">📁
+        <input value="${escHtml(t.category||'')}" list="tpl-folder-list" placeholder="未分類" onchange="updateTemplate(${t.id},'category',this.value)" style="flex:1;border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;box-sizing:border-box;">
+      </label>
+      <button onclick="delTemplate(${t.id})" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:5px;padding:4px 10px;font-size:12px;cursor:pointer;flex:none;">削除</button>
+    </div>
+  </div>`;
+}
 function renderTemplateMgr(){
+  populateFolderDatalist();
   const box = document.getElementById('template-mgr-list');
-  box.innerHTML = _templates.length ? _templates.map(t=>`
-    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;">
-      <input value="${escHtml(t.title)}" onchange="updateTemplate(${t.id},'title',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:13px;font-weight:700;margin-bottom:5px;box-sizing:border-box;">
-      <input value="${escHtml(t.subject)}" placeholder="件名（任意）" onchange="updateTemplate(${t.id},'subject',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px;margin-bottom:5px;box-sizing:border-box;">
-      <textarea rows="3" onchange="updateTemplate(${t.id},'body',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px;box-sizing:border-box;font-family:inherit;resize:vertical;">${escHtml(t.body)}</textarea>
-      <div style="text-align:right;margin-top:5px;"><button onclick="delTemplate(${t.id})" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:5px;padding:4px 10px;font-size:12px;cursor:pointer;">削除</button></div>
-    </div>`).join('') : '<p style="color:#9ca3af;font-size:13px;">テンプレートがありません。下から追加してください。</p>';
+  const g = groupTemplates(_newFolders);
+  const names = sortedFolderNames(g);
+  _mgrFolders = names;
+  if(!names.length){ box.innerHTML='<p style="color:#9ca3af;font-size:13px;">テンプレートがありません。下のフォームから追加してください。</p>'; return; }
+  box.innerHTML = names.map((name,idx)=>`
+    <div style="border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+      <div style="background:#F0FDFA;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-weight:700;font-size:13px;color:#0F766E;">📁 ${escHtml(name)} <span style="color:#94a3b8;font-weight:400;font-size:11px;">${g[name].length}件</span></span>
+        ${name!==TPL_UNCAT?`<button onclick="renameFolder(${idx})" style="background:#fff;border:1px solid #99F6E4;color:#0F766E;border-radius:5px;padding:3px 9px;font-size:11px;cursor:pointer;">名前変更</button>`:''}
+      </div>
+      <div style="padding:10px;display:flex;flex-direction:column;gap:8px;">
+        ${g[name].length ? g[name].map(tplCard).join('') : '<p style="color:#9ca3af;font-size:12px;margin:0;">（空のフォルダ）下のフォームでフォルダ名にこの名前を指定すると、ここに追加されます。</p>'}
+      </div>
+    </div>`).join('');
+}
+function createFolder(){
+  const inp = document.getElementById('tpl-new-folder');
+  const name = (inp.value||'').trim();
+  if(!name){ showAlert('フォルダ名を入力してください','error'); return; }
+  if(!_newFolders.includes(name) && !folderList().includes(name)) _newFolders.push(name);
+  inp.value='';
+  document.getElementById('tpl-new-category').value = name;  // 追加フォームに反映
+  renderTemplateMgr();
+}
+async function renameFolder(idx){
+  const oldName = _mgrFolders[idx];
+  if(!oldName || oldName===TPL_UNCAT) return;
+  const nn = prompt('新しいフォルダ名', oldName);
+  if(nn===null) return;
+  const newName = nn.trim();
+  if(!newName || newName===oldName) return;
+  const targets = _templates.filter(t=>_folderCat(t)===oldName);
+  for(const t of targets){
+    await fetch(`/api/mail-templates/${t.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:newName})});
+  }
+  // 空フォルダの名前も引き継ぐ
+  _newFolders = _newFolders.map(f=>f===oldName?newName:f);
+  await loadTemplates(); renderTemplateMgr();
 }
 async function addTemplate(){
+  const category=document.getElementById('tpl-new-category').value.trim();
   const title=document.getElementById('tpl-new-title').value.trim();
   const subject=document.getElementById('tpl-new-subject').value.trim();
   const body=document.getElementById('tpl-new-body').value.trim();
   if(!title||!body){ showAlert('テンプレ名と本文を入力してください','error'); return; }
-  await fetch('/api/mail-templates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,subject,body})});
+  await fetch('/api/mail-templates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({category,title,subject,body})});
   document.getElementById('tpl-new-title').value='';
   document.getElementById('tpl-new-subject').value='';
   document.getElementById('tpl-new-body').value='';
+  // フォルダ名は次の追加のため残す
+  _newFolders = _newFolders.filter(f=>f!==category);
   await loadTemplates(); renderTemplateMgr();
 }
 async function updateTemplate(id,field,value){
   await fetch(`/api/mail-templates/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:value})});
   const t=_templates.find(x=>x.id===id); if(t) t[field]=value;
+  if(field==='category') renderTemplateMgr();
 }
 async function delTemplate(id){
   if(!confirm('このテンプレートを削除しますか？')) return;
@@ -1120,6 +1223,10 @@ document.addEventListener('click', e=>{
 document.addEventListener('DOMContentLoaded', () => {
   updateLabel();
   loadDropdownOpts();
+  if (!IS_MANAGER && CUR_STAFF_ID) {
+    const sel = document.getElementById('filter-staff');
+    if (sel) sel.value = String(CUR_STAFF_ID);
+  }
   loadRecords();
 });
 </script>

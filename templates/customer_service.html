@@ -253,6 +253,8 @@
 {% block scripts %}
 <script>
 const STORE_ID = {{ store_id or 0 }};
+const CUR_STAFF_ID = {{ cur_staff_id or 'null' }};
+const IS_MANAGER = {{ 'true' if is_manager else 'false' }};
 let currentYear  = {{ year }};
 let currentMonth = {{ month }};
 let records = [];
@@ -544,6 +546,10 @@ function renderTable() {
 
 function openModal() {
   clearForm();
+  if (!IS_MANAGER && CUR_STAFF_ID) {
+    const sel = document.getElementById('f-staff');
+    if (sel) sel.value = String(CUR_STAFF_ID);
+  }
   document.getElementById('record-modal').classList.add('active');
 }
 function closeModal() {
@@ -601,6 +607,10 @@ async function deleteRecord(id) {
 document.addEventListener('DOMContentLoaded', () => {
   updateLabel();
   loadDropdownOpts();
+  if (!IS_MANAGER && CUR_STAFF_ID) {
+    const sel = document.getElementById('filter-staff');
+    if (sel) sel.value = String(CUR_STAFF_ID);
+  }
   loadRecords();
 });
 </script>

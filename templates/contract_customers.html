@@ -101,6 +101,8 @@
 {% block extra_scripts %}
 <script>
 const STORE_ID = {{ store_id or 0 }};
+const CUR_STAFF_ID = {{ cur_staff_id or 'null' }};
+const IS_MANAGER = {{ 'true' if is_manager else 'false' }};
 let ccData = [];
 
 function showAlert(msg, type='success') {
@@ -195,6 +197,12 @@ function openDocModal(id) {
 }
 function closeDocModal() { document.getElementById('doc-modal').classList.remove('active'); }
 
-document.addEventListener('DOMContentLoaded', loadList);
+document.addEventListener('DOMContentLoaded', () => {
+  if (!IS_MANAGER && CUR_STAFF_ID) {
+    const sel = document.getElementById('filter-staff');
+    if (sel) sel.value = String(CUR_STAFF_ID);
+  }
+  loadList();
+});
 </script>
 {% endblock %}

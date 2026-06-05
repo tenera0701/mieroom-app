@@ -701,6 +701,7 @@ class MailTemplate(db.Model):
     __tablename__ = 'mail_template'
     id         = db.Column(db.Integer, primary_key=True)
     tenant_id  = db.Column(db.Integer, nullable=True)
+    category   = db.Column(db.String(120), default='')   # フォルダ名（例：SUUMO / HOME'S）
     title      = db.Column(db.String(120))
     subject    = db.Column(db.String(300))
     body       = db.Column(db.Text)
@@ -755,6 +756,17 @@ class ChatAttachment(db.Model):
     size         = db.Column(db.Integer, default=0)
     data         = db.Column(db.LargeBinary)
     created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ChatRead(db.Model):
+    """チャンネルごとのユーザー既読位置（last_read_id 以下は既読）"""
+    __tablename__ = 'chat_read'
+    id           = db.Column(db.Integer, primary_key=True)
+    channel_id   = db.Column(db.Integer, db.ForeignKey('chat_channel.id'))
+    user_id      = db.Column(db.Integer, db.ForeignKey('app_user.id'))
+    last_read_id = db.Column(db.Integer, default=0)
+    updated_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint('channel_id', 'user_id', name='uq_chat_read_channel_user'),)
 
 
 class MailSetting(db.Model):
@@ -1411,6 +1423,16 @@ def migrate_db():
     except Exception as e:
         print(f"  Skip mail_setting columns: {e}")
 
+    # mail_template の category（フォルダ）カラムを追加
+    try:
+        cursor.execute("PRAGMA table_info(mail_template)")
+        mtcols = {r[1] for r in cursor.fetchall()}
+        if mtcols and 'category' not in mtcols:
+            cursor.execute("ALTER TABLE mail_template ADD COLUMN category VARCHAR(120) DEFAULT ''")
+            print("  Added column mail_template.category")
+    except Exception as e:
+        print(f"  Skip mail_template.category: {e}")
+
     conn.commit()
     conn.close()
 
@@ -1457,6 +1479,7 @@ def migrate_postgres():
         ("mail_message",             "opened_at",       "TIMESTAMP"),
         ("mail_setting",             "custom_keywords", "TEXT"),
         ("mail_setting",             "import_after",    "TIMESTAMP"),
+        ("mail_template",            "category",        "VARCHAR(120) DEFAULT ''"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
         ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
         ("tenant", "contract_start_date",     "DATE"),
@@ -1583,6 +1606,26 @@ def migrate_tenant_data():
         for s in Store.query.all():
             if MediaType.query.filter_by(store_id=s.id).count() == 0:
                 init_default_media_types(s.id)
+
+        # 重複した媒体マスターを除去（同一店舗・同一名は最古の1件のみ残す）
+        try:
+            dup_removed = 0
+            for s in Store.query.all():
+                seen_names = {}
+                rows = MediaType.query.filter_by(store_id=s.id, is_active=True)\
+                    .order_by(MediaType.id.asc()).all()
+                for m in rows:
+                    if m.name in seen_names:
+                        m.is_active = False
+                        dup_removed += 1
+                    else:
+                        seen_names[m.name] = m.id
+            if dup_removed:
+                db.session.commit()
+                print(f"媒体マスター重複除去: {dup_removed}件")
+        except Exception as _e:
+            db.session.rollback()
+            print(f"媒体重複除去エラー: {_e}")
     except Exception as e:
         db.session.rollback()
         print(f"migrate_tenant_data error: {e}")
@@ -2007,10 +2050,11 @@ def contract_customers():
     staff_list = Staff.query.filter(Staff.store_id.in_(active_ids), Staff.is_active == True).all() if active_ids else []
     cur_user = AppUser.query.get(session.get('app_user_id'))
     cur_role = cur_user.role if cur_user else 'staff'
+    cur_staff_id = cur_user.staff_id if cur_user else None
     is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
     store_id = active_ids[0] if active_ids else None
     return render_template("contract_customers.html", stores=stores, staff_list=staff_list,
-                           now=datetime.now(), cur_role=cur_role,
+                           now=datetime.now(), cur_role=cur_role, cur_staff_id=cur_staff_id,
                            is_manager=is_manager, store_id=store_id)
 
 
@@ -2043,10 +2087,11 @@ def past_customers():
     staff_list = Staff.query.filter(Staff.store_id.in_(active_ids), Staff.is_active == True).all() if active_ids else []
     cur_user = AppUser.query.get(session.get('app_user_id'))
     cur_role = cur_user.role if cur_user else 'staff'
+    cur_staff_id = cur_user.staff_id if cur_user else None
     is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
     store_id = active_ids[0] if active_ids else None
     return render_template("past_customers.html", stores=stores, staff_list=staff_list,
-                           now=datetime.now(), cur_role=cur_role,
+                           now=datetime.now(), cur_role=cur_role, cur_staff_id=cur_staff_id,
                            is_manager=is_manager, store_id=store_id)
 
 
@@ -3388,9 +3433,9 @@ def api_mail_templates_get():
             db.session.add(MailTemplate(tenant_id=tenant_id, title=t, subject=s, body=b, sort_order=i))
         db.session.commit()
     items = (MailTemplate.query.filter_by(tenant_id=tenant_id)
-             .order_by(MailTemplate.sort_order, MailTemplate.id).all())
-    return jsonify([{'id': t.id, 'title': t.title or '', 'subject': t.subject or '',
-                     'body': t.body or ''} for t in items])
+             .order_by(MailTemplate.category, MailTemplate.sort_order, MailTemplate.id).all())
+    return jsonify([{'id': t.id, 'category': t.category or '', 'title': t.title or '',
+                     'subject': t.subject or '', 'body': t.body or ''} for t in items])
 
 
 @app.route("/api/mail-templates", methods=["POST"])
@@ -3403,7 +3448,8 @@ def api_mail_templates_add():
         return jsonify({'error': 'タイトルと本文を入力してください'}), 400
     tenant_id = _get_tenant_id()
     mx = db.session.query(db.func.max(MailTemplate.sort_order)).filter_by(tenant_id=tenant_id).scalar() or 0
-    t = MailTemplate(tenant_id=tenant_id, title=title[:120],
+    t = MailTemplate(tenant_id=tenant_id, category=(data.get('category') or '').strip()[:120],
+                     title=title[:120],
                      subject=(data.get('subject') or '')[:300], body=body, sort_order=mx + 1)
     db.session.add(t)
     db.session.commit()
@@ -3418,6 +3464,8 @@ def api_mail_templates_update(tid):
     if t.tenant_id != tenant_id:
         return jsonify({'error': 'forbidden'}), 403
     data = request.get_json() or {}
+    if 'category' in data:
+        t.category = (data.get('category') or '').strip()[:120]
     if 'title' in data:
         t.title = (data.get('title') or '')[:120]
     if 'subject' in data:
@@ -3703,6 +3751,63 @@ def api_chat_send(cid):
     return jsonify({'ok': True, 'id': m.id})
 
 
+def _chat_mark_read(u, cid):
+    """指定チャンネルを最新メッセージまで既読にする"""
+    last = db.session.query(db.func.max(ChatMessage.id)).filter(
+        ChatMessage.channel_id == cid).scalar() or 0
+    rec = ChatRead.query.filter_by(channel_id=cid, user_id=u.id).first()
+    if not rec:
+        rec = ChatRead(channel_id=cid, user_id=u.id, last_read_id=last)
+        db.session.add(rec)
+    elif (rec.last_read_id or 0) < last:
+        rec.last_read_id = last
+        rec.updated_at = datetime.utcnow()
+    else:
+        return last
+    db.session.commit()
+    return last
+
+
+@app.route("/api/chat/channels/<int:cid>/read", methods=["POST"])
+@login_required
+def api_chat_mark_read(cid):
+    u = _chat_user()
+    c = ChatChannel.query.get_or_404(cid)
+    if not _can_access_channel(c, u):
+        return jsonify({'error': '権限がありません'}), 403
+    last = _chat_mark_read(u, cid)
+    return jsonify({'ok': True, 'last_read_id': last})
+
+
+@app.route("/api/chat/unread", methods=["GET"])
+@login_required
+def api_chat_unread():
+    """チャンネル別・合計の未読件数を返す（自分の発言は除外）"""
+    u = _chat_user()
+    if not u or not u.tenant_id:
+        return jsonify({'total': 0, 'channels': {}})
+    chans = _visible_channels(u.tenant_id, u)
+    cids = [c.id for c in chans]
+    if not cids:
+        return jsonify({'total': 0, 'channels': {}})
+    reads = {r.channel_id: (r.last_read_id or 0)
+             for r in ChatRead.query.filter(ChatRead.user_id == u.id,
+                                            ChatRead.channel_id.in_(cids)).all()}
+    per = {}
+    total = 0
+    # チャンネルごとに last_read より新しい自分以外のメッセージ数を集計
+    for cid in cids:
+        lr = reads.get(cid, 0)
+        cnt = db.session.query(db.func.count(ChatMessage.id)).filter(
+            ChatMessage.channel_id == cid,
+            ChatMessage.user_id != u.id,
+            ChatMessage.id > lr).scalar() or 0
+        if cnt:
+            per[cid] = cnt
+            total += cnt
+    return jsonify({'total': total, 'channels': per})
+
+
 @app.route("/api/chat/attachments/<int:aid>", methods=["GET"])
 @login_required
 def api_chat_attachment(aid):
@@ -3737,9 +3842,14 @@ def echo_management():
     staff_list = Staff.query.filter(Staff.store_id.in_(active_ids), Staff.is_active == True).all() if active_ids else []
     year, month = current_ym()
     store_id = active_ids[0] if active_ids else None
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    cur_role = cur_user.role if cur_user else 'staff'
+    cur_staff_id = cur_user.staff_id if cur_user else None
+    is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
     return render_template("echo_management.html",
                            stores=stores, staff_list=staff_list,
                            year=year, month=month, store_id=store_id,
+                           cur_staff_id=cur_staff_id, is_manager=is_manager,
                            now=datetime.now())
 
 
@@ -3894,9 +4004,14 @@ def customer_service():
     staff_list = Staff.query.filter(Staff.store_id.in_(active_ids), Staff.is_active == True).all() if active_ids else []
     year, month = current_ym()
     store_id = active_ids[0] if active_ids else None
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    cur_role = cur_user.role if cur_user else 'staff'
+    cur_staff_id = cur_user.staff_id if cur_user else None
+    is_manager = cur_role in ('owner', 'store_manager', 'super_admin')
     return render_template("customer_service.html",
                            stores=stores, staff_list=staff_list,
                            year=year, month=month, store_id=store_id,
+                           cur_staff_id=cur_staff_id, is_manager=is_manager,
                            now=datetime.now())
 
 
@@ -8677,7 +8792,15 @@ def api_media_types_list():
     store_id = allowed_ids[0] if allowed_ids else 1
     items = MediaType.query.filter_by(store_id=store_id, is_active=True)\
         .order_by(MediaType.sort_order, MediaType.name).all()
-    return jsonify([{'id': m.id, 'name': m.name} for m in items])
+    # 重複した媒体名を除外（同名は最初の1件だけ返す）
+    seen = set()
+    result = []
+    for m in items:
+        if m.name in seen:
+            continue
+        seen.add(m.name)
+        result.append({'id': m.id, 'name': m.name})
+    return jsonify(result)
 
 
 @app.route("/api/media-types", methods=["POST"])
