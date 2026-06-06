@@ -1674,16 +1674,20 @@ def migrate_tenant_data():
 
         db.session.commit()
 
-        # オーナーのテナントに店舗がない場合は全アクティブ店舗を割り当て（データ整合性修復）
+        # オーナーのテナントに店舗が無い場合は、そのテナント専用の店舗を新規作成する。
+        # （旧実装は default_tenant の店舗を「移動」していたが、他テナント（特に既定テナント）の
+        #   店舗を奪い、別会社の店舗が表示される重大なデータ混在を招くため廃止）
         for owner in AppUser.query.filter_by(role='owner').all():
             if owner.tenant_id:
-                store_count = Store.query.filter_by(tenant_id=owner.tenant_id, is_active=True).count()
-                if store_count == 0:
-                    # このオーナーのテナントに属する店舗がない → デフォルトテナントの店舗を割り当て
-                    for s in Store.query.filter_by(tenant_id=default_tenant.id, is_active=True).all():
-                        s.tenant_id = owner.tenant_id
+                usable = Store.query.filter(
+                    Store.tenant_id == owner.tenant_id,
+                    db.or_(Store.is_active == True, Store.is_locked == True)).count()
+                if usable == 0:
+                    t = Tenant.query.get(owner.tenant_id)
+                    db.session.add(Store(name=((t.name if t else None) or '本店'),
+                                         tenant_id=owner.tenant_id, is_active=True))
                     db.session.commit()
-                    print(f"オーナー(id={owner.id})のテナント店舗を修復しました")
+                    print(f"オーナー(id={owner.id})のテナントに店舗を新規作成しました")
 
         # LeadMediaStat / Lead の store_id=NULL・0 を最初のアクティブ店舗に修復
         default_store = Store.query.filter_by(is_active=True).order_by(Store.id).first()
@@ -8340,6 +8344,27 @@ def api_tenant_store_update(tid, sid):
             pass
     if 'options' in data:
         set_store_options(sid, data.get('options') or [])
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/tenants/<int:tid>/stores/<int:sid>/move", methods=["POST"])
+@super_admin_required
+def api_tenant_store_move(tid, sid):
+    """店舗を別のテナント（会社）へ移動する（誤った紐付けの修正用）"""
+    err = _check_admin_perm("admin_can_manage_stores")
+    if err: return err
+    store = Store.query.filter_by(id=sid, tenant_id=tid).first_or_404()
+    data = request.get_json() or {}
+    new_tid = int(data.get('tenant_id') or 0)
+    target = Tenant.query.get(new_tid)
+    if not target:
+        return jsonify({'error': '移動先の会社が見つかりません'}), 400
+    if new_tid == tid:
+        return jsonify({'error': '同じ会社です'}), 400
+    store.tenant_id = new_tid
+    # この店舗に紐づくオプションも移動先テナントに合わせる
+    TenantOption.query.filter_by(store_id=sid).update({'tenant_id': new_tid})
     db.session.commit()
     return jsonify({'status': 'ok'})
 

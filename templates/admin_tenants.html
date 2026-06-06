@@ -1091,6 +1091,18 @@ async function saveStoreOptions(sid) {
   await updateStore(sid, { options: opts });
 }
 
+// 店舗を別の会社（テナント）へ移動（誤った紐付けの修正用）
+async function moveStore(sid, newTid) {
+  const t = tenants.find(x => String(x.id) === String(newTid));
+  if (!confirm('この店舗を「' + (t ? t.name : '') + '」へ移動しますか？\n店舗とそのデータが移動先の会社に移ります。')) return;
+  const res = await fetch('/api/tenants/' + currentStoresTenantId + '/stores/' + sid + '/move', {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ tenant_id: parseInt(newTid) })
+  });
+  if (!res.ok) { const j = await res.json().catch(() => ({})); alert(j.error || '移動に失敗しました'); return; }
+  await loadTenantStores();
+  loadTenants();
+}
+
 async function addStoreFromModal() {
   const name = document.getElementById('sm-new-store-name').value.trim();
   const errEl = document.getElementById('sm-add-error');
@@ -1164,6 +1176,12 @@ async function loadTenantStores() {
                 class="text-xs px-2 py-1 border border-red-200 text-red-500 rounded hover:bg-red-50">🗑 データリセット</button>
               <button onclick="deleteStore(${s.id}, '${escHtml(s.name)}')"
                 class="text-xs px-2 py-1 border border-red-500 bg-red-50 text-red-700 rounded hover:bg-red-100 font-bold">✕ 店舗削除</button>
+              ${tenants.filter(t => t.id !== currentStoresTenantId).length ? `
+              <select onchange="if(this.value){moveStore(${s.id}, this.value);} this.value='';"
+                class="text-xs border border-gray-300 rounded px-2 py-1 text-gray-600 bg-white" title="この店舗を別の会社へ移動">
+                <option value="">🔀 別の会社へ移動…</option>
+                ${tenants.filter(t => t.id !== currentStoresTenantId).map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`).join('')}
+              </select>` : ''}
             </div>
           </div>
         `).join('')}
