@@ -130,9 +130,23 @@ def inject_ui_context():
             return False
         return tenant_has_option(u.tenant_id, 'chat_pro')
 
+    def _has_floorplan():
+        uid = session.get('app_user_id')
+        if not uid:
+            return False
+        u = AppUser.query.get(uid)
+        if not u:
+            return False
+        if u.role == 'super_admin':
+            return True   # 管理者は常に利用可
+        if not u.tenant_id:
+            return False
+        return tenant_has_option(u.tenant_id, 'floorplan')
+
     return {
         'is_premium': _is_premium(),
         'is_chat_pro': _is_chat_pro(),
+        'has_floorplan': _has_floorplan(),
         'current_role': session.get('app_user_role', ''),
         'sidebar_stores': _sidebar_stores(),
         'user_perms': _current_user_perms(),
@@ -173,6 +187,8 @@ class TenantOption(db.Model):
 PLAN_OPTION_DEFS = [
     {'key': 'chat_pro', 'name': 'チャットPro',
      'desc': 'チャットで画像・PDFの添付が可能になり、メッセージを2年間保存（通常はテキストのみ・60日保存）'},
+    {'key': 'floorplan', 'name': '間取り作成',
+     'desc': '物件の間取り図をツール上で作成・保存・印刷できる「間取り作成」機能を利用できます'},
 ]
 
 
@@ -197,6 +213,19 @@ def set_tenant_options(tenant_id, keys):
         db.session.add(TenantOption(tenant_id=tenant_id, option_key=k))
     for k in cur - want:
         TenantOption.query.filter_by(tenant_id=tenant_id, option_key=k).delete()
+
+
+def current_has_floorplan():
+    """ログイン中ユーザーのテナントが間取り作成オプションを持つか（super_adminは常に可）"""
+    uid = session.get('app_user_id')
+    if not uid:
+        return False
+    u = AppUser.query.get(uid)
+    if not u:
+        return False
+    if u.role == 'super_admin':
+        return True
+    return tenant_has_option(u.tenant_id, 'floorplan') if u.tenant_id else False
 
 
 class Store(db.Model):
@@ -2276,13 +2305,17 @@ def api_contract_document_save(rid):
 @login_required
 @block_super_admin
 def floorplan_page():
-    """間取り作成ページ"""
+    """間取り作成ページ（オプション契約が必要）"""
+    if not current_has_floorplan():
+        return redirect(url_for('customer_management'))
     return render_template("floorplan.html")
 
 
 @app.route("/api/floorplans", methods=["GET"])
 @login_required
 def api_floorplans_list():
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
     allowed = get_allowed_store_ids()
     sid = allowed[0] if allowed else None
     q = FloorPlan.query
@@ -2297,6 +2330,8 @@ def api_floorplans_list():
 @app.route("/api/floorplans", methods=["POST"])
 @login_required
 def api_floorplans_create():
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
     allowed = get_allowed_store_ids()
     sid = allowed[0] if allowed else None
     data = request.get_json() or {}
@@ -2318,6 +2353,8 @@ def api_floorplans_create():
 @app.route("/api/floorplans/<int:fid>", methods=["GET"])
 @login_required
 def api_floorplans_get(fid):
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
     allowed = get_allowed_store_ids()
     fp = FloorPlan.query.get_or_404(fid)
     if fp.store_id not in allowed:
@@ -2328,6 +2365,8 @@ def api_floorplans_get(fid):
 @app.route("/api/floorplans/<int:fid>", methods=["DELETE"])
 @login_required
 def api_floorplans_delete(fid):
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
     allowed = get_allowed_store_ids()
     fp = FloorPlan.query.get_or_404(fid)
     if fp.store_id not in allowed:

@@ -434,6 +434,7 @@
             <span class="nav-label">└ 日報</span>
           </a>
           {% endif %}
+          {% if has_floorplan %}
           <a href="/floorplan"
              class="nav-item {% if request.path == '/floorplan' %}active{% endif %}"
              style="padding-left:36px; font-size:12px; opacity:0.9;">
@@ -442,6 +443,7 @@
             </svg>
             <span class="nav-label">└ 間取り作成</span>
           </a>
+          {% endif %}
           {% if role != 'staff' and user_perms.get('can_view_leave', true) %}
           <a href="/leave-management"
              class="nav-item {% if request.path == '/leave-management' %}active{% endif %}"
