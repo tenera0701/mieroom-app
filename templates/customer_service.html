@@ -135,7 +135,6 @@
   </div>
 
   <!-- サマリーカード -->
-  <div class="cs-sec-head" onclick="toggleCsSec('summary')"><span class="cs-chev" id="chev-summary">▼</span>📋 サマリー</div>
   <div class="summary-bar" id="summary-bar">
     <div class="summary-card">
       <div class="label">総接客数</div>
@@ -169,7 +168,6 @@
     <div id="media-rows"></div>
   </div>
 
-  <div class="cs-sec-head" onclick="toggleCsSec('table')"><span class="cs-chev" id="chev-table">▼</span>📝 接客記録</div>
   <div class="table-wrap" id="cs-table-wrap">
     <table>
       <thead>
@@ -342,6 +340,29 @@ async function setStatusColor(encVal, color) {
   CS_STATUS_COLORS[val] = color;
   await fetch('/api/cs-status-colors', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({colors:{[val]:color}})});
   await renderStatusMgr();
+}
+
+/* ── メモを大きく開いて編集 ── */
+let _memoId = null;
+function openMemoEdit(id) {
+  const r = records.find(x => x.id === id);
+  if (!r) return;
+  _memoId = id;
+  document.getElementById('cs-memo-text').value = r.memo || '';
+  document.getElementById('cs-memo-modal').classList.add('active');
+  setTimeout(() => document.getElementById('cs-memo-text').focus(), 50);
+}
+function closeMemoEdit() {
+  document.getElementById('cs-memo-modal').classList.remove('active');
+  _memoId = null;
+}
+async function saveMemoEdit() {
+  if (_memoId == null) return;
+  const v = document.getElementById('cs-memo-text').value;
+  await patchRecord(_memoId, 'memo', v);
+  renderTable();
+  closeMemoEdit();
+  showAlert('メモを保存しました');
 }
 function openDropdownMgr(cat, selId) {
   _dgrCategory = cat; _dgrSelectId = selId;
@@ -631,8 +652,8 @@ function renderTable() {
       <td class="center" onclick="editCell(this,${r.id},'visit_count','number','${r.visit_count||0}')">${r.visit_count||0}</td>
       <td class="center" onclick="editCell(this,${r.id},'status','select','${r.status||'追客中'}',STATUS_LIST.map(v=>[v,v]))">
         <span style="display:inline-block;padding:2px 11px;border-radius:999px;font-size:12px;font-weight:700;background:#fff;border:1px solid rgba(0,0,0,0.15);color:#1f2937;white-space:nowrap;">${escHtml(r.status||'追客中')}</span></td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(r.memo)}"
-          onclick="editCell(this,${r.id},'memo','text','${escJs(r.memo)}')">${escHtml(r.memo)||''}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;" title="クリックで開く"
+          onclick="openMemoEdit(${r.id})">${escHtml(r.memo) || '<span style="color:#cbd5e1;">（クリックで入力）</span>'}</td>
       <td class="center no-edit" style="white-space:nowrap;">
         <button class="btn-sm btn-del" onclick="deleteRecord(${r.id})">削除</button>
       </td>
@@ -701,7 +722,7 @@ async function deleteRecord(id) {
 }
 
 /* ── セクションの折りたたみ ── */
-const CS_SEC_BODY = { summary: 'summary-bar', media: 'media-rows', table: 'cs-table-wrap' };
+const CS_SEC_BODY = { media: 'media-rows' };
 function toggleCsSec(key) {
   const body = document.getElementById(CS_SEC_BODY[key]);
   const chev = document.getElementById('chev-' + key);
@@ -777,6 +798,24 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
     <div style="padding:12px 20px;border-top:1px solid #e5e7eb;text-align:right;">
       <button onclick="closeStatusMgr()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">完了</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── メモ編集モーダル（大きく表示）── -->
+<div class="modal-overlay" id="cs-memo-modal">
+  <div class="modal" style="max-width:560px;width:94%;">
+    <div class="modal-header">
+      <h3>メモ</h3>
+      <button class="modal-close" onclick="closeMemoEdit()">✕</button>
+    </div>
+    <div style="padding:16px 18px;">
+      <textarea id="cs-memo-text" rows="12" placeholder="メモを入力…"
+        style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:11px 13px;font-size:13px;line-height:1.6;box-sizing:border-box;font-family:inherit;resize:vertical;min-height:220px;"></textarea>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px;">
+      <button onclick="closeMemoEdit()" style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer;">キャンセル</button>
+      <button onclick="saveMemoEdit()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">保存する</button>
     </div>
   </div>
 </div>
