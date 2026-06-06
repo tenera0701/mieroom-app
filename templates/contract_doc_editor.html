@@ -24,7 +24,8 @@
   .fg input[readonly] { background:#f3f4f6; color:#6b7280; }
   .fg .ai-mark { font-size:10px; color:var(--purple); font-weight:700; }
   .tpl-sel { border:1px solid #d1d5db; border-radius:8px; padding:9px 11px; font-size:14px; font-weight:700; min-width:260px; }
-  .ai-zone { border:2px dashed #c7d2fe; border-radius:10px; padding:14px; text-align:center; background:#f5f3ff; }
+  .ai-zone { border:2px dashed #c7d2fe; border-radius:10px; padding:14px; text-align:center; background:#f5f3ff; transition:.15s; }
+  .ai-zone.drag { border-color:#6D28D9; background:#ede9fe; transform:scale(1.01); }
   .ai-note { font-size:12px; color:#92400e; background:#FEF3C7; border:1px solid #FDE68A; border-radius:6px; padding:8px 10px; margin-top:10px; }
   .hint { font-size:12px; color:#6b7280; background:#F0FDFA; border:1px solid #99f6e4; border-radius:8px; padding:10px 12px; margin-bottom:14px; line-height:1.6; }
   .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:14px; display:none; }
@@ -71,10 +72,10 @@
       <h2 class="card-h">🤖 自動入力</h2>
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
         <button class="btn btn-light" onclick="applyRecord()">📋 申込情報を反映</button>
-        <div class="ai-zone" style="flex:1;min-width:260px;">
+        <div class="ai-zone" id="ai-zone" style="flex:1;min-width:260px;">
           <button class="btn btn-purple" id="ai-btn" onclick="document.getElementById('ai-file').click()">📎 契約書・物件・顧客資料を添付（複数可）</button>
           <input type="file" id="ai-file" accept="application/pdf,image/*" multiple style="display:none" onchange="aiExtract(event)">
-          <div style="font-size:11px;color:#6b7280;margin-top:6px;">PDF / 画像 ／ 合計20MBまで・最大5ファイル</div>
+          <div style="font-size:11px;color:#6b7280;margin-top:6px;">ここにファイルをドラッグ＆ドロップでもOK ／ PDF・画像 ／ 合計20MBまで・最大5ファイル</div>
         </div>
       </div>
       <div class="ai-note">⚠️ 自動入力は契約事故防止のため、必ず下の項目で内容をご確認・修正してください。</div>
@@ -197,9 +198,11 @@ function applyRecord(){
   showAlert(n ? `申込情報から${n}件を反映しました。` : '一致する項目がありませんでした。', n?'success':'error');
 }
 
-async function aiExtract(ev){
-  const files = ev.target.files; if(!files || !files.length) return;
-  const fd = new FormData(); [...files].forEach(f=>fd.append('files', f)); fd.append('application_id', String(RID));
+function aiExtract(ev){ const files = ev.target.files; processAiFiles(files); ev.target.value=''; }
+async function processAiFiles(files){
+  if(!files || !files.length) return;
+  if(!TPL){ showAlert('先にテンプレートを選択してください。','error'); return; }
+  const fd = new FormData(); [...files].slice(0,5).forEach(f=>fd.append('files', f)); fd.append('application_id', String(RID));
   const btn = document.getElementById('ai-btn'); const orig = btn.innerHTML;
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> 読み取り中…';
   showAlert('資料を読み取り中です…','info');
@@ -209,7 +212,15 @@ async function aiExtract(ev){
     let n=0; (j.fields||[]).forEach(f=>{ const el=document.getElementById(cid(f.key)); if(el){ el.value=f.value; el.style.background='#ECFDF5'; n++; } });
     showAlert(n ? `AIが${n}件を自動入力しました。内容を確認・修正してください。` : '読み取れる項目が見つかりませんでした。', n?'success':'error');
   }catch(e){ showAlert(e.message,'error'); }
-  finally{ btn.disabled=false; btn.innerHTML=orig; ev.target.value=''; }
+  finally{ btn.disabled=false; btn.innerHTML=orig; }
+}
+
+function initDnd(){
+  ['dragover','drop'].forEach(t=>window.addEventListener(t, ev=>{ ev.preventDefault(); }, false));
+  const z = document.getElementById('ai-zone'); if(!z) return;
+  ['dragenter','dragover'].forEach(t=>z.addEventListener(t, ev=>{ ev.preventDefault(); ev.stopPropagation(); z.classList.add('drag'); }));
+  z.addEventListener('dragleave', ev=>{ ev.preventDefault(); ev.stopPropagation(); if(!z.contains(ev.relatedTarget)) z.classList.remove('drag'); });
+  z.addEventListener('drop', ev=>{ ev.preventDefault(); ev.stopPropagation(); z.classList.remove('drag'); const files = ev.dataTransfer && ev.dataTransfer.files; if(files && files.length) processAiFiles(files); });
 }
 
 function collectValues(){
@@ -241,6 +252,6 @@ async function downloadXlsx(){
   }catch(e){ showAlert(e.message,'error'); }
 }
 
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', ()=>{ init(); initDnd(); });
 </script>
 {% endblock %}
