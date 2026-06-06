@@ -8348,27 +8348,6 @@ def api_tenant_store_update(tid, sid):
     return jsonify({'status': 'ok'})
 
 
-@app.route("/api/tenants/<int:tid>/stores/<int:sid>/move", methods=["POST"])
-@super_admin_required
-def api_tenant_store_move(tid, sid):
-    """店舗を別のテナント（会社）へ移動する（誤った紐付けの修正用）"""
-    err = _check_admin_perm("admin_can_manage_stores")
-    if err: return err
-    store = Store.query.filter_by(id=sid, tenant_id=tid).first_or_404()
-    data = request.get_json() or {}
-    new_tid = int(data.get('tenant_id') or 0)
-    target = Tenant.query.get(new_tid)
-    if not target:
-        return jsonify({'error': '移動先の会社が見つかりません'}), 400
-    if new_tid == tid:
-        return jsonify({'error': '同じ会社です'}), 400
-    store.tenant_id = new_tid
-    # この店舗に紐づくオプションも移動先テナントに合わせる
-    TenantOption.query.filter_by(store_id=sid).update({'tenant_id': new_tid})
-    db.session.commit()
-    return jsonify({'status': 'ok'})
-
-
 @app.route("/api/tenants/<int:tid>/owner", methods=["PUT"])
 @super_admin_required
 def api_tenant_owner_update(tid):
