@@ -1084,6 +1084,13 @@ async function updateStore(sid, data) {
   loadTenants();
 }
 
+// 店舗ごとのオプションを保存（チェックされている分を送信）
+async function saveStoreOptions(sid) {
+  const boxes = document.querySelectorAll('.store-opt-' + sid + ':checked');
+  const opts = Array.from(boxes).map(b => b.value);
+  await updateStore(sid, { options: opts });
+}
+
 async function addStoreFromModal() {
   const name = document.getElementById('sm-new-store-name').value.trim();
   const errEl = document.getElementById('sm-add-error');
@@ -1135,6 +1142,18 @@ async function loadTenantStores() {
                 <p class="text-xs text-gray-400 mt-2">${s.created_at || '—'}</p>
               </div>
             </div>
+            ${Object.keys(OPTION_LABELS).length ? `
+            <div class="mb-2 border-t pt-2">
+              <label class="text-xs text-gray-500 font-semibold">オプション（この店舗で利用可能にする機能）</label>
+              <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                ${Object.keys(OPTION_LABELS).map(k => `
+                  <label class="inline-flex items-center gap-1.5 text-xs text-gray-700 cursor-pointer">
+                    <input type="checkbox" class="store-opt-${s.id} accent-teal-600" value="${k}" ${(s.options || []).includes(k) ? 'checked' : ''}
+                      onchange="saveStoreOptions(${s.id})">
+                    ${escHtml(OPTION_LABELS[k])}
+                  </label>`).join('')}
+              </div>
+            </div>` : ''}
             <div class="flex gap-2 flex-wrap">
               <button onclick="openEditStoreModal(${s.id}, '${escHtml(s.name)}')"
                 class="text-xs px-2 py-1 border border-teal-300 text-teal-700 rounded hover:bg-teal-50">✏ 店舗名変更</button>

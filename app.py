@@ -128,20 +128,10 @@ def inject_ui_context():
         u = AppUser.query.get(uid)
         if not u or u.role == 'super_admin' or not u.tenant_id:
             return False
-        return tenant_has_option(u.tenant_id, 'chat_pro')
+        return current_has_option('chat_pro')
 
     def _has_floorplan():
-        uid = session.get('app_user_id')
-        if not uid:
-            return False
-        u = AppUser.query.get(uid)
-        if not u:
-            return False
-        if u.role == 'super_admin':
-            return True   # 管理者は常に利用可
-        if not u.tenant_id:
-            return False
-        return tenant_has_option(u.tenant_id, 'floorplan')
+        return current_has_option('floorplan')
 
     return {
         'is_premium': _is_premium(),
@@ -174,11 +164,13 @@ class Tenant(db.Model):
 
 
 class TenantOption(db.Model):
-    """テナントに紐づくオプション（プランに追加するアドオン）。
-    複数付与可能。option_key は PLAN_OPTION_DEFS のキー。"""
+    """テナント／店舗に紐づくオプション（プランに追加するアドオン）。
+    store_id=NULL はテナント全体（全店舗）、store_id 指定はその店舗のみ有効。
+    option_key は PLAN_OPTION_DEFS のキー。"""
     __tablename__ = 'tenant_option'
     id          = db.Column(db.Integer, primary_key=True)
     tenant_id   = db.Column(db.Integer, db.ForeignKey('tenant.id'))
+    store_id    = db.Column(db.Integer, db.ForeignKey('store.id'), nullable=True)  # NULL=テナント全体
     option_key  = db.Column(db.String(40))
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -193,30 +185,70 @@ PLAN_OPTION_DEFS = [
 
 
 def tenant_option_keys(tenant_id):
+    """テナント全体（store_id=NULL）のオプションキー"""
     if not tenant_id:
         return set()
-    return {o.option_key for o in TenantOption.query.filter_by(tenant_id=tenant_id).all()}
+    return {o.option_key for o in
+            TenantOption.query.filter_by(tenant_id=tenant_id, store_id=None).all()}
 
 
 def tenant_has_option(tenant_id, key):
+    """テナント全体（store_id=NULL）でオプションを持つか（後方互換）"""
     if not tenant_id:
         return False
-    return TenantOption.query.filter_by(tenant_id=tenant_id, option_key=key).first() is not None
+    return TenantOption.query.filter_by(
+        tenant_id=tenant_id, store_id=None, option_key=key).first() is not None
 
 
 def set_tenant_options(tenant_id, keys):
-    """テナントのオプションを keys（有効なキーのみ）で置き換える"""
+    """テナント全体（store_id=NULL）のオプションを keys で置き換える"""
     valid = {d['key'] for d in PLAN_OPTION_DEFS}
     want = {k for k in (keys or []) if k in valid}
     cur = tenant_option_keys(tenant_id)
     for k in want - cur:
-        db.session.add(TenantOption(tenant_id=tenant_id, option_key=k))
+        db.session.add(TenantOption(tenant_id=tenant_id, store_id=None, option_key=k))
     for k in cur - want:
-        TenantOption.query.filter_by(tenant_id=tenant_id, option_key=k).delete()
+        TenantOption.query.filter_by(tenant_id=tenant_id, store_id=None, option_key=k).delete()
 
 
-def current_has_floorplan():
-    """ログイン中ユーザーのテナントが間取り作成オプションを持つか（super_adminは常に可）"""
+def store_option_keys(store_id):
+    """店舗個別に付与されたオプションキー"""
+    if not store_id:
+        return set()
+    return {o.option_key for o in TenantOption.query.filter_by(store_id=store_id).all()}
+
+
+def set_store_options(store_id, keys):
+    """店舗個別のオプションを keys で置き換える"""
+    if not store_id:
+        return
+    valid = {d['key'] for d in PLAN_OPTION_DEFS}
+    want = {k for k in (keys or []) if k in valid}
+    cur = store_option_keys(store_id)
+    store = Store.query.get(store_id)
+    tid = store.tenant_id if store else None
+    for k in want - cur:
+        db.session.add(TenantOption(tenant_id=tid, store_id=store_id, option_key=k))
+    for k in cur - want:
+        TenantOption.query.filter_by(store_id=store_id, option_key=k).delete()
+
+
+def store_has_option(tenant_id, store_id, key):
+    """店舗個別 or テナント全体（store_id=NULL）のいずれかで有効ならTrue"""
+    conds = []
+    if store_id:
+        conds.append(TenantOption.store_id == store_id)
+    if tenant_id:
+        conds.append(db.and_(TenantOption.tenant_id == tenant_id,
+                             TenantOption.store_id == None))
+    if not conds:
+        return False
+    return TenantOption.query.filter(
+        TenantOption.option_key == key, db.or_(*conds)).first() is not None
+
+
+def current_has_option(key):
+    """ログイン中ユーザーの「現在の店舗」がオプションを持つか（super_adminは常に可）"""
     uid = session.get('app_user_id')
     if not uid:
         return False
@@ -225,7 +257,14 @@ def current_has_floorplan():
         return False
     if u.role == 'super_admin':
         return True
-    return tenant_has_option(u.tenant_id, 'floorplan') if u.tenant_id else False
+    if not u.tenant_id:
+        return False
+    sid = session.get('active_store_id') or getattr(u, 'store_id', None)
+    return store_has_option(u.tenant_id, sid, key)
+
+
+def current_has_floorplan():
+    return current_has_option('floorplan')
 
 
 class Store(db.Model):
@@ -1482,6 +1521,16 @@ def migrate_db():
     except Exception as e:
         print(f"  Skip echo_record.followup_phone: {e}")
 
+    # tenant_option の store_id（店舗別オプション）カラムを追加
+    try:
+        cursor.execute("PRAGMA table_info(tenant_option)")
+        tocols = {r[1] for r in cursor.fetchall()}
+        if tocols and 'store_id' not in tocols:
+            cursor.execute("ALTER TABLE tenant_option ADD COLUMN store_id INTEGER")
+            print("  Added column tenant_option.store_id")
+    except Exception as e:
+        print(f"  Skip tenant_option.store_id: {e}")
+
     conn.commit()
     conn.close()
 
@@ -1526,6 +1575,7 @@ def migrate_postgres():
         ("echo_record",              "has_phone_number", "BOOLEAN DEFAULT FALSE"),
         ("echo_record",              "status",          "VARCHAR(40)"),
         ("echo_record",              "followup_phone",  "VARCHAR(60) DEFAULT ''"),
+        ("tenant_option",            "store_id",        "INTEGER"),
         ("mail_message",             "opened_at",       "TIMESTAMP"),
         ("mail_setting",             "custom_keywords", "TEXT"),
         ("mail_setting",             "import_after",    "TIMESTAMP"),
@@ -3892,6 +3942,13 @@ def _chat_user():
 
 
 def _chat_is_pro(tenant_id):
+    # リクエスト中はログインユーザーの現在店舗で判定（店舗別オプション対応）、
+    # それ以外（バックグラウンド処理等）はテナント全体で判定
+    try:
+        if session.get('app_user_id'):
+            return current_has_option('chat_pro')
+    except Exception:
+        pass
     return tenant_has_option(tenant_id, 'chat_pro')
 
 
@@ -8228,6 +8285,7 @@ def api_tenant_stores(tid):
         'id': s.id,
         'name': s.name,
         'is_locked': bool(getattr(s, 'is_locked', False)),
+        'options': sorted(store_option_keys(s.id)),
         'contract_start_date': s.contract_start_date.strftime('%Y-%m-%d') if getattr(s, 'contract_start_date', None) else None,
         'created_at': s.created_at.strftime('%Y-%m-%d') if s.created_at else None
     } for s in stores])
@@ -8280,6 +8338,8 @@ def api_tenant_store_update(tid, sid):
             store.contract_start_date = _dt.strptime(data['contract_start_date'], '%Y-%m-%d').date() if data['contract_start_date'] else None
         except Exception:
             pass
+    if 'options' in data:
+        set_store_options(sid, data.get('options') or [])
     db.session.commit()
     return jsonify({'status': 'ok'})
 
