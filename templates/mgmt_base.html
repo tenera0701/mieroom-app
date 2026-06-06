@@ -416,6 +416,14 @@
             </svg>
             <span class="nav-label">└ 契約管理</span>
           </a>
+          <a href="/doc-templates"
+             class="nav-item {% if request.path.startswith('/doc-templates') or request.path.startswith('/doc-generate') %}active{% endif %}"
+             style="padding-left:36px; font-size:12px; opacity:0.9;">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z M9 13h6 M9 17h6"/>
+            </svg>
+            <span class="nav-label">└ 帳票テンプレート</span>
+          </a>
           <a href="/past-customers"
              class="nav-item {% if request.path == '/past-customers' %}active{% endif %}"
              style="padding-left:36px; font-size:12px; opacity:0.9;">

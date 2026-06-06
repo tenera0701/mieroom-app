@@ -1,0 +1,156 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}{{ tpl_name }} の作成 | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}帳票作成{% endblock %}
+
+{% block extra_head %}
+<style>
+  :root { --primary:#0D9488; --primary-dark:#0F766E; --purple:#6D28D9; }
+  .g-wrap { max-width:1040px; margin:0 auto; }
+  .g-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px; }
+  .g-title { font-size:20px; font-weight:800; color:#111827; margin:0; }
+  .g-sub { font-size:12px; color:#6b7280; margin:3px 0 0; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:18px 20px; box-shadow:0 1px 4px rgba(0,0,0,.06); margin-bottom:18px; }
+  .card-h { font-size:14px; font-weight:800; color:#0F766E; margin:0 0 10px; }
+  .btn { border:none; border-radius:7px; padding:9px 16px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-save { background:var(--primary); color:#fff; } .btn-save:hover { background:var(--primary-dark); }
+  .btn-light { background:#fff; color:#374151; border:1px solid #d1d5db; }
+  .btn-purple { background:var(--purple); color:#fff; } .btn-purple:hover { background:#5B21B6; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px 14px; }
+  .fg { display:flex; flex-direction:column; gap:4px; }
+  .fg label { font-size:12px; font-weight:600; color:#374151; }
+  .fg input { border:1px solid #d1d5db; border-radius:6px; padding:7px 9px; font-size:13px; }
+  .fg input:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 2px rgba(13,148,136,.15); }
+  .fg input[readonly] { background:#f3f4f6; color:#6b7280; }
+  .fg .ai-mark { font-size:10px; color:var(--purple); font-weight:700; }
+  .ai-zone { border:2px dashed #c7d2fe; border-radius:10px; padding:16px; text-align:center; background:#f5f3ff; }
+  .ai-note { font-size:12px; color:#92400e; background:#FEF3C7; border:1px solid #FDE68A; border-radius:6px; padding:8px 10px; margin-top:10px; }
+  .hint { font-size:12px; color:#6b7280; background:#F0FDFA; border:1px solid #99f6e4; border-radius:8px; padding:10px 12px; margin-bottom:14px; line-height:1.6; }
+  .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:14px; display:none; }
+  .alert.show { display:block; }
+  .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
+  .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+  .alert-info { background:#EFF6FF; color:#1e40af; border:1px solid #bfdbfe; }
+  .empty { color:#9ca3af; font-size:13px; }
+  .spin { width:20px; height:20px; border:3px solid #ddd6fe; border-top-color:var(--purple); border-radius:50%; display:inline-block; vertical-align:middle; animation:sp .8s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="g-wrap">
+  <div id="alert" class="alert"></div>
+  <div class="g-head">
+    <div>
+      <h1 class="g-title">{{ tpl_name }} の作成</h1>
+      <p class="g-sub">資料を添付してAIで穴埋め → 内容を確認 → Excelをダウンロードして印刷</p>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-light" onclick="location.href='/doc-templates'">← テンプレ一覧</button>
+      <button class="btn btn-save" onclick="downloadXlsx()">⬇ Excelをダウンロード</button>
+    </div>
+  </div>
+
+  <div class="hint">
+    契約書・お客様情報・物件資料（PDF/画像）を添付すると、AIが「案件情報」の空欄を自動入力します。<b>会社情報</b>は設定済みの固定値が自動で入ります。
+  </div>
+
+  <!-- AI添付 -->
+  <div class="card">
+    <h2 class="card-h">🤖 資料を添付してAI自動入力</h2>
+    <div class="ai-zone">
+      <button class="btn btn-purple" id="ai-btn" onclick="document.getElementById('ai-file').click()">📎 契約書・物件・顧客資料を添付（複数可）</button>
+      <input type="file" id="ai-file" accept="application/pdf,image/*" multiple style="display:none" onchange="aiExtract(event)">
+      <div style="font-size:11px;color:#6b7280;margin-top:8px;">PDF / 画像（JPEG・PNG）／ 合計20MBまで・最大5ファイル</div>
+    </div>
+    <div class="ai-note">⚠️ 自動入力は契約事故防止のため、必ず下の項目で内容をご確認・修正してください。</div>
+  </div>
+
+  <!-- 案件情報 -->
+  <div class="card">
+    <h2 class="card-h">📝 案件情報（自動入力・編集可）</h2>
+    <div id="case-fields" class="grid"><div class="empty">読み込み中…</div></div>
+  </div>
+
+  <!-- 会社情報（固定） -->
+  <div class="card">
+    <h2 class="card-h">🏢 会社情報（固定・自動差し込み）</h2>
+    <div id="company-fields" class="grid"></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const TPL_ID = {{ tpl_id }};
+let TPL = null;
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function showAlert(msg, type='success'){ const el=document.getElementById('alert'); el.innerHTML=msg; el.className=`alert alert-${type} show`; if(type!=='info') setTimeout(()=>el.classList.remove('show'),5000); }
+function cid(tag){ return 'cf__'+btoa(unescape(encodeURIComponent(tag))).replace(/=/g,''); }
+
+async function loadTpl(){
+  try{
+    const r = await fetch(`/api/doc-templates/${TPL_ID}`); const j = await r.json(); if(!r.ok) throw new Error(j.error||'取得失敗');
+    TPL = j;
+    const mapping = j.mapping || {};
+    const company = j.company || {};
+    const caseTags = (j.tags||[]).filter(t => (mapping[t]||{}).scope !== 'company');
+    const compTags = (j.tags||[]).filter(t => (mapping[t]||{}).scope === 'company');
+
+    const cf = document.getElementById('case-fields');
+    if(!caseTags.length){ cf.innerHTML = `<div class="empty">案件情報のタグがありません。「タグ割当」で案件情報を設定してください。</div>`; }
+    else cf.innerHTML = caseTags.map(t=>{
+      const label = (mapping[t]||{}).label || t;
+      return `<div class="fg"><label>${esc(label)} <span class="ai-mark">AI</span></label><input id="${cid(t)}" data-tag="${esc(t)}"></div>`;
+    }).join('');
+
+    const compEl = document.getElementById('company-fields');
+    if(!compTags.length){ compEl.innerHTML = `<div class="empty">会社情報タグはありません。</div>`; }
+    else compEl.innerHTML = compTags.map(t=>{
+      const m = mapping[t]||{}; const key = m.company_key || t;
+      const val = company[key] != null ? company[key] : '';
+      return `<div class="fg"><label>${esc(m.label||t)}</label><input value="${esc(val)}" readonly></div>`;
+    }).join('');
+  }catch(e){ showAlert(e.message,'error'); }
+}
+
+async function aiExtract(ev){
+  const files = ev.target.files; if(!files || !files.length) return;
+  const fd = new FormData();
+  [...files].forEach(f=>fd.append('files', f));
+  const btn = document.getElementById('ai-btn'); const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 読み取り中…（10〜40秒）';
+  showAlert('資料を読み取り中です…', 'info');
+  try{
+    const r = await fetch(`/api/doc-templates/${TPL_ID}/extract`, {method:'POST', body:fd});
+    const j = await r.json(); if(!r.ok) throw new Error(j.error||'読み取り失敗');
+    const fields = j.fields || [];
+    let n = 0;
+    fields.forEach(f=>{ const el = document.getElementById(cid(f.key)); if(el){ el.value = f.value; el.style.background='#ECFDF5'; n++; } });
+    if(n) showAlert(`AIが${n}件を自動入力しました。内容を確認・修正してください。`);
+    else showAlert('読み取れる項目が見つかりませんでした。鮮明な資料で再度お試しください。','error');
+  }catch(e){ showAlert(e.message,'error'); }
+  finally{ btn.disabled=false; btn.innerHTML=orig; ev.target.value=''; }
+}
+
+async function downloadXlsx(){
+  const values = {};
+  document.querySelectorAll('#case-fields input[data-tag]').forEach(el=>{ values[el.dataset.tag] = el.value; });
+  showAlert('Excelを生成中…','info');
+  try{
+    const r = await fetch(`/api/doc-templates/${TPL_ID}/render`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({values})});
+    if(!r.ok){ const j = await r.json().catch(()=>({})); throw new Error(j.error||'出力失敗'); }
+    const blob = await r.blob();
+    const cd = r.headers.get('Content-Disposition')||'';
+    let fname = (TPL && TPL.name ? TPL.name : 'document') + '.xlsx';
+    const m = /filename\*=UTF-8''([^;]+)/.exec(cd); if(m){ try{ fname = decodeURIComponent(m[1]); }catch(_){} }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    showAlert('Excelをダウンロードしました。Excelで開いてA4/A3で印刷してください。');
+  }catch(e){ showAlert(e.message,'error'); }
+}
+
+document.addEventListener('DOMContentLoaded', loadTpl);
+</script>
+{% endblock %}

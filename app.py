@@ -698,6 +698,31 @@ class FloorPlan(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class DocCompanyInfo(db.Model):
+    """会社情報（テナント単位で固定。帳票の会社情報タグへ自動差し込み）。data はJSON {ラベル: 値}"""
+    __tablename__ = 'doc_company_info'
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, index=True, unique=True)
+    data = db.Column(db.Text)   # JSON {"会社名":"...", "住所":"..."}
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class DocTemplate(db.Model):
+    """クライアントのExcel帳票テンプレート。{{タグ}}で差し込み位置を表現する。"""
+    __tablename__ = 'doc_template'
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, index=True)
+    name = db.Column(db.String(160))            # 帳票名（例: 賃貸借契約書）
+    filename = db.Column(db.String(255))        # 元ファイル名
+    file_b64 = db.Column(db.Text)               # xlsx本体（base64）
+    tags = db.Column(db.Text)                   # JSON: 検出タグ名のリスト
+    mapping = db.Column(db.Text)                # JSON: {tag: {"scope":"company|case","company_key":..,"label":..}}
+    is_active = db.Column(db.Boolean, default=True)
+    created_by = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class EchoRecord(db.Model):
     """反響管理表（追客進捗管理）"""
     __tablename__ = 'echo_record'
@@ -2544,6 +2569,385 @@ def api_contract_extract_document(rid):
         out.append({'key': fld['k'], 'label': fld['l'], 'type': fld['t'], 'value': v})
 
     return jsonify({'fields': out, 'found': len(out)})
+
+
+# ── Excelテンプレート帳票（クライアント様式の取込→穴埋め→出力） ──────────
+_DOC_TAG_RE = re.compile(r'\{\{\s*([^}]+?)\s*\}\}')
+
+
+def _doc_tenant_id():
+    u = AppUser.query.get(session.get('app_user_id'))
+    return u.tenant_id if u else None
+
+
+def _doc_can_manage():
+    """テンプレート・会社情報の初期設定が可能なロールか"""
+    return session.get('app_user_role') in ('owner', 'store_manager')
+
+
+def _xlsx_extract_tags(xlsx_bytes):
+    """xlsx内の全シート・全セルから {{タグ}} を抽出（重複除去・出現順）"""
+    import io
+    from openpyxl import load_workbook
+    wb = load_workbook(io.BytesIO(xlsx_bytes), data_only=False)
+    tags, seen = [], set()
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                v = cell.value
+                if isinstance(v, str) and '{{' in v:
+                    for m in _DOC_TAG_RE.findall(v):
+                        t = m.strip()
+                        if t and t not in seen:
+                            seen.add(t)
+                            tags.append(t)
+    return tags
+
+
+def _xlsx_fill(xlsx_bytes, values):
+    """{{タグ}} を values[タグ] で置換した xlsx バイト列を返す。
+    セル全体が単一タグかつ値が数値ならば数値として書き込む（合計式などのため）。"""
+    import io
+    from openpyxl import load_workbook
+    wb = load_workbook(io.BytesIO(xlsx_bytes), data_only=False)
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                v = cell.value
+                if not (isinstance(v, str) and '{{' in v):
+                    continue
+                stripped = v.strip()
+                m_full = _DOC_TAG_RE.fullmatch(stripped)
+                if m_full:
+                    key = m_full.group(1).strip()
+                    rv = values.get(key, '')
+                    rv = '' if rv is None else rv
+                    sval = str(rv)
+                    if sval != '' and re.fullmatch(r'-?\d+(\.\d+)?', sval):
+                        cell.value = float(sval) if '.' in sval else int(sval)
+                    else:
+                        cell.value = sval
+                else:
+                    def _repl(mm):
+                        k = mm.group(1).strip()
+                        rv = values.get(k, '')
+                        return '' if rv is None else str(rv)
+                    cell.value = _DOC_TAG_RE.sub(_repl, v)
+    out = io.BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
+def _doc_company_data(tenant_id):
+    rec = DocCompanyInfo.query.filter_by(tenant_id=tenant_id).first()
+    if rec and rec.data:
+        try:
+            d = json.loads(rec.data)
+            if isinstance(d, dict):
+                return d
+        except Exception:
+            pass
+    return {}
+
+
+def _doc_default_mapping(tags, company_keys):
+    """タグの初期割当：会社情報のキーと一致すれば company、それ以外は case"""
+    mp = {}
+    for t in tags:
+        if t in company_keys:
+            mp[t] = {'scope': 'company', 'company_key': t, 'label': t}
+        else:
+            mp[t] = {'scope': 'case', 'company_key': '', 'label': t}
+    return mp
+
+
+@app.route("/doc-templates")
+@login_required
+@block_super_admin
+def doc_templates_page():
+    return render_template("doc_templates.html", can_manage=_doc_can_manage())
+
+
+@app.route("/api/doc-company-info", methods=["GET"])
+@login_required
+@block_super_admin
+def api_doc_company_get():
+    return jsonify({'data': _doc_company_data(_doc_tenant_id())})
+
+
+@app.route("/api/doc-company-info", methods=["POST"])
+@login_required
+@block_super_admin
+def api_doc_company_save():
+    if not _doc_can_manage():
+        return jsonify({'error': '権限がありません'}), 403
+    tid = _doc_tenant_id()
+    payload = request.get_json() or {}
+    data = payload.get('data') if isinstance(payload, dict) else None
+    if not isinstance(data, dict):
+        return jsonify({'error': '不正なデータです'}), 400
+    clean = {str(k).strip(): ('' if v is None else str(v)) for k, v in data.items() if str(k).strip()}
+    rec = DocCompanyInfo.query.filter_by(tenant_id=tid).first()
+    if not rec:
+        rec = DocCompanyInfo(tenant_id=tid)
+        db.session.add(rec)
+    rec.data = json.dumps(clean, ensure_ascii=False)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'data': clean})
+
+
+@app.route("/api/doc-templates", methods=["GET"])
+@login_required
+@block_super_admin
+def api_doc_templates_list():
+    tid = _doc_tenant_id()
+    rows = DocTemplate.query.filter_by(tenant_id=tid, is_active=True).order_by(DocTemplate.id.desc()).all()
+    out = []
+    for r in rows:
+        try:
+            tags = json.loads(r.tags) if r.tags else []
+        except Exception:
+            tags = []
+        out.append({'id': r.id, 'name': r.name, 'filename': r.filename, 'tag_count': len(tags)})
+    return jsonify({'templates': out})
+
+
+@app.route("/api/doc-templates", methods=["POST"])
+@login_required
+@block_super_admin
+def api_doc_template_upload():
+    if not _doc_can_manage():
+        return jsonify({'error': '権限がありません（オーナー・店長のみ設定できます）'}), 403
+    import base64 as _b64
+    tid = _doc_tenant_id()
+    f = request.files.get('file')
+    if not f or not f.filename:
+        return jsonify({'error': 'Excelファイルを選択してください'}), 400
+    if not f.filename.lower().endswith('.xlsx'):
+        return jsonify({'error': 'Excel（.xlsx）形式のみ対応しています'}), 400
+    raw = f.read()
+    if len(raw) > 10 * 1024 * 1024:
+        return jsonify({'error': 'ファイルが大きすぎます（10MBまで）'}), 400
+    try:
+        tags = _xlsx_extract_tags(raw)
+    except Exception as e:
+        return jsonify({'error': f'Excelの読み込みに失敗しました: {e}'}), 400
+    name = (request.form.get('name') or '').strip() or f.filename.rsplit('.', 1)[0]
+    company_keys = set(_doc_company_data(tid).keys())
+    mapping = _doc_default_mapping(tags, company_keys)
+    rec = DocTemplate(
+        tenant_id=tid, name=name, filename=f.filename,
+        file_b64=_b64.standard_b64encode(raw).decode(),
+        tags=json.dumps(tags, ensure_ascii=False),
+        mapping=json.dumps(mapping, ensure_ascii=False),
+        created_by=session.get('app_user_id'),
+    )
+    db.session.add(rec)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': rec.id, 'tags': tags})
+
+
+@app.route("/api/doc-templates/<int:tpl_id>", methods=["GET"])
+@login_required
+@block_super_admin
+def api_doc_template_get(tpl_id):
+    tid = _doc_tenant_id()
+    r = DocTemplate.query.filter_by(id=tpl_id, tenant_id=tid, is_active=True).first_or_404()
+    try:
+        tags = json.loads(r.tags) if r.tags else []
+    except Exception:
+        tags = []
+    try:
+        mapping = json.loads(r.mapping) if r.mapping else {}
+    except Exception:
+        mapping = {}
+    company = _doc_company_data(tid)
+    # 未登録タグにデフォルト割当を補完
+    for t in tags:
+        if t not in mapping:
+            mapping[t] = ({'scope': 'company', 'company_key': t, 'label': t}
+                          if t in company else {'scope': 'case', 'company_key': '', 'label': t})
+    return jsonify({
+        'id': r.id, 'name': r.name, 'filename': r.filename,
+        'tags': tags, 'mapping': mapping,
+        'company_keys': list(company.keys()), 'company': company,
+        'can_manage': _doc_can_manage(),
+    })
+
+
+@app.route("/api/doc-templates/<int:tpl_id>/mapping", methods=["POST"])
+@login_required
+@block_super_admin
+def api_doc_template_mapping(tpl_id):
+    if not _doc_can_manage():
+        return jsonify({'error': '権限がありません'}), 403
+    tid = _doc_tenant_id()
+    r = DocTemplate.query.filter_by(id=tpl_id, tenant_id=tid, is_active=True).first_or_404()
+    payload = request.get_json() or {}
+    mapping = payload.get('mapping')
+    if not isinstance(mapping, dict):
+        return jsonify({'error': '不正なデータです'}), 400
+    if 'name' in payload and str(payload['name']).strip():
+        r.name = str(payload['name']).strip()
+    r.mapping = json.dumps(mapping, ensure_ascii=False)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/doc-templates/<int:tpl_id>", methods=["DELETE"])
+@login_required
+@block_super_admin
+def api_doc_template_delete(tpl_id):
+    if not _doc_can_manage():
+        return jsonify({'error': '権限がありません'}), 403
+    tid = _doc_tenant_id()
+    r = DocTemplate.query.filter_by(id=tpl_id, tenant_id=tid).first_or_404()
+    r.is_active = False
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/doc-generate/<int:tpl_id>")
+@login_required
+@block_super_admin
+def doc_generate_page(tpl_id):
+    tid = _doc_tenant_id()
+    r = DocTemplate.query.filter_by(id=tpl_id, tenant_id=tid, is_active=True).first_or_404()
+    return render_template("doc_generate.html", tpl_id=tpl_id, tpl_name=r.name)
+
+
+@app.route("/api/doc-templates/<int:tpl_id>/extract", methods=["POST"])
+@login_required
+@block_super_admin
+def api_doc_template_extract(tpl_id):
+    """添付資料（契約書/顧客/物件のPDF・画像）から案件タグの値をAIで抽出"""
+    import base64 as _b64
+    tid = _doc_tenant_id()
+    r = DocTemplate.query.filter_by(id=tpl_id, tenant_id=tid, is_active=True).first_or_404()
+    try:
+        mapping = json.loads(r.mapping) if r.mapping else {}
+    except Exception:
+        mapping = {}
+    # 案件タグ（AI抽出対象）
+    case_tags = [t for t, m in mapping.items() if (m or {}).get('scope') != 'company']
+    if not case_tags:
+        return jsonify({'fields': [], 'found': 0})
+
+    files = request.files.getlist('files') or ([request.files['file']] if 'file' in request.files else [])
+    files = [f for f in files if f and f.filename]
+    if not files:
+        return jsonify({'error': '資料ファイルを選択してください'}), 400
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return jsonify({'error': 'AI読み取りが未設定です（管理者にお問い合わせください）'}), 503
+
+    content = []
+    total = 0
+    for f in files[:5]:
+        raw = f.read()
+        total += len(raw)
+        if total > 20 * 1024 * 1024:
+            return jsonify({'error': '添付の合計が大きすぎます（20MBまで）'}), 400
+        mime = (f.mimetype or '').lower()
+        if mime not in _ALLOWED_EXTRACT_MIME:
+            ext = (f.filename.rsplit('.', 1)[-1] if '.' in f.filename else '').lower()
+            mime = {'pdf': 'application/pdf', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+                    'png': 'image/png', 'webp': 'image/webp', 'gif': 'image/gif'}.get(ext, mime)
+        kind = _ALLOWED_EXTRACT_MIME.get(mime)
+        if not kind:
+            continue
+        b64 = _b64.standard_b64encode(raw).decode()
+        if kind == 'pdf':
+            content.append({"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": b64}})
+        else:
+            content.append({"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}})
+    if not content:
+        return jsonify({'error': 'PDFまたは画像（JPEG/PNG）のみ対応しています'}), 400
+
+    key_lines = ",\n".join(f'  "{t}": "{(mapping.get(t) or {}).get("label") or t}"' for t in case_tags)
+    prompt = (
+        "あなたは不動産書類を読み取る専門アシスタントです。\n"
+        "添付資料（契約書・顧客情報・物件情報など）から、以下のJSONキーに対応する値を抽出してください。\n\n"
+        "対象フィールド（キー: 説明）:\n{\n" + key_lines + "\n}\n\n"
+        "厳守ルール:\n"
+        "1. 上記キーだけを持つJSONオブジェクトを1つだけ返す。説明文やマークダウンは付けない。\n"
+        "2. 記載が無い・読み取れない・自信が無い項目はキーを省略する（推測で埋めない）。\n"
+        "3. 金額は半角数字のみ、日付はYYYY-MM-DD（和暦は西暦へ）。\n"
+        "4. 誤った自動入力は契約事故につながるため、確実な箇所のみ返す。\n"
+    )
+    content.append({"type": "text", "text": prompt})
+
+    try:
+        msg = anthropic_client.messages.create(
+            model="claude-sonnet-4-6", max_tokens=2000,
+            messages=[{"role": "user", "content": content}],
+        )
+        text = "".join(getattr(b, 'text', '') for b in msg.content).strip()
+    except Exception as e:
+        return jsonify({'error': f'AI読み取りに失敗しました: {e}'}), 502
+
+    extracted = {}
+    try:
+        s, e = text.find('{'), text.rfind('}')
+        if s >= 0 and e > s:
+            parsed = json.loads(text[s:e + 1])
+            if isinstance(parsed, dict):
+                extracted = parsed
+    except Exception:
+        extracted = {}
+
+    out = []
+    for t in case_tags:
+        v = extracted.get(t)
+        if v is None:
+            continue
+        v = str(v).strip()
+        if v == '':
+            continue
+        out.append({'key': t, 'label': (mapping.get(t) or {}).get('label') or t, 'value': v})
+    return jsonify({'fields': out, 'found': len(out)})
+
+
+@app.route("/api/doc-templates/<int:tpl_id>/render", methods=["POST"])
+@login_required
+@block_super_admin
+def api_doc_template_render(tpl_id):
+    """会社情報＋入力値でテンプレートを穴埋めし、xlsxをダウンロード返却"""
+    import base64 as _b64
+    from urllib.parse import quote as _urlquote
+    tid = _doc_tenant_id()
+    r = DocTemplate.query.filter_by(id=tpl_id, tenant_id=tid, is_active=True).first_or_404()
+    try:
+        mapping = json.loads(r.mapping) if r.mapping else {}
+    except Exception:
+        mapping = {}
+    payload = request.get_json() or {}
+    case_values = payload.get('values') or {}
+    company = _doc_company_data(tid)
+
+    values = {}
+    for tag, m in mapping.items():
+        m = m or {}
+        if m.get('scope') == 'company':
+            values[tag] = company.get(m.get('company_key') or tag, '')
+        else:
+            values[tag] = case_values.get(tag, '')
+    # mappingに無いタグも case_values から補完
+    for k, v in case_values.items():
+        values.setdefault(k, v)
+
+    try:
+        raw = _b64.standard_b64decode(r.file_b64.encode())
+        filled = _xlsx_fill(raw, values)
+    except Exception as e:
+        return jsonify({'error': f'出力に失敗しました: {e}'}), 500
+
+    fname = f"{r.name or 'document'}.xlsx"
+    resp = make_response(filled)
+    resp.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    resp.headers['Content-Disposition'] = (
+        "attachment; filename=\"document.xlsx\"; filename*=UTF-8''" + _urlquote(fname)
+    )
+    return resp
 
 
 # ── 間取り作成 ──────────────────────────────────────────
