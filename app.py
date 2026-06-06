@@ -8219,8 +8219,11 @@ def api_tenant_delete(tid):
 @app.route("/api/tenants/<int:tid>/stores", methods=["GET"])
 @super_admin_required
 def api_tenant_stores(tid):
-    """テナント内の店舗一覧"""
-    stores = Store.query.filter_by(tenant_id=tid, is_active=True).order_by(Store.created_at.asc()).all()
+    """テナント内の店舗一覧（有効店舗＋ロック中店舗。論理削除のみ除外）"""
+    stores = (Store.query.filter(
+                Store.tenant_id == tid,
+                db.or_(Store.is_active == True, Store.is_locked == True))
+              .order_by(Store.created_at.asc()).all())
     return jsonify([{
         'id': s.id,
         'name': s.name,
@@ -8341,6 +8344,7 @@ def api_tenant_store_delete(tid, sid):
     if err: return err
     store = Store.query.filter_by(id=sid, tenant_id=tid).first_or_404()
     store.is_active = False
+    store.is_locked = False   # 論理削除はロック扱いにしない（一覧から消す）
     db.session.commit()
     return jsonify({'status': 'ok'})
 
