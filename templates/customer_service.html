@@ -287,6 +287,8 @@ async function loadDropdownOpts() {
   fillSelect('f-echo-media',   r1);
   fillSelect('f-service-type', r2);
   fillSelect('f-status',       r3);
+  // 色を読み込んだ後に再描画（初回ロード時にrenderTableが色より先に走っても色分けされるように）
+  if (typeof records !== 'undefined' && records.length) renderTable();
 }
 function fillSelect(id, opts) {
   const sel = document.getElementById(id);
