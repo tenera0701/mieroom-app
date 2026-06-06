@@ -25,6 +25,9 @@
 
   .media-stats { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px 18px; margin-bottom:14px; }
   .media-stats h4 { font-size:13px; font-weight:700; color:#374151; margin:0 0 10px; }
+  /* セクション折りたたみ用ヘッダー */
+  .cs-sec-head { display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; font-size:13px; font-weight:700; color:#374151; margin:14px 0 8px; }
+  .cs-chev { font-size:11px; color:#0D9488; display:inline-block; width:12px; }
   .media-row { display:flex; align-items:center; gap:10px; padding:5px 0; border-bottom:1px solid #f3f4f6; font-size:12px; }
   .media-row:last-child { border-bottom:none; }
   .media-name { width:120px; color:#374151; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -132,6 +135,7 @@
   </div>
 
   <!-- サマリーカード -->
+  <div class="cs-sec-head" onclick="toggleCsSec('summary')"><span class="cs-chev" id="chev-summary">▼</span>📋 サマリー</div>
   <div class="summary-bar" id="summary-bar">
     <div class="summary-card">
       <div class="label">総接客数</div>
@@ -161,11 +165,12 @@
 
   <!-- 媒体別申込率 -->
   <div class="media-stats" id="media-stats" style="display:none;">
-    <h4>📊 媒体別 申込率</h4>
+    <h4 class="cs-sec-head" style="margin:0 0 10px;" onclick="toggleCsSec('media')"><span class="cs-chev" id="chev-media">▼</span>📊 媒体別 申込率</h4>
     <div id="media-rows"></div>
   </div>
 
-  <div class="table-wrap">
+  <div class="cs-sec-head" onclick="toggleCsSec('table')"><span class="cs-chev" id="chev-table">▼</span>📝 接客記録</div>
+  <div class="table-wrap" id="cs-table-wrap">
     <table>
       <thead>
         <tr>
@@ -647,6 +652,30 @@ async function deleteRecord(id) {
   }
 }
 
+/* ── セクションの折りたたみ ── */
+const CS_SEC_BODY = { summary: 'summary-bar', media: 'media-rows', table: 'cs-table-wrap' };
+function toggleCsSec(key) {
+  const body = document.getElementById(CS_SEC_BODY[key]);
+  const chev = document.getElementById('chev-' + key);
+  if (!body) return;
+  const willCollapse = body.style.display !== 'none';
+  body.style.display = willCollapse ? 'none' : '';
+  if (chev) chev.textContent = willCollapse ? '▶' : '▼';
+  try { localStorage.setItem('csSec_' + key, willCollapse ? 'closed' : 'open'); } catch (_) {}
+}
+function restoreCsSecs() {
+  Object.keys(CS_SEC_BODY).forEach(key => {
+    let st = null;
+    try { st = localStorage.getItem('csSec_' + key); } catch (_) {}
+    if (st === 'closed') {
+      const body = document.getElementById(CS_SEC_BODY[key]);
+      const chev = document.getElementById('chev-' + key);
+      if (body) body.style.display = 'none';
+      if (chev) chev.textContent = '▶';
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   updateLabel();
   loadDropdownOpts();
@@ -655,6 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sel) sel.value = String(CUR_STAFF_ID);
   }
   loadRecords();
+  restoreCsSecs();
 });
 </script>
 
