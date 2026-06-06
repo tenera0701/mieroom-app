@@ -653,6 +653,7 @@ class EchoRecord(db.Model):
     followup_8    = db.Column(db.Date, nullable=True)
     followup_9    = db.Column(db.Date, nullable=True)
     followup_10   = db.Column(db.Date, nullable=True)
+    followup_phone = db.Column(db.String(60), default='')  # 電話追客の追客番号（カンマ区切り 例:"1,3"）
     has_reply     = db.Column(db.Boolean, default=False)  # 返信有
     has_phone     = db.Column(db.Boolean, default=False)  # 電話対応有無
     has_line      = db.Column(db.Boolean, default=False)  # LINE追加
@@ -1442,6 +1443,16 @@ def migrate_db():
     except Exception as e:
         print(f"  Skip mail_template.category: {e}")
 
+    # echo_record の followup_phone（電話追客フラグ）カラムを追加
+    try:
+        cursor.execute("PRAGMA table_info(echo_record)")
+        ercols = {r[1] for r in cursor.fetchall()}
+        if ercols and 'followup_phone' not in ercols:
+            cursor.execute("ALTER TABLE echo_record ADD COLUMN followup_phone VARCHAR(60) DEFAULT ''")
+            print("  Added column echo_record.followup_phone")
+    except Exception as e:
+        print(f"  Skip echo_record.followup_phone: {e}")
+
     conn.commit()
     conn.close()
 
@@ -1485,6 +1496,7 @@ def migrate_postgres():
         ("echo_record",              "has_unread_reply", "BOOLEAN DEFAULT FALSE"),
         ("echo_record",              "has_phone_number", "BOOLEAN DEFAULT FALSE"),
         ("echo_record",              "status",          "VARCHAR(40)"),
+        ("echo_record",              "followup_phone",  "VARCHAR(60) DEFAULT ''"),
         ("mail_message",             "opened_at",       "TIMESTAMP"),
         ("mail_setting",             "custom_keywords", "TEXT"),
         ("mail_setting",             "import_after",    "TIMESTAMP"),
@@ -4122,6 +4134,7 @@ def api_echo_records_list():
         'media': r.media or '', 'method': r.method or '',
         'first_contact_date': fd(r.first_contact_date),
         **{f'followup_{i}': fd(getattr(r, f'followup_{i}')) for i in range(1, 11)},
+        'followup_phone': r.followup_phone or '',
         'has_reply': r.has_reply, 'has_phone': r.has_phone, 'has_line': r.has_line,
         'memo': r.memo or '',
         'customer_email': r.customer_email or '',
@@ -4195,6 +4208,8 @@ def api_echo_records_update(rid):
         key = f'followup_{i}'
         if key in data:
             setattr(r, key, pd(data.get(key)))
+    if 'followup_phone' in data:
+        r.followup_phone = (data.get('followup_phone') or '')[:60]
     if 'has_reply' in data:
         r.has_reply = bool(data.get('has_reply'))
     if 'has_phone' in data:

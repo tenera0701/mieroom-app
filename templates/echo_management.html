@@ -623,6 +623,26 @@ function showUnrepliedOnly(){
 
 const STAFF_OPTIONS = [['','― 未選択 ―'], {% for s in staff_list %}[{{ s.id }}, '{{ s.name }}'],{% endfor %}];
 
+// 複数フィールドをまとめて保存（追客＋電話フラグなど）
+async function patchRecordFields(id, payload) {
+  try {
+    const res = await fetch(`/api/echo-records/${id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error();
+    const rec = records.find(r => r.id === id);
+    if (rec) Object.assign(rec, payload);
+    updateSummary();
+  } catch(e) { showAlert('保存に失敗しました', 'error'); loadRecords(); }
+}
+// 追客の表示ラベル（電話追客なら「6/3(電)」）
+function followupLabel(r, i) {
+  const d = shortDate(r['followup_' + i]);
+  if (!d) return '';
+  const phones = String(r.followup_phone || '').split(',').filter(Boolean);
+  return phones.includes(String(i)) ? d + '(電)' : d;
+}
+
 async function patchRecord(id, field, value) {
   try {
     const res = await fetch(`/api/echo-records/${id}`, {
@@ -689,15 +709,54 @@ function editCell(td, id, field, type, curVal, options) {
     el.addEventListener('blur', () => { if (td.querySelector('select')) renderTable(); });
   } else if (type === 'date') {
     // flatpickrで1クリックでカレンダーを表示
+    const isFollowup = field.indexOf('followup_') === 0;
+    const fuIndex = isFollowup ? field.split('_')[1] : null;
+    const rec = records.find(x => x.id === id);
+    let phoneMode = isFollowup && rec
+      && String(rec.followup_phone || '').split(',').filter(Boolean).includes(String(fuIndex));
     const inp = document.createElement('input');
     inp.type = 'text'; inp.readOnly = true; inp.setAttribute('data-fp', '1');
     inp.style.cssText = 'width:1px;height:1px;opacity:0;border:none;padding:0;margin:0;';
     td.innerHTML = ''; td.appendChild(inp);
     let done = false;
+    // 追客の保存（電話追客なら followup_phone も更新）
+    const saveFollowup = (dateStr, isPhone) => {
+      if (done) return; done = true;
+      const payload = {}; payload[field] = dateStr;
+      if (isFollowup) {
+        const set = new Set(String((rec && rec.followup_phone) || '').split(',').filter(Boolean));
+        if (isPhone) set.add(String(fuIndex)); else set.delete(String(fuIndex));
+        payload.followup_phone = Array.from(set).join(',');
+        patchRecordFields(id, payload).then(() => renderTable());
+      } else {
+        patchRecord(id, field, dateStr).then(() => renderTable());
+      }
+    };
     const fp = flatpickr(inp, {
       dateFormat: 'Y-m-d', defaultDate: curVal || null, clickOpens: true, disableMobile: true,
-      onChange: function (sel, str) { if (done || !str) return; done = true; patchRecord(id, field, str).then(() => renderTable()); },
-      onClose: function () { setTimeout(function () { if (!done) { try { fp.destroy(); } catch (e) {} renderTable(); } }, 150); }
+      onChange: function (sel, str) { if (done || !str) return; saveFollowup(str, phoneMode); },
+      onClose: function () { setTimeout(function () { if (!done) { try { fp.destroy(); } catch (e) {} renderTable(); } }, 150); },
+      onReady: function (sel, str, instance) {
+        if (!isFollowup) return;
+        const bar = document.createElement('div');
+        bar.style.cssText = 'display:flex;justify-content:center;padding:8px;border-top:1px solid #eef2f7;';
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.textContent = '📞 電話追客';
+        const paint = () => { btn.style.cssText = 'font-size:12px;font-weight:700;padding:6px 14px;border:1px solid #0D9488;border-radius:8px;cursor:pointer;' + (phoneMode ? 'background:#0D9488;color:#fff;' : 'background:#fff;color:#0F766E;'); };
+        paint();
+        btn.addEventListener('mousedown', function (e) { e.preventDefault(); e.stopPropagation(); });
+        btn.addEventListener('click', function (e) {
+          e.preventDefault(); e.stopPropagation();
+          phoneMode = !phoneMode; paint();
+          // 日付が既に選ばれていて電話追客にした場合は即保存（6/3(電)）
+          if (phoneMode && instance.selectedDates && instance.selectedDates[0]) {
+            saveFollowup(instance.formatDate(instance.selectedDates[0], 'Y-m-d'), true);
+            instance.close();
+          }
+        });
+        bar.appendChild(btn);
+        instance.calendarContainer.appendChild(bar);
+      }
     });
     fp.open();
   } else {
@@ -744,8 +803,8 @@ function renderTable() {
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'method','select','${escJs(r.method)}',ECHO_METHOD_PAIRS)">${escHtml(r.method) || '―'}</td>
       <td style="cursor:pointer;" title="電話番号の有無（クリックで切替）" onclick="toggleFlag(${r.id},'has_phone_number',${!!r.has_phone_number})">${r.has_phone_number ? '<span class="chk-yes">〇</span>' : '<span style="color:#ef4444;font-weight:800;">×</span>'}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'first_contact_date','date','${r.first_contact_date||''}')">${r.first_contact_date ? fmtMD(r.first_contact_date) : '―'}</td>
-      ${[1,2,3,4,5].map(i => `<td style="cursor:pointer;" onclick="editCell(this,${r.id},'followup_${i}','date','${r['followup_'+i]||''}')">${r['followup_'+i] ? `<span class="followup-date">${shortDate(r['followup_'+i])}</span>` : '<span class="followup-empty">—</span>'}</td>`).join('')}
-      ${[6,7,8,9,10].map(i => `<td class="followup-extra${_visibleFollowups >= i ? ' visible' : ''}" style="cursor:pointer;" onclick="editCell(this,${r.id},'followup_${i}','date','${r['followup_'+i]||''}')">${r['followup_'+i] ? `<span class="followup-date">${shortDate(r['followup_'+i])}</span>` : '<span class="followup-empty">—</span>'}</td>`).join('')}
+      ${[1,2,3,4,5].map(i => `<td style="cursor:pointer;" onclick="editCell(this,${r.id},'followup_${i}','date','${r['followup_'+i]||''}')">${r['followup_'+i] ? `<span class="followup-date">${followupLabel(r, i)}</span>` : '<span class="followup-empty">—</span>'}</td>`).join('')}
+      ${[6,7,8,9,10].map(i => `<td class="followup-extra${_visibleFollowups >= i ? ' visible' : ''}" style="cursor:pointer;" onclick="editCell(this,${r.id},'followup_${i}','date','${r['followup_'+i]||''}')">${r['followup_'+i] ? `<span class="followup-date">${followupLabel(r, i)}</span>` : '<span class="followup-empty">—</span>'}</td>`).join('')}
       <td></td>
       <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_reply',${!!r.has_reply})">${r.has_reply ? '<span class="chk-yes">〇</span>' : '<span class="chk-no">—</span>'}</td>
       <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_phone',${!!r.has_phone})">${r.has_phone ? '<span class="chk-yes">〇</span>' : '<span class="chk-no">—</span>'}</td>
