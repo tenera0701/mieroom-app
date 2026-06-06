@@ -176,9 +176,9 @@
         <tr>
           <th>日付</th>
           <th>担当者</th>
-          <th>反響媒体</th>
+          <th>反響媒体 <button type="button" onclick="openDropdownMgr('cs_media','f-echo-media')" title="反響媒体の選択肢を管理" style="font-size:10px;background:#fff;border:1px solid #d1d5db;border-radius:4px;padding:0 5px;cursor:pointer;color:#374151;">⚙</button></th>
           <th>お客様名</th>
-          <th class="center">対応</th>
+          <th class="center">対応 <button type="button" onclick="openDropdownMgr('cs_service_type','f-service-type')" title="対応種別の選択肢を管理" style="font-size:10px;background:#fff;border:1px solid #d1d5db;border-radius:4px;padding:0 5px;cursor:pointer;color:#374151;">⚙</button></th>
           <th class="center">来店数</th>
           <th class="center">状況 <button type="button" onclick="openStatusMgr()" title="状況タグと色を管理" style="font-size:10px;background:#fff;border:1px solid #d1d5db;border-radius:4px;padding:0 5px;cursor:pointer;color:#374151;">⚙</button></th>
           <th>メモ</th>
@@ -350,7 +350,7 @@ function openDropdownMgr(cat, selId) {
   renderDgrList();
   document.getElementById('dgr-modal').style.display = 'flex';
 }
-function closeDgr() { document.getElementById('dgr-modal').style.display = 'none'; }
+function closeDgr() { document.getElementById('dgr-modal').style.display = 'none'; loadDropdownOpts().then(() => renderTable()); }
 async function renderDgrList() {
   const res = await fetch(`/api/dropdown/${_dgrCategory}`);
   _dgrOpts = await res.json();
@@ -620,8 +620,8 @@ function renderTable() {
   }
   tbody.innerHTML = records.map(r => {
     const svcBadge = SERVICE_BADGE[r.service_type] || 'badge badge-other';
-    const stsColor = CS_STATUS_COLORS[r.status] || '#e5e7eb';   // 状況タグ別の色（色設定で変更可）
-    return `<tr>
+    const stsColor = CS_STATUS_COLORS[r.status] || '#ffffff';   // 状況タグ別の色（色設定で変更可）
+    return `<tr style="background:${stsColor};">
       <td onclick="editCell(this,${r.id},'service_date','date','${r.service_date||''}')">${r.service_date||'―'}</td>
       <td onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${escHtml(staffName(r.staff_id))}</td>
       <td onclick="editCell(this,${r.id},'echo_media','select','${escJs(r.echo_media)}',CS_MEDIA_PAIRS)">${escHtml(r.echo_media)||'―'}</td>
@@ -630,7 +630,7 @@ function renderTable() {
         <span class="${svcBadge}">${escHtml(r.service_type)||'―'}</span></td>
       <td class="center" onclick="editCell(this,${r.id},'visit_count','number','${r.visit_count||0}')">${r.visit_count||0}</td>
       <td class="center" onclick="editCell(this,${r.id},'status','select','${r.status||'追客中'}',STATUS_LIST.map(v=>[v,v]))">
-        <span style="display:inline-block;padding:2px 11px;border-radius:999px;font-size:12px;font-weight:700;background:${stsColor};border:1px solid rgba(0,0,0,0.08);color:#1f2937;white-space:nowrap;">${escHtml(r.status||'追客中')}</span></td>
+        <span style="display:inline-block;padding:2px 11px;border-radius:999px;font-size:12px;font-weight:700;background:#fff;border:1px solid rgba(0,0,0,0.15);color:#1f2937;white-space:nowrap;">${escHtml(r.status||'追客中')}</span></td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(r.memo)}"
           onclick="editCell(this,${r.id},'memo','text','${escJs(r.memo)}')">${escHtml(r.memo)||''}</td>
       <td class="center no-edit" style="white-space:nowrap;">
