@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>帳票テンプレート設定</title>
 <style>
-  :root { --primary:#0D9488; --primary-dark:#0F766E; --purple:#6D28D9; }
+  :root { --primary:#0D9488; --primary-dark:#0F766E; --purple:#6D28D9; --green:#059669; }
   * { box-sizing:border-box; }
   body { font-family:'Hiragino Sans','Noto Sans JP',sans-serif; margin:0; padding:4px 2px 24px; background:#f9fafb; color:#111827; }
   .card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:18px 20px; box-shadow:0 1px 4px rgba(0,0,0,.06); margin-bottom:18px; }
@@ -21,7 +21,8 @@
   .kv-row input { border:1px solid #d1d5db; border-radius:6px; padding:7px 9px; font-size:13px; width:100%; }
   .kv-del { border:none; background:#fee2e2; color:#b91c1c; border-radius:6px; height:32px; cursor:pointer; font-weight:700; }
   .kv-head { font-size:11px; font-weight:700; color:#6b7280; }
-  .tpl-row { display:flex; align-items:center; gap:10px; padding:11px 0; border-bottom:1px solid #f3f4f6; flex-wrap:wrap; }
+  .tpl-row { border:1px solid #e5e7eb; border-radius:10px; margin-bottom:10px; overflow:hidden; background:#fff; }
+  .tpl-row-head { display:flex; align-items:center; gap:10px; padding:12px 14px; flex-wrap:wrap; }
   .tpl-name { font-weight:700; color:#111827; font-size:14px; }
   .tpl-meta { font-size:11px; color:#6b7280; }
   .tpl-actions { margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; }
@@ -34,17 +35,39 @@
   .alert.show { display:block; }
   .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
   .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
-  .empty { color:#9ca3af; font-size:13px; padding:14px 0; }
-  .ovl { position:fixed; inset:0; background:rgba(17,24,39,.55); z-index:9999; display:none; align-items:center; justify-content:center; padding:16px; }
-  .ovl.show { display:flex; }
-  .modal { background:#fff; border-radius:14px; width:min(680px,96vw); max-height:88vh; display:flex; flex-direction:column; box-shadow:0 12px 40px rgba(0,0,0,.3); }
-  .modal-h { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #e5e7eb; font-weight:800; }
-  .modal-x { border:none; background:none; font-size:22px; color:#6b7280; cursor:pointer; }
-  .modal-b { padding:14px 18px; overflow:auto; }
-  .modal-f { padding:12px 18px; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:8px; }
-  .map-row { display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid #f3f4f6; }
-  .map-tag { font-weight:700; color:var(--purple); font-size:13px; }
-  .map-row select { border:1px solid #d1d5db; border-radius:6px; padding:5px 7px; font-size:12px; }
+  .empty { color:#9ca3af; font-size:13px; padding:12px 0; text-align:center; }
+
+  /* ── タグ仕分けパネル ── */
+  .map-panel { border-top:1px solid #e5e7eb; background:#f9fafb; padding:14px 16px; display:none; }
+  .map-panel.open { display:block; }
+  .map-name-row { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+  .map-name-row input { border:1px solid #d1d5db; border-radius:6px; padding:7px 10px; font-size:14px; font-weight:700; flex:1; }
+  .sort-cols { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  @media(max-width:600px){ .sort-cols { grid-template-columns:1fr; } }
+  .sort-col { border-radius:10px; padding:10px; min-height:140px; }
+  .sort-col.col-company { background:#ECFDF5; border:2px solid #6EE7B7; }
+  .sort-col.col-case { background:#EFF6FF; border:2px solid #BFDBFE; }
+  .sort-col-h { font-size:12px; font-weight:800; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+  .sort-col.col-company .sort-col-h { color:#065F46; }
+  .sort-col.col-case .sort-col-h { color:#1E40AF; }
+  .sort-col-desc { font-size:11px; color:#6b7280; margin-bottom:8px; }
+  .sort-col.drag-over { opacity:.75; transform:scale(.99); }
+  .tag-card { background:#fff; border-radius:8px; padding:8px 10px; margin-bottom:6px; cursor:grab; display:flex; align-items:center; gap:6px; font-size:13px; font-weight:700; border:1px solid #e5e7eb; user-select:none; transition:.1s; }
+  .tag-card:active { cursor:grabbing; }
+  .tag-card:hover { box-shadow:0 2px 6px rgba(0,0,0,.1); }
+  .tag-card.col-company { border-color:#6EE7B7; color:#065F46; }
+  .tag-card.col-case { border-color:#BFDBFE; color:#1E40AF; }
+  .tag-card.dragging { opacity:.4; }
+  .tag-pill { background:#f3f4f6; border-radius:4px; padding:2px 7px; font-size:12px; font-family:monospace; }
+  .tag-card.col-company .tag-pill { background:#D1FAE5; }
+  .tag-card.col-case .tag-pill { background:#DBEAFE; }
+  .tag-card-move { border:none; background:none; font-size:16px; color:#9ca3af; cursor:pointer; margin-left:auto; padding:0 2px; }
+  .tag-card-move:hover { color:#374151; }
+  .tag-company-sel { margin-top:6px; padding:0 0 0 10px; border-left:2px solid #6EE7B7; }
+  .tag-company-sel label { font-size:11px; color:#6b7280; display:block; margin-bottom:3px; }
+  .tag-company-sel select { border:1px solid #d1d5db; border-radius:5px; padding:4px 7px; font-size:12px; width:100%; }
+  .map-footer { margin-top:12px; display:flex; justify-content:flex-end; gap:8px; }
+  .sort-empty { font-size:12px; color:#9ca3af; text-align:center; padding:18px 0; border:2px dashed #e5e7eb; border-radius:8px; }
 </style>
 </head>
 <body>
@@ -54,8 +77,8 @@
     <b>使い方</b><br>
     ① 「会社情報」を登録（毎回固定で入る情報）。<br>
     ② 会社のExcel様式を用意し、自動入力したいセルに <code>{{ '{{お客様氏名}}' }}</code> のように <b>{{ '{{タグ}}' }}</b> を書いておく。<br>
-    ③ Excelをアップロード → タグの割当（会社情報／案件情報）を設定。<br>
-    ④ 契約一覧の「契約書を編集」で、資料を添付するとAIが穴あきを自動入力 → Excelをダウンロードして A4/A3 印刷。
+    ③ Excelをアップロード → このツール上でタグをドラッグ or クリックで仕分け。<br>
+    ④ 契約一覧の「契約書を編集」で資料を添付するとAIが穴あきを自動入力 → Excelをダウンロードして A4/A3 印刷。
   </div>
 
   <div class="card">
@@ -76,161 +99,273 @@
       <input type="text" id="tpl-name" placeholder="帳票名（例：賃貸借契約書）">
       <button class="btn btn-purple btn-sm" onclick="document.getElementById('tpl-file').click()">📄 Excelをアップロード</button>
       <input type="file" id="tpl-file" accept=".xlsx" style="display:none" onchange="uploadTpl(event)">
-      <div class="tpl-meta" style="margin-top:8px;">ここにExcelをドラッグ＆ドロップでもOK ／ 対応形式：.xlsx（10MBまで）</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:8px;">ここにExcelをドラッグ＆ドロップでもOK ／ 対応形式：.xlsx（10MBまで）</div>
     </div>
     <div id="tpl-list" style="margin-top:14px;"></div>
   </div>
 
-  <div id="map-modal" class="ovl">
-    <div class="modal">
-      <div class="modal-h"><span id="map-title">タグの割当</span><button class="modal-x" onclick="closeMap()">×</button></div>
-      <div class="modal-b">
-        <div style="margin-bottom:10px;">
-          <label class="kv-head">帳票名</label>
-          <input id="map-name" style="border:1px solid #d1d5db;border-radius:6px;padding:7px 9px;font-size:13px;width:100%;margin-top:4px;">
-        </div>
-        <div class="map-row" style="font-size:11px;font-weight:700;color:#6b7280;border:none;">
-          <div>タグ</div><div>区分</div><div>会社情報の項目</div>
-        </div>
-        <div id="map-list"></div>
-      </div>
-      <div class="modal-f">
-        <button class="btn btn-light" onclick="closeMap()">キャンセル</button>
-        <button class="btn btn-save" onclick="saveMap()">保存</button>
-      </div>
-    </div>
-  </div>
-
 <script>
 const CAN_MANAGE = {{ 'true' if can_manage else 'false' }};
+</script>
+<script>{% raw %}
 let COMPANY = {};
-let CUR_TPL = null;
+let _openId = null; // 現在展開中のテンプレID
 
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function showAlert(msg, type='success'){ const el=document.getElementById('alert'); el.textContent=msg; el.className=`alert alert-${type} show`; setTimeout(()=>el.classList.remove('show'),4000); }
 
-function kvRowHtml(k='', v=''){
-  return `<div class="kv-row">
-    <input class="kv-k" value="${esc(k)}" placeholder="例：会社名">
-    <input class="kv-v" value="${esc(v)}" placeholder="例：株式会社ミエルーム">
-    <button class="kv-del" onclick="this.parentElement.remove()">×</button>
-  </div>`;
-}
-function addKv(k='', v=''){ document.getElementById('kv-list').insertAdjacentHTML('beforeend', kvRowHtml(k,v)); }
+/* ── 会社情報 ── */
+function kvRowHtml(k='',v=''){ return `<div class="kv-row"><input class="kv-k" value="${esc(k)}" placeholder="例：会社名"><input class="kv-v" value="${esc(v)}" placeholder="例：株式会社ミエルーム"><button class="kv-del" onclick="this.parentElement.remove()">×</button></div>`; }
+function addKv(k='',v=''){ document.getElementById('kv-list').insertAdjacentHTML('beforeend', kvRowHtml(k,v)); }
 async function loadCompany(){
-  try{ const r = await fetch('/api/doc-company-info'); const j = await r.json(); COMPANY = j.data || {}; }
-  catch(_){ COMPANY = {}; }
-  const list = document.getElementById('kv-list'); list.innerHTML='';
-  const keys = Object.keys(COMPANY);
+  try{ const r=await fetch('/api/doc-company-info'); const j=await r.json(); COMPANY=j.data||{}; }catch(_){ COMPANY={}; }
+  const list=document.getElementById('kv-list'); list.innerHTML='';
+  const keys=Object.keys(COMPANY);
   if(!keys.length){ ['会社名','住所','電話番号','宅建免許番号','代表者名'].forEach(k=>addKv(k,'')); }
-  else keys.forEach(k=>addKv(k, COMPANY[k]));
-  if(!CAN_MANAGE){ document.getElementById('kv-save').style.display='none'; }
+  else keys.forEach(k=>addKv(k,COMPANY[k]));
+  if(!CAN_MANAGE) document.getElementById('kv-save').style.display='none';
 }
 async function saveCompany(){
-  const data = {};
-  document.querySelectorAll('#kv-list .kv-row').forEach(row=>{
-    const k = row.querySelector('.kv-k').value.trim(); const v = row.querySelector('.kv-v').value;
-    if(k) data[k] = v;
-  });
+  const data={};
+  document.querySelectorAll('#kv-list .kv-row').forEach(r=>{ const k=r.querySelector('.kv-k').value.trim(); const v=r.querySelector('.kv-v').value; if(k) data[k]=v; });
   try{
-    const r = await fetch('/api/doc-company-info', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({data})});
-    const j = await r.json(); if(!r.ok) throw new Error(j.error||'保存失敗');
-    COMPANY = j.data || data; showAlert('会社情報を保存しました。');
+    const r=await fetch('/api/doc-company-info',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data})});
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||'保存失敗');
+    COMPANY=j.data||data; showAlert('会社情報を保存しました。');
   }catch(e){ showAlert(e.message,'error'); }
 }
 
-async function loadTemplates(){
+/* ── テンプレ一覧 ── */
+async function loadTemplates(autoOpenId){
   try{
-    const r = await fetch('/api/doc-templates'); const j = await r.json();
-    const list = document.getElementById('tpl-list'); const tpls = j.templates || [];
-    if(!tpls.length){ list.innerHTML = `<div class="empty">まだテンプレートがありません。上のボタンからExcel様式をアップロードしてください。</div>`; return; }
-    list.innerHTML = tpls.map(t=>`
-      <div class="tpl-row">
-        <div>
-          <div class="tpl-name">${esc(t.name)}</div>
-          <div class="tpl-meta">${esc(t.filename)} ／ タグ ${t.tag_count}個</div>
+    const r=await fetch('/api/doc-templates'); const j=await r.json();
+    const list=document.getElementById('tpl-list'); const tpls=j.templates||[];
+    if(!tpls.length){ list.innerHTML=`<div class="empty">まだテンプレートがありません。上のボタンからExcel様式をアップロードしてください。</div>`; return; }
+    list.innerHTML=tpls.map(t=>`
+      <div class="tpl-row" id="trow-${t.id}">
+        <div class="tpl-row-head">
+          <div>
+            <div class="tpl-name">${esc(t.name)}</div>
+            <div class="tpl-meta">${esc(t.filename)} ／ タグ ${t.tag_count}個</div>
+          </div>
+          <div class="tpl-actions">
+            ${CAN_MANAGE?`<button class="btn btn-light btn-sm" onclick="toggleMap(${t.id})">✏ タグを仕分け</button>
+            <button class="btn btn-danger btn-sm" onclick="delTpl(${t.id},'${esc(t.name)}')">削除</button>`:''}
+          </div>
         </div>
-        <div class="tpl-actions">
-          ${CAN_MANAGE ? `<button class="btn btn-light btn-sm" onclick="openMap(${t.id})">タグ割当</button>
-          <button class="btn btn-danger btn-sm" onclick="delTpl(${t.id}, '${esc(t.name)}')">削除</button>` : ''}
-        </div>
+        <div class="map-panel" id="map-${t.id}"></div>
       </div>`).join('');
+    if(autoOpenId) openMap(autoOpenId);
+    else if(_openId) openMap(_openId);
   }catch(_){}
 }
-function uploadTpl(ev){ const f = ev.target.files && ev.target.files[0]; processTplFile(f); ev.target.value=''; }
+
+function uploadTpl(ev){ const f=ev.target.files&&ev.target.files[0]; processTplFile(f); ev.target.value=''; }
 async function processTplFile(f){
   if(!f) return;
   if(!f.name.toLowerCase().endsWith('.xlsx')){ showAlert('Excel（.xlsx）形式のみ対応しています。','error'); return; }
-  const name = document.getElementById('tpl-name').value.trim();
-  const fd = new FormData(); fd.append('file', f); if(name) fd.append('name', name);
+  const name=document.getElementById('tpl-name').value.trim();
+  const fd=new FormData(); fd.append('file',f); if(name) fd.append('name',name);
   showAlert('アップロード中…');
   try{
-    const r = await fetch('/api/doc-templates', {method:'POST', body:fd});
-    const j = await r.json(); if(!r.ok) throw new Error(j.error||'アップロード失敗');
+    const r=await fetch('/api/doc-templates',{method:'POST',body:fd});
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||'アップロード失敗');
     document.getElementById('tpl-name').value='';
-    showAlert(`登録しました（タグ ${(j.tags||[]).length}個を検出）。「タグ割当」で区分を確認してください。`);
-    loadTemplates();
+    showAlert(`登録しました（タグ ${(j.tags||[]).length}個を検出）。下でタグを仕分けしてください。`);
+    await loadTemplates(j.id);
   }catch(e){ showAlert(e.message,'error'); }
 }
-function initTplDnd(){
-  ['dragover','drop'].forEach(t=>window.addEventListener(t, ev=>{ ev.preventDefault(); }, false));
-  const z = document.getElementById('up-zone'); if(!z) return;
-  ['dragenter','dragover'].forEach(t=>z.addEventListener(t, ev=>{ ev.preventDefault(); ev.stopPropagation(); z.classList.add('drag'); }));
-  z.addEventListener('dragleave', ev=>{ ev.preventDefault(); ev.stopPropagation(); if(!z.contains(ev.relatedTarget)) z.classList.remove('drag'); });
-  z.addEventListener('drop', ev=>{ ev.preventDefault(); ev.stopPropagation(); z.classList.remove('drag'); const files = ev.dataTransfer && ev.dataTransfer.files; if(files && files.length) processTplFile(files[0]); });
-}
-async function delTpl(id, name){
+async function delTpl(id,name){
   if(!confirm(`テンプレート「${name}」を削除しますか？`)) return;
-  try{ const r = await fetch(`/api/doc-templates/${id}`, {method:'DELETE'}); if(!r.ok) throw new Error(); showAlert('削除しました。'); loadTemplates(); }
+  try{ const r=await fetch(`/api/doc-templates/${id}`,{method:'DELETE'}); if(!r.ok) throw new Error(); showAlert('削除しました。'); _openId=null; loadTemplates(); }
   catch(_){ showAlert('削除に失敗しました。','error'); }
 }
 
-async function openMap(id){
-  try{
-    const r = await fetch(`/api/doc-templates/${id}`); const j = await r.json(); if(!r.ok) throw new Error(j.error||'取得失敗');
-    CUR_TPL = j;
-    document.getElementById('map-title').textContent = `タグの割当：${j.name}`;
-    document.getElementById('map-name').value = j.name || '';
-    const ckeys = j.company_keys || [];
-    const opts = ['<option value="">（自動：タグ名で一致）</option>'].concat(ckeys.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`)).join('');
-    const list = document.getElementById('map-list');
-    if(!(j.tags||[]).length){ list.innerHTML = `<div class="empty">このExcelにタグ {{ '{{...}}' }} が見つかりませんでした。様式のセルにタグを記入してください。</div>`; }
-    else list.innerHTML = j.tags.map(t=>{
-      const m = j.mapping[t] || {scope:'case', company_key:''};
-      return `<div class="map-row" data-tag="${esc(t)}">
-        <div class="map-tag">${esc(t)}</div>
-        <select class="map-scope" onchange="onScope(this)">
-          <option value="case" ${m.scope!=='company'?'selected':''}>案件情報（自動入力対象）</option>
-          <option value="company" ${m.scope==='company'?'selected':''}>会社情報（固定）</option>
-        </select>
-        <select class="map-key" ${m.scope==='company'?'':'disabled'}>${opts}</select>
-      </div>`;
-    }).join('');
-    document.querySelectorAll('#map-list .map-row').forEach(row=>{
-      const t = row.dataset.tag; const m = j.mapping[t]||{};
-      if(m.scope==='company'){ row.querySelector('.map-key').value = m.company_key || ''; }
-    });
-    document.getElementById('map-modal').classList.add('show');
-  }catch(e){ showAlert(e.message,'error'); }
+/* ── タグ仕分けパネル ── */
+async function toggleMap(id){
+  const panel=document.getElementById('map-'+id);
+  if(!panel) return;
+  if(panel.classList.contains('open')){ panel.classList.remove('open'); _openId=null; return; }
+  await openMap(id);
 }
-function onScope(sel){ const row = sel.closest('.map-row'); row.querySelector('.map-key').disabled = (sel.value !== 'company'); }
-function closeMap(){ document.getElementById('map-modal').classList.remove('show'); CUR_TPL=null; }
-async function saveMap(){
-  if(!CUR_TPL) return;
-  const mapping = {};
-  document.querySelectorAll('#map-list .map-row').forEach(row=>{
-    const t = row.dataset.tag; const scope = row.querySelector('.map-scope').value; const ck = row.querySelector('.map-key').value;
-    mapping[t] = {scope, company_key: scope==='company'?ck:'', label: t};
-  });
-  const name = document.getElementById('map-name').value.trim();
+
+async function openMap(id){
+  // 他を閉じる
+  document.querySelectorAll('.map-panel.open').forEach(p=>p.classList.remove('open'));
+  _openId=id;
+  const panel=document.getElementById('map-'+id);
+  if(!panel) return;
+  panel.innerHTML=`<div style="padding:20px;text-align:center;color:#9ca3af;font-size:13px;">読み込み中…</div>`;
+  panel.classList.add('open');
   try{
-    const r = await fetch(`/api/doc-templates/${CUR_TPL.id}/mapping`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({mapping, name})});
+    const r=await fetch(`/api/doc-templates/${id}`); const j=await r.json(); if(!r.ok) throw new Error(j.error||'取得失敗');
+    renderMapPanel(panel, j);
+  }catch(e){ panel.innerHTML=`<div style="padding:14px;color:#b91c1c;font-size:13px;">取得失敗: ${esc(e.message)}</div>`; }
+}
+
+function renderMapPanel(panel, tpl){
+  const mapping=tpl.mapping||{};
+  const ckeys=tpl.company_keys||[];
+
+  // タグを仕分け
+  const companyTags=(tpl.tags||[]).filter(t=>(mapping[t]||{}).scope==='company');
+  const caseTags=(tpl.tags||[]).filter(t=>(mapping[t]||{}).scope!=='company');
+
+  const companyKeyOpts=['<option value="">（タグ名と同じ）</option>']
+    .concat(ckeys.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`)).join('');
+
+  function cardHtml(tag, side){
+    const m=mapping[tag]||{};
+    const arrow = side==='company' ? '→ 案件へ' : '← 固定へ';
+    const arrowFn = side==='company'
+      ? `moveTag(this,'case',${tpl.id})`
+      : `moveTag(this,'company',${tpl.id})`;
+    const compSel = side==='company' ? `
+      <div class="tag-company-sel">
+        <label>会社情報の項目：</label>
+        <select class="tag-ck" data-tag="${esc(tag)}">${companyKeyOpts}</select>
+      </div>` : '';
+    return `<div class="tag-card col-${side}" draggable="true" data-tag="${esc(tag)}" data-tpl="${tpl.id}"
+      ondragstart="onDragStart(event)" ondragend="onDragEnd(event)">
+      <span class="tag-pill">{{${esc(tag)}}}</span>
+      <button class="tag-card-move" onclick="${arrowFn}" title="${arrow}">${side==='company'?'⇒':'⇐'}</button>
+      ${compSel}
+    </div>`;
+  }
+
+  panel.innerHTML=`
+    <div class="map-panel open" id="map-${tpl.id}" style="display:block;">
+      <div class="map-name-row">
+        <input id="mname-${tpl.id}" value="${esc(tpl.name||'')}" placeholder="帳票名">
+        <button class="btn btn-save btn-sm" onclick="saveMap(${tpl.id})">💾 保存</button>
+        <button class="btn btn-light btn-sm" onclick="toggleMap(${tpl.id})">閉じる</button>
+      </div>
+      <div class="sort-cols">
+        <div class="sort-col col-company" id="col-company-${tpl.id}"
+          ondragover="onColOver(event)" ondragleave="onColLeave(event)" ondrop="onColDrop(event,'company',${tpl.id})">
+          <div class="sort-col-h">🏢 固定（会社情報）
+            <span style="font-size:10px;font-weight:400;color:#065F46;">契約書に毎回同じ内容が入る</span>
+          </div>
+          <div class="sort-col-desc">会社名・住所・電話番号など、どの案件でも変わらない情報</div>
+          <div id="cards-company-${tpl.id}">
+            ${companyTags.length ? companyTags.map(t=>cardHtml(t,'company')).join('') : `<div class="sort-empty">ここにドラッグ</div>`}
+          </div>
+        </div>
+        <div class="sort-col col-case" id="col-case-${tpl.id}"
+          ondragover="onColOver(event)" ondragleave="onColLeave(event)" ondrop="onColDrop(event,'case',${tpl.id})">
+          <div class="sort-col-h">📄 インポートで取り込み
+            <span style="font-size:10px;font-weight:400;color:#1E40AF;">契約書を読み込んで自動入力</span>
+          </div>
+          <div class="sort-col-desc">お客様名・物件名・家賃など、案件ごとに変わる情報</div>
+          <div id="cards-case-${tpl.id}">
+            ${caseTags.length ? caseTags.map(t=>cardHtml(t,'case')).join('') : `<div class="sort-empty">ここにドラッグ</div>`}
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  // 会社キー選択の初期値を設定
+  panel.querySelectorAll('.tag-ck').forEach(sel=>{
+    const t=sel.dataset.tag; const m2=mapping[t]||{};
+    if(m2.company_key) sel.value=m2.company_key;
+  });
+}
+
+/* ── カード移動（クリック） ── */
+function moveTag(btn, toSide, tplId){
+  const card=btn.closest('.tag-card');
+  const tag=card.dataset.tag;
+  const dest=document.getElementById(`cards-${toSide}-${tplId}`);
+  if(!dest) return;
+  const newCard=buildCard(tag, toSide, tplId);
+  dest.querySelector('.sort-empty')&&dest.querySelector('.sort-empty').remove();
+  dest.appendChild(newCard);
+  card.remove();
+  checkEmpty(tplId);
+  // 元の会社キー選択値を引き継ぐ
+  const ckSel=newCard.querySelector('.tag-ck');
+  if(ckSel) ckSel.value='';
+}
+
+function buildCard(tag, side, tplId){
+  const panel=document.getElementById('map-'+tplId);
+  const ckeys=(panel._ckeys||[]);
+  const compKeyOpts=['<option value="">（タグ名と同じ）</option>']
+    .concat(ckeys.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`)).join('');
+  const div=document.createElement('div');
+  div.innerHTML=`<div class="tag-card col-${side}" draggable="true" data-tag="${esc(tag)}" data-tpl="${tplId}"
+    ondragstart="onDragStart(event)" ondragend="onDragEnd(event)">
+    <span class="tag-pill">{{${esc(tag)}}}</span>
+    <button class="tag-card-move" onclick="moveTag(this,'${side==='company'?'case':'company'}',${tplId})" title="${side==='company'?'→ 案件へ':'← 固定へ'}">${side==='company'?'⇒':'⇐'}</button>
+    ${side==='company'?`<div class="tag-company-sel"><label>会社情報の項目：</label><select class="tag-ck" data-tag="${esc(tag)}">${compKeyOpts}</select></div>`:''}
+  </div>`;
+  const card=div.firstElementChild;
+  // ckeysが使えるようにパネルに保持
+  return card;
+}
+
+function checkEmpty(tplId){
+  ['company','case'].forEach(side=>{
+    const cont=document.getElementById(`cards-${side}-${tplId}`);
+    if(!cont) return;
+    if(!cont.querySelector('.tag-card')){ cont.innerHTML='<div class="sort-empty">ここにドラッグ</div>'; }
+  });
+}
+
+/* ── ドラッグ＆ドロップ（カード間） ── */
+let _dragging=null;
+function onDragStart(ev){ _dragging=ev.currentTarget; ev.currentTarget.classList.add('dragging'); ev.dataTransfer.effectAllowed='move'; ev.dataTransfer.setData('text/plain', ev.currentTarget.dataset.tag); }
+function onDragEnd(ev){ ev.currentTarget.classList.remove('dragging'); _dragging=null; }
+function onColOver(ev){ ev.preventDefault(); ev.currentTarget.classList.add('drag-over'); }
+function onColLeave(ev){ ev.currentTarget.classList.remove('drag-over'); }
+function onColDrop(ev, toSide, tplId){
+  ev.preventDefault(); ev.currentTarget.classList.remove('drag-over');
+  if(!_dragging) return;
+  const tag=_dragging.dataset.tag;
+  const fromCard=_dragging;
+  const dest=document.getElementById(`cards-${toSide}-${tplId}`);
+  if(!dest) return;
+  const newCard=buildCard(tag, toSide, tplId);
+  dest.querySelector('.sort-empty')&&dest.querySelector('.sort-empty').remove();
+  dest.appendChild(newCard);
+  fromCard.remove();
+  checkEmpty(tplId);
+  // company_keyを引き継ぐ（元カードから）
+  const panel=document.getElementById('map-'+tplId);
+  panel._ckeys=panel._ckeys||[];
+}
+
+/* ── 保存 ── */
+async function saveMap(tplId){
+  const panel=document.getElementById('map-'+tplId);
+  if(!panel) return;
+  const mapping={};
+  panel.querySelectorAll('.tag-card').forEach(card=>{
+    const tag=card.dataset.tag;
+    const side=card.classList.contains('col-company')?'company':'case';
+    const ckSel=card.querySelector('.tag-ck');
+    const ck=ckSel?ckSel.value:'';
+    mapping[tag]={scope:side, company_key:ck, label:tag};
+  });
+  const nameEl=document.getElementById(`mname-${tplId}`);
+  const name=nameEl?nameEl.value.trim():'';
+  try{
+    const r=await fetch(`/api/doc-templates/${tplId}/mapping`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mapping,name})});
     if(!r.ok){ const j=await r.json(); throw new Error(j.error||'保存失敗'); }
-    closeMap(); showAlert('タグ割当を保存しました。'); loadTemplates();
+    showAlert('タグ仕分けを保存しました。'); loadTemplates();
   }catch(e){ showAlert(e.message,'error'); }
 }
 
-document.addEventListener('DOMContentLoaded', ()=>{ loadCompany(); loadTemplates(); initTplDnd(); });
-</script>
+/* ── Excelアップ D&D ── */
+function initTplDnd(){
+  ['dragover','drop'].forEach(t=>window.addEventListener(t,ev=>ev.preventDefault(),false));
+  const z=document.getElementById('up-zone'); if(!z) return;
+  ['dragenter','dragover'].forEach(t=>z.addEventListener(t,ev=>{ ev.preventDefault(); ev.stopPropagation(); z.classList.add('drag'); }));
+  z.addEventListener('dragleave',ev=>{ ev.preventDefault(); ev.stopPropagation(); if(!z.contains(ev.relatedTarget)) z.classList.remove('drag'); });
+  z.addEventListener('drop',ev=>{ ev.preventDefault(); ev.stopPropagation(); z.classList.remove('drag'); const f=ev.dataTransfer&&ev.dataTransfer.files; if(f&&f.length) processTplFile(f[0]); });
+}
+
+document.addEventListener('DOMContentLoaded',()=>{ loadCompany(); loadTemplates(); initTplDnd(); });
+{% endraw %}</script>
 </body>
 </html>
