@@ -228,18 +228,37 @@ function applyRecord(){
 }
 
 function onAiFileChange(ev){ const files=ev.target.files; processAiFiles(files); ev.target.value=''; }
+/* ファイルをbase64に変換 */
+function fileToB64(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const dataUrl = reader.result;
+      const b64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+      resolve({name: file.name, type: file.type, data: b64});
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 async function processAiFiles(files){
   if(!files || !files.length) return;
-  const fd = new FormData();
-  [...files].slice(0,5).forEach(f=>fd.append('files',f));
-  fd.append('application_id', String(RID));
   const btn=document.getElementById('ai-btn'); const orig=btn.innerHTML;
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> 読み取り中…';
   showAlert('資料を読み取り中です…（10〜30秒ほどかかります）','info');
   try{
+    /* ファイルをbase64変換してJSONで送信（multipart/form-dataを使わない） */
+    const fileArr = await Promise.all([...files].slice(0,5).map(fileToB64));
+    const payload = {files: fileArr, application_id: RID};
+
     let r;
     try{
-      r = await fetch('/api/doc-templates/extract-combined',{method:'POST',body:fd});
+      r = await fetch('/api/doc-templates/extract-combined',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
     }catch(netErr){
       throw new Error('サーバーに接続できませんでした。ページをリロードして再試行してください。');
     }

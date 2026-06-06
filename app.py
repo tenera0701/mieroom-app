@@ -3075,37 +3075,47 @@ def _api_doc_extract_combined_impl():
     if not all_case_tags:
         return jsonify({'values': {}, 'found': 0})
 
-    files = request.files.getlist('files') or ([request.files['file']] if 'file' in request.files else [])
-    files = [f for f in files if f and f.filename]
-    if not files:
+    # ファイルはJSONのbase64で受け取る（multipart/form-dataを避けてプロキシ問題を回避）
+    payload = request.get_json(silent=True) or {}
+    files_data = payload.get('files', [])   # [{name, type, data(base64)}]
+    app_id = payload.get('application_id')
+
+    if not files_data:
         return jsonify({'error': '資料ファイルを選択してください'}), 400
     if not os.getenv("ANTHROPIC_API_KEY"):
         return jsonify({'error': 'AI読み取りが未設定です（管理者にお問い合わせください）'}), 503
 
     content = []
     total = 0
-    for f in files[:5]:
-        raw = f.read()
+    ext_map = {'pdf': 'application/pdf', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+               'png': 'image/png', 'webp': 'image/webp', 'gif': 'image/gif'}
+    for fdata in files_data[:5]:
+        if not isinstance(fdata, dict):
+            continue
+        b64 = fdata.get('data', '')
+        if not b64:
+            continue
+        try:
+            raw = _b64.standard_b64decode(b64)
+        except Exception:
+            continue
         total += len(raw)
         if total > 20 * 1024 * 1024:
             return jsonify({'error': '添付の合計が大きすぎます（20MBまで）'}), 400
-        mime = (f.mimetype or '').lower()
+        mime = (fdata.get('type') or '').lower()
         if mime not in _ALLOWED_EXTRACT_MIME:
-            ext = (f.filename.rsplit('.', 1)[-1] if '.' in f.filename else '').lower()
-            mime = {'pdf': 'application/pdf', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
-                    'png': 'image/png', 'webp': 'image/webp', 'gif': 'image/gif'}.get(ext, mime)
+            fname = fdata.get('name', '')
+            ext = (fname.rsplit('.', 1)[-1] if '.' in fname else '').lower()
+            mime = ext_map.get(ext, mime)
         kind = _ALLOWED_EXTRACT_MIME.get(mime)
         if not kind:
             continue
-        b64 = _b64.standard_b64encode(raw).decode()
         if kind == 'pdf':
             content.append({"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": b64}})
         else:
             content.append({"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}})
     if not content:
         return jsonify({'error': 'PDFまたは画像（JPEG/PNG）のみ対応しています'}), 400
-
-    app_id = request.form.get('application_id')
     if app_id:
         try:
             rec = ApplicationRecord.query.get(int(app_id))
