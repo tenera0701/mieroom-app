@@ -2392,6 +2392,8 @@ PORTAL_DOMAIN_MAP = [
     ('canary',   'カナリー'),
     ('cnary',    'カナリー'),
     ('ielove',   'いえらぶ'),
+    ('tryell',   '住まい探しの窓口'),
+    ('sumaisagashi', '住まい探しの窓口'),
     ('eheya',    'エイブル'),
     ('pittat',   'ピタットハウス'),
 ]
@@ -2412,6 +2414,8 @@ PORTAL_KEYWORD_MAP = [
     ('価格.com',     '価格.com'),
     ('価格コム',     '価格.com'),
     ('kakaku',       '価格.com'),
+    ('住まい探しの窓口', '住まい探しの窓口'),
+    ('住まい探し',   '住まい探しの窓口'),
     ('スモッカ',     'スモッカ'),
     ('SUUMO',        'SUUMO'),
     ('スーモ',       'SUUMO'),
@@ -2430,10 +2434,13 @@ PORTAL_KEYWORD_MAP = [
 _FIELD_SYNONYMS = {
     'name':      ['氏名(漢字)', '氏名（漢字）', '氏名', 'お名前', 'お名前(漢字)', 'お名前（漢字）', '名前', 'ご氏名',
                   'お客様名', 'お客さま名', 'お客様氏名', 'ご担当者名', '申込者名', '申込者', 'お申込者', 'ご入居者名', '反響者名',
-                  '顧客名', 'ご顧客名', 'ご入居者', '入居者名'],
-    'phone':     ['電話番号', 'tel', '電話', 'お電話番号', '携帯電話', '携帯番号', '連絡先電話番号', 'ご連絡先'],
-    'email':     ['メールアドレス', 'email', 'e-mail', 'mail', 'メール', 'eメール'],
-    'property':  ['物件名', '建物名', 'マンション名'],
+                  '顧客名', 'ご顧客名', 'ご入居者', '入居者名',
+                  'ユーザ様氏名', 'ユーザー様氏名', 'ユーザ氏名', 'ユーザ様お名前', 'ユーザ様名'],
+    'phone':     ['電話番号', 'tel', '電話', 'お電話番号', '携帯電話', '携帯番号', '連絡先電話番号', 'ご連絡先',
+                  'ユーザ様電話番号', 'ユーザー様電話番号', 'ユーザ電話番号'],
+    'email':     ['メールアドレス', 'email', 'e-mail', 'mail', 'メール', 'eメール',
+                  'ユーザ様メールアドレス', 'ユーザー様メールアドレス', 'ユーザメールアドレス'],
+    'property':  ['物件名', '建物名', 'マンション名', 'お問い合わせ物件名', 'お問合せ物件名', '問い合わせ物件名'],
     'room':      ['部屋番号', '号室'],
     'rent':      ['賃料', '家賃'],
     'address':   ['住所', '所在地', '物件所在地'],
@@ -2443,7 +2450,7 @@ _FIELD_SYNONYMS = {
     'datetime':  ['お問合わせ日時', 'お問い合わせ日時', 'お問合せ日時', '問合せ日時', '問い合わせ日時', '受付日時', '反響日時', '受信日時'],
     'extid':     ['スモッカ反響id', '反響id', '問い合わせ番号', 'お問い合わせ番号', '受付番号', '反響番号', '問合せ番号'],
     'inquiry':   ['お問合せ内容', 'お問い合わせ内容', '物件に関するお問合せ内容', 'お問合せ', 'ご要望', '希望内容'],
-    'bukken_no': ['物件管理番号', '物件番号', '管理番号'],
+    'bukken_no': ['物件管理番号', '物件番号', '管理番号', '自社管理番号'],
     'note':      ['備考', 'その他', 'ご質問', 'メッセージ', 'コメント'],
 }
 
@@ -2630,7 +2637,28 @@ def parse_reaction_email(msg, extra_map=None, portal_map=None):
         if key and key not in fields:
             fields[key] = value
 
-    name = fields.get('name', '')
+    # ＜ラベル＞/<ラベル> が単独行で、値が次の行にある形式（住まい探しの窓口 等）にも対応
+    _blines = body.splitlines()
+    for _i, _raw in enumerate(_blines):
+        _ml = re.match(r'^\s*[<＜](.+?)[>＞]\s*$', _raw.strip())
+        if not _ml:
+            continue
+        _key = _LABEL_TO_KEY.get(_norm_label(_ml.group(1)))
+        if not _key or _key in fields:
+            continue
+        # 次の非空行を値として採用（次のラベル行に当たったら値なし）
+        for _j in range(_i + 1, min(_i + 4, len(_blines))):
+            _v = _blines[_j].strip()
+            if not _v:
+                continue
+            if re.match(r'^[<＜].+[>＞]\s*$', _v):
+                break
+            if _v in ('－', '-', 'ー', '−'):
+                break
+            fields[_key] = _v
+            break
+
+    name = re.sub(r'[\s　]*(様|さま|殿)\s*$', '', fields.get('name', '')).strip()
     contact = name or fields.get('phone') or fields.get('email')
     prop = (fields.get('property') or fields.get('extid')
             or fields.get('bukken_no') or fields.get('inquiry'))
