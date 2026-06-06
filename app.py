@@ -2351,12 +2351,12 @@ def _contract_doc_defaults(rec, staff):
 @login_required
 @block_super_admin
 def contract_document_edit(rid):
-    """契約書類エディタページ"""
+    """契約書類エディタページ（テンプレート方式）"""
     allowed_ids = get_allowed_store_ids()
     rec = ApplicationRecord.query.get_or_404(rid)
     if rec.store_id not in allowed_ids:
         return "権限がありません", 403
-    return render_template("contract_editor.html", rid=rid,
+    return render_template("contract_doc_editor.html", rid=rid,
                            customer_name=rec.customer_name or '',
                            property_name=rec.property_name or '')
 
@@ -2668,6 +2668,14 @@ def doc_templates_page():
     return render_template("doc_templates.html", can_manage=_doc_can_manage())
 
 
+@app.route("/doc-templates/embed")
+@login_required
+@block_super_admin
+def doc_templates_embed():
+    """契約管理ページのタブ内にiframeで埋め込む、サイドバー無しの設定UI"""
+    return render_template("doc_templates_embed.html", can_manage=_doc_can_manage())
+
+
 @app.route("/api/doc-company-info", methods=["GET"])
 @login_required
 @block_super_admin
@@ -2863,10 +2871,37 @@ def api_doc_template_extract(tpl_id):
     if not content:
         return jsonify({'error': 'PDFまたは画像（JPEG/PNG）のみ対応しています'}), 400
 
+    # 申込台帳の既知情報をコンテキストとして渡す（添付資料に無くても埋められるように）
+    app_id = request.form.get('application_id')
+    if app_id:
+        try:
+            rec = ApplicationRecord.query.get(int(app_id))
+        except Exception:
+            rec = None
+        if rec and rec.store_id in get_allowed_store_ids():
+            staff = Staff.query.get(rec.staff_id) if rec.staff_id else None
+            fd = lambda d: d.isoformat() if d else ''
+            known = {
+                'お客様名・契約者名': rec.customer_name or '',
+                '物件名': rec.property_name or '',
+                '号室・部屋番号': rec.room_number or '',
+                '賃料（月額）': int(rec.rent or 0),
+                '管理会社': rec.management_company or '',
+                '担当者': staff.name if staff else '',
+                '契約開始日': fd(rec.contract_start_date),
+                '申込日': fd(rec.application_date),
+                '仲介手数料': int(rec.brokerage_fee or 0),
+            }
+            known = {k: v for k, v in known.items() if v not in ('', 0)}
+            if known:
+                ctx_text = "【この案件の既知情報（添付資料より優先して活用してよい）】\n" + \
+                    "\n".join(f"・{k}: {v}" for k, v in known.items())
+                content.append({"type": "text", "text": ctx_text})
+
     key_lines = ",\n".join(f'  "{t}": "{(mapping.get(t) or {}).get("label") or t}"' for t in case_tags)
     prompt = (
         "あなたは不動産書類を読み取る専門アシスタントです。\n"
-        "添付資料（契約書・顧客情報・物件情報など）から、以下のJSONキーに対応する値を抽出してください。\n\n"
+        "添付資料（契約書・顧客情報・物件情報など）と既知情報から、以下のJSONキーに対応する値を抽出してください。\n\n"
         "対象フィールド（キー: 説明）:\n{\n" + key_lines + "\n}\n\n"
         "厳守ルール:\n"
         "1. 上記キーだけを持つJSONオブジェクトを1つだけ返す。説明文やマークダウンは付けない。\n"

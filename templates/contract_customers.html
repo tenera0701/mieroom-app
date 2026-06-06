@@ -36,6 +36,10 @@
   .info-grid .v { color:#111827; font-weight:600; }
   .btn-cancel { background:#fff; color:#374151; border:1px solid #d1d5db; border-radius:6px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; }
   .btn-submit { background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 20px; font-size:13px; font-weight:700; cursor:pointer; }
+  .cc-tabs { display:flex; gap:6px; margin-bottom:14px; border-bottom:2px solid #e5e7eb; }
+  .cc-tab { border:none; background:none; padding:9px 16px; font-size:14px; font-weight:700; color:#6b7280; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; }
+  .cc-tab:hover { color:#0F766E; }
+  .cc-tab.active { color:#0F766E; border-bottom-color:var(--primary); }
 </style>
 {% endblock %}
 
@@ -48,7 +52,7 @@
       <h1 class="page-title">契約管理</h1>
       <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">審査〇で契約に進んだ顧客の一覧・書類管理</p>
     </div>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <div id="list-filters" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
       <input type="text" id="search-input" placeholder="🔍 お客様名・物件名・号室で検索" class="filter" style="min-width:240px;" oninput="filterList()">
       <select id="filter-staff" class="filter" onchange="filterList()">
         <option value="">全スタッフ</option>
@@ -57,6 +61,21 @@
     </div>
   </div>
 
+  <!-- タブ -->
+  <div class="cc-tabs">
+    <button class="cc-tab active" id="tab-list" onclick="switchTab('list')">📋 契約中顧客一覧</button>
+    <button class="cc-tab" id="tab-tpl" onclick="switchTab('tpl')">⚙ テンプレート設定</button>
+  </div>
+
+  <!-- パネル：テンプレ設定 -->
+  <div id="panel-tpl" style="display:none;">
+    <div class="table-section" style="padding:6px;">
+      <iframe id="tpl-frame" src="" style="width:100%; height:1400px; border:none; border-radius:8px;" loading="lazy"></iframe>
+    </div>
+  </div>
+
+  <!-- パネル：契約一覧 -->
+  <div id="panel-list">
   <div class="table-section">
     <div class="table-section-header">
       <h2>契約中顧客一覧</h2>
@@ -75,8 +94,9 @@
         </tbody>
       </table>
     </div>
-    <p style="font-size:12px;color:#9ca3af;margin-top:10px;">💡「契約書類を編集」を押すと、顧客情報を引き継いだ取引成立台帳をツール上で編集・保存・印刷できます。物件資料/契約書の取り込み自動入力や重要事項説明など他帳票は順次追加予定です。</p>
+    <p style="font-size:12px;color:#9ca3af;margin-top:10px;">💡「契約書類を編集」を押すと、テンプレート設定で登録した会社様式に、申込情報の反映や資料添付AIで穴あきを自動入力し、Excel（A4/A3）で出力できます。</p>
   </div>
+  </div><!-- /panel-list -->
 </div>
 
 <!-- 契約書類作成モーダル -->
@@ -197,12 +217,30 @@ function openDocModal(id) {
 }
 function closeDocModal() { document.getElementById('doc-modal').classList.remove('active'); }
 
+let _tplFrameLoaded = false;
+function switchTab(which) {
+  const isTpl = which === 'tpl';
+  document.getElementById('tab-list').classList.toggle('active', !isTpl);
+  document.getElementById('tab-tpl').classList.toggle('active', isTpl);
+  document.getElementById('panel-list').style.display = isTpl ? 'none' : '';
+  document.getElementById('panel-tpl').style.display = isTpl ? '' : 'none';
+  const lf = document.getElementById('list-filters');
+  if (lf) lf.style.visibility = isTpl ? 'hidden' : 'visible';
+  if (isTpl && !_tplFrameLoaded) {
+    document.getElementById('tpl-frame').src = '/doc-templates/embed';
+    _tplFrameLoaded = true;
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   if (!IS_MANAGER && CUR_STAFF_ID) {
     const sel = document.getElementById('filter-staff');
     if (sel) sel.value = String(CUR_STAFF_ID);
   }
   loadList();
+  if (location.hash === '#tpl' || new URLSearchParams(location.search).get('tab') === 'tpl') {
+    switchTab('tpl');
+  }
 });
 </script>
 {% endblock %}
