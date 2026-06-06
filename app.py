@@ -2397,6 +2397,155 @@ def api_contract_document_save(rid):
     return jsonify({'status': 'ok'})
 
 
+# ── 契約書のAI読み取り（PDF/画像 → 項目自動抽出） ──────────────
+# 抽出対象フィールド定義：key は契約書類エディタのフラットキー（docKey.fieldKey）と一致させる
+CONTRACT_EXTRACT_FIELDS = [
+    # 物件の表示
+    {'k': 'keiyakusho.meisho',      'l': '物件名称',          't': 'text'},
+    {'k': 'keiyakusho.goushitsu',   'l': '号室・部屋番号',     't': 'text'},
+    {'k': 'keiyakusho.shozai',      'l': '物件所在地（住所）', 't': 'text'},
+    {'k': 'keiyakusho.yukamenseki', 'l': '床面積（㎡・数値のみ）', 't': 'text'},
+    {'k': 'keiyakusho.madori',      'l': '間取り（例:1LDK）',  't': 'text'},
+    {'k': 'keiyakusho.kouzou',      'l': '構造（例:木造/RC造）', 't': 'text'},
+    {'k': 'keiyakusho.kaisuu',      'l': '階数',              't': 'text'},
+    # 契約期間
+    {'k': 'keiyakusho.shiki', 'l': '契約期間の始期', 't': 'date'},
+    {'k': 'keiyakusho.shuki', 'l': '契約期間の終期', 't': 'date'},
+    {'k': 'keiyakusho.getsu', 'l': '契約月数',       't': 'num'},
+    # 賃料等
+    {'k': 'keiyakusho.chinryo',  'l': '賃料（月額・円）',     't': 'num'},
+    {'k': 'keiyakusho.kyoekihi', 'l': '共益費・管理費（円）', 't': 'num'},
+    {'k': 'keiyakusho.reikin',   'l': '礼金（円）',          't': 'num'},
+    {'k': 'keiyakusho.shikikin', 'l': '敷金（円）',          't': 'num'},
+    {'k': 'keiyakusho.chuusha',  'l': '駐車場料金（円）',     't': 'num'},
+    {'k': 'keiyakusho.shokyaku', 'l': '償却・敷引',          't': 'text'},
+    # 支払・口座
+    {'k': 'keiyakusho.shiharaibi',   'l': '賃料支払日（毎月○日）', 't': 'text'},
+    {'k': 'keiyakusho.kinyu',        'l': '金融機関名',        't': 'text'},
+    {'k': 'keiyakusho.furikomi',     'l': '振込/引落（どちらか）', 't': 'sel', 'o': ['振込', '引落']},
+    {'k': 'keiyakusho.kouza_no',     'l': '口座番号',          't': 'text'},
+    {'k': 'keiyakusho.kouza_name',   'l': '口座名義人',        't': 'text'},
+    {'k': 'keiyakusho.kanri_gyosha', 'l': '貸主及び管理業者',   't': 'text'},
+    # 貸主・借主（取引成立台帳タブと共有）
+    {'k': 'daicho.kashinushi_name', 'l': '貸主（オーナー）氏名・名称', 't': 'text'},
+    {'k': 'daicho.kashinushi_addr', 'l': '貸主住所',          't': 'text'},
+    {'k': 'daicho.kashinushi_tel',  'l': '貸主電話番号',       't': 'text'},
+    {'k': 'daicho.karinushi_name',  'l': '借主（入居者）氏名',  't': 'text'},
+    {'k': 'daicho.karinushi_addr',  'l': '借主（現）住所',     't': 'text'},
+    {'k': 'daicho.karinushi_tel',   'l': '借主電話番号',       't': 'text'},
+]
+
+_ALLOWED_EXTRACT_MIME = {
+    'application/pdf': 'pdf',
+    'image/jpeg': 'image', 'image/jpg': 'image', 'image/png': 'image',
+    'image/webp': 'image', 'image/gif': 'image',
+}
+
+
+@app.route("/api/contract-customers/<int:rid>/extract-document", methods=["POST"])
+@login_required
+@block_super_admin
+def api_contract_extract_document(rid):
+    """賃貸借契約書のPDF/画像をClaudeで読み取り、契約書類フィールドを自動抽出して返す。
+    自動確定はせず、フロントの確認画面で人がチェック・修正してから反映する設計。"""
+    import base64 as _b64
+    allowed_ids = get_allowed_store_ids()
+    rec = ApplicationRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed_ids:
+        return jsonify({'error': '権限がありません'}), 403
+
+    f = request.files.get('file')
+    if not f or not f.filename:
+        return jsonify({'error': 'ファイルが選択されていません'}), 400
+
+    raw = f.read()
+    if len(raw) > 18 * 1024 * 1024:
+        return jsonify({'error': 'ファイルが大きすぎます（18MBまで）'}), 400
+    if len(raw) == 0:
+        return jsonify({'error': 'ファイルが空です'}), 400
+
+    mime = (f.mimetype or '').lower()
+    # 拡張子からの補完
+    if mime not in _ALLOWED_EXTRACT_MIME:
+        ext = (f.filename.rsplit('.', 1)[-1] if '.' in f.filename else '').lower()
+        mime = {'pdf': 'application/pdf', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+                'png': 'image/png', 'webp': 'image/webp', 'gif': 'image/gif'}.get(ext, mime)
+    kind = _ALLOWED_EXTRACT_MIME.get(mime)
+    if not kind:
+        return jsonify({'error': 'PDFまたは画像（JPEG/PNG）のみ対応しています'}), 400
+
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return jsonify({'error': 'AI読み取りが未設定です（管理者にお問い合わせください）'}), 503
+
+    b64 = _b64.standard_b64encode(raw).decode()
+    field_lines = []
+    for fld in CONTRACT_EXTRACT_FIELDS:
+        extra = ''
+        if fld['t'] == 'date':
+            extra = '（日付。YYYY-MM-DD形式。和暦は西暦へ変換）'
+        elif fld['t'] == 'num':
+            extra = '（半角数字のみ。カンマ・円記号・単位は付けない）'
+        elif fld['t'] == 'sel':
+            extra = f'（次のいずれか:{"/".join(fld.get("o", []))}）'
+        field_lines.append(f'  "{fld["k"]}": "{fld["l"]}{extra}"')
+
+    prompt = (
+        "あなたは不動産の賃貸借契約書を読み取る専門アシスタントです。\n"
+        "添付された賃貸借契約書（PDFまたは画像）から、以下のJSONキーに対応する値を抽出してください。\n\n"
+        "対象フィールド（キー: 説明）:\n{\n" + ",\n".join(field_lines) + "\n}\n\n"
+        "厳守ルール:\n"
+        "1. 必ず上記キーだけを持つJSONオブジェクトを1つだけ返す。説明文やマークダウンは一切付けない。\n"
+        "2. 書類に記載が無い・読み取れない項目は、そのキーを省略する（推測で埋めない）。\n"
+        "3. 金額は半角数字のみ（例: 75000）。日付はYYYY-MM-DD。\n"
+        "4. 自信が持てない値は省略する。誤った自動入力は事故につながるため、確実な箇所のみ返す。\n"
+    )
+
+    if kind == 'pdf':
+        doc_block = {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": b64}}
+    else:
+        doc_block = {"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}}
+
+    try:
+        msg = anthropic_client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1500,
+            messages=[{"role": "user", "content": [doc_block, {"type": "text", "text": prompt}]}],
+        )
+        text = "".join(getattr(b, 'text', '') for b in msg.content).strip()
+    except Exception as e:
+        return jsonify({'error': f'AI読み取りに失敗しました: {e}'}), 502
+
+    # JSON抽出（コードフェンスや前後テキストに耐性を持たせる）
+    extracted = {}
+    try:
+        s, e = text.find('{'), text.rfind('}')
+        if s >= 0 and e > s:
+            parsed = json.loads(text[s:e + 1])
+            if isinstance(parsed, dict):
+                extracted = parsed
+    except Exception:
+        extracted = {}
+
+    valid_keys = {fld['k'] for fld in CONTRACT_EXTRACT_FIELDS}
+    out = []
+    for fld in CONTRACT_EXTRACT_FIELDS:
+        v = extracted.get(fld['k'])
+        if v is None:
+            continue
+        v = str(v).strip()
+        if v == '':
+            continue
+        if fld['t'] == 'num':
+            v = re.sub(r'[^0-9]', '', v)
+            if v == '':
+                continue
+        if fld['t'] == 'sel' and v not in fld.get('o', []):
+            continue
+        out.append({'key': fld['k'], 'label': fld['l'], 'type': fld['t'], 'value': v})
+
+    return jsonify({'fields': out, 'found': len(out)})
+
+
 # ── 間取り作成 ──────────────────────────────────────────
 @app.route("/floorplan")
 @login_required

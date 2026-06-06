@@ -33,6 +33,24 @@
   .btn-save { background:var(--primary); color:#fff; } .btn-save:hover { background:var(--primary-dark); }
   .btn-print { background:#fff; color:#374151; border:1px solid #d1d5db; }
   .btn-back { background:#fff; color:#0F766E; border:1px solid #5EEAD4; }
+  .btn-ai { background:#6D28D9; color:#fff; } .btn-ai:hover { background:#5B21B6; }
+  .btn-ai:disabled { opacity:.6; cursor:default; }
+  .ai-ovl { position:fixed; inset:0; background:rgba(17,24,39,.55); z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .ai-box { background:#fff; border-radius:14px; width:min(720px,96vw); max-height:88vh; display:flex; flex-direction:column; box-shadow:0 12px 40px rgba(0,0,0,.3); }
+  .ai-h { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid #e5e7eb; font-weight:800; color:#111827; }
+  .ai-x { border:none; background:none; font-size:22px; line-height:1; color:#6b7280; cursor:pointer; }
+  .ai-body { padding:14px 18px; overflow:auto; }
+  .ai-foot { padding:12px 18px; border-top:1px solid #e5e7eb; }
+  .ai-note { font-size:12px; color:#92400e; background:#FEF3C7; border:1px solid #FDE68A; border-radius:6px; padding:8px 10px; display:block; }
+  .ai-load { text-align:center; padding:30px 10px; color:#6b7280; font-size:14px; }
+  .ai-spin { width:34px; height:34px; border:3px solid #ddd6fe; border-top-color:#6D28D9; border-radius:50%; margin:0 auto 12px; animation:aispin 0.8s linear infinite; }
+  @keyframes aispin { to { transform:rotate(360deg); } }
+  .ai-row { display:grid; grid-template-columns:24px 1fr 1.3fr; gap:8px; align-items:center; padding:7px 0; border-bottom:1px solid #f3f4f6; }
+  .ai-row input[type=checkbox] { width:17px; height:17px; accent-color:#6D28D9; }
+  .ai-row .ai-lbl { font-size:12px; font-weight:600; color:#374151; }
+  .ai-row .ai-val { border:1px solid #d1d5db; border-radius:6px; padding:6px 8px; font-size:13px; width:100%; }
+  .ai-doc-tag { display:inline-block; font-size:10px; color:#6D28D9; background:#F5F3FF; border:1px solid #ddd6fe; border-radius:4px; padding:1px 5px; margin-left:6px; }
+  .ai-empty { text-align:center; color:#6b7280; padding:24px; font-size:14px; }
   .alert { padding:10px 16px; border-radius:8px; font-size:13px; margin-bottom:14px; display:none; }
   .alert.show { display:block; }
   .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
@@ -58,13 +76,33 @@
     </div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-back" onclick="location.href='/contract-customers'">← 一覧へ</button>
+      <button class="btn btn-ai" onclick="document.getElementById('ai-file').click()">🤖 契約書をAI読み取り</button>
       <button class="btn btn-print" onclick="printCurrent()">🖨 この帳票を印刷</button>
       <button class="btn btn-save" onclick="saveDoc()">💾 全て保存</button>
     </div>
+    <input type="file" id="ai-file" accept="application/pdf,image/*" style="display:none" onchange="onAiFile(event)">
   </div>
 
   <div class="tabs no-print" id="tabs"></div>
   <div id="docs-container"></div>
+</div>
+
+<!-- AI読み取り：確認モーダル -->
+<div id="ai-modal" class="ai-ovl no-print" style="display:none">
+  <div class="ai-box">
+    <div class="ai-h">
+      <span id="ai-h-title">🤖 契約書のAI読み取り</span>
+      <button class="ai-x" onclick="closeAiModal()">×</button>
+    </div>
+    <div id="ai-body" class="ai-body"></div>
+    <div id="ai-foot" class="ai-foot" style="display:none">
+      <label class="ai-note">⚠️ 自動入力は契約事故防止のため必ず内容をご確認ください。チェックした項目だけ反映されます。</label>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+        <button class="btn btn-print" onclick="closeAiModal()">キャンセル</button>
+        <button class="btn btn-save" onclick="applyAiFields()">✓ チェックした項目を反映</button>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -406,6 +444,78 @@ async function saveDoc() {
     if (!res.ok) throw new Error();
     showAlert('契約書類を保存しました（全帳票）。');
   } catch(_) { showAlert('保存に失敗しました。', 'error'); }
+}
+
+/* ── AI読み取り ───────────────────────────────── */
+const DOC_TITLES = Object.fromEntries(DOCS.map(d => [d.key, d.title]));
+let _aiFields = [];
+
+function openAiModal(){ document.getElementById('ai-modal').style.display='flex'; }
+function closeAiModal(){
+  document.getElementById('ai-modal').style.display='none';
+  document.getElementById('ai-file').value='';
+}
+function aiLoading(msg){
+  document.getElementById('ai-foot').style.display='none';
+  document.getElementById('ai-body').innerHTML =
+    `<div class="ai-load"><div class="ai-spin"></div>${esc(msg)}</div>`;
+}
+
+async function onAiFile(ev){
+  const file = ev.target.files && ev.target.files[0];
+  if(!file) return;
+  openAiModal();
+  aiLoading('契約書を読み取り中です…（10〜30秒ほどかかります）');
+  const fd = new FormData();
+  fd.append('file', file);
+  try{
+    const res = await fetch(`/api/contract-customers/${RID}/extract-document`, { method:'POST', body:fd });
+    const j = await res.json();
+    if(!res.ok){ throw new Error(j.error || '読み取りに失敗しました'); }
+    renderAiResult(j.fields || []);
+  }catch(e){
+    document.getElementById('ai-body').innerHTML =
+      `<div class="ai-empty">❌ ${esc(e.message)}</div>`;
+    document.getElementById('ai-foot').style.display='none';
+  }finally{
+    document.getElementById('ai-file').value='';
+  }
+}
+
+function renderAiResult(fields){
+  _aiFields = fields;
+  const body = document.getElementById('ai-body');
+  if(!fields.length){
+    body.innerHTML = `<div class="ai-empty">読み取れる項目が見つかりませんでした。<br>鮮明なPDF・画像で再度お試しください。</div>`;
+    document.getElementById('ai-foot').style.display='none';
+    return;
+  }
+  body.innerHTML =
+    `<p style="font-size:13px;color:#374151;margin:0 0 10px;">${fields.length}件の項目を読み取りました。反映する項目にチェックを入れ、必要なら値を修正してください。</p>` +
+    fields.map((f,i)=>{
+      const dk = f.key.split('.')[0];
+      const tag = DOC_TITLES[dk] ? `<span class="ai-doc-tag">${esc(DOC_TITLES[dk])}</span>` : '';
+      return `<div class="ai-row">
+        <input type="checkbox" id="aichk-${i}" checked>
+        <label class="ai-lbl" for="aichk-${i}">${esc(f.label)}${tag}</label>
+        <input class="ai-val" id="aival-${i}" value="${esc(f.value)}">
+      </div>`;
+    }).join('');
+  document.getElementById('ai-foot').style.display='block';
+}
+
+function applyAiFields(){
+  let n = 0;
+  _aiFields.forEach((f,i)=>{
+    if(!document.getElementById('aichk-'+i)?.checked) return;
+    const val = document.getElementById('aival-'+i)?.value ?? '';
+    const [dk, fk] = f.key.split('.');
+    const id = fid(dk, fk);
+    const el = document.getElementById(id);
+    if(el){ el.value = val; n++; }
+  });
+  closeAiModal();
+  showAlert(`AI読み取りから${n}件を反映しました。内容を確認して「全て保存」してください。`);
 }
 
 document.addEventListener('DOMContentLoaded', loadDoc);
