@@ -3000,35 +3000,46 @@ def api_doc_template_render(tpl_id):
 @block_super_admin
 def api_doc_combined_schema():
     """全テンプレートの案件タグを集約して返す（書類一括編集画面用）"""
-    tid = _doc_tenant_id()
-    templates = DocTemplate.query.filter_by(tenant_id=tid, is_active=True).order_by(DocTemplate.id).all()
-    tpl_list = []
-    all_case_tags = {}   # 順序保持: tag -> label
-    for r in templates:
-        try:
-            mapping = json.loads(r.mapping) if r.mapping else {}
-        except Exception:
-            mapping = {}
-        try:
-            tags = json.loads(r.tags) if r.tags else []
-        except Exception:
-            tags = []
-        case_tags, company_tags = [], []
-        for tag in tags:
-            m = mapping.get(tag) or {}
-            if m.get('scope') == 'company':
-                company_tags.append(tag)
-            else:
-                case_tags.append(tag)
-                if tag not in all_case_tags:
-                    all_case_tags[tag] = m.get('label') or tag
-        tpl_list.append({'id': r.id, 'name': r.name, 'filename': r.filename,
-                         'case_tags': case_tags, 'company_tags': company_tags})
-    return jsonify({
-        'templates': tpl_list,
-        'case_tags': [{'key': k, 'label': v} for k, v in all_case_tags.items()],
-        'company': _doc_company_data(tid),
-    })
+    try:
+        tid = _doc_tenant_id()
+        templates = DocTemplate.query.filter_by(tenant_id=tid, is_active=True).order_by(DocTemplate.id).all()
+        tpl_list = []
+        all_case_tags = {}   # 順序保持: tag -> label
+        for tpl_row in templates:
+            try:
+                mapping = json.loads(tpl_row.mapping) if tpl_row.mapping else {}
+                if not isinstance(mapping, dict):
+                    mapping = {}
+            except Exception:
+                mapping = {}
+            try:
+                tags = json.loads(tpl_row.tags) if tpl_row.tags else []
+                if not isinstance(tags, list):
+                    tags = []
+            except Exception:
+                tags = []
+            case_tags, company_tags = [], []
+            for tag in tags:
+                m = mapping.get(tag) or {}
+                if not isinstance(m, dict):
+                    m = {}
+                if m.get('scope') == 'company':
+                    company_tags.append(tag)
+                else:
+                    case_tags.append(tag)
+                    if tag not in all_case_tags:
+                        all_case_tags[tag] = m.get('label') or tag
+            tpl_list.append({'id': tpl_row.id, 'name': tpl_row.name, 'filename': tpl_row.filename,
+                             'case_tags': case_tags, 'company_tags': company_tags})
+        return jsonify({
+            'templates': tpl_list,
+            'case_tags': [{'key': k, 'label': v} for k, v in all_case_tags.items()],
+            'company': _doc_company_data(tid),
+        })
+    except Exception as _e:
+        import traceback as _tb
+        _tb.print_exc()
+        return jsonify({'templates': [], 'case_tags': [], 'company': {}, 'error': str(_e)}), 500
 
 
 @app.route("/api/doc-templates/extract-combined", methods=["POST"])
@@ -3036,17 +3047,29 @@ def api_doc_combined_schema():
 @block_super_admin
 def api_doc_extract_combined():
     """添付資料から全テンプレートの案件タグをまとめてAI抽出（1回の添付で全書類に反映）"""
+    try:
+        return _api_doc_extract_combined_impl()
+    except Exception as _e:
+        import traceback as _tb
+        _tb.print_exc()
+        return jsonify({'error': f'サーバーエラーが発生しました: {_e}'}), 500
+
+
+def _api_doc_extract_combined_impl():
     import base64 as _b64
     tid = _doc_tenant_id()
     templates = DocTemplate.query.filter_by(tenant_id=tid, is_active=True).all()
     all_case_tags = {}
-    for r in templates:
+    for tpl_row in templates:
         try:
-            mapping = json.loads(r.mapping) if r.mapping else {}
+            mapping = json.loads(tpl_row.mapping) if tpl_row.mapping else {}
+            if not isinstance(mapping, dict):
+                mapping = {}
         except Exception:
             mapping = {}
         for tag, m in mapping.items():
-            m = m or {}
+            if not isinstance(m, dict):
+                m = {}
             if m.get('scope') != 'company' and tag not in all_case_tags:
                 all_case_tags[tag] = m.get('label') or tag
     if not all_case_tags:

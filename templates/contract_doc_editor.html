@@ -143,7 +143,12 @@ async function init(){
     renderCaseFields();
     renderDownloadList();
     initDnd();
-  }catch(e){ showAlert('読み込みに失敗しました: '+e.message,'error'); }
+  }catch(e){
+    const msg = e.message === 'Failed to fetch'
+      ? 'サーバーに接続できませんでした。ページをリロードしてください。'
+      : '読み込みに失敗しました: '+e.message;
+    showAlert(msg,'error');
+  }
 }
 
 function renderCaseFields(){
@@ -230,10 +235,18 @@ async function processAiFiles(files){
   fd.append('application_id', String(RID));
   const btn=document.getElementById('ai-btn'); const orig=btn.innerHTML;
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> 読み取り中…';
-  showAlert('資料を読み取り中です…','info');
+  showAlert('資料を読み取り中です…（10〜30秒ほどかかります）','info');
   try{
-    const r=await fetch('/api/doc-templates/extract-combined',{method:'POST',body:fd});
-    const j=await r.json(); if(!r.ok) throw new Error(j.error||'読み取り失敗');
+    let r;
+    try{
+      r = await fetch('/api/doc-templates/extract-combined',{method:'POST',body:fd});
+    }catch(netErr){
+      throw new Error('サーバーに接続できませんでした。ページをリロードして再試行してください。');
+    }
+    let j;
+    try{ j = await r.json(); }
+    catch(_){ throw new Error(`サーバーエラー（HTTP ${r.status}）。管理者に連絡してください。`); }
+    if(!r.ok) throw new Error(j.error || `エラー（HTTP ${r.status}）`);
     let n=0;
     Object.entries(j.values||{}).forEach(([tag,val])=>{
       VALUES[tag]=val;
@@ -241,7 +254,7 @@ async function processAiFiles(files){
       if(el){ el.value=val; el.style.background='#ECFDF5'; n++; }
     });
     refreshBadges();
-    showAlert(n ? `AIが${n}件を自動入力しました（全書類に反映済み）。内容を確認・修正してください。` : '読み取れる項目が見つかりませんでした。', n?'success':'error');
+    showAlert(n ? `AIが${n}件を自動入力しました（全書類に反映済み）。内容を確認・修正してください。` : '読み取れる項目が見つかりませんでした。テンプレート設定でタグを「インポートで取り込み」に設定してください。', n?'success':'error');
   }catch(e){ showAlert(e.message,'error'); }
   finally{ btn.disabled=false; btn.innerHTML=orig; }
 }
