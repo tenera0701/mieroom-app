@@ -786,6 +786,8 @@ class ChatChannel(db.Model):
     store_id   = db.Column(db.Integer, db.ForeignKey('store.id'), nullable=True)  # kind=store のとき
     created_by = db.Column(db.Integer, db.ForeignKey('app_user.id'), nullable=True)
     is_active  = db.Column(db.Boolean, default=True)
+    pinned     = db.Column(db.Boolean, default=False)   # グループのピン止め（先頭に表示）
+    sort_order = db.Column(db.Integer, default=0)       # グループの並び順
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -1529,6 +1531,19 @@ def migrate_db():
     except Exception as e:
         print(f"  Skip tenant_option.store_id: {e}")
 
+    # chat_channel の pinned / sort_order カラムを追加
+    try:
+        cursor.execute("PRAGMA table_info(chat_channel)")
+        ccols = {r[1] for r in cursor.fetchall()}
+        if ccols and 'pinned' not in ccols:
+            cursor.execute("ALTER TABLE chat_channel ADD COLUMN pinned BOOLEAN DEFAULT 0")
+            print("  Added column chat_channel.pinned")
+        if ccols and 'sort_order' not in ccols:
+            cursor.execute("ALTER TABLE chat_channel ADD COLUMN sort_order INTEGER DEFAULT 0")
+            print("  Added column chat_channel.sort_order")
+    except Exception as e:
+        print(f"  Skip chat_channel columns: {e}")
+
     conn.commit()
     conn.close()
 
@@ -1574,6 +1589,8 @@ def migrate_postgres():
         ("echo_record",              "status",          "VARCHAR(40)"),
         ("echo_record",              "followup_phone",  "VARCHAR(60) DEFAULT ''"),
         ("tenant_option",            "store_id",        "INTEGER"),
+        ("chat_channel",             "pinned",          "BOOLEAN DEFAULT FALSE"),
+        ("chat_channel",             "sort_order",      "INTEGER DEFAULT 0"),
         ("mail_message",             "opened_at",       "TIMESTAMP"),
         ("mail_setting",             "custom_keywords", "TEXT"),
         ("mail_setting",             "import_after",    "TIMESTAMP"),
@@ -4085,10 +4102,32 @@ def api_chat_channels():
     if not u or not u.tenant_id:
         return jsonify({'channels': [], 'is_pro': False, 'retention_days': 60, 'me': {}})
     chans = _visible_channels(u.tenant_id, u)
-    order = {'company': 0, 'store': 1, 'group': 2}
-    chans.sort(key=lambda c: (order.get(c.kind, 9), c.name or ''))
+    kind_order = {'company': 0, 'store': 1, 'group': 2}
+    # company → store → group。groupはピン優先→sort_order→名前
+    chans.sort(key=lambda c: (
+        kind_order.get(c.kind, 9),
+        0 if (c.kind == 'group' and getattr(c, 'pinned', False)) else 1,
+        getattr(c, 'sort_order', 0) or 0,
+        c.name or '',
+    ))
+    # グループのメンバー数
+    group_ids = [c.id for c in chans if c.kind == 'group']
+    mcount = {}
+    if group_ids:
+        for cid_, cnt in db.session.query(ChatMember.channel_id, db.func.count(ChatMember.id))\
+                .filter(ChatMember.channel_id.in_(group_ids)).group_by(ChatMember.channel_id).all():
+            mcount[cid_] = cnt
+    is_mgr = u.role in ('owner', 'store_manager')
+    out = []
+    for c in chans:
+        item = {'id': c.id, 'kind': c.kind, 'name': c.name or '', 'store_id': c.store_id}
+        if c.kind == 'group':
+            item['pinned'] = bool(getattr(c, 'pinned', False))
+            item['member_count'] = mcount.get(c.id, 0)
+            item['can_manage'] = (c.created_by == u.id) or is_mgr   # 削除・並べ替え可
+        out.append(item)
     return jsonify({
-        'channels': [{'id': c.id, 'kind': c.kind, 'name': c.name or '', 'store_id': c.store_id} for c in chans],
+        'channels': out,
         'is_pro': _chat_is_pro(u.tenant_id),
         'retention_days': _chat_retention_days(u.tenant_id),
         'me': {'id': u.id, 'name': _chat_display_name(u)},
@@ -4137,6 +4176,89 @@ def api_chat_create_group():
     return jsonify({'id': c.id})
 
 
+def _can_manage_group(c, u):
+    """グループの削除・ピン・並べ替えができるか（作成者 or オーナー/店長）"""
+    if not c or c.kind != 'group':
+        return False
+    return c.created_by == u.id or u.role in ('owner', 'store_manager')
+
+
+@app.route("/api/chat/channels/<int:cid>/members", methods=["GET"])
+@login_required
+def api_chat_channel_members(cid):
+    """チャンネルのメンバー一覧（グループはメンバー、全社/店舗は対象ユーザー）"""
+    u = _chat_user()
+    c = ChatChannel.query.get_or_404(cid)
+    if not _can_access_channel(c, u):
+        return jsonify({'error': '権限がありません'}), 403
+    if c.kind == 'group':
+        uids = [m.user_id for m in ChatMember.query.filter_by(channel_id=cid).all()]
+        users = AppUser.query.filter(AppUser.id.in_(uids)).all() if uids else []
+    else:
+        # 全社/店舗：テナントの該当ユーザー
+        q = AppUser.query.filter(AppUser.tenant_id == u.tenant_id,
+                                 AppUser.is_active == True, AppUser.role != 'super_admin')
+        if c.kind == 'store' and c.store_id:
+            q = q.filter(db.or_(AppUser.store_id == c.store_id, AppUser.role == 'owner'))
+        users = q.all()
+    return jsonify([{'id': x.id, 'name': _chat_display_name(x),
+                     'is_me': x.id == u.id} for x in users])
+
+
+@app.route("/api/chat/channels/<int:cid>", methods=["DELETE"])
+@login_required
+def api_chat_delete_group(cid):
+    """グループを削除（作成者・オーナー・店長のみ）"""
+    u = _chat_user()
+    c = ChatChannel.query.get_or_404(cid)
+    if c.tenant_id != u.tenant_id or c.kind != 'group':
+        return jsonify({'error': 'グループのみ削除できます'}), 400
+    if not _can_manage_group(c, u):
+        return jsonify({'error': '削除する権限がありません'}), 403
+    c.is_active = False
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/chat/channels/<int:cid>/pin", methods=["POST"])
+@login_required
+def api_chat_pin_group(cid):
+    """グループのピン止めを切り替え"""
+    u = _chat_user()
+    c = ChatChannel.query.get_or_404(cid)
+    if c.tenant_id != u.tenant_id or not _can_manage_group(c, u):
+        return jsonify({'error': '権限がありません'}), 403
+    c.pinned = not bool(getattr(c, 'pinned', False))
+    db.session.commit()
+    return jsonify({'status': 'ok', 'pinned': c.pinned})
+
+
+@app.route("/api/chat/channels/<int:cid>/move", methods=["POST"])
+@login_required
+def api_chat_move_group(cid):
+    """グループの並び順を1つ上/下に移動（隣のグループと並び順を入れ替え）"""
+    u = _chat_user()
+    c = ChatChannel.query.get_or_404(cid)
+    if c.tenant_id != u.tenant_id or not _can_manage_group(c, u):
+        return jsonify({'error': '権限がありません'}), 403
+    direction = (request.get_json() or {}).get('direction', 'up')
+    # 同じピン状態のグループ内で並べ替え
+    groups = ChatChannel.query.filter_by(tenant_id=u.tenant_id, kind='group', is_active=True,
+                                         pinned=bool(c.pinned)).all()
+    groups.sort(key=lambda x: (x.sort_order or 0, x.name or '', x.id))
+    idx = next((i for i, g in enumerate(groups) if g.id == cid), None)
+    if idx is None:
+        return jsonify({'error': 'not found'}), 404
+    swap = idx - 1 if direction == 'up' else idx + 1
+    if 0 <= swap < len(groups):
+        # まず連番を振り直してから入れ替え（sort_orderが全部0でも動くように）
+        for i, g in enumerate(groups):
+            g.sort_order = i
+        groups[idx].sort_order, groups[swap].sort_order = groups[swap].sort_order, groups[idx].sort_order
+        db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
 @app.route("/api/chat/channels/<int:cid>/messages", methods=["GET"])
 @login_required
 def api_chat_messages(cid):
@@ -4160,12 +4282,36 @@ def api_chat_messages(cid):
                 'content_type': a.content_type or '',
                 'is_image': (a.content_type or '').startswith('image/') or fn.endswith(_IMG_EXTS),
             })
+    # 既読数：このチャンネルを読んだ各ユーザーの last_read_id を取得し、
+    # 各メッセージについて「投稿者以外で last_read_id >= m.id の人数」を数える
+    reads = [(r.user_id, r.last_read_id or 0)
+             for r in ChatRead.query.filter_by(channel_id=cid).all()]
+    def _read_count(m):
+        return sum(1 for (uid_, lr) in reads if uid_ != m.user_id and lr >= m.id)
     return jsonify({'messages': [{
         'id': m.id, 'user_id': m.user_id, 'user_name': m.user_name or '',
         'body': m.body or '', 'mine': m.user_id == u.id,
         'at': m.created_at.strftime('%Y-%m-%d %H:%M') if m.created_at else '',
+        'read_count': _read_count(m),
         'attachments': atts_by.get(m.id, []),
     } for m in msgs]})
+
+
+@app.route("/api/chat/channels/<int:cid>/reads", methods=["GET"])
+@login_required
+def api_chat_reads(cid):
+    """自分の投稿メッセージごとの既読人数を返す（既読表示の更新用・軽量）"""
+    u = _chat_user()
+    c = ChatChannel.query.get_or_404(cid)
+    if not _can_access_channel(c, u):
+        return jsonify({})
+    reads = [(r.user_id, r.last_read_id or 0)
+             for r in ChatRead.query.filter_by(channel_id=cid).all()]
+    my_msgs = ChatMessage.query.filter_by(channel_id=cid, user_id=u.id).all()
+    out = {}
+    for m in my_msgs:
+        out[str(m.id)] = sum(1 for (uid_, lr) in reads if uid_ != u.id and lr >= m.id)
+    return jsonify(out)
 
 
 @app.route("/api/chat/channels/<int:cid>/messages", methods=["POST"])

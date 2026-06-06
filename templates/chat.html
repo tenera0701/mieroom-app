@@ -19,6 +19,12 @@
   .ch-item .ch-nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
   .ch-badge { flex:none; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:#ef4444; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
   .ch-item.active .ch-nm { font-weight:700; }
+  .ch-mc { flex:none; min-width:18px; height:18px; padding:0 6px; border-radius:9px; background:#e2e8f0; color:#475569; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+  .ch-mc::before { content:'👤'; font-size:9px; margin-right:2px; }
+  .ch-menu-btn { flex:none; border:none; background:transparent; color:#94a3b8; font-size:16px; line-height:1; cursor:pointer; padding:2px 4px; border-radius:5px; }
+  .ch-menu-btn:hover { background:#e2e8f0; color:#334155; }
+  .gm-act { padding:8px 12px; border-radius:7px; cursor:pointer; white-space:nowrap; }
+  .gm-act:hover { background:#f1f5f9; }
   /* 右：会話 */
   .ch-main { flex:1; background:#fff; border:1px solid #e5e7eb; border-radius:12px; display:flex; flex-direction:column; overflow:hidden; min-width:0; position:relative; }
   .ch-main.dnd-over { outline:2px dashed #0D9488; outline-offset:-5px; }
@@ -107,7 +113,7 @@
       <div class="ch-input-bar">
         <button class="ch-attach-btn" id="ch-attach-btn" onclick="document.getElementById('ch-file').click()" title="画像・PDFを添付">📎</button>
         <input type="file" id="ch-file" multiple accept="image/*,application/pdf,.pdf" style="display:none" onchange="onChatFiles(this)">
-        <textarea id="ch-input" class="ch-input" rows="1" placeholder="メッセージを入力…" oninput="cgrow(this)"></textarea>
+        <textarea id="ch-input" class="ch-input" rows="1" placeholder="メッセージを入力…（Shift+Enterで送信）" oninput="cgrow(this)"></textarea>
         <button class="ch-send" id="ch-send" onclick="sendChat()" title="送信">➤</button>
       </div>
       <div class="pro-note" id="pro-note"></div>
@@ -132,6 +138,17 @@
       <button onclick="closeGroupModal()" style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer;margin-right:6px;">キャンセル</button>
       <button onclick="createGroup()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">作成する</button>
     </div>
+  </div>
+</div>
+
+<!-- メンバー一覧モーダル -->
+<div class="gm-overlay" id="members-modal">
+  <div class="gm-box">
+    <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="margin:0;font-size:15px;font-weight:700;">👥 メンバー一覧</h3>
+      <button onclick="closeMembers()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+    <div id="members-list" style="padding:10px 20px 16px;max-height:360px;overflow-y:auto;"></div>
   </div>
 </div>
 {% endblock %}
@@ -173,11 +190,68 @@ function renderChannelList(){
     if(c.kind!==lastKind){ html += `<div class="ch-group-label">${KIND_LABEL[c.kind]||''}</div>`; lastKind=c.kind; }
     const u = _unread[c.id] || 0;
     const badge = u ? `<span class="ch-badge">${u>99?'99+':u}</span>` : '';
-    html += `<div class="ch-item ${_curCh===c.id?'active':''}" onclick="selectChannel(${c.id})">
-      <span class="ch-ico">${KIND_ICON[c.kind]||'#'}</span><span class="ch-nm">${escH(c.name)}</span>${badge}</div>`;
+    if(c.kind==='group'){
+      const pin = c.pinned ? '📌 ' : '';
+      const mc = (c.member_count!=null) ? `<span class="ch-mc">${c.member_count}</span>` : '';
+      const menuBtn = c.can_manage ? `<button class="ch-menu-btn" title="操作" onclick="event.stopPropagation();toggleGroupMenu(event,${c.id},${!!c.pinned})">⋯</button>` : '';
+      html += `<div class="ch-item ${_curCh===c.id?'active':''}" onclick="selectChannel(${c.id})">
+        <span class="ch-ico" title="メンバーを見る" style="cursor:pointer;" onclick="event.stopPropagation();showMembers(${c.id})">${KIND_ICON[c.kind]||'#'}</span>
+        <span class="ch-nm">${pin}${escH(c.name)}</span>${mc}${badge}${menuBtn}</div>`;
+    } else {
+      html += `<div class="ch-item ${_curCh===c.id?'active':''}" onclick="selectChannel(${c.id})">
+        <span class="ch-ico">${KIND_ICON[c.kind]||'#'}</span><span class="ch-nm">${escH(c.name)}</span>${badge}</div>`;
+    }
   });
   box.innerHTML = html;
 }
+
+// グループ操作メニュー（ピン/並べ替え/メンバー/削除）
+function closeGroupMenu(){ const m=document.getElementById('group-menu'); if(m) m.remove(); }
+function toggleGroupMenu(ev, cid, pinned){
+  closeGroupMenu();
+  const menu = document.createElement('div');
+  menu.id = 'group-menu';
+  menu.style.cssText = 'position:fixed;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 10px 36px rgba(0,0,0,0.18);z-index:3000;padding:5px;font-size:13px;min-width:150px;';
+  menu.innerHTML =
+    `<div class="gm-act" onclick="pinGroup(${cid})">${pinned?'📌 ピンを外す':'📌 ピン止め'}</div>`
+    + `<div class="gm-act" onclick="moveGroup(${cid},'up')">⬆️ 上へ移動</div>`
+    + `<div class="gm-act" onclick="moveGroup(${cid},'down')">⬇️ 下へ移動</div>`
+    + `<div class="gm-act" onclick="showMembers(${cid})">👥 メンバーを見る</div>`
+    + `<div class="gm-act" style="color:#dc2626;" onclick="deleteGroup(${cid})">🗑 グループを削除</div>`;
+  document.body.appendChild(menu);
+  const r = ev.target.getBoundingClientRect();
+  menu.style.left = Math.min(r.left, window.innerWidth-165) + 'px';
+  menu.style.top = (r.bottom + 4) + 'px';
+  setTimeout(()=>document.addEventListener('click', closeGroupMenu, {once:true}), 0);
+}
+async function pinGroup(cid){ closeGroupMenu(); try{ await fetch(`/api/chat/channels/${cid}/pin`,{method:'POST'}); }catch(_){} await loadChannels(false); }
+async function moveGroup(cid, dir){ closeGroupMenu(); try{ await fetch(`/api/chat/channels/${cid}/move`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({direction:dir})}); }catch(_){} await loadChannels(false); }
+async function deleteGroup(cid){
+  closeGroupMenu();
+  if(!confirm('このグループを削除しますか？（メッセージも見られなくなります）')) return;
+  const r = await fetch(`/api/chat/channels/${cid}`, {method:'DELETE'});
+  if(!r.ok){ const j = await r.json().catch(()=>({})); alert(j.error || '削除に失敗しました'); return; }
+  if(_curCh===cid){
+    _curCh = null;
+    document.getElementById('ch-head').style.display='none';
+    document.getElementById('ch-compose').style.display='none';
+    document.getElementById('ch-body').innerHTML='<div class="ch-empty">左のチャンネルを選んでください</div>';
+  }
+  await loadChannels(false);
+}
+async function showMembers(cid){
+  closeGroupMenu();
+  try{
+    const list = await fetch(`/api/chat/channels/${cid}/members`).then(r=>r.json());
+    document.getElementById('members-list').innerHTML = (list && list.length)
+      ? list.map(m=>`<div style="padding:8px 4px;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:9px;">`
+          + `<span style="width:28px;height:28px;border-radius:50%;background:#CCFBF1;color:#0F766E;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;">${escH(String(m.name||'?').slice(0,1))}</span>`
+          + `<span>${escH(m.name)}${m.is_me?' <span style="color:#94a3b8;font-size:11px;">（自分）</span>':''}</span></div>`).join('')
+      : '<p style="color:#9ca3af;font-size:13px;">メンバーがいません</p>';
+    document.getElementById('members-modal').style.display='flex';
+  }catch(_){ alert('メンバーの取得に失敗しました'); }
+}
+function closeMembers(){ document.getElementById('members-modal').style.display='none'; }
 
 async function refreshUnread(){
   try{
@@ -214,7 +288,19 @@ function selectChannel(cid){
   loadMessages(false);
   markChannelRead(cid);
   if(_pollTimer) clearInterval(_pollTimer);
-  _pollTimer = setInterval(()=>{ if(_curCh) loadMessages(true); }, 5000);
+  _pollTimer = setInterval(()=>{ if(_curCh){ loadMessages(true); refreshReadCounts(); } }, 5000);
+}
+
+// 既読人数を更新（自分の投稿のみ・ポーリングで反映）
+async function refreshReadCounts(){
+  if(!_curCh) return;
+  try{
+    const d = await fetch(`/api/chat/channels/${_curCh}/reads`).then(r=>r.json());
+    Object.keys(d).forEach(mid=>{
+      const el = document.getElementById('rc-'+mid);
+      if(el){ const n = d[mid]||0; el.textContent = '既読 ' + n; el.style.display = n>0 ? '' : 'none'; }
+    });
+  }catch(_){}
 }
 
 async function loadMessages(incremental){
@@ -241,8 +327,18 @@ async function loadMessages(incremental){
       const attHtml = atts ? `<div class="cm-att">${atts}</div>` : '';
       const nameHtml = m.mine ? '' : `<div class="cm-name">${escH(m.user_name)}</div>`;
       const bodyHtml = m.body ? escH(m.body) : '';
+      const time = escH((m.at||'').slice(11,16));
+      let metaHtml;
+      if(m.mine){
+        const rc = m.read_count||0;
+        metaHtml = `<div class="cm-time" style="display:flex;flex-direction:column;align-items:flex-end;line-height:1.3;">`
+          + `<span class="cm-read" id="rc-${m.id}" style="color:#0D9488;font-weight:700;${rc>0?'':'display:none;'}">既読 ${rc}</span>`
+          + `<span>${time}</span></div>`;
+      } else {
+        metaHtml = `<div class="cm-time">${time}</div>`;
+      }
       body.insertAdjacentHTML('beforeend',
-        `<div class="cm-row ${cls}">${nameHtml}<div class="cm-bubble">${bodyHtml}${attHtml}</div><div class="cm-time">${escH((m.at||'').slice(11,16))}</div></div>`);
+        `<div class="cm-row ${cls}">${nameHtml}<div class="cm-bubble">${bodyHtml}${attHtml}</div>${metaHtml}</div>`);
       _lastId = Math.max(_lastId, m.id);
     });
     body.setAttribute('data-lastdate', lastDate);
@@ -314,8 +410,9 @@ async function sendChat(){
   finally{ btn.disabled = false; }
 }
 // Enterで送信（Shift+Enterで改行）
+// Shift+Enterで送信（Enter単独は改行）
 document.addEventListener('keydown', e=>{
-  if(e.key==='Enter' && !e.shiftKey && document.activeElement && document.activeElement.id==='ch-input'){
+  if(e.key==='Enter' && e.shiftKey && document.activeElement && document.activeElement.id==='ch-input'){
     e.preventDefault(); sendChat();
   }
 });
