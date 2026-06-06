@@ -184,31 +184,35 @@ PLAN_OPTION_DEFS = [
 ]
 
 
+def _tenant_active_stores(tenant_id):
+    return Store.query.filter_by(tenant_id=tenant_id, is_active=True).all() if tenant_id else []
+
+
 def tenant_option_keys(tenant_id):
-    """テナント全体（store_id=NULL）のオプションキー"""
-    if not tenant_id:
+    """全店舗に共通で付与されているオプション（クライアント管理のバッジ表示用）"""
+    stores = _tenant_active_stores(tenant_id)
+    if not stores:
         return set()
-    return {o.option_key for o in
-            TenantOption.query.filter_by(tenant_id=tenant_id, store_id=None).all()}
+    sets = [store_option_keys(s.id) for s in stores]
+    return set.intersection(*sets) if sets else set()
 
 
 def tenant_has_option(tenant_id, key):
-    """テナント全体（store_id=NULL）でオプションを持つか（後方互換）"""
-    if not tenant_id:
-        return False
-    return TenantOption.query.filter_by(
-        tenant_id=tenant_id, store_id=None, option_key=key).first() is not None
+    """全店舗に共通でオプションを持つか（後方互換・表示用）"""
+    return key in tenant_option_keys(tenant_id)
 
 
 def set_tenant_options(tenant_id, keys):
-    """テナント全体（store_id=NULL）のオプションを keys で置き換える"""
+    """クライアント管理から: 指定オプションをテナントの全有効店舗に一括適用する
+    （オプションは店舗単位で管理。ここで指定したものを全店舗に付与し、外したものを全店舗から外す）"""
     valid = {d['key'] for d in PLAN_OPTION_DEFS}
     want = {k for k in (keys or []) if k in valid}
-    cur = tenant_option_keys(tenant_id)
-    for k in want - cur:
-        db.session.add(TenantOption(tenant_id=tenant_id, store_id=None, option_key=k))
-    for k in cur - want:
-        TenantOption.query.filter_by(tenant_id=tenant_id, store_id=None, option_key=k).delete()
+    for s in _tenant_active_stores(tenant_id):
+        cur = store_option_keys(s.id)
+        for k in want - cur:
+            db.session.add(TenantOption(tenant_id=tenant_id, store_id=s.id, option_key=k))
+        for k in cur - want:
+            TenantOption.query.filter_by(store_id=s.id, option_key=k).delete()
 
 
 def store_option_keys(store_id):
@@ -234,17 +238,11 @@ def set_store_options(store_id, keys):
 
 
 def store_has_option(tenant_id, store_id, key):
-    """店舗個別 or テナント全体（store_id=NULL）のいずれかで有効ならTrue"""
-    conds = []
-    if store_id:
-        conds.append(TenantOption.store_id == store_id)
-    if tenant_id:
-        conds.append(db.and_(TenantOption.tenant_id == tenant_id,
-                             TenantOption.store_id == None))
-    if not conds:
+    """その店舗にオプションが付与されているか（店舗単位のみ。テナント全体の概念は廃止）"""
+    if not store_id:
         return False
-    return TenantOption.query.filter(
-        TenantOption.option_key == key, db.or_(*conds)).first() is not None
+    return TenantOption.query.filter_by(
+        store_id=store_id, option_key=key).first() is not None
 
 
 def current_has_option(key):
@@ -1705,6 +1703,34 @@ def migrate_tenant_data():
             if broken_stats or broken_leads:
                 db.session.commit()
                 print(f"store_id修復: LeadMediaStat={len(broken_stats)}件, Lead={len(broken_leads)}件")
+
+        # 旧「テナント全体オプション」(store_id=NULL)を店舗単位に移行する。
+        #  ・同一(テナント,オプション)で既に店舗別の設定があれば、店舗別を正とし NULL行は削除
+        #  ・店舗別の設定が無ければ、全有効店舗に展開してから NULL行を削除
+        try:
+            null_opts = TenantOption.query.filter(TenantOption.store_id == None).all()
+            if null_opts:
+                from collections import defaultdict as _dd
+                grouped = _dd(list)
+                for o in null_opts:
+                    grouped[(o.tenant_id, o.option_key)].append(o)
+                migrated = 0
+                for (otid, okey), rows in grouped.items():
+                    has_store_level = TenantOption.query.filter(
+                        TenantOption.tenant_id == otid,
+                        TenantOption.option_key == okey,
+                        TenantOption.store_id != None).first() is not None
+                    if not has_store_level:
+                        for s in Store.query.filter_by(tenant_id=otid, is_active=True).all():
+                            db.session.add(TenantOption(tenant_id=otid, store_id=s.id, option_key=okey))
+                    for o in rows:
+                        db.session.delete(o)
+                    migrated += 1
+                db.session.commit()
+                print(f"オプションを店舗単位に移行: {migrated}件")
+        except Exception as _e:
+            db.session.rollback()
+            print(f"オプション店舗移行エラー: {_e}")
 
         print("テナントデータのマイグレーション完了")
 
