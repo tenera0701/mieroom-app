@@ -204,6 +204,17 @@ async function openMap(id){
 }
 
 function renderMapPanel(panel, tpl){
+  panel._ckeys = tpl.company_keys || [];   // buildCard から参照できるよう保持
+  if(!(tpl.tags||[]).length){
+    panel.innerHTML=`<div style="padding:16px 18px;">
+      <div style="font-size:13px;color:#92400e;background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:12px 14px;">
+        ⚠️ このExcelに <b>{{ '{{タグ}}' }}</b> が見つかりませんでした。<br>
+        様式のセルに <code style="background:#fff;padding:1px 5px;border-radius:3px;">{{ '{{お客様氏名}}' }}</code> のようにタグを書いてからアップロードし直してください。
+      </div>
+      <button class="btn btn-light btn-sm" style="margin-top:10px;" onclick="toggleMap(${tpl.id})">閉じる</button>
+    </div>`;
+    return;
+  }
   const mapping=tpl.mapping||{};
   const ckeys=tpl.company_keys||[];
 
@@ -289,7 +300,7 @@ function moveTag(btn, toSide, tplId){
 
 function buildCard(tag, side, tplId){
   const panel=document.getElementById('map-'+tplId);
-  const ckeys=(panel._ckeys||[]);
+  const ckeys=(panel && panel._ckeys) || [];
   const compKeyOpts=['<option value="">（タグ名と同じ）</option>']
     .concat(ckeys.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`)).join('');
   const div=document.createElement('div');

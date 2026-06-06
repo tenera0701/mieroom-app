@@ -2394,7 +2394,12 @@ def api_contract_document_get(rid):
         try:
             saved = json.loads(doc.data)
             if isinstance(saved, dict):
-                data = saved
+                if saved.get('v') == 2:          # 新フォーマット {v:2, values:{tag:val}}
+                    data = saved.get('values') or {}
+                elif 'values' in saved and isinstance(saved.get('values'), dict):
+                    data = saved['values']       # 旧1テンプレート形式 {template_id:.., values:{}}
+                else:
+                    data = saved                 # レガシー直フラット
         except Exception:
             pass
     return jsonify({'data': data, 'ctx': ctx, 'saved': bool(doc)})
@@ -2412,11 +2417,16 @@ def api_contract_document_save(rid):
     if cur_user and cur_user.role == 'staff' and rec.staff_id != cur_user.staff_id:
         return jsonify({'error': '権限がありません'}), 403
     payload = request.get_json() or {}
+    # {v:2, values:{}} でも フラット{tag:val} でも受け付ける
+    if isinstance(payload, dict) and payload.get('v') == 2:
+        save_data = payload
+    else:
+        save_data = {'v': 2, 'values': payload}
     doc = ContractDocument.query.filter_by(application_id=rid).first()
     if not doc:
         doc = ContractDocument(application_id=rid, store_id=rec.store_id)
         db.session.add(doc)
-    doc.data = json.dumps(payload, ensure_ascii=False)
+    doc.data = json.dumps(save_data, ensure_ascii=False)
     doc.updated_at = datetime.utcnow()
     db.session.commit()
     return jsonify({'status': 'ok'})
@@ -2983,6 +2993,157 @@ def api_doc_template_render(tpl_id):
         "attachment; filename=\"document.xlsx\"; filename*=UTF-8''" + _urlquote(fname)
     )
     return resp
+
+
+@app.route("/api/doc-templates/combined-schema", methods=["GET"])
+@login_required
+@block_super_admin
+def api_doc_combined_schema():
+    """全テンプレートの案件タグを集約して返す（書類一括編集画面用）"""
+    tid = _doc_tenant_id()
+    templates = DocTemplate.query.filter_by(tenant_id=tid, is_active=True).order_by(DocTemplate.id).all()
+    tpl_list = []
+    all_case_tags = {}   # 順序保持: tag -> label
+    for r in templates:
+        try:
+            mapping = json.loads(r.mapping) if r.mapping else {}
+        except Exception:
+            mapping = {}
+        try:
+            tags = json.loads(r.tags) if r.tags else []
+        except Exception:
+            tags = []
+        case_tags, company_tags = [], []
+        for tag in tags:
+            m = mapping.get(tag) or {}
+            if m.get('scope') == 'company':
+                company_tags.append(tag)
+            else:
+                case_tags.append(tag)
+                if tag not in all_case_tags:
+                    all_case_tags[tag] = m.get('label') or tag
+        tpl_list.append({'id': r.id, 'name': r.name, 'filename': r.filename,
+                         'case_tags': case_tags, 'company_tags': company_tags})
+    return jsonify({
+        'templates': tpl_list,
+        'case_tags': [{'key': k, 'label': v} for k, v in all_case_tags.items()],
+        'company': _doc_company_data(tid),
+    })
+
+
+@app.route("/api/doc-templates/extract-combined", methods=["POST"])
+@login_required
+@block_super_admin
+def api_doc_extract_combined():
+    """添付資料から全テンプレートの案件タグをまとめてAI抽出（1回の添付で全書類に反映）"""
+    import base64 as _b64
+    tid = _doc_tenant_id()
+    templates = DocTemplate.query.filter_by(tenant_id=tid, is_active=True).all()
+    all_case_tags = {}
+    for r in templates:
+        try:
+            mapping = json.loads(r.mapping) if r.mapping else {}
+        except Exception:
+            mapping = {}
+        for tag, m in mapping.items():
+            m = m or {}
+            if m.get('scope') != 'company' and tag not in all_case_tags:
+                all_case_tags[tag] = m.get('label') or tag
+    if not all_case_tags:
+        return jsonify({'values': {}, 'found': 0})
+
+    files = request.files.getlist('files') or ([request.files['file']] if 'file' in request.files else [])
+    files = [f for f in files if f and f.filename]
+    if not files:
+        return jsonify({'error': '資料ファイルを選択してください'}), 400
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return jsonify({'error': 'AI読み取りが未設定です（管理者にお問い合わせください）'}), 503
+
+    content = []
+    total = 0
+    for f in files[:5]:
+        raw = f.read()
+        total += len(raw)
+        if total > 20 * 1024 * 1024:
+            return jsonify({'error': '添付の合計が大きすぎます（20MBまで）'}), 400
+        mime = (f.mimetype or '').lower()
+        if mime not in _ALLOWED_EXTRACT_MIME:
+            ext = (f.filename.rsplit('.', 1)[-1] if '.' in f.filename else '').lower()
+            mime = {'pdf': 'application/pdf', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+                    'png': 'image/png', 'webp': 'image/webp', 'gif': 'image/gif'}.get(ext, mime)
+        kind = _ALLOWED_EXTRACT_MIME.get(mime)
+        if not kind:
+            continue
+        b64 = _b64.standard_b64encode(raw).decode()
+        if kind == 'pdf':
+            content.append({"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": b64}})
+        else:
+            content.append({"type": "image", "source": {"type": "base64", "media_type": mime, "data": b64}})
+    if not content:
+        return jsonify({'error': 'PDFまたは画像（JPEG/PNG）のみ対応しています'}), 400
+
+    app_id = request.form.get('application_id')
+    if app_id:
+        try:
+            rec = ApplicationRecord.query.get(int(app_id))
+        except Exception:
+            rec = None
+        if rec and rec.store_id in get_allowed_store_ids():
+            staff = Staff.query.get(rec.staff_id) if rec.staff_id else None
+            _fd = lambda d: d.isoformat() if d else ''
+            known = {k: v for k, v in {
+                'お客様名・契約者名': rec.customer_name or '',
+                '物件名': rec.property_name or '',
+                '号室・部屋番号': rec.room_number or '',
+                '賃料（月額）': int(rec.rent or 0),
+                '管理会社': rec.management_company or '',
+                '担当者': staff.name if staff else '',
+                '契約開始日': _fd(rec.contract_start_date),
+                '申込日': _fd(rec.application_date),
+            }.items() if v not in ('', 0)}
+            if known:
+                content.append({"type": "text", "text": "【この案件の既知情報】\n" + "\n".join(f"・{k}: {v}" for k, v in known.items())})
+
+    key_lines = ",\n".join(f'  "{t}": "{all_case_tags[t]}"' for t in all_case_tags)
+    prompt = (
+        "あなたは不動産書類を読み取る専門アシスタントです。\n"
+        "添付資料と既知情報から、以下のJSONキーに対応する値を抽出してください。\n\n"
+        "対象フィールド（キー: 説明）:\n{\n" + key_lines + "\n}\n\n"
+        "厳守ルール:\n"
+        "1. 上記キーだけを持つJSONオブジェクトを1つだけ返す。説明文は不要。\n"
+        "2. 読み取れない・自信がない項目は省略する（推測しない）。\n"
+        "3. 金額は半角数字のみ、日付はYYYY-MM-DD（和暦→西暦変換）。\n"
+    )
+    content.append({"type": "text", "text": prompt})
+
+    try:
+        msg = anthropic_client.messages.create(
+            model="claude-sonnet-4-6", max_tokens=2000,
+            messages=[{"role": "user", "content": content}],
+        )
+        text = "".join(getattr(b, 'text', '') for b in msg.content).strip()
+    except Exception as e:
+        return jsonify({'error': f'AI読み取りに失敗しました: {e}'}), 502
+
+    extracted = {}
+    try:
+        s, e = text.find('{'), text.rfind('}')
+        if s >= 0 and e > s:
+            parsed = json.loads(text[s:e + 1])
+            if isinstance(parsed, dict):
+                extracted = parsed
+    except Exception:
+        extracted = {}
+
+    out = {}
+    for tag in all_case_tags:
+        v = extracted.get(tag)
+        if v is None:
+            continue
+        v = str(v).strip()
+        if v:
+            out[tag] = v
+    return jsonify({'values': out, 'found': len(out)})
 
 
 # ── 間取り作成 ──────────────────────────────────────────

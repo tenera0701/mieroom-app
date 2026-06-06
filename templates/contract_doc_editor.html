@@ -16,18 +16,15 @@
   .btn-light { background:#fff; color:#374151; border:1px solid #d1d5db; }
   .btn-purple { background:var(--purple); color:#fff; } .btn-purple:hover { background:#5B21B6; }
   .btn:disabled { opacity:.6; cursor:default; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px 14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px 14px; }
   .fg { display:flex; flex-direction:column; gap:4px; }
   .fg label { font-size:12px; font-weight:600; color:#374151; }
   .fg input { border:1px solid #d1d5db; border-radius:6px; padding:7px 9px; font-size:13px; }
   .fg input:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 2px rgba(13,148,136,.15); }
-  .fg input[readonly] { background:#f3f4f6; color:#6b7280; }
-  .fg .ai-mark { font-size:10px; color:var(--purple); font-weight:700; }
-  .tpl-sel { border:1px solid #d1d5db; border-radius:8px; padding:9px 11px; font-size:14px; font-weight:700; min-width:260px; }
-  .ai-zone { border:2px dashed #c7d2fe; border-radius:10px; padding:14px; text-align:center; background:#f5f3ff; transition:.15s; }
-  .ai-zone.drag { border-color:#6D28D9; background:#ede9fe; transform:scale(1.01); }
+  .ai-row { display:flex; gap:10px; flex-wrap:wrap; align-items:stretch; }
+  .ai-zone { border:2px dashed #c7d2fe; border-radius:10px; padding:14px; text-align:center; background:#f5f3ff; transition:.15s; flex:1; min-width:200px; }
+  .ai-zone.drag { border-color:var(--purple); background:#ede9fe; transform:scale(1.01); }
   .ai-note { font-size:12px; color:#92400e; background:#FEF3C7; border:1px solid #FDE68A; border-radius:6px; padding:8px 10px; margin-top:10px; }
-  .hint { font-size:12px; color:#6b7280; background:#F0FDFA; border:1px solid #99f6e4; border-radius:8px; padding:10px 12px; margin-bottom:14px; line-height:1.6; }
   .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:14px; display:none; }
   .alert.show { display:block; }
   .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
@@ -36,6 +33,15 @@
   .empty { color:#9ca3af; font-size:13px; }
   .spin { width:18px; height:18px; border:3px solid #ddd6fe; border-top-color:var(--purple); border-radius:50%; display:inline-block; vertical-align:middle; animation:sp .8s linear infinite; }
   @keyframes sp { to { transform:rotate(360deg); } }
+  /* 帳票出力カード */
+  .tpl-dl-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid #f3f4f6; flex-wrap:wrap; }
+  .tpl-dl-row:last-child { border-bottom:none; }
+  .tpl-dl-name { font-weight:700; color:#111827; font-size:14px; min-width:140px; }
+  .tpl-dl-tags { display:flex; flex-wrap:wrap; gap:4px; flex:1; }
+  .tag-badge { font-size:11px; border-radius:4px; padding:2px 7px; background:#f3f4f6; color:#374151; border:1px solid #e5e7eb; }
+  .tag-badge.filled { background:#D1FAE5; color:#065F46; border-color:#6EE7B7; }
+  .tag-badge.empty-val { background:#FEF2F2; color:#B91C1C; border-color:#FECACA; }
+  .no-tpl { color:#9ca3af; font-size:13px; background:#f9fafb; border:1px dashed #e5e7eb; border-radius:8px; padding:20px; text-align:center; }
 </style>
 {% endblock %}
 
@@ -49,47 +55,38 @@
     </div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-light" onclick="location.href='/contract-customers'">← 一覧へ</button>
-      <button class="btn btn-light" onclick="saveDoc()">💾 保存</button>
-      <button class="btn btn-save" onclick="downloadXlsx()">⬇ Excelをダウンロード</button>
+      <button class="btn btn-light" onclick="saveAll()">💾 保存</button>
     </div>
   </div>
 
-  <div class="hint">
-    使う帳票（テンプレート）を選び、「申込情報を反映」や「資料を添付してAI自動入力」で穴あきを埋め、内容を確認して <b>Excelをダウンロード</b>（A4/A3印刷）。テンプレート・会社情報は「契約管理 → テンプレート設定」で登録します。
-  </div>
-
-  <!-- テンプレ選択 -->
+  <!-- 自動入力 -->
   <div class="card">
-    <h2 class="card-h">📑 帳票テンプレートを選択</h2>
-    <div id="tpl-pick">
-      <select id="tpl-select" class="tpl-sel" onchange="onSelectTpl()"><option value="">読み込み中…</option></select>
+    <h2 class="card-h">🤖 自動入力（全書類に一括反映）</h2>
+    <div class="ai-row">
+      <button class="btn btn-light" style="white-space:nowrap;" onclick="applyRecord()">📋 申込情報を反映</button>
+      <div class="ai-zone" id="ai-zone">
+        <button class="btn btn-purple" id="ai-btn" onclick="document.getElementById('ai-file').click()">
+          📎 契約書・物件・顧客資料を添付
+        </button>
+        <input type="file" id="ai-file" accept="application/pdf,image/*" multiple style="display:none" onchange="onAiFileChange(event)">
+        <div style="font-size:11px;color:#6b7280;margin-top:6px;">ここにドラッグ＆ドロップでもOK ／ PDF・画像 ／ 20MBまで・最大5ファイル</div>
+      </div>
     </div>
+    <div class="ai-note">⚠️ 添付1回で登録済みの全書類に一括反映されます。内容を必ずご確認・修正ください。</div>
   </div>
 
-  <!-- 入力エリア -->
-  <div id="edit-area" style="display:none;">
-    <div class="card">
-      <h2 class="card-h">🤖 自動入力</h2>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <button class="btn btn-light" onclick="applyRecord()">📋 申込情報を反映</button>
-        <div class="ai-zone" id="ai-zone" style="flex:1;min-width:260px;">
-          <button class="btn btn-purple" id="ai-btn" onclick="document.getElementById('ai-file').click()">📎 契約書・物件・顧客資料を添付（複数可）</button>
-          <input type="file" id="ai-file" accept="application/pdf,image/*" multiple style="display:none" onchange="aiExtract(event)">
-          <div style="font-size:11px;color:#6b7280;margin-top:6px;">ここにファイルをドラッグ＆ドロップでもOK ／ PDF・画像 ／ 合計20MBまで・最大5ファイル</div>
-        </div>
-      </div>
-      <div class="ai-note">⚠️ 自動入力は契約事故防止のため、必ず下の項目で内容をご確認・修正してください。</div>
-    </div>
+  <!-- 書類フィールド -->
+  <div class="card">
+    <h2 class="card-h">📝 書類フィールド（全書類共通）</h2>
+    <p style="font-size:12px;color:#6b7280;margin:0 0 12px;">ここで入力した値が、全ての帳票テンプレートに自動で差し込まれます。</p>
+    <div id="case-fields" class="grid"><div class="empty">読み込み中…</div></div>
+  </div>
 
-    <div class="card">
-      <h2 class="card-h">📝 案件情報（自動入力・編集可）</h2>
-      <div id="case-fields" class="grid"></div>
-    </div>
-
-    <div class="card">
-      <h2 class="card-h">🏢 会社情報（固定・自動差し込み）</h2>
-      <div id="company-fields" class="grid"></div>
-    </div>
+  <!-- 帳票ダウンロード -->
+  <div class="card">
+    <h2 class="card-h">📄 帳票の出力</h2>
+    <p style="font-size:12px;color:#6b7280;margin:0 0 12px;">各書類をExcelでダウンロードしてA4/A3で印刷できます。🟢は入力済み、🔴は未入力の項目です。</p>
+    <div id="tpl-download-list"><div class="empty">読み込み中…</div></div>
   </div>
 </div>
 {% endblock %}
@@ -97,161 +94,200 @@
 {% block extra_scripts %}
 <script>
 const RID = {{ rid }};
-let TEMPLATES = [];
-let TPL = null;       // 選択中テンプレ詳細
-let CTX = {};         // 申込情報
-let SAVED_VALUES = {};// 保存済み値
+let CTX = {};
+let VALUES = {};   // フラット: {タグ名: 値}
+let SCHEMA = {};   // {templates, case_tags, company}
 
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function showAlert(msg, type='success'){ const el=document.getElementById('alert'); el.innerHTML=msg; el.className=`alert alert-${type} show`; if(type!=='info') setTimeout(()=>el.classList.remove('show'),5000); }
-function cid(tag){ return 'cf__'+btoa(unescape(encodeURIComponent(tag))).replace(/=/g,''); }
+function showAlert(msg, type='success'){
+  const el=document.getElementById('alert'); el.innerHTML=msg; el.className=`alert alert-${type} show`;
+  if(type!=='info') setTimeout(()=>el.classList.remove('show'),5000);
+}
+function cid(tag){ return 'cf__'+btoa(unescape(encodeURIComponent(tag))).replace(/[+=\/]/g,'_'); }
 
-/* 申込情報→案件タグの簡易マッチ用キーワード */
+/* ── 申込情報 → タグ自動マッチ ── */
 const RECORD_RULES = [
-  { kw:['契約者','お客様','借主','入居者','申込者','氏名','名前'], ctx:'customer_name' },
-  { kw:['号室','部屋'], ctx:'room_number' },
-  { kw:['物件','建物','名称'], ctx:'property_name' },
-  { kw:['管理会社'], ctx:'management_company' },
-  { kw:['担当','営業'], ctx:'staff_name' },
-  { kw:['契約開始','入居日','始期','契約日'], ctx:'contract_start_date' },
-  { kw:['申込'], ctx:'application_date' },
-  { kw:['仲介手数料'], ctx:'brokerage_fee' },
-  { kw:['賃料','家賃'], ctx:'rent' },
+  {kw:['契約者','お客様','借主','入居者','申込者','氏名','名前'], ctx:'customer_name'},
+  {kw:['号室','部屋番号'], ctx:'room_number'},
+  {kw:['物件','建物'], ctx:'property_name'},
+  {kw:['管理会社'], ctx:'management_company'},
+  {kw:['担当','営業'], ctx:'staff_name'},
+  {kw:['契約開始','入居日','始期','契約日'], ctx:'contract_start_date'},
+  {kw:['申込'], ctx:'application_date'},
+  {kw:['仲介手数料'], ctx:'brokerage_fee'},
+  {kw:['賃料','家賃'], ctx:'rent'},
 ];
 function recordValueFor(label){
   const l = String(label||'');
-  if(l.indexOf('会社名')>=0) return null; // 会社名は会社情報側
-  for(const r of RECORD_RULES){ if(r.kw.some(k=>l.indexOf(k)>=0)){ const v=CTX[r.ctx]; if(v!==undefined && v!==null && v!=='') return v; } }
+  if(l.includes('会社名')) return null;
+  for(const r of RECORD_RULES){
+    if(r.kw.some(k=>l.includes(k))){
+      const v = CTX[r.ctx];
+      if(v !== undefined && v !== null && v !== '') return String(v);
+    }
+  }
   return null;
 }
 
 async function init(){
-  // 申込情報＋保存値
   try{
-    const r = await fetch(`/api/contract-customers/${RID}/document-data`); const j = await r.json();
-    CTX = j.ctx || {};
-    const d = j.data || {};
-    if(d && d.template_id){ SAVED_VALUES = d.values || {}; }
-  }catch(_){}
-  // テンプレ一覧
-  try{
-    const r = await fetch('/api/doc-templates'); const j = await r.json(); TEMPLATES = j.templates || [];
-  }catch(_){ TEMPLATES = []; }
-  const sel = document.getElementById('tpl-select');
-  if(!TEMPLATES.length){
-    document.getElementById('tpl-pick').innerHTML = `<div class="empty">テンプレートがありません。「契約管理 → テンプレート設定」でExcel様式を登録してください。</div>`;
+    const [r1, r2] = await Promise.all([
+      fetch(`/api/contract-customers/${RID}/document-data`),
+      fetch('/api/doc-templates/combined-schema'),
+    ]);
+    const j1 = await r1.json();
+    const j2 = await r2.json();
+    CTX = j1.ctx || {};
+    VALUES = j1.data || {};
+    SCHEMA = j2;
+    renderCaseFields();
+    renderDownloadList();
+    initDnd();
+  }catch(e){ showAlert('読み込みに失敗しました: '+e.message,'error'); }
+}
+
+function renderCaseFields(){
+  const cf = document.getElementById('case-fields');
+  const tags = SCHEMA.case_tags || [];
+  if(!tags.length){
+    cf.innerHTML = `<div class="no-tpl">
+      案件情報のタグがありません。<br>
+      「契約管理 → テンプレート設定」でExcel様式を登録し、<br>
+      タグ仕分けで「インポートで取り込み」に設定してください。
+    </div>`;
     return;
   }
-  sel.innerHTML = `<option value="">― 帳票を選択 ―</option>` + TEMPLATES.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
-  // 保存済みテンプレを自動選択
-  const savedTplId = (await getSavedTplId());
-  if(savedTplId && TEMPLATES.some(t=>String(t.id)===String(savedTplId))){ sel.value=String(savedTplId); onSelectTpl(); }
-}
-async function getSavedTplId(){
-  try{ const r = await fetch(`/api/contract-customers/${RID}/document-data`); const j = await r.json(); return (j.data||{}).template_id || null; }
-  catch(_){ return null; }
-}
-
-async function onSelectTpl(){
-  const id = document.getElementById('tpl-select').value;
-  if(!id){ document.getElementById('edit-area').style.display='none'; TPL=null; return; }
-  try{
-    const r = await fetch(`/api/doc-templates/${id}`); const j = await r.json(); if(!r.ok) throw new Error(j.error||'取得失敗');
-    TPL = j;
-    renderFields();
-    document.getElementById('edit-area').style.display='';
-  }catch(e){ showAlert(e.message,'error'); }
-}
-
-function renderFields(){
-  const mapping = TPL.mapping || {}; const company = TPL.company || {};
-  const caseTags = (TPL.tags||[]).filter(t => (mapping[t]||{}).scope !== 'company');
-  const compTags = (TPL.tags||[]).filter(t => (mapping[t]||{}).scope === 'company');
-
-  const cf = document.getElementById('case-fields');
-  if(!caseTags.length){ cf.innerHTML = `<div class="empty">案件情報のタグがありません。テンプレート設定の「タグ割当」で設定してください。</div>`; }
-  else cf.innerHTML = caseTags.map(t=>{
-    const label = (mapping[t]||{}).label || t;
-    const val = SAVED_VALUES[t] != null ? SAVED_VALUES[t] : '';
-    return `<div class="fg"><label>${esc(label)} <span class="ai-mark">自動</span></label><input id="${cid(t)}" data-tag="${esc(t)}" value="${esc(val)}"></div>`;
+  cf.innerHTML = tags.map(t=>{
+    const val = VALUES[t.key] != null ? VALUES[t.key] : '';
+    return `<div class="fg">
+      <label>${esc(t.label)}</label>
+      <input id="${cid(t.key)}" data-tag="${esc(t.key)}" value="${esc(val)}"
+        oninput="VALUES[this.dataset.tag]=this.value; refreshBadges();">
+    </div>`;
   }).join('');
+}
 
-  const compEl = document.getElementById('company-fields');
-  if(!compTags.length){ compEl.innerHTML = `<div class="empty">会社情報タグはありません。</div>`; }
-  else compEl.innerHTML = compTags.map(t=>{
-    const m = mapping[t]||{}; const key = m.company_key || t;
-    const val = company[key] != null ? company[key] : '';
-    return `<div class="fg"><label>${esc(m.label||t)}</label><input value="${esc(val)}" readonly></div>`;
+function renderDownloadList(){
+  const list = document.getElementById('tpl-download-list');
+  const tpls = SCHEMA.templates || [];
+  if(!tpls.length){
+    list.innerHTML = `<div class="no-tpl">
+      テンプレートがありません。<br>
+      「契約管理 → テンプレート設定」でExcel様式（.xlsx）をアップロードしてください。
+    </div>`;
+    return;
+  }
+  list.innerHTML = tpls.map(t=>{
+    const badges = t.case_tags.map(tag=>{
+      const v = VALUES[tag];
+      const cls = v ? 'filled' : 'empty-val';
+      return `<span class="tag-badge ${cls}">${esc(tag)}</span>`;
+    }).join('');
+    return `<div class="tpl-dl-row">
+      <div class="tpl-dl-name">${esc(t.name)}</div>
+      <div class="tpl-dl-tags">${badges||'<span style="font-size:11px;color:#9ca3af;">タグなし</span>'}</div>
+      <button class="btn btn-save btn-sm" onclick="downloadTpl(${t.id},'${esc(t.name)}')">⬇ ダウンロード</button>
+    </div>`;
   }).join('');
+}
+
+function refreshBadges(){
+  // 入力変更時にバッジ色だけ更新
+  const tpls = SCHEMA.templates || [];
+  tpls.forEach(t=>{
+    t.case_tags.forEach(tag=>{
+      const el=document.getElementById('tpl-download-list');
+      if(!el) return;
+      el.querySelectorAll('.tag-badge').forEach(b=>{
+        if(b.textContent===tag){
+          const v=VALUES[tag];
+          b.className='tag-badge '+(v?'filled':'empty-val');
+        }
+      });
+    });
+  });
 }
 
 function applyRecord(){
-  if(!TPL) return;
-  const mapping = TPL.mapping || {};
-  const caseTags = (TPL.tags||[]).filter(t => (mapping[t]||{}).scope !== 'company');
   let n = 0;
-  caseTags.forEach(t=>{
-    const label = (mapping[t]||{}).label || t;
-    const v = recordValueFor(label);
-    if(v!==null){ const el=document.getElementById(cid(t)); if(el){ el.value=v; el.style.background='#ECFDF5'; n++; } }
+  (SCHEMA.case_tags||[]).forEach(t=>{
+    const v = recordValueFor(t.label);
+    if(v !== null){
+      VALUES[t.key] = v;
+      const el = document.getElementById(cid(t.key));
+      if(el){ el.value = v; el.style.background = '#ECFDF5'; n++; }
+    }
   });
+  refreshBadges();
   showAlert(n ? `申込情報から${n}件を反映しました。` : '一致する項目がありませんでした。', n?'success':'error');
 }
 
-function aiExtract(ev){ const files = ev.target.files; processAiFiles(files); ev.target.value=''; }
+function onAiFileChange(ev){ const files=ev.target.files; processAiFiles(files); ev.target.value=''; }
 async function processAiFiles(files){
   if(!files || !files.length) return;
-  if(!TPL){ showAlert('先にテンプレートを選択してください。','error'); return; }
-  const fd = new FormData(); [...files].slice(0,5).forEach(f=>fd.append('files', f)); fd.append('application_id', String(RID));
-  const btn = document.getElementById('ai-btn'); const orig = btn.innerHTML;
+  const fd = new FormData();
+  [...files].slice(0,5).forEach(f=>fd.append('files',f));
+  fd.append('application_id', String(RID));
+  const btn=document.getElementById('ai-btn'); const orig=btn.innerHTML;
   btn.disabled=true; btn.innerHTML='<span class="spin"></span> 読み取り中…';
   showAlert('資料を読み取り中です…','info');
   try{
-    const r = await fetch(`/api/doc-templates/${TPL.id}/extract`, {method:'POST', body:fd});
-    const j = await r.json(); if(!r.ok) throw new Error(j.error||'読み取り失敗');
-    let n=0; (j.fields||[]).forEach(f=>{ const el=document.getElementById(cid(f.key)); if(el){ el.value=f.value; el.style.background='#ECFDF5'; n++; } });
-    showAlert(n ? `AIが${n}件を自動入力しました。内容を確認・修正してください。` : '読み取れる項目が見つかりませんでした。', n?'success':'error');
+    const r=await fetch('/api/doc-templates/extract-combined',{method:'POST',body:fd});
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||'読み取り失敗');
+    let n=0;
+    Object.entries(j.values||{}).forEach(([tag,val])=>{
+      VALUES[tag]=val;
+      const el=document.getElementById(cid(tag));
+      if(el){ el.value=val; el.style.background='#ECFDF5'; n++; }
+    });
+    refreshBadges();
+    showAlert(n ? `AIが${n}件を自動入力しました（全書類に反映済み）。内容を確認・修正してください。` : '読み取れる項目が見つかりませんでした。', n?'success':'error');
   }catch(e){ showAlert(e.message,'error'); }
   finally{ btn.disabled=false; btn.innerHTML=orig; }
 }
 
-function initDnd(){
-  ['dragover','drop'].forEach(t=>window.addEventListener(t, ev=>{ ev.preventDefault(); }, false));
-  const z = document.getElementById('ai-zone'); if(!z) return;
-  ['dragenter','dragover'].forEach(t=>z.addEventListener(t, ev=>{ ev.preventDefault(); ev.stopPropagation(); z.classList.add('drag'); }));
-  z.addEventListener('dragleave', ev=>{ ev.preventDefault(); ev.stopPropagation(); if(!z.contains(ev.relatedTarget)) z.classList.remove('drag'); });
-  z.addEventListener('drop', ev=>{ ev.preventDefault(); ev.stopPropagation(); z.classList.remove('drag'); const files = ev.dataTransfer && ev.dataTransfer.files; if(files && files.length) processAiFiles(files); });
-}
-
 function collectValues(){
-  const values = {};
-  document.querySelectorAll('#case-fields input[data-tag]').forEach(el=>{ values[el.dataset.tag]=el.value; });
-  return values;
+  const vals={...VALUES};
+  document.querySelectorAll('#case-fields input[data-tag]').forEach(el=>{ vals[el.dataset.tag]=el.value; });
+  return vals;
 }
 
-async function saveDoc(){
-  if(!TPL){ showAlert('先にテンプレートを選択してください。','error'); return; }
+async function saveAll(){
+  const values=collectValues();
   try{
-    const r = await fetch(`/api/contract-customers/${RID}/document-data`, {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({template_id: TPL.id, values: collectValues()})});
-    if(!r.ok) throw new Error(); showAlert('保存しました。');
+    const r=await fetch(`/api/contract-customers/${RID}/document-data`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({v:2,values})
+    });
+    if(!r.ok) throw new Error(); VALUES=values; refreshBadges(); showAlert('保存しました。');
   }catch(_){ showAlert('保存に失敗しました。','error'); }
 }
 
-async function downloadXlsx(){
-  if(!TPL){ showAlert('先にテンプレートを選択してください。','error'); return; }
+async function downloadTpl(tplId, tplName){
+  const values=collectValues();
   showAlert('Excelを生成中…','info');
   try{
-    const r = await fetch(`/api/doc-templates/${TPL.id}/render`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({values:collectValues()})});
+    const r=await fetch(`/api/doc-templates/${tplId}/render`,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values})
+    });
     if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.error||'出力失敗'); }
-    const blob = await r.blob();
-    let fname = (TPL.name||'document') + '.xlsx';
-    const cd = r.headers.get('Content-Disposition')||''; const m=/filename\*=UTF-8''([^;]+)/.exec(cd); if(m){ try{ fname=decodeURIComponent(m[1]); }catch(_){} }
-    const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=fname; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-    showAlert('Excelをダウンロードしました。Excelで開いてA4/A3で印刷してください。');
+    const blob=await r.blob();
+    let fname=tplName+'.xlsx';
+    const cd=r.headers.get('Content-Disposition')||''; const m=/filename\*=UTF-8''([^;]+)/.exec(cd); if(m){ try{ fname=decodeURIComponent(m[1]); }catch(_){} }
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=fname;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    showAlert(`「${tplName}」をダウンロードしました。Excelで開いてA4/A3で印刷してください。`);
   }catch(e){ showAlert(e.message,'error'); }
 }
 
-document.addEventListener('DOMContentLoaded', ()=>{ init(); initDnd(); });
+function initDnd(){
+  ['dragover','drop'].forEach(t=>window.addEventListener(t,ev=>ev.preventDefault(),false));
+  const z=document.getElementById('ai-zone'); if(!z) return;
+  ['dragenter','dragover'].forEach(t=>z.addEventListener(t,ev=>{ ev.preventDefault(); ev.stopPropagation(); z.classList.add('drag'); }));
+  z.addEventListener('dragleave',ev=>{ ev.preventDefault(); ev.stopPropagation(); if(!z.contains(ev.relatedTarget)) z.classList.remove('drag'); });
+  z.addEventListener('drop',ev=>{ ev.preventDefault(); ev.stopPropagation(); z.classList.remove('drag'); const f=ev.dataTransfer&&ev.dataTransfer.files; if(f&&f.length) processAiFiles(f); });
+}
+
+document.addEventListener('DOMContentLoaded', init);
 </script>
 {% endblock %}
