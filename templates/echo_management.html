@@ -739,7 +739,7 @@ function editCell(td, id, field, type, curVal, options) {
       onReady: function (sel, str, instance) {
         if (!isFollowup) return;
         const bar = document.createElement('div');
-        bar.style.cssText = 'display:flex;justify-content:center;padding:8px;border-top:1px solid #eef2f7;';
+        bar.style.cssText = 'display:flex;justify-content:center;gap:8px;padding:8px;border-top:1px solid #eef2f7;';
         const btn = document.createElement('button');
         btn.type = 'button'; btn.textContent = '📞 電話追客';
         const paint = () => { btn.style.cssText = 'font-size:12px;font-weight:700;padding:6px 14px;border:1px solid #0D9488;border-radius:8px;cursor:pointer;' + (phoneMode ? 'background:#0D9488;color:#fff;' : 'background:#fff;color:#0F766E;'); };
@@ -755,6 +755,21 @@ function editCell(td, id, field, type, curVal, options) {
           }
         });
         bar.appendChild(btn);
+        // 削除ボタン（追客の日付を消す）
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button'; delBtn.textContent = '🗑 削除';
+        delBtn.style.cssText = 'font-size:12px;font-weight:700;padding:6px 14px;border:1px solid #fca5a5;border-radius:8px;cursor:pointer;background:#fff;color:#dc2626;';
+        delBtn.addEventListener('mousedown', function (e) { e.preventDefault(); e.stopPropagation(); });
+        delBtn.addEventListener('click', function (e) {
+          e.preventDefault(); e.stopPropagation();
+          if (done) return; done = true;
+          const set = new Set(String((rec && rec.followup_phone) || '').split(',').filter(Boolean));
+          set.delete(String(fuIndex));
+          const payload = {}; payload[field] = null; payload.followup_phone = Array.from(set).join(',');
+          patchRecordFields(id, payload).then(() => renderTable());
+          instance.close();
+        });
+        bar.appendChild(delBtn);
         instance.calendarContainer.appendChild(bar);
       }
     });
