@@ -180,7 +180,7 @@
           <th>お客様名</th>
           <th class="center">対応</th>
           <th class="center">来店数</th>
-          <th class="center">状況</th>
+          <th class="center">状況 <button type="button" onclick="openStatusMgr()" title="状況タグと色を管理" style="font-size:10px;background:#fff;border:1px solid #d1d5db;border-radius:4px;padding:0 5px;cursor:pointer;color:#374151;">⚙</button></th>
           <th>メモ</th>
           <th class="center no-edit">操作</th>
         </tr>
@@ -237,7 +237,7 @@
         </div>
         <div class="form-group">
           <label style="display:flex;align-items:center;gap:6px;">状況
-            <button type="button" onclick="openDropdownMgr('cs_status','f-status')" style="font-size:11px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;padding:1px 6px;cursor:pointer;color:#374151;">⚙ 管理</button>
+            <button type="button" onclick="openStatusMgr()" title="状況タグと色を管理" style="font-size:11px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;padding:1px 6px;cursor:pointer;color:#374151;">⚙ 色・管理</button>
           </label>
           <select id="f-status"><option value="">― 選択 ―</option></select>
         </div>
@@ -271,18 +271,21 @@ let STATUS_LIST   = ['追客中','申込','他決','キャンセル'];
 /* ── ドロップダウン管理 ──────────────────── */
 let CS_MEDIA_PAIRS   = [];
 let CS_STYPE_PAIRS   = [];
+let CS_STATUS_COLORS = {};   // 状況タグ → バッジ背景色
 let _dgrCategory = '', _dgrSelectId = '', _dgrOpts = [];
 
 async function loadDropdownOpts() {
-  const [r1, r2, r3] = await Promise.all([
+  const [r1, r2, r3, r4] = await Promise.all([
     fetch('/api/dropdown/cs_media').then(r => r.json()),
     fetch('/api/dropdown/cs_service_type').then(r => r.json()),
     fetch('/api/dropdown/cs_status').then(r => r.json()),
+    fetch('/api/cs-status-colors').then(r => r.json()).catch(() => ({})),
   ]);
   CS_MEDIA_PAIRS  = r1.map(o => [o.value, o.value]);
   CS_STYPE_PAIRS  = r2.map(o => [o.value, o.value]);
   SERVICE_TYPES   = r2.map(o => o.value);
   STATUS_LIST     = r3.map(o => o.value);
+  CS_STATUS_COLORS = r4 || {};
   fillSelect('f-echo-media',   r1);
   fillSelect('f-service-type', r2);
   fillSelect('f-status',       r3);
@@ -294,6 +297,51 @@ function fillSelect(id, opts) {
   sel.innerHTML = '<option value="">― 選択 ―</option>' +
     opts.map(o => `<option value="${o.value}">${o.value}</option>`).join('');
   if (cur) sel.value = cur;
+}
+
+/* ── 状況タグ＋色 管理（反響管理表と同じ仕組み）── */
+async function openStatusMgr() {
+  await renderStatusMgr();
+  document.getElementById('cs-status-mgr-modal').style.display = 'flex';
+}
+function closeStatusMgr() {
+  document.getElementById('cs-status-mgr-modal').style.display = 'none';
+  loadDropdownOpts().then(() => renderTable());
+}
+async function renderStatusMgr() {
+  const [opts, colors] = await Promise.all([
+    fetch('/api/dropdown/cs_status').then(r => r.json()),
+    fetch('/api/cs-status-colors').then(r => r.json()).catch(() => ({})),
+  ]);
+  CS_STATUS_COLORS = colors || {};
+  const list = document.getElementById('cs-status-mgr-list');
+  list.innerHTML = opts.length ? opts.map(o => {
+    const c = CS_STATUS_COLORS[o.value] || '#e5e7eb';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f3f4f6;">
+      <input type="color" value="${c}" title="バッジの色" onchange="setStatusColor('${encodeURIComponent(o.value)}',this.value)" style="width:36px;height:30px;border:1px solid #d1d5db;border-radius:6px;padding:1px;cursor:pointer;background:#fff;">
+      <span style="flex:1;display:inline-block;padding:4px 12px;border-radius:999px;font-size:13px;font-weight:700;background:${c};border:1px solid rgba(0,0,0,0.08);color:#1f2937;">${escHtml(o.value)}</span>
+      <button onclick="delStatusOpt(${o.id})" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:5px;padding:4px 10px;cursor:pointer;font-size:12px;">削除</button>
+    </div>`;
+  }).join('') : '<p style="color:#9ca3af;font-size:13px;">状況タグがありません。下から追加してください。</p>';
+}
+async function addStatusOpt() {
+  const inp = document.getElementById('cs-status-mgr-input');
+  const val = inp.value.trim();
+  if (!val) return;
+  await fetch('/api/dropdown/cs_status', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({value:val})});
+  inp.value = '';
+  await renderStatusMgr();
+}
+async function delStatusOpt(id) {
+  if (!confirm('この状況タグを削除しますか？')) return;
+  await fetch(`/api/dropdown/item/${id}`, {method:'DELETE'});
+  await renderStatusMgr();
+}
+async function setStatusColor(encVal, color) {
+  const val = decodeURIComponent(encVal);
+  CS_STATUS_COLORS[val] = color;
+  await fetch('/api/cs-status-colors', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({colors:{[val]:color}})});
+  await renderStatusMgr();
 }
 function openDropdownMgr(cat, selId) {
   _dgrCategory = cat; _dgrSelectId = selId;
@@ -572,7 +620,7 @@ function renderTable() {
   }
   tbody.innerHTML = records.map(r => {
     const svcBadge = SERVICE_BADGE[r.service_type] || 'badge badge-other';
-    const stsBadge = STATUS_BADGE[r.status] || 'badge badge-follow';
+    const stsColor = CS_STATUS_COLORS[r.status] || '#e5e7eb';   // 状況タグ別の色（色設定で変更可）
     return `<tr>
       <td onclick="editCell(this,${r.id},'service_date','date','${r.service_date||''}')">${r.service_date||'―'}</td>
       <td onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${escHtml(staffName(r.staff_id))}</td>
@@ -582,7 +630,7 @@ function renderTable() {
         <span class="${svcBadge}">${escHtml(r.service_type)||'―'}</span></td>
       <td class="center" onclick="editCell(this,${r.id},'visit_count','number','${r.visit_count||0}')">${r.visit_count||0}</td>
       <td class="center" onclick="editCell(this,${r.id},'status','select','${r.status||'追客中'}',STATUS_LIST.map(v=>[v,v]))">
-        <span class="${stsBadge}">${escHtml(r.status||'追客中')}</span></td>
+        <span style="display:inline-block;padding:2px 11px;border-radius:999px;font-size:12px;font-weight:700;background:${stsColor};border:1px solid rgba(0,0,0,0.08);color:#1f2937;white-space:nowrap;">${escHtml(r.status||'追客中')}</span></td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(r.memo)}"
           onclick="editCell(this,${r.id},'memo','text','${escJs(r.memo)}')">${escHtml(r.memo)||''}</td>
       <td class="center no-edit" style="white-space:nowrap;">
@@ -706,6 +754,29 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
     <div style="padding:12px 20px;border-top:1px solid #e5e7eb;text-align:right;">
       <button onclick="closeDgr()" style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer;">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 状況タグ＋色 管理モーダル ── -->
+<div id="cs-status-mgr-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:2000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;width:420px;max-width:95vw;max-height:82vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="margin:0;font-size:15px;font-weight:700;">状況タグと色の管理</h3>
+      <button onclick="closeStatusMgr()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+    <div style="padding:14px 20px;">
+      <p style="margin:0 0 10px;font-size:12px;color:#6b7280;">左の■をクリックすると、その状況バッジの色を変更できます。</p>
+      <div id="cs-status-mgr-list" style="min-height:50px;"></div>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <input id="cs-status-mgr-input" type="text" placeholder="新しい状況タグ（例：契約）"
+          style="flex:1;border:1px solid #d1d5db;border-radius:6px;padding:8px 10px;font-size:14px;outline:none;"
+          onkeydown="if(event.key==='Enter'){addStatusOpt();}" autocomplete="off">
+        <button onclick="addStatusOpt()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;">追加</button>
+      </div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #e5e7eb;text-align:right;">
+      <button onclick="closeStatusMgr()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">完了</button>
     </div>
   </div>
 </div>

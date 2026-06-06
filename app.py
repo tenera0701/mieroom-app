@@ -3772,6 +3772,44 @@ def api_echo_status_colors_update():
     return jsonify({'status': 'ok'})
 
 
+@app.route("/api/cs-status-colors", methods=["GET"])
+@login_required
+def api_cs_status_colors_get():
+    """接客管理表の状況タグ別の色（badge背景色）。echo と同じ仕組み（status_key='cs:'）"""
+    allowed = get_allowed_store_ids()
+    store_id = allowed[0] if allowed else 1
+    tenant_id = _get_tenant_id()
+    opts = (DropdownOption.query.filter(
+                DropdownOption.category == 'cs_status',
+                db.or_(DropdownOption.tenant_id == tenant_id, DropdownOption.tenant_id == None))
+            .order_by(DropdownOption.sort_order, DropdownOption.id).all())
+    result = {}
+    for i, o in enumerate(opts):
+        sc = StatusColor.query.filter_by(store_id=store_id, status_key='cs:' + o.value).first()
+        result[o.value] = (sc.row_bg_color if (sc and sc.row_bg_color)
+                           else ECHO_STATUS_PALETTE[i % len(ECHO_STATUS_PALETTE)])
+    return jsonify(result)
+
+
+@app.route("/api/cs-status-colors", methods=["PUT"])
+@login_required
+def api_cs_status_colors_update():
+    allowed = get_allowed_store_ids()
+    store_id = allowed[0] if allowed else 1
+    data = request.get_json() or {}
+    colors = data.get('colors') if isinstance(data.get('colors'), dict) else data
+    for key, color in (colors or {}).items():
+        if not isinstance(color, str):
+            continue
+        sc = StatusColor.query.filter_by(store_id=store_id, status_key='cs:' + key).first()
+        if not sc:
+            sc = StatusColor(store_id=store_id, status_key='cs:' + key)
+            db.session.add(sc)
+        sc.row_bg_color = color or '#ffffff'
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
 # ── 社内チャット ───────────────────────────────────────────
 def _chat_user():
     uid = session.get('app_user_id')
