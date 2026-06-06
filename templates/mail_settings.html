@@ -59,6 +59,28 @@
 
   <div id="msg" class="msg"></div>
 
+  <!-- 管理者向け初期設定ガイド（OAuth未設定時に表示） -->
+  <div class="card" id="oauth-setup-card" style="display:none; border:2px solid #fde047; background:#fffdf5;">
+    <h2 style="color:#92400e;">⚙️ 管理者の初期設定が必要です（メール送受信を有効化）</h2>
+    <p style="font-size:12px;color:#6b7280;margin:-6px 0 12px;line-height:1.8;">
+      このサーバー(Railway)は通常のメール送信(SMTP)が使えないため、<b>Gmailでの送受信はGoogle連携(OAuth)で行います</b>。
+      下記の初期設定（1回のみ）を行うと、各店舗が「Googleで連携」ボタンで利用できるようになります。
+    </p>
+    <ol style="font-size:12.5px;color:#374151;line-height:1.9;padding-left:20px;margin:0;">
+      <li><b>Railway</b> のプロジェクト → Variables に、ローカル <code>.env</code> と同じ値で2つ追加：<br>
+        <code style="background:#eef2f7;padding:1px 6px;border-radius:4px;">GOOGLE_CLIENT_ID</code> ／
+        <code style="background:#eef2f7;padding:1px 6px;border-radius:4px;">GOOGLE_CLIENT_SECRET</code>
+        <span style="color:#9ca3af;">（設定後Railwayが自動再起動）</span></li>
+      <li><b>Google Cloud Console</b> → 該当のOAuthクライアント → 「承認済みのリダイレクトURI」に次を追加：<br>
+        <span style="display:inline-flex;align-items:center;gap:8px;margin-top:4px;">
+          <code id="redirect-uri" style="background:#ecfeff;border:1px solid #a5f3fc;padding:3px 8px;border-radius:5px;">https://app.mieroom.cloud/oauth/google/callback</code>
+          <button class="btn" style="padding:3px 8px;font-size:11px;" onclick="copyRedirect()">コピー</button>
+        </span></li>
+      <li><b>OAuth同意画面</b> → スコープに <code>https://mail.google.com/</code> を追加。テストモードなら連携するGmailを「テストユーザー」に追加。</li>
+    </ol>
+    <p style="font-size:11px;color:#9ca3af;margin:12px 0 0;">設定が完了すると、このカードは消えて「Googleで連携する」ボタンが表示されます。</p>
+  </div>
+
   <!-- Google連携（推奨・OAuth） -->
   <div class="card" id="oauth-card" style="display:none; border:2px solid #5EEAD4;">
     <h2>🔗 Googleアカウントで連携（推奨）</h2>
@@ -243,6 +265,12 @@ async function loadSettings(){
     sl.textContent=txt;
 
     // Google連携（OAuth）
+    const setupCard=document.getElementById('oauth-setup-card');
+    if(setupCard){
+      setupCard.style.display = d.oauth_available ? 'none' : 'block';
+      const ru=document.getElementById('redirect-uri');
+      if(ru) ru.textContent = location.origin + '/oauth/google/callback';
+    }
     if(d.oauth_available){
       document.getElementById('oauth-card').style.display='block';
       document.getElementById('apppass-note').style.display='block';
@@ -265,6 +293,11 @@ async function loadSettings(){
       document.getElementById('apppass-note').style.display='none';
     }
   }catch(_){}
+}
+
+function copyRedirect(){
+  const t=(document.getElementById('redirect-uri')||{}).textContent||'';
+  if(navigator.clipboard) navigator.clipboard.writeText(t).then(()=>showMsg('リダイレクトURIをコピーしました'));
 }
 
 async function googleDisconnect(){
