@@ -3971,14 +3971,29 @@ def _chat_display_name(u):
 
 
 def _ensure_base_channels(tenant_id):
-    """全社チャンネル＋全店舗チャンネルを自動作成（無ければ）"""
+    """全社チャンネル＋全店舗チャンネルを整える。
+    このテナントの有効店舗ぶんだけ作成し、テナントに属さない/無効店舗の
+    店舗チャンネルは無効化する（他テナント店舗の混在掃除）。"""
     created = False
     if not ChatChannel.query.filter_by(tenant_id=tenant_id, kind='company').first():
         db.session.add(ChatChannel(tenant_id=tenant_id, kind='company', name='全社'))
         created = True
-    for st in Store.query.filter_by(tenant_id=tenant_id, is_active=True).all():
-        if not ChatChannel.query.filter_by(tenant_id=tenant_id, kind='store', store_id=st.id).first():
-            db.session.add(ChatChannel(tenant_id=tenant_id, kind='store', store_id=st.id, name=st.name or '店舗'))
+    valid_stores = Store.query.filter_by(tenant_id=tenant_id, is_active=True).all()
+    valid_ids = {s.id for s in valid_stores}
+    name_by_id = {s.id: (s.name or '店舗') for s in valid_stores}
+    # 有効店舗のチャンネルを作成 or 再有効化
+    for sid in valid_ids:
+        ch = ChatChannel.query.filter_by(tenant_id=tenant_id, kind='store', store_id=sid).first()
+        if not ch:
+            db.session.add(ChatChannel(tenant_id=tenant_id, kind='store', store_id=sid, name=name_by_id[sid]))
+            created = True
+        elif not ch.is_active:
+            ch.is_active = True
+            created = True
+    # このテナントの有効店舗以外を指す店舗チャンネルは無効化（他社店舗の混在を解消）
+    for c in ChatChannel.query.filter_by(tenant_id=tenant_id, kind='store', is_active=True).all():
+        if c.store_id not in valid_ids:
+            c.is_active = False
             created = True
     if created:
         db.session.commit()
