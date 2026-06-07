@@ -34,11 +34,23 @@
       <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">契約が終了したお客様の管理ファイル</p>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-      <input type="text" id="search-input" placeholder="🔍 お客様名・物件名・号室で検索" class="filter" style="min-width:240px;" oninput="filterList()">
       <select id="filter-staff" class="filter" onchange="filterList()">
         <option value="">全スタッフ</option>
         {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
       </select>
+    </div>
+  </div>
+
+  <!-- 一括検索バー（他ページと同じ位置・スタイル） -->
+  <div style="margin-bottom:12px;">
+    <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #5EEAD4;border-radius:10px;padding:8px 14px;box-shadow:0 2px 8px rgba(13,148,136,0.08);">
+      <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="#0D9488" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+      <input id="search-input" type="text" placeholder="お客様名・物件名・号室で検索"
+        style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;"
+        oninput="filterList()" autocomplete="off">
+      <button onclick="document.getElementById('search-input').value='';filterList();" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:0 2px;" title="クリア">✕</button>
     </div>
   </div>
 
@@ -51,8 +63,8 @@
       <table>
         <thead>
           <tr>
-            <th>契約開始日</th><th>担当</th><th>物件名</th><th>号室</th><th>お客様名</th>
-            <th>賃料</th><th>管理会社</th><th>申込日</th><th>操作</th>
+            <th>申込日</th><th>契約開始日</th><th>担当</th><th>物件名</th><th>号室</th>
+            <th>お客様名</th><th>賃料</th><th>管理会社</th><th>操作</th>
           </tr>
         </thead>
         <tbody id="pc-tbody">
@@ -78,6 +90,8 @@ function showAlert(msg, type='success') {
 
 function yen(v) { return v ? Math.round(v).toLocaleString() + '円' : '―'; }
 function esc(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// ISO日付(YYYY-MM-DD)を「YYYY/MM/DD」で表示
+function fmtDate(iso) { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[1]}/${m[2]}/${m[3]}` : '―'; }
 
 async function loadList() {
   try {
@@ -108,20 +122,39 @@ function render(list) {
     tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:24px;">該当する顧客はいません</td></tr>';
     return;
   }
-  tbody.innerHTML = list.map(r => `
+  // 契約開始日で仕分け（新しい月→古い月の順。契約開始日が未定の行は最後）
+  const sorted = list.slice().sort((a, b) => {
+    const da = a.contract_start_date || '', db_ = b.contract_start_date || '';
+    if (!da && !db_) return 0;
+    if (!da) return 1;
+    if (!db_) return -1;
+    return db_.localeCompare(da);
+  });
+  let html = '', curKey = null;
+  for (const r of sorted) {
+    const m = String(r.contract_start_date || '').match(/^(\d{4})-(\d{2})/);
+    const key = m ? `${m[1]}-${m[2]}` : '__none__';
+    if (key !== curKey) {
+      curKey = key;
+      const label = m ? `${m[1]}年${parseInt(m[2], 10)}月` : '契約開始日 未定';
+      html += `<tr><td colspan="9" style="text-align:left;background:#F0FDFA;color:#0F766E;font-weight:800;padding:8px 12px;border-top:2px solid #5EEAD4;">${label}</td></tr>`;
+    }
+    html += `
     <tr>
-      <td style="white-space:nowrap;">${r.contract_start_date || '―'}</td>
+      <td style="white-space:nowrap;">${fmtDate(r.application_date)}</td>
+      <td style="white-space:nowrap;">${fmtDate(r.contract_start_date)}</td>
       <td>${esc(r.staff_name) || '―'}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;">${esc(r.property_name) || '―'}</td>
       <td>${esc(r.room_number) || '―'}</td>
       <td>${esc(r.customer_name) || '―'}</td>
       <td style="text-align:right;">${yen(r.rent)}</td>
       <td>${esc(r.management_company) || '―'}</td>
-      <td style="white-space:nowrap;">${r.application_date || '―'}</td>
       <td>
         <button onclick="restoreContract(${r.id})" style="padding:4px 10px;font-size:11px;background:#CCFBF1;border:1px solid #5EEAD4;border-radius:6px;cursor:pointer;color:#0F766E;font-weight:600;">契約管理へ戻す</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }
+  tbody.innerHTML = html;
 }
 
 async function restoreContract(id) {
