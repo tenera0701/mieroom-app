@@ -5701,6 +5701,7 @@ def api_echo_records_list():
         'customer_email': r.customer_email or '',
         'has_unread_reply': bool(r.has_unread_reply),
         'needs_reply': last_dir.get(r.id) == 'in' and not r.reply_dismissed,
+        'reply_dismissed': bool(r.reply_dismissed),
         'has_phone_number': bool(r.has_phone_number),
         'status': r.status or '',
     } for r in records])
