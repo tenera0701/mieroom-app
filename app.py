@@ -3788,6 +3788,48 @@ def _msg_datetime(msg):
         return None
 
 
+def _norm_name_key(s):
+    """氏名の比較用キー（空白・全角空白を除去）"""
+    return re.sub(r'[\s　]+', '', (s or '')).strip()
+
+
+_UNKNOWN_NAME_KEYS = {'', '氏名不明', '不明', 'お客様', 'お名前不明', 'ー', '―'}
+
+
+def _find_merge_target(store_id, name, email):
+    """同一お客様の既存反響を探す（同名・メール不一致なら別人として除外）。無ければ None。"""
+    nk = _norm_name_key(name)
+    if not nk or nk in _UNKNOWN_NAME_KEYS:
+        return None
+    email_l = (email or '').strip().lower()
+    cands = (EchoRecord.query.filter_by(store_id=store_id)
+             .order_by(EchoRecord.id.desc()).limit(800).all())
+    for c in cands:
+        if _norm_name_key(c.list_name) != nk:
+            continue
+        cem = (c.customer_email or '').strip().lower()
+        if email_l and cem and email_l != cem:
+            continue   # メールが両方あって違う → 別人なのでまとめない
+        return c
+    return None
+
+
+def _merge_into_echo(target, parsed):
+    """既存反響に、追加反響の内容（物件名など）をメモへ追記して1件にまとめる。"""
+    d = parsed.get('date')
+    ds = f"{d.month}/{d.day}" if hasattr(d, 'month') else str(d or '')
+    media = parsed.get('source') or ''
+    info = (parsed.get('memo') or '').strip()
+    head = f"【追加反響 {ds}" + (f" / {media}" if media else "") + "】"
+    add = ("\n─────\n" + head + ("\n" + info if info else "")).rstrip()
+    target.memo = ((target.memo or '').rstrip() + add).strip()
+    # 不足情報を補完
+    if not target.customer_email and parsed.get('email'):
+        target.customer_email = parsed.get('email')
+    if parsed.get('has_phone') and not target.has_phone_number:
+        target.has_phone_number = True
+
+
 def fetch_reactions_for_store(store_id, limit=120, since_days=30):
     """指定店舗のGmailから反響メールを取得し EchoRecord へ登録"""
     ms = MailSetting.query.filter_by(store_id=store_id).first()
@@ -3804,6 +3846,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
     import_after = ms.import_after
 
     imported = 0
+    merged = 0
     scanned = 0
     try:
         M = _open_imap(ms)
@@ -3844,6 +3887,13 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
             if (ProcessedReaction.query.filter_by(store_id=store_id, external_id=ext).first()
                     or EchoRecord.query.filter_by(store_id=store_id, external_id=ext).first()):
                 continue
+            # 同一お客様の既存反響があれば、新規行を作らずメモへ追記して1件にまとめる
+            target = _find_merge_target(store_id, parsed['name'], parsed.get('email'))
+            if target:
+                _merge_into_echo(target, parsed)
+                db.session.add(ProcessedReaction(store_id=store_id, external_id=ext))
+                merged += 1
+                continue
             db.session.add(EchoRecord(
                 store_id=store_id,
                 staff_id=ms.default_staff_id or None,
@@ -3866,9 +3916,10 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
         except Exception:
             pass
         ms.last_fetch_at = datetime.utcnow()
-        ms.last_result = f"取得OK：{imported}件追加 / {scanned}件確認（{datetime.now():%m/%d %H:%M}）"
+        mtxt = f" / {merged}件まとめ" if merged else ""
+        ms.last_result = f"取得OK：{imported}件追加{mtxt} / {scanned}件確認（{datetime.now():%m/%d %H:%M}）"
         db.session.commit()
-        return {'ok': True, 'imported': imported, 'scanned': scanned}
+        return {'ok': True, 'imported': imported, 'merged': merged, 'scanned': scanned}
     except imaplib.IMAP4.error as e:
         db.session.rollback()
         try:
