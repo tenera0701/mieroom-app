@@ -10496,6 +10496,118 @@ def api_pending_approvals():
     return jsonify({'count': count, 'url': '/sales'})
 
 
+@app.route("/api/notifications")
+@login_required
+def api_notifications():
+    """通知ベルの中身（お知らせを文章で一覧）。ロール別。"""
+    cur = AppUser.query.get(session.get('app_user_id'))
+    items = []
+    if not cur:
+        return jsonify({'items': [], 'total': 0})
+
+    if cur.role in ('super_admin', 'sys_admin'):
+        try:
+            n = TrialApplication.query.filter_by(status='new').count()
+        except Exception:
+            n = 0
+        if n:
+            items.append({'icon': '📨', 'title': f'新着のお問い合わせ {n}件',
+                          'body': 'トライアル申込フォームから新しいお問い合わせが届いています。クリックで問合せ管理を開きます。',
+                          'url': '/admin/applications', 'count': n})
+    else:
+        allowed = get_allowed_store_ids()
+        # 入金承認待ち（オーナー・店長）
+        if cur.role in ('owner', 'store_manager') and allowed:
+            try:
+                ap = ApplicationRecord.query.filter(
+                    ApplicationRecord.store_id.in_(allowed),
+                    db.or_(
+                        db.and_(ApplicationRecord.ad_settled == True, ApplicationRecord.ad_approved == False),
+                        db.and_(ApplicationRecord.brokerage_settled == True, ApplicationRecord.brokerage_approved == False),
+                        db.and_(ApplicationRecord.option_settled == True, ApplicationRecord.option_approved == False),
+                    )).count()
+            except Exception:
+                ap = 0
+            if ap:
+                items.append({'icon': '💰', 'title': f'入金承認待ち {ap}件',
+                              'body': '営業から入金報告があり、店長の承認待ちの案件があります。営業分析の入金承認からご確認ください。',
+                              'url': '/sales', 'count': ap})
+        # 未返信メール（全スタッフ）
+        if allowed:
+            try:
+                ur = EchoRecord.query.filter(EchoRecord.store_id.in_(allowed),
+                                             EchoRecord.has_unread_reply == True).count()
+            except Exception:
+                ur = 0
+            if ur:
+                items.append({'icon': '✉️', 'title': f'未返信のメール {ur}件',
+                              'body': 'お客様から返信が届いていて、まだ返信していないメールがあります。反響管理表のチャットからご返信ください。',
+                              'url': '/echo-management', 'count': ur})
+
+    total = sum(i['count'] for i in items)
+    return jsonify({'items': items, 'total': total})
+
+
+# ── 使い方マニュアル ──────────────────────────────────────
+MANUAL_SECTIONS = [
+    {'cat': 'はじめに', 'title': 'ログインと基本画面', 'body':
+     'ユーザー名（またはメール）とパスワードでログインします。左のサイドバーから各機能へ移動できます。'
+     'サイドバーの項目をクリックで画面が切り替わり、「事務作業」「各種設定」はクリックすると下にメニューが開きます。'
+     '上部のベルでお知らせ、その隣の「ヘルプ」でこのマニュアルが開きます。'},
+    {'cat': '売上分析', 'title': '売上分析ダッシュボード', 'body':
+     '「売上分析」では、当月の売上・見込・各種KPIをカードで確認できます。総売上は顧客管理の入金額（入金月ベース）を集計したものです。'
+     '上部の月切替で対象月を変更できます。'},
+    {'cat': '顧客管理表', 'title': '顧客管理表（入金・売上）', 'body':
+     '申込ごとの金額（仲介手数料・AD・その他費用など）と入金状況を管理します。入金報告→店長承認のワークフローがあり、'
+     '承認時に入金日が自動で付きます。入金済み一覧は入金月ベースで表示され、金額は「円」表記です。'},
+    {'cat': '反響管理表', 'title': '反響管理表の基本', 'body':
+     'ポータル（SUUMO・HOME\'S等）からの反響を一覧で管理します。担当者・反響日・状況・顧客名・媒体・手段・番号有無・初回対応日・追客日程・メモなどをセルクリックで直接編集できます。'
+     '上部の検索で顧客名・媒体・担当で絞り込めます。サマリーカードで総反響数や電話番号あり件数などを確認できます。'},
+    {'cat': '反響管理表', 'title': '状況タグと行の色', 'body':
+     '「状況」列でタグ（追客中・申込・終了など）を選べます。状況見出しの⚙からタグの追加・削除と、各タグの行の色を設定できます。'
+     '行の背景色は状況タグの色で変わります。お客様から返信があって未返信の行は、左端に赤いラインが付いて目立ちます。'},
+    {'cat': 'メール', 'title': '反響からメール送受信（チャット）', 'body':
+     '各行の「✉️メール」ボタンでチャット画面が開き、お客様とメールでやり取りできます。テンプレ挿入（📋）・画像/PDF添付（📎）が可能です。'
+     '送信は Shift+Enter（Enterは改行）または右下の➤ボタン。お客様がメールを開くと「既読」が表示されます。返信が来ると未返信としてアラート表示されます。'},
+    {'cat': 'メール', 'title': '反響メールの自動取込（受信設定）', 'body':
+     '「各種設定 → メール自動取込設定」で、反響メールが届くGmailを連携します。アプリパスワード方式またはGoogle連携で接続し、「自動取り込みを有効にする」をONにすると、'
+     '届いた反響がリアルタイムで反響管理表に入ります。「ポータル登録」で差出人アドレス→媒体名を登録すると確実に振り分けられます。同じお客様の再反響は1件にまとまり、追加分はメモに記録されます。'},
+    {'cat': 'メール', 'title': '自動返信（媒体ごとに変える）', 'body':
+     '「各種設定 → メール自動化設定」で「新着反響に自動返信する」をONにすると、反響が届いた瞬間に自動でテンプレを送信します（お客様メールがある反響のみ）。'
+     '「ポータル登録」で媒体ごとに使うテンプレを選べるので、SUUMO用・HOME\'S用など媒体別に文面を変えられます。媒体未指定のときは既定テンプレが使われます。'},
+    {'cat': 'メール', 'title': 'メールテンプレートの作り方（HTML・差し込み文字）', 'body':
+     '「各種設定 → メールテンプレート設定」の「＋新しいテンプレートを作成」でエディタが開きます。HTML（太字・色・リンク・リスト）で装飾でき、'
+     '差し込み文字（#name#＝お客様氏名、#お問い合わせ物件名#、#会社名#、#会社電話番号#、#公式LINE# など）を入れると送信時に実データへ自動で置き換わります。'},
+    {'cat': 'メール', 'title': '会社情報の登録（差し込み用）', 'body':
+     '「各種設定 → メールテンプレート設定」の会社情報カードに、会社名・電話・メール・住所・営業時間・定休日・公式LINEを登録します。'
+     'ここに登録した内容が、テンプレ内の差し込み文字（#会社名# 等）に自動で入ります。'},
+    {'cat': '接客管理表', 'title': '接客管理表', 'body':
+     '来店・電話・メール等の接客対応を記録します。日付・担当・お客様名・対応種別・接客数・状況などを管理できます。'},
+    {'cat': '営業分析', 'title': '営業分析・スタッフKPI', 'body':
+     '店舗・スタッフ別の成約率や売上KPIを確認できます。成約率は接客数→申込数で算出。LL・火災保険・引越しの成約率カードや、スタッフ別の昨年同月比（YoY）も表示されます。'},
+    {'cat': '事務作業', 'title': '事務作業メニュー', 'body':
+     'サイドバーの「事務作業」をクリックすると、契約管理・顧客管理・日報・間取り作成・有給管理・経理（PL）が開きます。'},
+    {'cat': 'チャット', 'title': '社内チャット', 'body':
+     'サイドバーの「チャット」で社内メンバーとやり取りできます。全社チャンネル・店舗別チャンネル・グループ（オーナー/店長が作成）があり、'
+     'チャットProプラン（オプション）では画像・PDFの添付と2年間の保存が可能です（通常はテキストのみ・60日保存）。'},
+    {'cat': '通知', 'title': '通知ベルの見方', 'body':
+     '上部のベルを押すと、未承認の入金報告・未返信メール・新着お問い合わせなどのお知らせが文章で一覧表示されます。各項目をクリックすると該当画面へ移動します。'},
+    {'cat': '設定', 'title': '各種設定の場所', 'body':
+     'メール関連の設定はサイドバー「各種設定」にまとまっています。メールテンプレート設定（文面）・メール自動取込設定（受信連携）・メール自動化設定（自動返信）の3つです。'},
+    {'cat': 'メール', 'title': 'アプリパスワードの作り方', 'body':
+     '「メール自動取込設定」の下部「🔑アプリパスワードの作り方」を開くと手順が出ます。Googleで2段階認証をON→アプリパスワードを発行（16桁）→メールアドレスと一緒に貼り付け→接続テスト→保存、の流れです。'},
+    {'cat': 'よくある質問', 'title': 'メールが送れない・受信できないとき', 'body':
+     'まず「メール自動取込設定」で接続テストを行ってください。失敗する場合はメールアドレスの打ち間違い、または通常のログインパスワードを入れている（必ず16桁のアプリパスワードを使う）ことが多いです。'
+     'Google連携（OAuth）を使う方法もあります。'},
+]
+
+
+@app.route("/api/manual")
+@login_required
+def api_manual():
+    return jsonify(MANUAL_SECTIONS)
+
+
 @app.route("/api/admin/net-diagnose")
 @login_required
 def api_net_diagnose():
