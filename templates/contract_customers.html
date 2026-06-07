@@ -53,11 +53,24 @@
       <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">審査〇で契約に進んだ顧客の一覧・書類管理</p>
     </div>
     <div id="list-filters" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-      <input type="text" id="search-input" placeholder="🔍 お客様名・物件名・号室で検索" class="filter" style="min-width:240px;" oninput="filterList()">
       <select id="filter-staff" class="filter" onchange="filterList()">
         <option value="">全スタッフ</option>
         {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
       </select>
+    </div>
+  </div>
+
+  <!-- 検索バー -->
+  <div style="margin-bottom:12px;">
+    <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #5EEAD4;border-radius:10px;padding:8px 14px;box-shadow:0 2px 8px rgba(13,148,136,0.08);">
+      <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="#0D9488" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+      <input id="search-input" type="text" placeholder="お客様名・物件名・号室で検索"
+        style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;"
+        oninput="filterList()" autocomplete="off">
+      <button onclick="document.getElementById('search-input').value='';filterList();"
+        style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:0 2px;">✕</button>
     </div>
   </div>
 
