@@ -153,7 +153,7 @@
 
   <!-- テンプレート エディタ（モーダル） -->
   <div id="tpl-editor-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:2200;align-items:center;justify-content:center;padding:16px;">
-    <div style="background:#fff;border-radius:12px;width:720px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,0.3);">
+    <div style="background:#fff;border-radius:12px;width:1000px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,0.3);">
       <div style="padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
         <h3 id="te-heading" style="margin:0;font-size:15px;font-weight:800;color:#0F766E;">テンプレートを編集</h3>
         <button onclick="closeTplEditor()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
@@ -175,8 +175,11 @@
           </div>
         </div>
 
+        <!-- 本文（左）＋自動変換文字（右）の2カラム -->
+        <div style="display:flex;gap:14px;align-items:flex-start;margin-top:10px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:300px;">
         <!-- ツールバー（HTMLモード） -->
-        <div id="te-toolbar" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;border:1px solid #e5e7eb;border-radius:8px 8px 0 0;padding:6px 8px;background:#F8FAFC;">
+        <div id="te-toolbar" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;border:1px solid #e5e7eb;border-radius:8px 8px 0 0;padding:6px 8px;background:#F8FAFC;">
           <button type="button" class="te-tb" onmousedown="event.preventDefault()" onclick="teCmd('bold')" title="太字" style="font-weight:800;">B</button>
           <button type="button" class="te-tb" onmousedown="event.preventDefault()" onclick="teCmd('italic')" title="斜体" style="font-style:italic;">I</button>
           <button type="button" class="te-tb" onmousedown="event.preventDefault()" onclick="teCmd('underline')" title="下線" style="text-decoration:underline;">U</button>
@@ -217,6 +220,19 @@
         <textarea id="te-body-text" placeholder="本文（差し込み文字が使えます）" style="display:none;width:100%;min-height:220px;border:1px solid #d1d5db;border-radius:8px;padding:12px;font-size:13px;box-sizing:border-box;font-family:inherit;resize:vertical;margin-top:10px;"></textarea>
 
         <div id="te-error" style="color:#b91c1c;font-size:12px;margin-top:8px;display:none;"></div>
+        </div><!-- /左カラム（本文） -->
+
+        <!-- 自動変換文字：本文の横に一覧表示（クリックで本文に挿入） -->
+        <div style="width:300px;flex-shrink:0;">
+          <div id="te-vars-panel" style="border:1px solid #e5e7eb;border-radius:8px;background:#fff;">
+            <div style="padding:8px 12px;border-bottom:1px solid #f1f5f9;background:#F8FAFC;border-radius:8px 8px 0 0;">
+              <div style="font-size:12px;font-weight:800;color:#0F766E;">自動変換文字</div>
+              <div style="font-size:11px;color:#6b7280;margin-top:2px;">クリックで本文に挿入</div>
+            </div>
+            <div id="te-vars" style="padding:10px 12px;"></div>
+          </div>
+        </div>
+        </div><!-- /2カラム -->
       </div>
       <div style="padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px;">
         <button class="btn" onclick="closeTplEditor()">キャンセル</button>
