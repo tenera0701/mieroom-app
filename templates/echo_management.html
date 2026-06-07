@@ -601,6 +601,22 @@ function updateSummary() {
   }
 }
 
+// 未返信アラートを「返信不要」として消す（解除）
+async function dismissReply(id){
+  if (!confirm('このお客様への返信は不要として、未返信アラートを消しますか？\n（お客様から新たに返信が届くと再表示されます）')) return;
+  try {
+    const res = await fetch(`/api/echo-records/${id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({reply_dismissed: true})
+    });
+    if (!res.ok) throw new Error();
+    const rec = records.find(r => r.id === id);
+    if (rec) rec.needs_reply = false;
+    renderTable();
+    updateSummary();
+  } catch(e) { showAlert('処理に失敗しました', 'error'); }
+}
+
 let _unrepliedOnly = false;
 function showUnrepliedOnly(){
   _unrepliedOnly = !_unrepliedOnly;
@@ -822,6 +838,8 @@ function renderTable() {
           style="border:1px solid #5EEAD4;background:#F0FDFA;color:#0F766E;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;position:relative;">
           ✉️ メール${r.needs_reply ? '<span style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;font-size:9px;border-radius:8px;padding:0 4px;white-space:nowrap;">未返信</span>' : ''}
         </button>
+        ${r.needs_reply ? `<button class="btn-sm" onclick="dismissReply(${r.id})" title="このお客様への返信は不要として、未返信アラートを消します"
+          style="border:1px solid #fde047;background:#fef9c3;color:#854d0e;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;">返信不要</button>` : ''}
         <button class="btn-sm btn-del" onclick="deleteRecord(${r.id})">削除</button>
       </td>
     </tr>

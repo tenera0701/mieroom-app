@@ -753,6 +753,7 @@ class EchoRecord(db.Model):
     customer_email = db.Column(db.String(200), nullable=True) # お客様メール（送信先）
     has_unread_reply = db.Column(db.Boolean, default=False)   # 未読の返信あり
     has_phone_number = db.Column(db.Boolean, default=False)   # 電話番号の有無（〇/×）
+    reply_dismissed  = db.Column(db.Boolean, default=False)   # 未返信アラートを「返信不要」として消したか
     status        = db.Column(db.String(40), nullable=True)   # 状況タグ（追客中/申込/終了 など）
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -1517,6 +1518,12 @@ def migrate_db():
             print("  Added column echo_record.has_phone_number")
         except Exception as e:
             print(f"  Skip echo_record.has_phone_number: {e}")
+    if 'reply_dismissed' not in er_cols:
+        try:
+            cursor.execute("ALTER TABLE echo_record ADD COLUMN reply_dismissed BOOLEAN DEFAULT 0")
+            print("  Added column echo_record.reply_dismissed")
+        except Exception as e:
+            print(f"  Skip echo_record.reply_dismissed: {e}")
     if 'status' not in er_cols:
         try:
             cursor.execute("ALTER TABLE echo_record ADD COLUMN status VARCHAR(40)")
@@ -1686,6 +1693,7 @@ def migrate_postgres():
         ("echo_record",              "customer_email", "VARCHAR(200)"),
         ("echo_record",              "has_unread_reply", "BOOLEAN DEFAULT FALSE"),
         ("echo_record",              "has_phone_number", "BOOLEAN DEFAULT FALSE"),
+        ("echo_record",              "reply_dismissed",  "BOOLEAN DEFAULT FALSE"),
         ("echo_record",              "status",          "VARCHAR(40)"),
         ("echo_record",              "followup_phone",  "VARCHAR(60) DEFAULT ''"),
         ("tenant_option",            "store_id",        "INTEGER"),
@@ -4170,6 +4178,7 @@ def _handle_incoming_reply(store_id, msg):
     rec = EchoRecord.query.get(echo_id)
     if rec:
         rec.has_unread_reply = True
+        rec.reply_dismissed = False  # 新たな返信が来たら未返信アラートを再表示
     db.session.commit()
     return True
 
@@ -5691,7 +5700,7 @@ def api_echo_records_list():
         'memo': r.memo or '',
         'customer_email': r.customer_email or '',
         'has_unread_reply': bool(r.has_unread_reply),
-        'needs_reply': last_dir.get(r.id) == 'in',
+        'needs_reply': last_dir.get(r.id) == 'in' and not r.reply_dismissed,
         'has_phone_number': bool(r.has_phone_number),
         'status': r.status or '',
     } for r in records])
@@ -5770,6 +5779,8 @@ def api_echo_records_update(rid):
         r.has_line = bool(data.get('has_line'))
     if 'has_phone_number' in data:
         r.has_phone_number = bool(data.get('has_phone_number'))
+    if 'reply_dismissed' in data:
+        r.reply_dismissed = bool(data.get('reply_dismissed'))
     if 'status' in data:
         r.status = (data.get('status') or '') or None
     if 'memo' in data:
