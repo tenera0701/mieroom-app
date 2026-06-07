@@ -1218,11 +1218,11 @@ def init_store():
     # デフォルトテナント
     tenant = Tenant.query.first()
     if not tenant:
-        tenant = Tenant(name='ルームピック', plan='standard', is_active=True)
+        tenant = Tenant(name='ミエルーム', plan='standard', is_active=True)
         db.session.add(tenant)
         db.session.flush()
 
-    store = Store(name='ルームピック', is_active=True, tenant_id=tenant.id)
+    store = Store(name='ミエルーム', is_active=True, tenant_id=tenant.id)
     db.session.add(store)
     db.session.flush()
 
@@ -1784,7 +1784,7 @@ def migrate_tenant_data():
     try:
         # テナントがなければ作成
         if Tenant.query.count() == 0:
-            t = Tenant(name='ルームピック', plan='standard', is_active=True)
+            t = Tenant(name='ミエルーム', plan='standard', is_active=True)
             db.session.add(t)
             db.session.commit()
 
@@ -2178,7 +2178,7 @@ def lp():
 
 @app.route("/roompick-lp")
 def roompick_lp():
-    """ルームピック ランディングページ"""
+    """ミエルーム ランディングページ"""
     return render_template("roompick_lp.html")
 
 
