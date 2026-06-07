@@ -797,8 +797,24 @@ class MailTemplate(db.Model):
     title      = db.Column(db.String(120))
     subject    = db.Column(db.String(300))
     body       = db.Column(db.Text)
+    is_html    = db.Column(db.Boolean, default=False)   # 本文がHTMLか（リッチ編集）
     sort_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class CompanyProfile(db.Model):
+    """会社情報（自動返信メールの差し込み用）。店舗ごと。"""
+    __tablename__ = 'company_profile'
+    id             = db.Column(db.Integer, primary_key=True)
+    store_id       = db.Column(db.Integer, db.ForeignKey('store.id'), unique=True)
+    company_name   = db.Column(db.String(200))
+    phone          = db.Column(db.String(60))
+    email          = db.Column(db.String(200))
+    address        = db.Column(db.String(300))
+    business_hours = db.Column(db.String(200))
+    holidays       = db.Column(db.String(200))
+    line_url       = db.Column(db.String(300))
+    updated_at     = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class ChatChannel(db.Model):
@@ -1545,6 +1561,19 @@ def migrate_db():
     except Exception as e:
         print(f"  Skip portal_source.auto_reply_template_id: {e}")
 
+    # mail_template の is_html / category カラムを追加
+    try:
+        cursor.execute("PRAGMA table_info(mail_template)")
+        mtcols = {r[1] for r in cursor.fetchall()}
+        if mtcols and 'is_html' not in mtcols:
+            cursor.execute("ALTER TABLE mail_template ADD COLUMN is_html BOOLEAN DEFAULT 0")
+            print("  Added column mail_template.is_html")
+        if mtcols and 'category' not in mtcols:
+            cursor.execute("ALTER TABLE mail_template ADD COLUMN category VARCHAR(120) DEFAULT ''")
+            print("  Added column mail_template.category")
+    except Exception as e:
+        print(f"  Skip mail_template columns: {e}")
+
     # mail_template の category（フォルダ）カラムを追加
     try:
         cursor.execute("PRAGMA table_info(mail_template)")
@@ -1643,6 +1672,8 @@ def migrate_postgres():
         ("mail_setting",             "auto_reply_enabled", "BOOLEAN DEFAULT FALSE"),
         ("mail_setting",             "auto_reply_template_id", "INTEGER"),
         ("portal_source",            "auto_reply_template_id", "INTEGER"),
+        ("mail_template",            "is_html",         "BOOLEAN DEFAULT FALSE"),
+        ("mail_template",            "category",        "VARCHAR(120) DEFAULT ''"),
         ("mail_template",            "category",        "VARCHAR(120) DEFAULT ''"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
         ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
@@ -3971,7 +4002,8 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                 try:
                     send_mail_for_store(store_id, rec.id,
                                         tpl.subject or 'お問い合わせありがとうございます',
-                                        tpl.body or '', base_url=APP_BASE_URL)
+                                        tpl.body or '', base_url=APP_BASE_URL,
+                                        is_html=bool(tpl.is_html))
                 except Exception as e:
                     print(f"auto-reply send error (echo={rec.id}): {e}")
         ms.last_fetch_at = datetime.utcnow()
@@ -4107,10 +4139,76 @@ def _smtp_deliver(host, user, pw, from_addr, to_addrs, msg_string):
     raise last_err
 
 
-def send_mail_for_store(store_id, echo_id, subject, body, attachments=None, base_url=None):
+def _split_name(full):
+    parts = re.split(r'[\s　]+', (full or '').strip(), 1)
+    last = parts[0] if parts and parts[0] else ''
+    first = parts[1].strip() if len(parts) > 1 else ''
+    return last, first
+
+
+def _extract_property(memo):
+    """メモから「物件：XXX」の最初の物件名を取り出す"""
+    m = re.search(r'物件\s*[:：]\s*(.+)', memo or '')
+    return m.group(1).strip() if m else ''
+
+
+# 差し込み文字の一覧（UIの凡例と一致させる）
+TEMPLATE_VARS = [
+    ('#name#', 'お客様の氏名'),
+    ('#lastName#', 'お客様の姓'),
+    ('#firstName#', 'お客様の名'),
+    ('#お問い合わせ物件名#', 'お問い合わせ物件名'),
+    ('#物件名#', '物件名（同上）'),
+    ('#会社名#', '会社名'),
+    ('#会社電話番号#', '会社の電話番号'),
+    ('#会社メールアドレス#', '会社のメールアドレス'),
+    ('#会社住所#', '会社の住所'),
+    ('#会社営業時間#', '営業時間'),
+    ('#会社定休日#', '定休日'),
+    ('#公式LINE#', '公式LINEのURL'),
+]
+
+
+def _apply_template_vars(text, rec, store_id):
+    """テンプレ内の差し込み文字（#name# 等）を実データで置換"""
+    if not text or '#' not in text:
+        return text or ''
+    cp = CompanyProfile.query.filter_by(store_id=store_id).first()
+    last, first = _split_name(rec.list_name if rec else '')
+    prop = _extract_property(rec.memo if rec else '')
+    repl = {
+        '#name#': (rec.list_name if rec else ''),
+        '#lastName#': last, '#firstName#': first,
+        '#お問い合わせ物件名#': prop, '#物件名#': prop,
+        '#会社名#': (cp.company_name if cp else ''),
+        '#会社電話番号#': (cp.phone if cp else ''),
+        '#会社メールアドレス#': (cp.email if cp else ''),
+        '#会社住所#': (cp.address if cp else ''),
+        '#会社営業時間#': (cp.business_hours if cp else ''),
+        '#会社定休日#': (cp.holidays if cp else ''),
+        '#公式LINE#': (cp.line_url if cp else ''),
+        '#LINE#': (cp.line_url if cp else ''),
+    }
+    for k, v in repl.items():
+        text = text.replace(k, v or '')
+    return text
+
+
+def _html_to_text(html):
+    """HTML本文をプレーンテキスト化（text/plain代替・チャット表示用）"""
+    t = re.sub(r'(?i)<br\s*/?>', '\n', html or '')
+    t = re.sub(r'(?i)</p>', '\n', t)
+    t = re.sub(r'<[^>]+>', '', t)
+    t = (t.replace('&nbsp;', ' ').replace('&amp;', '&')
+         .replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"'))
+    return t.strip()
+
+
+def send_mail_for_store(store_id, echo_id, subject, body, attachments=None, base_url=None, is_html=False):
     """店舗のGmail(SMTP)からお客様へ送信し、会話に保存。
     attachments: [(filename, content_type, bytes), ...]
-    base_url: 既読トラッキング用ピクセルの絶対URLベース"""
+    base_url: 既読トラッキング用ピクセルの絶対URLベース
+    is_html: body がHTMLか（リッチテンプレ）"""
     ms = MailSetting.query.filter_by(store_id=store_id).first()
     use_oauth = bool(ms and ms.oauth_refresh_token)
     if not ms or not (use_oauth or (ms.imap_user and ms.imap_pass)):
@@ -4123,6 +4221,12 @@ def send_mail_for_store(store_id, echo_id, subject, body, attachments=None, base
     if not to_addr:
         return {'ok': False, 'error': 'お客様のメールアドレスが未登録です'}
 
+    # 差し込み文字（#name# 等）を実データに置換
+    subject = _apply_template_vars(subject, rec, store_id)
+    body = _apply_template_vars(body, rec, store_id)
+    # チャット表示・保存用の本文（HTMLならテキスト化）
+    display_body = _html_to_text(body) if is_html else body
+
     # スレッド情報（最後の受信メッセージに返信する形）
     last_in = (MailMessage.query
                .filter_by(store_id=store_id, echo_id=echo_id, direction='in')
@@ -4133,7 +4237,7 @@ def send_mail_for_store(store_id, echo_id, subject, body, attachments=None, base
     mm = MailMessage(
         store_id=store_id, echo_id=echo_id, direction='out',
         from_addr=sender, to_addr=to_addr,
-        subject=subject or '', body=body or '',
+        subject=subject or '', body=display_body or '',
         message_id=msg_id, is_read=True,
     )
     db.session.add(mm)
@@ -4141,7 +4245,10 @@ def send_mail_for_store(store_id, echo_id, subject, body, attachments=None, base
 
     base = (base_url or APP_BASE_URL).rstrip('/')
     pixel = f'<img src="{base}/m/o/{mm.id}.gif" width="1" height="1" alt="" style="display:none">'
-    html_body = _text_to_html(body or '') + pixel
+    if is_html:
+        html_body = (body or '') + pixel
+    else:
+        html_body = _text_to_html(body or '') + pixel
 
     msg = MIMEMultipart('mixed')
     msg['Subject'] = subject or '（無題）'
@@ -4153,7 +4260,7 @@ def send_mail_for_store(store_id, echo_id, subject, body, attachments=None, base
         msg['References'] = last_in.message_id
 
     alt = MIMEMultipart('alternative')
-    alt.attach(MIMEText(body or '', 'plain', 'utf-8'))
+    alt.attach(MIMEText(display_body or '', 'plain', 'utf-8'))
     alt.attach(MIMEText(html_body, 'html', 'utf-8'))
     msg.attach(alt)
 
@@ -4752,7 +4859,8 @@ def api_mail_templates_get():
     items = (MailTemplate.query.filter_by(tenant_id=tenant_id)
              .order_by(MailTemplate.category, MailTemplate.sort_order, MailTemplate.id).all())
     return jsonify([{'id': t.id, 'category': t.category or '', 'title': t.title or '',
-                     'subject': t.subject or '', 'body': t.body or ''} for t in items])
+                     'subject': t.subject or '', 'body': t.body or '',
+                     'is_html': bool(t.is_html)} for t in items])
 
 
 @app.route("/api/mail-templates", methods=["POST"])
@@ -4767,7 +4875,8 @@ def api_mail_templates_add():
     mx = db.session.query(db.func.max(MailTemplate.sort_order)).filter_by(tenant_id=tenant_id).scalar() or 0
     t = MailTemplate(tenant_id=tenant_id, category=(data.get('category') or '').strip()[:120],
                      title=title[:120],
-                     subject=(data.get('subject') or '')[:300], body=body, sort_order=mx + 1)
+                     subject=(data.get('subject') or '')[:300], body=body,
+                     is_html=bool(data.get('is_html')), sort_order=mx + 1)
     db.session.add(t)
     db.session.commit()
     return jsonify({'id': t.id})
@@ -4789,6 +4898,48 @@ def api_mail_templates_update(tid):
         t.subject = (data.get('subject') or '')[:300]
     if 'body' in data:
         t.body = data.get('body') or ''
+    if 'is_html' in data:
+        t.is_html = bool(data.get('is_html'))
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/company-profile", methods=["GET"])
+@login_required
+def api_company_profile_get():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    cp = CompanyProfile.query.filter_by(store_id=sid).first() if sid else None
+    return jsonify({
+        'company_name': cp.company_name if cp else '',
+        'phone': cp.phone if cp else '',
+        'email': cp.email if cp else '',
+        'address': cp.address if cp else '',
+        'business_hours': cp.business_hours if cp else '',
+        'holidays': cp.holidays if cp else '',
+        'line_url': cp.line_url if cp else '',
+    })
+
+
+@app.route("/api/company-profile", methods=["POST"])
+@login_required
+def api_company_profile_save():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    if not sid:
+        return jsonify({'error': 'unauthorized'}), 403
+    data = request.get_json() or {}
+    cp = CompanyProfile.query.filter_by(store_id=sid).first()
+    if not cp:
+        cp = CompanyProfile(store_id=sid)
+        db.session.add(cp)
+    cp.company_name   = (data.get('company_name') or '')[:200]
+    cp.phone          = (data.get('phone') or '')[:60]
+    cp.email          = (data.get('email') or '')[:200]
+    cp.address        = (data.get('address') or '')[:300]
+    cp.business_hours = (data.get('business_hours') or '')[:200]
+    cp.holidays       = (data.get('holidays') or '')[:200]
+    cp.line_url       = (data.get('line_url') or '')[:300]
     db.session.commit()
     return jsonify({'status': 'ok'})
 

@@ -142,6 +142,23 @@
     </div>
   </div>
 
+  <!-- 会社情報（差し込み用） -->
+  <div class="card">
+    <h2>🏢 会社情報（自動返信メールの差し込み用）</h2>
+    <p style="font-size:12px;color:#6b7280;margin:-6px 0 12px;line-height:1.6;">
+      ここに登録した内容が、テンプレ内の差し込み文字（例 <code>#会社名#</code>）に自動で入ります。
+    </p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="field"><label>会社名</label><input id="cp_company_name" type="text" placeholder="例：ルームピック本店"></div>
+      <div class="field"><label>電話番号</label><input id="cp_phone" type="text" placeholder="例：052-000-0000"></div>
+      <div class="field"><label>メールアドレス</label><input id="cp_email" type="text" placeholder="例：honten@roompick.net"></div>
+      <div class="field"><label>住所</label><input id="cp_address" type="text" placeholder="例：名古屋市中区..."></div>
+      <div class="field"><label>営業時間</label><input id="cp_business_hours" type="text" placeholder="例：10:00〜19:00"></div>
+      <div class="field"><label>定休日</label><input id="cp_holidays" type="text" placeholder="例：水曜日"></div>
+      <div class="field" style="grid-column:1 / -1;"><label>公式LINEのURL</label><input id="cp_line_url" type="text" placeholder="例：https://lin.ee/xxxx"></div>
+    </div>
+  </div>
+
   <!-- 自動返信テンプレート管理 -->
   <div class="card">
     <h2>📝 自動返信テンプレート</h2>
@@ -153,7 +170,8 @@
       <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px;">新しいテンプレを追加</div>
       <input id="ntpl-title" type="text" placeholder="テンプレ名（例：SUUMO用）" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:6px;box-sizing:border-box;">
       <input id="ntpl-subject" type="text" placeholder="件名（例：お問い合わせありがとうございます）" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:6px;box-sizing:border-box;">
-      <textarea id="ntpl-body" rows="4" placeholder="本文" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;font-family:inherit;resize:vertical;"></textarea>
+      <textarea id="ntpl-body" rows="5" placeholder="本文（差し込み文字が使えます）" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;font-family:inherit;resize:vertical;"></textarea>
+      <div id="var-legend" style="margin-top:8px;"></div>
       <div style="text-align:right;margin-top:8px;"><button class="btn primary" onclick="addTemplate()">追加する</button></div>
     </div>
   </div>
@@ -434,11 +452,43 @@ function collectPortals(){
   })).filter(x=>x.matcher && x.media);
 }
 
+// ── 会社情報（差し込み用）──
+const CP_FIELDS=['company_name','phone','email','address','business_hours','holidays','line_url'];
+async function loadCompanyProfile(){
+  try{
+    const d=await fetch('/api/company-profile').then(r=>r.json());
+    CP_FIELDS.forEach(f=>{ const el=document.getElementById('cp_'+f); if(el) el.value=d[f]||''; });
+  }catch(_){}
+}
+function companyPayload(){
+  const o={}; CP_FIELDS.forEach(f=>{ o[f]=(document.getElementById('cp_'+f)||{}).value||''; }); return o;
+}
+
+// ── 差し込み文字の凡例（クリックで本文に挿入）──
+const TEMPLATE_VARS=[
+  ['#name#','お客様氏名'],['#lastName#','姓'],['#firstName#','名'],
+  ['#お問い合わせ物件名#','問合せ物件名'],
+  ['#会社名#','会社名'],['#会社電話番号#','電話'],['#会社メールアドレス#','メール'],
+  ['#会社住所#','住所'],['#会社営業時間#','営業時間'],['#会社定休日#','定休日'],['#公式LINE#','公式LINE'],
+];
+function renderVarLegend(){
+  const box=document.getElementById('var-legend'); if(!box) return;
+  box.innerHTML='<div style="font-size:11px;color:#6b7280;margin-bottom:4px;">差し込み文字（クリックで本文に挿入）：</div>'+
+    TEMPLATE_VARS.map(([tok,label])=>`<button type="button" onclick="insertVar('${tok}')" title="${label}" style="font-size:11px;background:#ECFDF5;border:1px solid #A7F3D0;color:#0F766E;border-radius:6px;padding:2px 7px;margin:0 4px 4px 0;cursor:pointer;">${tok}</button>`).join('');
+}
+function insertVar(tok){
+  const ta=document.getElementById('ntpl-body'); if(!ta) return;
+  const s=ta.selectionStart||0, e=ta.selectionEnd||0;
+  ta.value=ta.value.slice(0,s)+tok+ta.value.slice(e);
+  ta.focus(); ta.selectionStart=ta.selectionEnd=s+tok.length;
+}
+
 async function saveSettings(){
   try{
     const r=await fetch('/api/mail-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});
     if(!r.ok) throw new Error();
     await fetch('/api/portal-sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sources:collectPortals()})});
+    await fetch('/api/company-profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(companyPayload())});
     document.getElementById('imap_pass').value='';
     showMsg('設定を保存しました。');
     loadSettings(); loadPortals();
@@ -476,6 +526,8 @@ async function fetchNow(){
 document.addEventListener('DOMContentLoaded', async function(){
   await loadTemplates();
   renderTplList();
+  renderVarLegend();
+  loadCompanyProfile();
   loadSettings();
   loadPortals();
 });
