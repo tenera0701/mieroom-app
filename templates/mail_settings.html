@@ -128,6 +128,21 @@
         <div class="hint" style="margin:0;">メールが届いた瞬間にリアルタイムで取り込みます。</div>
       </div>
     </div>
+
+    <!-- 自動返信 -->
+    <div class="toggle-row" style="margin-top:14px;border-top:1px dashed #e5e7eb;padding-top:14px;">
+      <label class="switch"><input type="checkbox" id="auto_reply_enabled"><span class="slider"></span></label>
+      <div>
+        <div style="font-size:13px; font-weight:700; color:#374151;">新着反響に自動返信する</div>
+        <div class="hint" style="margin:0;">反響が取り込まれた瞬間に、選んだテンプレを<b>お客様へ自動送信</b>します（お客様のメールアドレスがある反響のみ）。</div>
+      </div>
+    </div>
+    <div class="field" id="auto-reply-tpl-wrap" style="margin-top:10px;display:none;">
+      <label>自動返信に使うテンプレート</label>
+      <select id="auto_reply_template_id"><option value="">— テンプレを選択 —</option></select>
+      <div class="hint">テンプレは反響管理表のメール画面「📋 テンプレ → ＋管理」で追加・編集できます。<br>
+        <b style="color:#b45309;">※ 送信機能が有効（メール連携済み）のときだけ動作します。</b></div>
+    </div>
     <div class="field" style="margin-top:14px;">
       <label>取り込んだ反響のデフォルト担当（任意）</label>
       <select id="default_staff_id">
@@ -258,6 +273,12 @@ async function loadSettings(){
     document.getElementById('default_staff_id').value=d.default_staff_id||'';
     document.getElementById('custom_keywords').value=d.custom_keywords||'';
     if(d.has_password){ document.getElementById('imap_pass').placeholder='●●●●（設定済み・変更時のみ入力）'; }
+    // 自動返信
+    await loadTemplatesIntoSelect(d.auto_reply_template_id);
+    const ar=document.getElementById('auto_reply_enabled');
+    ar.checked=!!d.auto_reply_enabled;
+    document.getElementById('auto-reply-tpl-wrap').style.display = ar.checked ? 'block' : 'none';
+    ar.onchange=()=>{ document.getElementById('auto-reply-tpl-wrap').style.display = ar.checked ? 'block' : 'none'; };
     const sl=document.getElementById('status-line');
     let txt='';
     if(d.last_fetch_at) txt+='最終取得: '+d.last_fetch_at+'　';
@@ -323,6 +344,16 @@ async function googleDisconnect(){
   history.replaceState({}, '', '/mail-settings');
 })();
 
+async function loadTemplatesIntoSelect(selectedId){
+  try{
+    const tpls=await fetch('/api/mail-templates').then(r=>r.json());
+    const sel=document.getElementById('auto_reply_template_id');
+    sel.innerHTML='<option value="">— テンプレを選択 —</option>'+
+      tpls.map(t=>`<option value="${t.id}">${(t.title||'').replace(/</g,'&lt;')}</option>`).join('');
+    if(selectedId) sel.value=String(selectedId);
+  }catch(_){}
+}
+
 function payload(){
   return {
     imap_user:document.getElementById('imap_user').value.trim(),
@@ -331,6 +362,8 @@ function payload(){
     enabled:document.getElementById('enabled').checked,
     default_staff_id:document.getElementById('default_staff_id').value||null,
     custom_keywords:document.getElementById('custom_keywords').value,
+    auto_reply_enabled:document.getElementById('auto_reply_enabled').checked,
+    auto_reply_template_id:document.getElementById('auto_reply_template_id').value||null,
   };
 }
 

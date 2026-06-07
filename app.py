@@ -879,6 +879,8 @@ class MailSetting(db.Model):
     last_result      = db.Column(db.String(300))
     oauth_refresh_token = db.Column(db.Text, nullable=True)     # Google OAuth リフレッシュトークン
     oauth_email      = db.Column(db.String(200), nullable=True) # OAuthで連携したGmailアドレス
+    auto_reply_enabled    = db.Column(db.Boolean, default=False)  # 新着反響に自動返信
+    auto_reply_template_id = db.Column(db.Integer, nullable=True) # 自動返信に使うテンプレID
     created_at       = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at       = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1523,6 +1525,12 @@ def migrate_db():
         if mscols and 'oauth_email' not in mscols:
             cursor.execute("ALTER TABLE mail_setting ADD COLUMN oauth_email VARCHAR(200)")
             print("  Added column mail_setting.oauth_email")
+        if mscols and 'auto_reply_enabled' not in mscols:
+            cursor.execute("ALTER TABLE mail_setting ADD COLUMN auto_reply_enabled BOOLEAN DEFAULT 0")
+            print("  Added column mail_setting.auto_reply_enabled")
+        if mscols and 'auto_reply_template_id' not in mscols:
+            cursor.execute("ALTER TABLE mail_setting ADD COLUMN auto_reply_template_id INTEGER")
+            print("  Added column mail_setting.auto_reply_template_id")
     except Exception as e:
         print(f"  Skip mail_setting columns: {e}")
 
@@ -1621,6 +1629,8 @@ def migrate_postgres():
         ("mail_setting",             "import_after",    "TIMESTAMP"),
         ("mail_setting",             "oauth_refresh_token", "TEXT"),
         ("mail_setting",             "oauth_email",     "VARCHAR(200)"),
+        ("mail_setting",             "auto_reply_enabled", "BOOLEAN DEFAULT FALSE"),
+        ("mail_setting",             "auto_reply_template_id", "INTEGER"),
         ("mail_template",            "category",        "VARCHAR(120) DEFAULT ''"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
         ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
@@ -3848,6 +3858,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
     imported = 0
     merged = 0
     scanned = 0
+    new_exts = []
     try:
         M = _open_imap(ms)
         M.select('INBOX')
@@ -3908,6 +3919,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                 customer_email=parsed.get('email') or None,
             ))
             db.session.add(ProcessedReaction(store_id=store_id, external_id=ext))
+            new_exts.append(ext)
             imported += 1
         db.session.commit()
         try:
@@ -3915,6 +3927,20 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
             M.logout()
         except Exception:
             pass
+        # 新着反響への自動返信（設定ONかつテンプレ指定かつお客様メールあり）
+        if new_exts and ms.auto_reply_enabled and ms.auto_reply_template_id:
+            tpl = MailTemplate.query.get(ms.auto_reply_template_id)
+            if tpl:
+                for ext in new_exts:
+                    rec = EchoRecord.query.filter_by(store_id=store_id, external_id=ext).first()
+                    if not rec or not rec.customer_email:
+                        continue
+                    try:
+                        send_mail_for_store(store_id, rec.id,
+                                            tpl.subject or 'お問い合わせありがとうございます',
+                                            tpl.body or '', base_url=APP_BASE_URL)
+                    except Exception as e:
+                        print(f"auto-reply send error (echo={rec.id}): {e}")
         ms.last_fetch_at = datetime.utcnow()
         mtxt = f" / {merged}件まとめ" if merged else ""
         ms.last_result = f"取得OK：{imported}件追加{mtxt} / {scanned}件確認（{datetime.now():%m/%d %H:%M}）"
@@ -4320,7 +4346,8 @@ def api_mail_settings_get():
         return jsonify({'imap_user': '', 'imap_host': 'imap.gmail.com', 'enabled': False,
                         'default_staff_id': None, 'has_password': False, 'custom_keywords': '',
                         'last_result': '', 'last_fetch_at': None,
-                        'oauth_available': oauth_available, 'oauth_connected': False, 'oauth_email': ''})
+                        'oauth_available': oauth_available, 'oauth_connected': False, 'oauth_email': '',
+                        'auto_reply_enabled': False, 'auto_reply_template_id': None})
     return jsonify({
         'imap_user': ms.imap_user or '',
         'imap_host': ms.imap_host or 'imap.gmail.com',
@@ -4333,6 +4360,8 @@ def api_mail_settings_get():
         'oauth_available': oauth_available,
         'oauth_connected': bool(ms.oauth_refresh_token),
         'oauth_email': ms.oauth_email or '',
+        'auto_reply_enabled': bool(ms.auto_reply_enabled),
+        'auto_reply_template_id': ms.auto_reply_template_id,
     })
 
 
@@ -4360,6 +4389,11 @@ def api_mail_settings_save():
     dsid = data.get('default_staff_id')
     ms.default_staff_id = int(dsid) if dsid else None
     ms.custom_keywords = (data.get('custom_keywords') or '')[:5000]
+    if 'auto_reply_enabled' in data:
+        ms.auto_reply_enabled = bool(data.get('auto_reply_enabled'))
+    if 'auto_reply_template_id' in data:
+        arid = data.get('auto_reply_template_id')
+        ms.auto_reply_template_id = int(arid) if arid else None
     ms.updated_at = datetime.utcnow()
     db.session.commit()
     start_mail_service()   # 未起動なら起動
