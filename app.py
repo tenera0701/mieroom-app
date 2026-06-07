@@ -2736,7 +2736,41 @@ def _xlsx_fill(xlsx_bytes, values):
     return out.getvalue()
 
 
-def _doc_company_data(tenant_id):
+# 設定＞会社情報（CompanyProfile）を、契約フォーマットの固定差し込みタグ名に対応づける
+_COMPANY_PROFILE_DOC_LABELS = [
+    ('company_name',   '会社名'),
+    ('store_name',     '店舗名'),
+    ('phone',          '電話番号'),
+    ('fax',            'FAX番号'),
+    ('email',          'メールアドレス'),
+    ('address',        '住所'),
+    ('representative', '代表者氏名'),
+    ('license_number', '宅建業免許番号'),
+    ('license_date',   '宅建業免許取得日'),
+    ('business_hours', '営業時間'),
+    ('holidays',       '定休日'),
+    ('invoice_number', 'インボイス登録番号'),
+    ('line_url',       '公式LINEのURL'),
+]
+
+
+def _company_profile_doc_dict():
+    """設定＞会社情報（CompanyProfile）を、契約フォーマットの固定差し込み辞書に変換。空欄は除外。"""
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    cp = CompanyProfile.query.filter_by(store_id=sid).first() if sid else None
+    if not cp:
+        return {}
+    out = {}
+    for attr, label in _COMPANY_PROFILE_DOC_LABELS:
+        val = getattr(cp, attr, None)
+        if val:
+            out[label] = str(val)
+    return out
+
+
+def _doc_company_manual(tenant_id):
+    """契約フォーマット側で手入力した追加項目（会社情報に無い項目）。"""
     rec = DocCompanyInfo.query.filter_by(tenant_id=tenant_id).first()
     if rec and rec.data:
         try:
@@ -2746,6 +2780,14 @@ def _doc_company_data(tenant_id):
         except Exception:
             pass
     return {}
+
+
+def _doc_company_data(tenant_id):
+    """固定差し込み用の会社情報。設定＞会社情報を自動反映し、手入力の追加項目を重ねる
+    （同名キーは設定＞会社情報を優先＝常に最新の内容が入る）。"""
+    merged = dict(_doc_company_manual(tenant_id))
+    merged.update(_company_profile_doc_dict())
+    return merged
 
 
 def _doc_default_mapping(tags, company_keys):
@@ -2778,7 +2820,11 @@ def doc_templates_embed():
 @login_required
 @block_super_admin
 def api_doc_company_get():
-    return jsonify({'data': _doc_company_data(_doc_tenant_id())})
+    tid = _doc_tenant_id()
+    auto = _company_profile_doc_dict()                # 設定＞会社情報（自動）
+    manual = _doc_company_manual(tid)                 # 手入力の保存内容
+    extras = {k: v for k, v in manual.items() if k not in auto}   # 会社情報に無い追加項目のみ
+    return jsonify({'data': _doc_company_data(tid), 'auto': auto, 'extras': extras})
 
 
 @app.route("/api/doc-company-info", methods=["POST"])

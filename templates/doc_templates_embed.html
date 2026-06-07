@@ -21,6 +21,10 @@
   .kv-row input { border:1px solid #d1d5db; border-radius:6px; padding:7px 9px; font-size:13px; width:100%; }
   .kv-del { border:none; background:#fee2e2; color:#b91c1c; border-radius:6px; height:32px; cursor:pointer; font-weight:700; }
   .kv-head { font-size:11px; font-weight:700; color:#6b7280; }
+  .cp-auto-row { display:grid; grid-template-columns:160px 1fr; gap:10px; padding:7px 0; border-bottom:1px solid #f3f4f6; font-size:13px; align-items:center; }
+  .cp-auto-row .cp-k { color:#6b7280; font-weight:700; }
+  .cp-auto-row .cp-v { color:#111827; font-weight:600; word-break:break-all; }
+  .cp-auto-empty { color:#9ca3af; font-size:13px; padding:10px 0; }
   .tpl-row { border:1px solid #e5e7eb; border-radius:10px; margin-bottom:10px; overflow:hidden; background:#fff; }
   .tpl-row-head { display:flex; align-items:center; gap:10px; padding:12px 14px; flex-wrap:wrap; }
   .tpl-name { font-weight:700; color:#111827; font-size:14px; }
@@ -75,7 +79,7 @@
 
   <div class="hint">
     <b>使い方</b><br>
-    ① 「会社情報」を登録（毎回固定で入る情報）。<br>
+    ① 「会社情報（固定）」は<b>設定 ＞ 会社情報</b>の内容が自動で差し込まれます。<br>
     ② 会社のExcel様式を用意し、自動入力したいセルに <code>{{ '{{お客様氏名}}' }}</code> のように <b>{{ '{{タグ}}' }}</b> を書いておく。<br>
     ③ Excelをアップロード → このツール上でタグをドラッグ or クリックで仕分け。<br>
     ④ 契約一覧の「契約書を編集」で資料を添付するとAIが穴あきを自動入力 → Excelをダウンロードして A4/A3 印刷。
@@ -83,13 +87,19 @@
 
   <div class="card">
     <h2 class="card-h">① 会社情報（固定）</h2>
-    <p class="card-d">毎回同じ内容（会社名・住所・宅建免許番号・振込口座など）。タグ名と同じラベルにすると自動で差し込まれます。</p>
-    <div class="kv-row kv-head"><div>項目名（タグ名）</div><div>値</div><div></div></div>
-    <div id="kv-list"></div>
-    <div style="display:flex;gap:8px;margin-top:10px;">
-      <button class="btn btn-light btn-sm" onclick="addKv()">＋ 項目を追加</button>
-      <button class="btn btn-save btn-sm" id="kv-save" onclick="saveCompany()">会社情報を保存</button>
-    </div>
+    <p class="card-d">「設定 ＞ 会社情報」に登録した内容が自動で入ります。変更は<a href="/settings/company" target="_top" style="color:#0F766E;font-weight:700;">会社情報ページ</a>から。Excel様式には下の<b>項目名</b>と同じタグ（例 <code>{{ '{{会社名}}' }}</code>）を書いてください。</p>
+    <div id="cp-auto"></div>
+    <details style="margin-top:14px;">
+      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:#6b7280;">＋ 会社情報に無い項目を追加（例：振込口座 など）</summary>
+      <div style="margin-top:10px;">
+        <div class="kv-row kv-head"><div>項目名（タグ名）</div><div>値</div><div></div></div>
+        <div id="kv-list"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn btn-light btn-sm" onclick="addKv()">＋ 項目を追加</button>
+          <button class="btn btn-save btn-sm" id="kv-save" onclick="saveCompany()">追加項目を保存</button>
+        </div>
+      </div>
+    </details>
   </div>
 
   <div class="card">
@@ -118,12 +128,15 @@ function showAlert(msg, type='success'){ const el=document.getElementById('alert
 function kvRowHtml(k='',v=''){ return `<div class="kv-row"><input class="kv-k" value="${esc(k)}" placeholder="例：会社名"><input class="kv-v" value="${esc(v)}" placeholder="例：株式会社ミエルーム"><button class="kv-del" onclick="this.parentElement.remove()">×</button></div>`; }
 function addKv(k='',v=''){ document.getElementById('kv-list').insertAdjacentHTML('beforeend', kvRowHtml(k,v)); }
 async function loadCompany(){
-  try{ const r=await fetch('/api/doc-company-info'); const j=await r.json(); COMPANY=j.data||{}; }catch(_){ COMPANY={}; }
+  let auto={}, extras={};
+  try{ const r=await fetch('/api/doc-company-info'); const j=await r.json(); COMPANY=j.data||{}; auto=j.auto||{}; extras=j.extras||{}; }catch(_){ COMPANY={}; }
+  const ak=Object.keys(auto);
+  document.getElementById('cp-auto').innerHTML = ak.length
+    ? ak.map(k=>`<div class="cp-auto-row"><span class="cp-k">${esc(k)}</span><span class="cp-v">${esc(auto[k])}</span></div>`).join('')
+    : `<div class="cp-auto-empty">会社情報がまだ登録されていません。<a href="/settings/company" target="_top" style="color:#0F766E;font-weight:700;">設定 ＞ 会社情報</a>で登録してください。</div>`;
   const list=document.getElementById('kv-list'); list.innerHTML='';
-  const keys=Object.keys(COMPANY);
-  if(!keys.length){ ['会社名','住所','電話番号','宅建免許番号','代表者名'].forEach(k=>addKv(k,'')); }
-  else keys.forEach(k=>addKv(k,COMPANY[k]));
-  if(!CAN_MANAGE) document.getElementById('kv-save').style.display='none';
+  Object.keys(extras).forEach(k=>addKv(k, extras[k]));
+  if(!CAN_MANAGE){ const s=document.getElementById('kv-save'); if(s) s.style.display='none'; }
 }
 async function saveCompany(){
   const data={};
@@ -131,7 +144,7 @@ async function saveCompany(){
   try{
     const r=await fetch('/api/doc-company-info',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data})});
     const j=await r.json(); if(!r.ok) throw new Error(j.error||'保存失敗');
-    COMPANY=j.data||data; showAlert('会社情報を保存しました。');
+    COMPANY=j.data||data; showAlert('追加項目を保存しました。'); loadCompany();
   }catch(e){ showAlert(e.message,'error'); }
 }
 
