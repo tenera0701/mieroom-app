@@ -855,7 +855,7 @@ async function load() {
       fetch(`/api/kpi/summary?year=${y}&month=${m}&store_id=${STORE_ID}`).then(r => r.ok ? r.json() : {}),
       fetch(`/api/kpi/monthly?store_id=${STORE_ID}`).then(r => r.ok ? r.json() : []),
       fetch(`/api/kpi/staff?year=${y}&month=${m}&store_id=${STORE_ID}`).then(r => r.ok ? r.json() : []),
-      fetch(`/api/applications/approved-sum?year=${y}&month=${parseInt(m)}`).then(r => r.ok ? r.json() : {count:0}),
+      fetch(`/api/applications/approved-sum?year=${y}&month=${parseInt(m)}&store_id=${STORE_ID}`).then(r => r.ok ? r.json() : {count:0}),
     ]);
 
     // 契約数を入金済み申込件数（approved-sum）で上書き

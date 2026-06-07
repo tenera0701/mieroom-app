@@ -569,9 +569,28 @@
 
   <!-- スタッフ別KPIテーブル -->
   <div class="table-section">
-    <div class="table-section-header">
+    <div class="table-section-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
       <h2>スタッフ別KPI</h2>
-      <span style="font-size:12px; color:var(--text-muted);">ヘッダークリックでソート ／ 行クリックで詳細展開</span>
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);">
+        <span>並び替え</span>
+        <select id="staff-sort-key" onchange="applyStaffSort()" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;color:#111827;background:#fff;">
+          <option value="revenue">売上</option>
+          <option value="responses">反響数</option>
+          <option value="visits">接客数</option>
+          <option value="applications">申込数</option>
+          <option value="contracts">契約数</option>
+          <option value="visitRate">接客率</option>
+          <option value="appRate">申込率</option>
+          <option value="closeRate">契約率</option>
+          <option value="target">目標</option>
+          <option value="achv">達成率</option>
+          <option value="name">氏名</option>
+        </select>
+        <select id="staff-sort-dir" onchange="applyStaffSort()" style="border:1px solid #d1d5db;border-radius:6px;padding:4px 8px;font-size:12px;color:#111827;background:#fff;">
+          <option value="desc">多い順</option>
+          <option value="asc">少ない順</option>
+        </select>
+      </div>
     </div>
     <div id="staff-table-loading" class="loading-spinner" style="display:none;">
       <div class="spinner"></div> データを読み込んでいます…
@@ -810,7 +829,7 @@ async function loadStaffKpi(year, month) {
       prev_revenue: 0,
     }));
     await populateStaffSelect();
-    renderStaffTable(staffData);
+    applyStaffSort();
 
     // 顧客管理表の集計（総売上＝入金済み全スタッフ合計／付帯成約率など）
     try {
@@ -1135,42 +1154,64 @@ function renderMonthlyChart(data) {
 /* ===================================================
    ソート
 =================================================== */
-function sortTable(colIdx) {
-  const ths = document.querySelectorAll('#staff-table thead th');
-  ths.forEach((th, i) => {
-    th.classList.remove('sort-asc', 'sort-desc');
-    if (i === colIdx) th.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
-  });
+// 並び替えキー → 値の取り出し
+function staffSortVal(s, key) {
+  switch(key) {
+    case 'name':        return s.name || '';
+    case 'responses':   return s.responses || 0;
+    case 'visits':      return s.visits || 0;
+    case 'applications':return s.applications || 0;
+    case 'contracts':   return s.contracts || 0;
+    case 'visitRate':   return pct(s.visits, s.responses);
+    case 'appRate':     return pct(s.applications, s.visits);
+    case 'closeRate':   return pct(s.contracts, s.applications);
+    case 'revenue':     return s.revenue || 0;
+    case 'target':      return s.target_sales || 0;
+    case 'achv':        return s.target_sales ? (s.revenue / s.target_sales) : -1;
+    default:            return 0;
+  }
+}
 
-  if (sortCol === colIdx) sortDir *= -1;
-  else { sortCol = colIdx; sortDir = 1; }
+// 列インデックス → 並び替えキー（ヘッダークリック用）
+const STAFF_COL_KEYS = ['name','responses','visits','applications','contracts',
+  'visitRate','appRate','closeRate','revenue','target','achv'];
 
-  const keys = ['name','branch','responses','visits','tours','applications','contracts',
-    '_visitRate','_appRate','_closeRate','revenue','_unitPrice','option','_trend'];
+// ドロップダウン（並び替え項目・多い順/少ない順）に従って並べ替え＆再描画
+function applyStaffSort() {
+  const keySel = document.getElementById('staff-sort-key');
+  const dirSel = document.getElementById('staff-sort-dir');
+  const key = keySel ? keySel.value : 'revenue';
+  const dir = (dirSel && dirSel.value === 'asc') ? 1 : -1;
 
   staffData.sort((a, b) => {
-    let av, bv;
-    switch(colIdx) {
-      case 0:  av = a.name; bv = b.name; break;
-      case 1:  av = a.responses; bv = b.responses; break;
-      case 2:  av = a.visits; bv = b.visits; break;
-      case 3:  av = a.tours; bv = b.tours; break;
-      case 4:  av = a.applications; bv = b.applications; break;
-      case 5:  av = a.contracts; bv = b.contracts; break;
-      case 6:  av = pct(a.visits,a.responses); bv = pct(b.visits,b.responses); break;
-      case 7:  av = pct(a.applications,a.visits); bv = pct(b.applications,b.visits); break;
-      case 8:  av = pct(a.contracts,a.applications); bv = pct(b.contracts,b.applications); break;
-      case 9:  av = a.revenue; bv = b.revenue; break;
-      case 10: av = a.contracts ? a.revenue/a.contracts : 0; bv = b.contracts ? b.revenue/b.contracts : 0; break;
-      case 11: av = a.prev_revenue ? (a.revenue-a.prev_revenue)/a.prev_revenue : 0;
-               bv = b.prev_revenue ? (b.revenue-b.prev_revenue)/b.prev_revenue : 0; break;
-      default: return 0;
-    }
-    if (typeof av === 'string') return av.localeCompare(bv, 'ja') * sortDir;
-    return (av - bv) * sortDir;
+    const av = staffSortVal(a, key), bv = staffSortVal(b, key);
+    if (typeof av === 'string') return av.localeCompare(bv, 'ja') * dir;
+    return (av - bv) * dir;
+  });
+
+  // ヘッダーの▲▼表示を更新
+  const colIdx = STAFF_COL_KEYS.indexOf(key);
+  document.querySelectorAll('#staff-table thead th').forEach((th, i) => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (i === colIdx) th.classList.add(dir === 1 ? 'sort-asc' : 'sort-desc');
   });
 
   renderStaffTable(staffData);
+}
+
+// ヘッダークリック：ドロップダウンに反映してから並べ替え（同じ列は昇降トグル）
+function sortTable(colIdx) {
+  const key = STAFF_COL_KEYS[colIdx];
+  if (!key) return;
+  const keySel = document.getElementById('staff-sort-key');
+  const dirSel = document.getElementById('staff-sort-dir');
+  if (keySel.value === key) {
+    dirSel.value = (dirSel.value === 'asc') ? 'desc' : 'asc';
+  } else {
+    keySel.value = key;
+    dirSel.value = 'desc';
+  }
+  applyStaffSort();
 }
 
 /* ===================================================

@@ -10199,21 +10199,30 @@ def api_applications_unpaid():
 @app.route("/api/applications/approved-sum")
 @login_required
 def api_applications_approved_sum():
-    """入金済み（全承認済み）申込の売上合計を返す（年月フィルタ付き）"""
+    """入金済み一覧の売上合計と件数を返す（年月フィルタ付き）。
+    入金日(payment_date)が当月の承認済み方向を持つ案件で判定する（入金済み一覧と同じ基準）。"""
     year  = request.args.get('year',  type=int) or current_ym()[0]
     month = request.args.get('month', type=int) or current_ym()[1]
+    store_id = request.args.get('store_id', type=int)
     allowed = get_allowed_store_ids()
 
-    recs = ApplicationRecord.query.filter(
+    q = ApplicationRecord.query.filter(
         ApplicationRecord.store_id.in_(allowed),
         ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
-        db.extract('year',  ApplicationRecord.application_date) == year,
-        db.extract('month', ApplicationRecord.application_date) == month,
-    ).all()
+    )
+    if store_id and store_id in allowed:
+        q = q.filter(ApplicationRecord.store_id == store_id)
 
-    # 仲手・その他費用・AD の承認済み金額をそれぞれ独立に合算（その他費用も売上に含む）
-    total = sum(_record_approved_amount(r) for r in recs)
-    count = sum(1 for r in recs if _record_approved_amount(r) > 0)
+    total = 0
+    count = 0
+    for r in q.all():
+        amt = 0
+        if _approved_in_month(r, 'brokerage', year, month): amt += (r.brokerage_fee or 0)
+        if _approved_in_month(r, 'option', year, month):    amt += (r.option_amount or 0)
+        if _approved_in_month(r, 'ad', year, month):         amt += _ad_yen(r)
+        if amt:
+            total += amt
+            count += 1   # 入金済み一覧に出る案件数（= 契約数）
     return jsonify({'total': total, 'count': count})
 
 
