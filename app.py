@@ -808,11 +808,17 @@ class CompanyProfile(db.Model):
     id             = db.Column(db.Integer, primary_key=True)
     store_id       = db.Column(db.Integer, db.ForeignKey('store.id'), unique=True)
     company_name   = db.Column(db.String(200))
+    store_name     = db.Column(db.String(200))        # 店舗名
     phone          = db.Column(db.String(60))
+    fax            = db.Column(db.String(60))          # FAX番号
     email          = db.Column(db.String(200))
     address        = db.Column(db.String(300))
+    representative = db.Column(db.String(100))         # 代表者氏名
+    license_number = db.Column(db.String(120))         # 宅建業免許番号
+    license_date   = db.Column(db.String(60))          # 宅建業免許取得日
     business_hours = db.Column(db.String(200))
     holidays       = db.Column(db.String(200))
+    invoice_number = db.Column(db.String(60))          # インボイス登録番号
     line_url       = db.Column(db.String(300))
     logo_data      = db.Column(db.LargeBinary)        # 店舗ロゴ画像
     logo_type      = db.Column(db.String(80))         # ロゴのMIMEタイプ
@@ -1573,8 +1579,14 @@ def migrate_db():
         if cpcols and 'logo_type' not in cpcols:
             cursor.execute("ALTER TABLE company_profile ADD COLUMN logo_type VARCHAR(80)")
             print("  Added column company_profile.logo_type")
+        for col, typ in [('store_name', 'VARCHAR(200)'), ('fax', 'VARCHAR(60)'),
+                         ('representative', 'VARCHAR(100)'), ('license_number', 'VARCHAR(120)'),
+                         ('license_date', 'VARCHAR(60)'), ('invoice_number', 'VARCHAR(60)')]:
+            if cpcols and col not in cpcols:
+                cursor.execute(f"ALTER TABLE company_profile ADD COLUMN {col} {typ}")
+                print(f"  Added column company_profile.{col}")
     except Exception as e:
-        print(f"  Skip company_profile logo columns: {e}")
+        print(f"  Skip company_profile columns: {e}")
 
     # mail_template の is_html / category カラムを追加
     try:
@@ -1691,6 +1703,12 @@ def migrate_postgres():
         ("mail_template",            "category",        "VARCHAR(120) DEFAULT ''"),
         ("company_profile",          "logo_data",       "BYTEA"),
         ("company_profile",          "logo_type",       "VARCHAR(80)"),
+        ("company_profile",          "store_name",      "VARCHAR(200)"),
+        ("company_profile",          "fax",             "VARCHAR(60)"),
+        ("company_profile",          "representative",  "VARCHAR(100)"),
+        ("company_profile",          "license_number",  "VARCHAR(120)"),
+        ("company_profile",          "license_date",    "VARCHAR(60)"),
+        ("company_profile",          "invoice_number",  "VARCHAR(60)"),
         ("mail_template",            "category",        "VARCHAR(120) DEFAULT ''"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
         ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
@@ -4177,11 +4195,17 @@ TEMPLATE_VARS = [
     ('#お問い合わせ物件名#', 'お問い合わせ物件名'),
     ('#物件名#', '物件名（同上）'),
     ('#会社名#', '会社名'),
+    ('#店舗名#', '店舗名'),
     ('#会社電話番号#', '会社の電話番号'),
+    ('#FAX番号#', 'FAX番号'),
     ('#会社メールアドレス#', '会社のメールアドレス'),
     ('#会社住所#', '会社の住所'),
+    ('#代表者氏名#', '代表者氏名'),
+    ('#宅建業免許番号#', '宅建業免許番号'),
+    ('#宅建業免許取得日#', '宅建業免許取得日'),
     ('#会社営業時間#', '営業時間'),
     ('#会社定休日#', '定休日'),
+    ('#インボイス番号#', 'インボイス登録番号'),
     ('#公式LINE#', '公式LINEのURL'),
 ]
 
@@ -4198,11 +4222,17 @@ def _apply_template_vars(text, rec, store_id):
         '#lastName#': last, '#firstName#': first,
         '#お問い合わせ物件名#': prop, '#物件名#': prop,
         '#会社名#': (cp.company_name if cp else ''),
+        '#店舗名#': (cp.store_name if cp else ''),
         '#会社電話番号#': (cp.phone if cp else ''),
+        '#FAX番号#': (cp.fax if cp else ''),
         '#会社メールアドレス#': (cp.email if cp else ''),
         '#会社住所#': (cp.address if cp else ''),
+        '#代表者氏名#': (cp.representative if cp else ''),
+        '#宅建業免許番号#': (cp.license_number if cp else ''),
+        '#宅建業免許取得日#': (cp.license_date if cp else ''),
         '#会社営業時間#': (cp.business_hours if cp else ''),
         '#会社定休日#': (cp.holidays if cp else ''),
+        '#インボイス番号#': (cp.invoice_number if cp else ''),
         '#公式LINE#': (cp.line_url if cp else ''),
         '#LINE#': (cp.line_url if cp else ''),
     }
@@ -4960,11 +4990,17 @@ def api_company_profile_get():
     cp = CompanyProfile.query.filter_by(store_id=sid).first() if sid else None
     return jsonify({
         'company_name': cp.company_name if cp else '',
+        'store_name': cp.store_name if cp else '',
         'phone': cp.phone if cp else '',
+        'fax': cp.fax if cp else '',
         'email': cp.email if cp else '',
         'address': cp.address if cp else '',
+        'representative': cp.representative if cp else '',
+        'license_number': cp.license_number if cp else '',
+        'license_date': cp.license_date if cp else '',
         'business_hours': cp.business_hours if cp else '',
         'holidays': cp.holidays if cp else '',
+        'invoice_number': cp.invoice_number if cp else '',
         'line_url': cp.line_url if cp else '',
         'has_logo': bool(cp and cp.logo_data),
     })
@@ -4983,11 +5019,17 @@ def api_company_profile_save():
         cp = CompanyProfile(store_id=sid)
         db.session.add(cp)
     cp.company_name   = (data.get('company_name') or '')[:200]
+    cp.store_name     = (data.get('store_name') or '')[:200]
     cp.phone          = (data.get('phone') or '')[:60]
+    cp.fax            = (data.get('fax') or '')[:60]
     cp.email          = (data.get('email') or '')[:200]
     cp.address        = (data.get('address') or '')[:300]
+    cp.representative = (data.get('representative') or '')[:100]
+    cp.license_number = (data.get('license_number') or '')[:120]
+    cp.license_date   = (data.get('license_date') or '')[:60]
     cp.business_hours = (data.get('business_hours') or '')[:200]
     cp.holidays       = (data.get('holidays') or '')[:200]
+    cp.invoice_number = (data.get('invoice_number') or '')[:60]
     cp.line_url       = (data.get('line_url') or '')[:300]
     db.session.commit()
     return jsonify({'status': 'ok'})

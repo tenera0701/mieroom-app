@@ -278,12 +278,17 @@
           </div>
         </div>
         <div style="flex:1;min-width:260px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div class="form-group" style="grid-column:1/-1;"><label>会社名</label><input type="text" id="cp_company_name" placeholder="例：ルームピック本店"></div>
+          <div class="form-group"><label>会社名</label><input type="text" id="cp_company_name" placeholder="例：株式会社ルームピック"></div>
+          <div class="form-group"><label>店舗名</label><input type="text" id="cp_store_name" placeholder="例：ルームピック本店"></div>
           <div class="form-group"><label>電話番号</label><input type="text" id="cp_phone" placeholder="例：052-000-0000"></div>
-          <div class="form-group"><label>メールアドレス</label><input type="text" id="cp_email" placeholder="例：honten@roompick.net"></div>
-          <div class="form-group" style="grid-column:1/-1;"><label>住所</label><input type="text" id="cp_address" placeholder="例：名古屋市中区..."></div>
+          <div class="form-group"><label>FAX番号</label><input type="text" id="cp_fax" placeholder="例：052-000-0001"></div>
+          <div class="form-group" style="grid-column:1/-1;"><label>メールアドレス</label><input type="text" id="cp_email" placeholder="例：honten@roompick.net"></div>
+          <div class="form-group"><label>代表者氏名</label><input type="text" id="cp_representative" placeholder="例：山田 太郎"></div>
+          <div class="form-group"><label>宅建業免許番号</label><input type="text" id="cp_license_number" placeholder="例：愛知県知事（1）第00000号"></div>
+          <div class="form-group"><label>宅建業免許取得日</label><input type="date" id="cp_license_date"></div>
           <div class="form-group"><label>営業時間</label><input type="text" id="cp_business_hours" placeholder="例：10:00〜19:00"></div>
           <div class="form-group"><label>定休日</label><input type="text" id="cp_holidays" placeholder="例：水曜日"></div>
+          <div class="form-group" style="grid-column:1/-1;"><label>適格請求書(インボイス)発行事業者の登録番号</label><input type="text" id="cp_invoice_number" placeholder="例：T0000000000000"></div>
           <div class="form-group" style="grid-column:1/-1;"><label>公式LINEのURL</label><input type="text" id="cp_line_url" placeholder="例：https://lin.ee/xxxx"></div>
         </div>
       </div>
@@ -551,7 +556,7 @@
 {% block scripts %}
 <script>
 // ── 会社情報・ロゴ ──
-const CP_FIELDS=['company_name','phone','email','address','business_hours','holidays','line_url'];
+const CP_FIELDS=['company_name','store_name','phone','fax','email','representative','license_number','license_date','business_hours','holidays','invoice_number','line_url'];
 async function loadCompany(){
   try{
     const d=await fetch('/api/company-profile').then(r=>r.json());
