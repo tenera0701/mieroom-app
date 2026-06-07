@@ -4808,6 +4808,135 @@ def api_mail_settings_fetch():
     return jsonify(res)
 
 
+# ── 反響取込 診断（読み取り専用：DBへ書き込まない） ──
+def _diagnose_one_email(msg, extra_map, portal_map, store_id, import_after):
+    """1通のメールを読み取り専用で解析し、取込可否と理由を返す（DB書き込みなし）。"""
+    from_addr = _decode_mime(msg.get('From', '') or '')
+    subject = _decode_mime(msg.get('Subject', '') or '')
+    mdt = _msg_datetime(msg)
+    out = {
+        'from': from_addr[:160],
+        'subject': subject[:160],
+        'date': _fmt_jst(mdt, '%Y/%m/%d %H:%M') if mdt else (msg.get('Date') or ''),
+    }
+    if mdt and import_after and mdt < import_after:
+        out['status'] = 'skip'
+        out['reason'] = '取込開始日時より前のメール（過去分は取込対象外）'
+        return out
+    body = _email_plain_body(msg)
+    if not body:
+        out['status'] = 'skip'
+        out['reason'] = '本文テキストを取得できない（HTMLのみ等で項目が読めない）'
+        return out
+    neg = next((k for k in NEG_SUBJECT_KEYWORDS if k in subject), None)
+    if neg:
+        out['status'] = 'skip'
+        out['reason'] = f'件名の除外ワード「{neg}」に該当（通知系と判断）'
+        return out
+    parsed = parse_reaction_email(msg, extra_map, portal_map)
+    if not parsed:
+        fa = (from_addr or '').lower()
+        matched = next((media for matcher, media in (portal_map or []) if matcher and matcher.lower() in fa), None)
+        if matched:
+            out['reason'] = f'ポータル「{matched}」一致だが氏名・物件のどちらも抽出できず（本文の項目表記が想定外）'
+        else:
+            out['reason'] = '差出人が未登録ポータルで、かつ「氏名＋(物件 or 反響件名)」を満たさず'
+        out['status'] = 'skip'
+        return out
+    out['name'] = parsed.get('name')
+    out['media'] = parsed.get('source')
+    ext = parsed.get('external_id')
+    if (ProcessedReaction.query.filter_by(store_id=store_id, external_id=ext).first()
+            or EchoRecord.query.filter_by(store_id=store_id, external_id=ext).first()):
+        out['status'] = 'dup'
+        out['reason'] = '既に取込済み/既存（重複としてスキップ）'
+        return out
+    out['status'] = 'ok'
+    out['reason'] = '反響として取込対象（この条件なら取り込まれる）'
+    return out
+
+
+def _is_mail_diag_manager():
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    return bool(cur_user and cur_user.role in ('owner', 'store_manager', 'super_admin'))
+
+
+@app.route("/mail-diagnose")
+@login_required
+def mail_diagnose_page():
+    if not _is_mail_diag_manager():
+        return "この画面は管理者のみ利用できます。", 403
+    stores = get_allowed_stores()
+    return render_template("mail_diagnose.html", stores=stores)
+
+
+@app.route("/api/mail-diagnose")
+@login_required
+def api_mail_diagnose():
+    if not _is_mail_diag_manager():
+        return jsonify({'error': '権限がありません'}), 403
+    allowed = get_allowed_store_ids()
+    sid = request.args.get('store_id', type=int) or (allowed[0] if allowed else None)
+    if not sid or sid not in allowed:
+        return jsonify({'error': '対象の店舗が見つかりません'}), 404
+    ms = MailSetting.query.filter_by(store_id=sid).first()
+    result = {'store_id': sid, 'setting': None, 'portals': [], 'emails': [], 'summary': {}}
+    if not ms:
+        result['error'] = 'この店舗のメール取込設定がありません（未設定）。'
+        return jsonify(result)
+    conn = 'OAuth(Google)連携' if ms.oauth_refresh_token else ('アプリパスワード' if (ms.imap_user and ms.imap_pass) else '未接続')
+    result['setting'] = {
+        'enabled': bool(ms.enabled),
+        'connection': conn,
+        'imap_user': ms.imap_user or ms.oauth_email or '',
+        'import_after': _fmt_jst(ms.import_after, '%Y/%m/%d %H:%M') if ms.import_after else '（未設定）',
+        'last_fetch_at': _fmt_jst(ms.last_fetch_at, '%Y/%m/%d %H:%M') if ms.last_fetch_at else '（なし）',
+        'last_result': ms.last_result or '（なし）',
+        'auto_reply_enabled': bool(ms.auto_reply_enabled),
+    }
+    portals = PortalSource.query.filter_by(store_id=sid).order_by(PortalSource.id.asc()).all()
+    result['portals'] = [{'matcher': p.matcher or '', 'media': p.media or '', 'enabled': bool(p.enabled)} for p in portals]
+    if conn == '未接続':
+        result['error'] = 'メール接続が未設定です（IMAP/OAuthなし）。先に接続設定が必要です。'
+        return jsonify(result)
+    extra_map = parse_custom_keywords(ms.custom_keywords)
+    portal_map = [(p.matcher, p.media) for p in portals if p.enabled and p.matcher and p.media]
+    diag_days, limit = 21, 60
+    try:
+        M = _open_imap(ms)
+        M.select('INBOX')
+        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        since = date.today() - timedelta(days=diag_days)
+        since_str = f"{since.day:02d}-{months[since.month - 1]}-{since.year}"
+        typ, data = M.search(None, f'(SINCE "{since_str}")')
+        ids = data[0].split() if (data and data[0]) else []
+        ids = ids[-limit:]
+        emails = []
+        for num in reversed(ids):
+            try:
+                typ, md = M.fetch(num, '(BODY.PEEK[])')
+                if not md or not md[0]:
+                    continue
+                msg = emaillib.message_from_bytes(md[0][1])
+            except Exception:
+                continue
+            emails.append(_diagnose_one_email(msg, extra_map, portal_map, sid, ms.import_after))
+        try:
+            M.close()
+            M.logout()
+        except Exception:
+            pass
+        result['emails'] = emails
+        summary = {'total': len(emails), 'ok': 0, 'dup': 0, 'skip': 0}
+        for e in emails:
+            st = e.get('status', 'skip')
+            summary[st] = summary.get(st, 0) + 1
+        result['summary'] = summary
+    except Exception as e:
+        result['error'] = f'メール取得でエラー：{e}'
+    return jsonify(result)
+
+
 @app.route("/api/portal-sources", methods=["GET"])
 @login_required
 def api_portal_sources_get():

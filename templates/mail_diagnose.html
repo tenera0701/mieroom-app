@@ -1,0 +1,132 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}反響取込 診断 | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}反響取込 診断{% endblock %}
+
+{% block extra_head %}
+<style>
+  :root { --primary:#0D9488; --primary-dark:#0F766E; --primary-light:#CCFBF1; }
+  .page-title { font-size:22px; font-weight:800; color:#111827; margin:0; }
+  .card { background:#fff; border-radius:12px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,0.06); border:1px solid #e5e7eb; margin-bottom:14px; }
+  .card h2 { font-size:14px; font-weight:800; color:#111827; margin:0 0 10px; border-left:4px solid var(--primary); padding-left:10px; }
+  .filter { border:1px solid #d1d5db; border-radius:6px; padding:7px 10px; font-size:13px; }
+  .btn { padding:8px 16px; font-size:13px; border-radius:8px; border:none; background:var(--primary); color:#fff; font-weight:700; cursor:pointer; }
+  .btn:disabled { opacity:0.5; cursor:wait; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th { background:#F0FDFA; padding:7px 8px; text-align:left; font-weight:700; color:#374151; border-bottom:2px solid #d1fae5; white-space:nowrap; }
+  td { padding:7px 8px; border-bottom:1px solid #f3f4f6; color:#111827; vertical-align:top; }
+  .kv { display:grid; grid-template-columns:160px 1fr; gap:4px 12px; font-size:13px; }
+  .kv .k { color:#6b7280; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap; }
+  .b-ok { background:#d1fae5; color:#065f46; }
+  .b-dup { background:#e0e7ff; color:#3730a3; }
+  .b-skip { background:#fee2e2; color:#b91c1c; }
+  .muted { color:#9ca3af; font-size:12px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1200px;margin:0 auto;">
+  <div style="margin-bottom:16px;">
+    <h1 class="page-title">反響取込 診断</h1>
+    <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">受信箱の直近メールを<b>読み取り専用で試し解析</b>し、1通ごとに「取り込めた／弾いた理由」を表示します（DBには一切書き込みません）。</p>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <label style="font-size:13px;font-weight:700;color:#374151;">店舗</label>
+      <select id="store-sel" class="filter">
+        {% for s in stores %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+      </select>
+      <button class="btn" id="run-btn" onclick="runDiag()">診断を実行</button>
+      <span id="run-note" class="muted"></span>
+    </div>
+  </div>
+
+  <div id="result" style="display:none;">
+    <div class="card">
+      <h2>取込設定の状態</h2>
+      <div id="setting-box" class="kv"></div>
+    </div>
+    <div class="card">
+      <h2>ポータル登録（差出人 → 媒体）</h2>
+      <div id="portal-box"></div>
+    </div>
+    <div class="card">
+      <h2>直近メールの試し解析</h2>
+      <div id="summary-box" style="margin-bottom:8px;"></div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>判定</th><th>日時</th><th>差出人</th><th>件名</th><th>理由 / 抽出結果</th></tr></thead>
+          <tbody id="email-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function runDiag(){
+  const btn = document.getElementById('run-btn');
+  const sid = document.getElementById('store-sel').value;
+  const note = document.getElementById('run-note');
+  btn.disabled = true; note.textContent = '受信箱に接続して解析中…（数十秒かかる場合があります）';
+  try{
+    const res = await fetch('/api/mail-diagnose?store_id=' + encodeURIComponent(sid));
+    const d = await res.json();
+    if(d.error && !d.setting){ note.textContent = '⚠ ' + d.error; document.getElementById('result').style.display='none'; return; }
+    renderResult(d);
+    note.textContent = d.error ? ('⚠ ' + d.error) : '完了';
+  }catch(e){
+    note.textContent = '通信に失敗しました：' + e;
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+function renderResult(d){
+  document.getElementById('result').style.display='';
+  const s = d.setting || {};
+  document.getElementById('setting-box').innerHTML = [
+    ['自動取込', s.enabled ? 'ON' : 'OFF'],
+    ['接続方式', s.connection],
+    ['連携アドレス', s.imap_user],
+    ['取込開始日時', s.import_after],
+    ['最終取得', s.last_fetch_at],
+    ['前回結果', s.last_result],
+    ['自動返信', s.auto_reply_enabled ? 'ON' : 'OFF'],
+  ].map(([k,v])=>`<div class="k">${esc(k)}</div><div>${esc(v)}</div>`).join('');
+
+  const portals = d.portals || [];
+  document.getElementById('portal-box').innerHTML = portals.length
+    ? `<table><thead><tr><th>差出人 matcher</th><th>媒体</th><th>有効</th></tr></thead><tbody>${
+        portals.map(p=>`<tr><td>${esc(p.matcher)}</td><td>${esc(p.media)}</td><td>${p.enabled?'有効':'<span class="b-skip badge">無効</span>'}</td></tr>`).join('')
+      }</tbody></table>`
+    : '<div class="b-skip badge">ポータル登録が0件です（未登録だと取込判定が厳しくなります）</div>';
+
+  const sum = d.summary || {};
+  document.getElementById('summary-box').innerHTML =
+    `<span class="badge b-ok">取込対象 ${sum.ok||0}</span> ` +
+    `<span class="badge b-dup">重複/既存 ${sum.dup||0}</span> ` +
+    `<span class="badge b-skip">対象外 ${sum.skip||0}</span> ` +
+    `<span class="muted">（直近21日・最大60通を確認）</span>`;
+
+  const rows = (d.emails || []).map(e=>{
+    const cls = e.status==='ok'?'b-ok':(e.status==='dup'?'b-dup':'b-skip');
+    const lbl = e.status==='ok'?'取込対象':(e.status==='dup'?'重複':'対象外');
+    const extra = (e.name||e.media) ? `<div class="muted">媒体:${esc(e.media||'-')} / 氏名:${esc(e.name||'-')}</div>` : '';
+    return `<tr>
+      <td><span class="badge ${cls}">${lbl}</span></td>
+      <td style="white-space:nowrap;">${esc(e.date)}</td>
+      <td style="max-width:220px;word-break:break-all;">${esc(e.from)}</td>
+      <td style="max-width:260px;">${esc(e.subject)}</td>
+      <td>${esc(e.reason)}${extra}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('email-tbody').innerHTML = rows || '<tr><td colspan="5" class="muted" style="padding:20px;text-align:center;">直近21日に対象メールがありません</td></tr>';
+}
+</script>
+{% endblock %}
