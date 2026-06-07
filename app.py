@@ -814,6 +814,8 @@ class CompanyProfile(db.Model):
     business_hours = db.Column(db.String(200))
     holidays       = db.Column(db.String(200))
     line_url       = db.Column(db.String(300))
+    logo_data      = db.Column(db.LargeBinary)        # 店舗ロゴ画像
+    logo_type      = db.Column(db.String(80))         # ロゴのMIMEタイプ
     updated_at     = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
@@ -1561,6 +1563,19 @@ def migrate_db():
     except Exception as e:
         print(f"  Skip portal_source.auto_reply_template_id: {e}")
 
+    # company_profile の logo カラムを追加
+    try:
+        cursor.execute("PRAGMA table_info(company_profile)")
+        cpcols = {r[1] for r in cursor.fetchall()}
+        if cpcols and 'logo_data' not in cpcols:
+            cursor.execute("ALTER TABLE company_profile ADD COLUMN logo_data BLOB")
+            print("  Added column company_profile.logo_data")
+        if cpcols and 'logo_type' not in cpcols:
+            cursor.execute("ALTER TABLE company_profile ADD COLUMN logo_type VARCHAR(80)")
+            print("  Added column company_profile.logo_type")
+    except Exception as e:
+        print(f"  Skip company_profile logo columns: {e}")
+
     # mail_template の is_html / category カラムを追加
     try:
         cursor.execute("PRAGMA table_info(mail_template)")
@@ -1674,6 +1689,8 @@ def migrate_postgres():
         ("portal_source",            "auto_reply_template_id", "INTEGER"),
         ("mail_template",            "is_html",         "BOOLEAN DEFAULT FALSE"),
         ("mail_template",            "category",        "VARCHAR(120) DEFAULT ''"),
+        ("company_profile",          "logo_data",       "BYTEA"),
+        ("company_profile",          "logo_type",       "VARCHAR(80)"),
         ("mail_template",            "category",        "VARCHAR(120) DEFAULT ''"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
         ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
@@ -4949,6 +4966,7 @@ def api_company_profile_get():
         'business_hours': cp.business_hours if cp else '',
         'holidays': cp.holidays if cp else '',
         'line_url': cp.line_url if cp else '',
+        'has_logo': bool(cp and cp.logo_data),
     })
 
 
@@ -7761,17 +7779,11 @@ def api_payments_summary():
 
 # ── 設定ページ ───────────────────────────────────────────
 
-@app.route("/settings")
-@login_required
-def settings():
-    """設定ページ（スタッフ以上）"""
+def _render_settings(mode):
     stores     = get_allowed_stores(ignore_active=True)
-    # スタッフ表示はアクティブ店舗のみ（店舗ごとに分離）
     active_store_ids = get_allowed_store_ids(ignore_active=False)
     staff_list = Staff.query.filter(Staff.store_id.in_(active_store_ids), Staff.is_active == True).order_by(Staff.name).all() if active_store_ids else []
-    # 担当店舗名マップ
     store_name_map = {s.id: s.name for s in stores}
-    # アカウント一覧はオーナー・店長のみ表示（自テナントのみ）
     user = AppUser.query.get(session['app_user_id'])
     is_owner = user and user.role == 'owner'
     is_manager = user and user.role == 'store_manager'
@@ -7779,12 +7791,96 @@ def settings():
         accounts = AppUser.query.filter_by(is_active=True, tenant_id=user.tenant_id).all()
     else:
         accounts = []
+    titles = {'staff': 'スタッフ管理', 'accounts': 'ログインアカウント',
+              'company': '会社情報', 'profile': 'IDパスワード変更'}
     return render_template("settings.html",
                            stores=stores, staff_list=staff_list, accounts=accounts,
                            store_name_map=store_name_map,
                            is_owner=is_owner, is_manager=is_manager,
-                           current_user=user,
+                           current_user=user, mode=mode,
+                           page_title=titles.get(mode, '設定'),
                            now=datetime.now())
+
+
+@app.route("/settings")
+@login_required
+def settings():
+    user = AppUser.query.get(session.get('app_user_id'))
+    if user and user.role in ('owner', 'store_manager'):
+        return redirect(url_for('settings_staff'))
+    return redirect(url_for('settings_profile'))
+
+
+@app.route("/settings/staff")
+@login_required
+def settings_staff():
+    return _render_settings('staff')
+
+
+@app.route("/settings/accounts")
+@login_required
+def settings_accounts():
+    return _render_settings('accounts')
+
+
+@app.route("/settings/company")
+@login_required
+def settings_company():
+    return _render_settings('company')
+
+
+@app.route("/settings/profile")
+@login_required
+def settings_profile():
+    return _render_settings('profile')
+
+
+@app.route("/api/company-logo", methods=["GET"])
+@login_required
+def api_company_logo_get():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    cp = CompanyProfile.query.filter_by(store_id=sid).first() if sid else None
+    if not cp or not cp.logo_data:
+        return "", 404
+    from flask import Response as _Resp
+    return _Resp(cp.logo_data, mimetype=cp.logo_type or 'image/png')
+
+
+@app.route("/api/company-logo", methods=["POST"])
+@login_required
+def api_company_logo_upload():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    if not sid:
+        return jsonify({'error': 'unauthorized'}), 403
+    f = request.files.get('logo')
+    if not f or not f.filename:
+        return jsonify({'error': 'ファイルを選択してください'}), 400
+    raw = f.read()
+    if len(raw) > 5 * 1024 * 1024:
+        return jsonify({'error': 'ロゴ画像は5MBまでです'}), 400
+    cp = CompanyProfile.query.filter_by(store_id=sid).first()
+    if not cp:
+        cp = CompanyProfile(store_id=sid)
+        db.session.add(cp)
+    cp.logo_data = raw
+    cp.logo_type = (f.mimetype or 'image/png')[:80]
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/company-logo", methods=["DELETE"])
+@login_required
+def api_company_logo_delete():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    cp = CompanyProfile.query.filter_by(store_id=sid).first() if sid else None
+    if cp:
+        cp.logo_data = None
+        cp.logo_type = None
+        db.session.commit()
+    return jsonify({'status': 'ok'})
 
 
 @app.route("/api/settings/staff/add", methods=["POST"])

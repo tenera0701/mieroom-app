@@ -138,21 +138,10 @@
   {% endif %}{# end import: 接続・取込設定 #}
 
   {% if mode == 'templates' %}
-  <!-- 会社情報（差し込み用） -->
-  <div class="card">
-    <h2>🏢 会社情報（自動返信メールの差し込み用）</h2>
-    <p style="font-size:12px;color:#6b7280;margin:-6px 0 12px;line-height:1.6;">
-      ここに登録した内容が、テンプレ内の差し込み文字（例 <code>#会社名#</code>）に自動で入ります。
+  <div class="card" style="background:#F8FAFC;">
+    <p style="font-size:12px;color:#6b7280;margin:0;line-height:1.7;">
+      💡 差し込み文字（<code>#会社名#</code> など）に入る<b>会社情報・店舗ロゴ</b>は、サイドバー「設定 → 会社情報」で登録します。
     </p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div class="field"><label>会社名</label><input id="cp_company_name" type="text" placeholder="例：ルームピック本店"></div>
-      <div class="field"><label>電話番号</label><input id="cp_phone" type="text" placeholder="例：052-000-0000"></div>
-      <div class="field"><label>メールアドレス</label><input id="cp_email" type="text" placeholder="例：honten@roompick.net"></div>
-      <div class="field"><label>住所</label><input id="cp_address" type="text" placeholder="例：名古屋市中区..."></div>
-      <div class="field"><label>営業時間</label><input id="cp_business_hours" type="text" placeholder="例：10:00〜19:00"></div>
-      <div class="field"><label>定休日</label><input id="cp_holidays" type="text" placeholder="例：水曜日"></div>
-      <div class="field" style="grid-column:1 / -1;"><label>公式LINEのURL</label><input id="cp_line_url" type="text" placeholder="例：https://lin.ee/xxxx"></div>
-    </div>
   </div>
 
   <!-- 自動返信テンプレート管理 -->
