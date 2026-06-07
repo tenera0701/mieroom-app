@@ -1331,9 +1331,9 @@ async function sendMail(){
   finally{ btn.disabled = false; }
 }
 
-// Enterで送信（Shift+Enterで改行）
+// Shift+Enterで送信（Enterは改行）
 document.addEventListener('keydown', e=>{
-  if(e.key==='Enter' && !e.shiftKey && document.activeElement && document.activeElement.id==='mail-body'){
+  if(e.key==='Enter' && e.shiftKey && document.activeElement && document.activeElement.id==='mail-body'){
     e.preventDefault(); sendMail();
   }
 });
