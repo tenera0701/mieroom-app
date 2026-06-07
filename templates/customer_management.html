@@ -1380,42 +1380,41 @@ async function loadColors() {
     const c = colors[key] || STATUS_DEFAULTS[key] || { bg: '#ffffff', text: '#111827' };
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f3f4f6;';
-    const cls = key.replace(/[^a-z]/gi,'');
+    const sw = (type, val) => `<button type="button" class="color-swatch" data-status="${key}" data-type="${type}" data-value="${val}" onclick="openColorPalette(this, function(col){ cmRefreshColorRow('${key}'); })" style="width:32px;height:26px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:0;background:${val};"></button>`;
     row.innerHTML = `
       <span style="font-size:13px;font-weight:600;min-width:84px;">${key}</span>
       <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#6b7280;">バッジ背景
-        <input type="color" data-status="${key}" data-type="bg" value="${c.bg}" style="width:32px;height:26px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;"></label>
+        ${sw('bg', c.bg)}</label>
       <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#6b7280;">文字色
-        <input type="color" data-status="${key}" data-type="text" value="${c.text}" style="width:32px;height:26px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;"></label>
+        ${sw('text', c.text)}</label>
       <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#6b7280;">行背景
-        <input type="color" data-status="${key}" data-type="row_bg" value="${c.row_bg || '#ffffff'}" style="width:32px;height:26px;border:1px solid #d1d5db;border-radius:4px;cursor:pointer;padding:2px;"></label>
-      <span class="rp-${cls}" title="行プレビュー" style="display:inline-flex;align-items:center;padding:4px 8px;border-radius:4px;border:1px solid #e5e7eb;background:${c.row_bg || '#ffffff'};">
-        <span class="app-status-badge cp-${cls}" style="background:${c.bg};color:${c.text};border:1px solid ${c.text}30;">${key}</span>
+        ${sw('row_bg', c.row_bg || '#ffffff')}</label>
+      <span data-preview-row="${key}" title="行プレビュー" style="display:inline-flex;align-items:center;padding:4px 8px;border-radius:4px;border:1px solid #e5e7eb;background:${c.row_bg || '#ffffff'};">
+        <span class="app-status-badge" data-preview-badge="${key}" style="background:${c.bg};color:${c.text};border:1px solid ${c.text}30;">${key}</span>
       </span>`;
     container.appendChild(row);
-    row.querySelectorAll('input[type="color"]').forEach(inp => {
-      inp.addEventListener('input', () => {
-        const s = inp.dataset.status, cl = s.replace(/[^a-z]/gi,'');
-        const bgV  = container.querySelector(`input[data-status="${s}"][data-type="bg"]`).value;
-        const txV  = container.querySelector(`input[data-status="${s}"][data-type="text"]`).value;
-        const rowV = container.querySelector(`input[data-status="${s}"][data-type="row_bg"]`).value;
-        const badge = container.querySelector(`.cp-${cl}`);
-        const rowPv = container.querySelector(`.rp-${cl}`);
-        if (badge) { badge.style.background = bgV; badge.style.color = txV; badge.style.borderColor = txV + '30'; }
-        if (rowPv) { rowPv.style.background = rowV; }
-      });
-    });
   });
+}
+
+// 色設定モーダル：3スウォッチの現在値からプレビュー（バッジ・行背景）を更新
+function cmRefreshColorRow(key) {
+  const cont = document.getElementById('color-settings');
+  const g = (t) => { const el = cont.querySelector(`.color-swatch[data-status="${key}"][data-type="${t}"]`); return el ? el.dataset.value : ''; };
+  const bg = g('bg'), tx = g('text'), row = g('row_bg');
+  const badge = cont.querySelector(`[data-preview-badge="${key}"]`);
+  const rowPv = cont.querySelector(`[data-preview-row="${key}"]`);
+  if (badge) { badge.style.background = bg; badge.style.color = tx; badge.style.borderColor = tx + '30'; }
+  if (rowPv) { rowPv.style.background = row; }
 }
 
 async function saveColors() {
   const container = document.getElementById('color-settings');
   const colors = {};
   STATUS_KEYS.forEach(key => {
-    const bgEl  = container.querySelector(`input[data-status="${key}"][data-type="bg"]`);
-    const txEl  = container.querySelector(`input[data-status="${key}"][data-type="text"]`);
-    const rowEl = container.querySelector(`input[data-status="${key}"][data-type="row_bg"]`);
-    if (bgEl && txEl) colors[key] = { bg: bgEl.value, text: txEl.value, row_bg: rowEl ? rowEl.value : bgEl.value };
+    const bgEl  = container.querySelector(`.color-swatch[data-status="${key}"][data-type="bg"]`);
+    const txEl  = container.querySelector(`.color-swatch[data-status="${key}"][data-type="text"]`);
+    const rowEl = container.querySelector(`.color-swatch[data-status="${key}"][data-type="row_bg"]`);
+    if (bgEl && txEl) colors[key] = { bg: bgEl.dataset.value, text: txEl.dataset.value, row_bg: rowEl ? rowEl.dataset.value : bgEl.dataset.value };
   });
   try {
     const res = await fetch('/api/status-colors', {

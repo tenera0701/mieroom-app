@@ -56,7 +56,7 @@
       <input type="file" accept="image/*" onchange="addLogo(event)" style="display:none;">
     </label>
     <span class="tb-sep"></span>
-    <input type="color" class="tb-color" id="color-picker" value="#0D9488" title="選択中の色" onchange="applyColor(this.value)">
+    <button type="button" class="tb-color color-swatch" id="color-picker" data-value="#0D9488" title="選択中の色" onclick="openColorPalette(this, function(col){ applyColor(col); })" style="background:#0D9488;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;padding:0;"></button>
     <button class="tb-btn" onclick="bringFront()">最前面へ</button>
     <button class="tb-btn" onclick="sendBack()">最背面へ</button>
     <button class="tb-btn danger" onclick="delSel()">🗑 削除</button>
@@ -146,7 +146,7 @@ function addLogo(e) {
   e.target.value = '';
 }
 
-function getColor() { return document.getElementById('color-picker').value; }
+function getColor() { return document.getElementById('color-picker').dataset.value; }
 
 function applyColor(c) {
   const o = canvas.getActiveObject(); if (!o) return;

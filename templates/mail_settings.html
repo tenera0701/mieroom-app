@@ -204,8 +204,8 @@
             <option value="6">特大</option>
             <option value="7">最大</option>
           </select>
-          <label class="te-tb" title="フォントカラー" style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;">A<input type="color" onmousedown="teRemember()" onchange="teCmd('foreColor', this.value)" style="width:22px;height:20px;border:none;padding:0;cursor:pointer;background:none;"></label>
-          <label class="te-tb" title="背景色選択" style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;">塗<input type="color" value="#ffff00" onmousedown="teRemember()" onchange="teBg(this.value)" style="width:22px;height:20px;border:none;padding:0;cursor:pointer;background:none;"></label>
+          <label class="te-tb" title="フォントカラー" style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;">A<button type="button" class="color-swatch" data-value="#111827" onmousedown="teRemember()" onclick="openColorPalette(this, function(col){ teCmd('foreColor', col); })" style="width:22px;height:20px;border:1px solid #d1d5db;border-radius:4px;padding:0;cursor:pointer;background:#111827;"></button></label>
+          <label class="te-tb" title="背景色選択" style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;">塗<button type="button" class="color-swatch" data-value="#fde047" onmousedown="teRemember()" onclick="openColorPalette(this, function(col){ teBg(col); })" style="width:22px;height:20px;border:1px solid #d1d5db;border-radius:4px;padding:0;cursor:pointer;background:#fde047;"></button></label>
           <span style="width:1px;height:18px;background:#e5e7eb;margin:0 2px;"></span>
           <button type="button" class="te-tb" onmousedown="event.preventDefault()" onclick="teCmd('insertUnorderedList')" title="・リスト">・リスト</button>
           <button type="button" class="te-tb" onmousedown="event.preventDefault()" onclick="teCmd('insertOrderedList')" title="1.リスト">1. リスト</button>
