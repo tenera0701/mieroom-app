@@ -7791,8 +7791,8 @@ def _render_settings(mode):
         accounts = AppUser.query.filter_by(is_active=True, tenant_id=user.tenant_id).all()
     else:
         accounts = []
-    titles = {'staff': 'スタッフ管理', 'accounts': 'ログインアカウント',
-              'company': '会社情報', 'profile': 'IDパスワード変更'}
+    titles = {'staff': 'スタッフ管理', 'accounts': 'ログイン管理',
+              'company': '会社情報', 'profile': 'ID/パス管理'}
     return render_template("settings.html",
                            stores=stores, staff_list=staff_list, accounts=accounts,
                            store_name_map=store_name_map,
