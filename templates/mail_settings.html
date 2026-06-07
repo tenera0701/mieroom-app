@@ -167,8 +167,7 @@
       <div style="padding:16px 18px;overflow-y:auto;">
         <input type="hidden" id="te-id">
         <div class="field"><label>媒体（フォルダ）</label>
-          <input id="te-category" type="text" list="te-cat-list" placeholder="例：SUUMO / HOME'S（空欄は「未分類」）" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;">
-          <datalist id="te-cat-list"></datalist></div>
+          <select id="te-category" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;background:#fff;color:#111827;"></select></div>
         <div class="field" style="margin-top:10px;"><label>テンプレ名</label>
           <input id="te-title" type="text" placeholder="例：初回返信" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;"></div>
         <div class="field" style="margin-top:10px;"><label>件名</label>
@@ -461,9 +460,14 @@ function categoryChoices(){
   push('ポータル以外');
   return set;
 }
-function fillCategoryDatalist(){
-  const dl=document.getElementById('te-cat-list'); if(!dl) return;
-  dl.innerHTML=categoryChoices().map(c=>`<option value="${escAttr(c)}">`).join('');
+function fillCategorySelect(cur){
+  const sel=document.getElementById('te-category'); if(!sel) return;
+  const choices=categoryChoices().slice();
+  // 現在の値が候補に無ければ追加（既存フォルダを保持）
+  const c=(cur||'').trim();
+  if(c && choices.indexOf(c)<0) choices.unshift(c);
+  sel.innerHTML='<option value="">（未分類）</option>'+choices.map(v=>`<option value="${escAttr(v)}">${escAttr(v)}</option>`).join('');
+  sel.value=c;
 }
 // テンプレをフォルダ（媒体）ごとにまとめる。空は「未分類」
 function groupTemplatesByFolder(){
@@ -485,7 +489,8 @@ function renderTplList(){
   }
   box.innerHTML = groupTemplatesByFolder().map(g=>`
     <div style="margin-bottom:12px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
-      <div style="display:flex;align-items:center;gap:6px;background:#F0FDFA;padding:8px 12px;border-bottom:1px solid #99f6e4;">
+      <div onclick="toggleTplFolder(this)" style="display:flex;align-items:center;gap:6px;background:#F0FDFA;padding:8px 12px;border-bottom:1px solid #99f6e4;cursor:pointer;user-select:none;">
+        <span class="fld-chev" style="font-size:11px;color:#0F766E;width:12px;">▼</span>
         <span style="font-size:14px;">📁</span>
         <span style="font-size:13px;font-weight:800;color:#0F766E;">${escAttr(g.folder)}</span>
         <span style="font-size:11px;color:#6b7280;">（${g.items.length}件）</span>
@@ -505,6 +510,14 @@ function renderTplList(){
       </div>
     </div>`).join('');
 }
+// フォルダ見出しクリックで中身を開閉
+function toggleTplFolder(head){
+  const items=head.nextElementSibling; if(!items) return;
+  const open=items.style.display!=='none';
+  items.style.display=open?'none':'';
+  const chev=head.querySelector('.fld-chev');
+  if(chev) chev.textContent=open?'▶':'▼';
+}
 async function refreshTemplatesUI(){
   await loadTemplates();
   renderTplList();
@@ -519,8 +532,7 @@ function openTplEditor(id){
   const t=id ? _TEMPLATES.find(x=>x.id===id) : null;
   document.getElementById('te-id').value = t ? t.id : '';
   document.getElementById('te-heading').textContent = t ? 'テンプレートを編集' : '新しいテンプレート';
-  fillCategoryDatalist();
-  document.getElementById('te-category').value = t ? (t.category||'') : '';
+  fillCategorySelect(t ? (t.category||'') : '');
   document.getElementById('te-title').value = t ? (t.title||'') : '';
   document.getElementById('te-subject').value = t ? (t.subject||'') : '';
   document.getElementById('te-error').style.display='none';
