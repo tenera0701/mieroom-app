@@ -46,6 +46,10 @@
   .man-body li { margin-bottom:4px; }
   .man-tip { margin-top:8px; background:#FEF9C3; border:1px solid #FDE047; border-radius:8px; padding:7px 10px; color:#92400e; }
   .man-note { margin-top:14px; background:#ECFDF5; border:1px solid #A7F3D0; border-radius:8px; padding:9px 12px; color:#065F46; }
+  .te-tb { font-size:13px; border:1px solid #d1d5db; background:#fff; border-radius:5px; padding:3px 9px; cursor:pointer; color:#374151; }
+  .te-tb:hover { background:#f1f5f9; }
+  #te-body-html:empty:before { content:'本文（差し込み文字・装飾が使えます）'; color:#cbd5e1; }
+  #te-body-html a { color:#0d6efd; }
   .badge { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; background:#ECFDF5; color:#0F766E; border:1px solid #A7F3D0; }
 </style>
 {% endblock %}
@@ -155,16 +159,58 @@
   <div class="card">
     <h2>📝 自動返信テンプレート</h2>
     <p style="font-size:12px;color:#6b7280;margin:-6px 0 12px;line-height:1.6;">
-      自動返信に使う文面を作成します。<b>媒体ごとに違う内容</b>を用意して、下の「ポータル登録」で媒体に割り当てられます。
+      自動返信に使う文面を作成します。<b>HTMLで装飾</b>でき、<b>差し込み文字</b>（#name# 等）でお客様情報が自動で入ります。<br>
+      <b>媒体ごとに違う内容</b>を用意して、下の「ポータル登録」で媒体に割り当てられます。
     </p>
-    <div id="tpl-list" style="display:flex;flex-direction:column;gap:10px;"></div>
-    <div style="margin-top:14px;border-top:1px dashed #e5e7eb;padding-top:12px;">
-      <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px;">新しいテンプレを追加</div>
-      <input id="ntpl-title" type="text" placeholder="テンプレ名（例：SUUMO用）" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:6px;box-sizing:border-box;">
-      <input id="ntpl-subject" type="text" placeholder="件名（例：お問い合わせありがとうございます）" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:6px;box-sizing:border-box;">
-      <textarea id="ntpl-body" rows="5" placeholder="本文（差し込み文字が使えます）" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;font-family:inherit;resize:vertical;"></textarea>
-      <div id="var-legend" style="margin-top:8px;"></div>
-      <div style="text-align:right;margin-top:8px;"><button class="btn primary" onclick="addTemplate()">追加する</button></div>
+    <div id="tpl-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+    <div style="text-align:right;margin-top:12px;">
+      <button class="btn primary" onclick="openTplEditor(null)">＋ 新しいテンプレートを作成</button>
+    </div>
+  </div>
+
+  <!-- テンプレート エディタ（モーダル） -->
+  <div id="tpl-editor-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:2200;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:#fff;border-radius:12px;width:760px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,0.3);">
+      <div style="padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+        <h3 id="te-heading" style="margin:0;font-size:15px;font-weight:800;color:#0F766E;">テンプレートを編集</h3>
+        <button onclick="closeTplEditor()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
+      </div>
+      <div style="padding:16px 18px;overflow-y:auto;">
+        <input type="hidden" id="te-id">
+        <div class="field"><label>テンプレ名</label>
+          <input id="te-title" type="text" placeholder="例：SUUMO用" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;"></div>
+        <div class="field" style="margin-top:10px;"><label>件名</label>
+          <input id="te-subject" type="text" placeholder="例：お問い合わせありがとうございます" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;"></div>
+
+        <div style="margin-top:12px;display:flex;align-items:center;gap:10px;">
+          <label style="font-size:12px;font-weight:700;color:#374151;">編集形式</label>
+          <div style="display:inline-flex;border:1px solid #d1d5db;border-radius:8px;overflow:hidden;">
+            <button type="button" id="te-mode-html" onclick="teSetMode('html')" style="border:none;background:#0D9488;color:#fff;font-size:12px;padding:5px 14px;cursor:pointer;">HTML（装飾あり）</button>
+            <button type="button" id="te-mode-text" onclick="teSetMode('text')" style="border:none;background:#fff;color:#374151;font-size:12px;padding:5px 14px;cursor:pointer;">テキスト</button>
+          </div>
+        </div>
+
+        <!-- ツールバー（HTMLモード） -->
+        <div id="te-toolbar" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;border:1px solid #e5e7eb;border-radius:8px 8px 0 0;padding:6px 8px;background:#F8FAFC;">
+          <button type="button" class="te-tb" onmousedown="event.preventDefault()" onclick="teCmd('bold')" style="font-weight:800;">B</button>
+          <button type="button" class="te-tb" onmousedown="event.preventDefault()" onclick="teCmd('italic')" style="font-style:italic;">I</button>
+          <button type="button" class="te-tb" onmousedown="event.preventDefault()" onclick="teCmd('underline')" style="text-decoration:underline;">U</button>
+          <input type="color" title="文字色" onchange="teCmd('foreColor', this.value)" style="width:28px;height:26px;border:1px solid #d1d5db;border-radius:5px;padding:0;cursor:pointer;background:#fff;vertical-align:middle;">
+          <button type="button" class="te-tb" onmousedown="event.preventDefault()" onclick="teCmd('insertUnorderedList')">• リスト</button>
+          <button type="button" class="te-tb" onmousedown="event.preventDefault()" onclick="teCmd('insertOrderedList')">1. リスト</button>
+          <button type="button" class="te-tb" onmousedown="event.preventDefault()" onclick="teLink()">🔗 リンク</button>
+          <span style="width:1px;height:18px;background:#e5e7eb;margin:0 2px;"></span>
+          <span style="font-size:11px;color:#6b7280;">差し込み:</span>
+          <span id="te-vars"></span>
+        </div>
+        <div id="te-body-html" contenteditable="true" style="border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;min-height:200px;max-height:340px;overflow-y:auto;padding:12px;font-size:14px;line-height:1.7;outline:none;"></div>
+        <textarea id="te-body-text" placeholder="本文（差し込み文字が使えます）" style="display:none;width:100%;min-height:220px;border:1px solid #d1d5db;border-radius:8px;padding:12px;font-size:13px;box-sizing:border-box;font-family:inherit;resize:vertical;margin-top:10px;"></textarea>
+        <div id="te-error" style="color:#b91c1c;font-size:12px;margin-top:8px;display:none;"></div>
+      </div>
+      <div style="padding:12px 18px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px;">
+        <button class="btn" onclick="closeTplEditor()">キャンセル</button>
+        <button class="btn primary" onclick="saveTplEditor()">保存する</button>
+      </div>
     </div>
   </div>
   {% endif %}{# end templates #}
@@ -371,12 +417,15 @@ async function loadTemplates(){
 function renderTplList(){
   const box=document.getElementById('tpl-list'); if(!box) return;
   box.innerHTML = _TEMPLATES.length ? _TEMPLATES.map(t=>`
-    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;">
-      <input value="${escAttr(t.title)}" onchange="updTpl(${t.id},'title',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:13px;font-weight:700;margin-bottom:5px;box-sizing:border-box;">
-      <input value="${escAttr(t.subject)}" placeholder="件名" onchange="updTpl(${t.id},'subject',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px;margin-bottom:5px;box-sizing:border-box;">
-      <textarea rows="3" onchange="updTpl(${t.id},'body',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px;box-sizing:border-box;font-family:inherit;resize:vertical;">${escAttr(t.body)}</textarea>
-      <div style="text-align:right;margin-top:5px;"><button class="btn" style="border-color:#fca5a5;color:#ef4444;" onclick="delTpl(${t.id})">削除</button></div>
-    </div>`).join('') : '<p style="color:#9ca3af;font-size:12px;">テンプレがありません。下から追加してください。</p>';
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;color:#111827;">${escAttr(t.title)||'（無題）'}
+          ${t.is_html?'<span style="font-size:9px;background:#0D9488;color:#fff;border-radius:6px;padding:1px 6px;margin-left:4px;">HTML</span>':''}</div>
+        <div style="font-size:11px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escAttr(t.subject)||'（件名なし）'}</div>
+      </div>
+      <button class="btn" onclick="openTplEditor(${t.id})">編集</button>
+      <button class="btn" style="border-color:#fca5a5;color:#ef4444;" onclick="delTpl(${t.id})">削除</button>
+    </div>`).join('') : '<p style="color:#9ca3af;font-size:12px;">テンプレがありません。「＋ 新しいテンプレートを作成」から追加してください。</p>';
 }
 async function refreshTemplatesUI(){
   await loadTemplates();
@@ -386,18 +435,76 @@ async function refreshTemplatesUI(){
   if(def){ const v=def.value; def.innerHTML=tplOptions(v,'— テンプレを選択 —'); def.value=v; }
   document.querySelectorAll('.p-tpl').forEach(sel=>{ const v=sel.value; sel.innerHTML=tplOptions(v); sel.value=v; });
 }
-async function addTemplate(){
-  const title=document.getElementById('ntpl-title').value.trim();
-  const subject=document.getElementById('ntpl-subject').value.trim();
-  const body=document.getElementById('ntpl-body').value.trim();
-  if(!title||!body){ showMsg('テンプレ名と本文を入力してください', false); return; }
-  await fetch('/api/mail-templates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,subject,body})});
-  document.getElementById('ntpl-title').value='';document.getElementById('ntpl-subject').value='';document.getElementById('ntpl-body').value='';
-  await refreshTemplatesUI(); showMsg('テンプレを追加しました');
+// ── テンプレート エディタ（HTML/テキスト・差し込み）──
+let _teMode='html';
+function openTplEditor(id){
+  const t=id ? _TEMPLATES.find(x=>x.id===id) : null;
+  document.getElementById('te-id').value = t ? t.id : '';
+  document.getElementById('te-heading').textContent = t ? 'テンプレートを編集' : '新しいテンプレート';
+  document.getElementById('te-title').value = t ? (t.title||'') : '';
+  document.getElementById('te-subject').value = t ? (t.subject||'') : '';
+  document.getElementById('te-error').style.display='none';
+  const isHtml = t ? !!t.is_html : true;
+  teSetMode(isHtml ? 'html' : 'text');
+  if(isHtml){ document.getElementById('te-body-html').innerHTML = t ? (t.body||'') : ''; document.getElementById('te-body-text').value=''; }
+  else { document.getElementById('te-body-text').value = t ? (t.body||'') : ''; document.getElementById('te-body-html').innerHTML=''; }
+  renderTeVars();
+  document.getElementById('tpl-editor-overlay').style.display='flex';
 }
-async function updTpl(id,field,value){
-  await fetch(`/api/mail-templates/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:value})});
-  const t=_TEMPLATES.find(x=>x.id===id); if(t) t[field]=value;
+function closeTplEditor(){ document.getElementById('tpl-editor-overlay').style.display='none'; }
+function teSetMode(mode){
+  _teMode=mode;
+  const html=document.getElementById('te-body-html'), text=document.getElementById('te-body-text');
+  const tb=document.getElementById('te-toolbar');
+  const bh=document.getElementById('te-mode-html'), bt=document.getElementById('te-mode-text');
+  if(mode==='html'){
+    // テキスト→HTML：改行を<br>に
+    if(text.style.display!=='none' && text.value){ html.innerHTML=escAttr(text.value).replace(/\n/g,'<br>'); }
+    html.style.display='block'; tb.style.display='flex'; text.style.display='none';
+    bh.style.background='#0D9488'; bh.style.color='#fff'; bt.style.background='#fff'; bt.style.color='#374151';
+  }else{
+    // HTML→テキスト：タグを除去
+    if(html.style.display!=='none' && html.innerHTML){ text.value=html.innerText; }
+    html.style.display='none'; tb.style.display='none'; text.style.display='block';
+    bt.style.background='#0D9488'; bt.style.color='#fff'; bh.style.background='#fff'; bh.style.color='#374151';
+  }
+}
+function teCmd(cmd, val){ document.getElementById('te-body-html').focus(); try{ document.execCommand(cmd,false,val||null); }catch(_){ } }
+function teLink(){
+  const url=prompt('リンク先URLを入力してください','https://'); if(!url) return;
+  teCmd('createLink', url);
+}
+function renderTeVars(){
+  const box=document.getElementById('te-vars'); if(!box) return;
+  box.innerHTML=TEMPLATE_VARS.map(([tok,label])=>`<button type="button" onmousedown="event.preventDefault()" onclick="insertVar('${tok}')" title="${label}" style="font-size:11px;background:#ECFDF5;border:1px solid #A7F3D0;color:#0F766E;border-radius:6px;padding:2px 6px;margin:0 3px 3px 0;cursor:pointer;">${tok}</button>`).join('');
+}
+function insertVar(tok){
+  if(_teMode==='html'){
+    const el=document.getElementById('te-body-html'); el.focus();
+    try{ document.execCommand('insertText',false,tok); }catch(_){ el.innerHTML+=tok; }
+  }else{
+    const ta=document.getElementById('te-body-text');
+    const s=ta.selectionStart||0, e=ta.selectionEnd||0;
+    ta.value=ta.value.slice(0,s)+tok+ta.value.slice(e);
+    ta.focus(); ta.selectionStart=ta.selectionEnd=s+tok.length;
+  }
+}
+async function saveTplEditor(){
+  const id=document.getElementById('te-id').value;
+  const title=document.getElementById('te-title').value.trim();
+  const subject=document.getElementById('te-subject').value.trim();
+  const isHtml=_teMode==='html';
+  const body=isHtml ? document.getElementById('te-body-html').innerHTML.trim()
+                    : document.getElementById('te-body-text').value.trim();
+  const err=document.getElementById('te-error');
+  const plain=isHtml ? document.getElementById('te-body-html').innerText.trim() : body;
+  if(!title || !plain){ err.textContent='テンプレ名と本文を入力してください'; err.style.display='block'; return; }
+  const data={title, subject, body, is_html:isHtml};
+  if(id){ await fetch('/api/mail-templates/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); }
+  else { await fetch('/api/mail-templates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); }
+  closeTplEditor();
+  await refreshTemplatesUI();
+  showMsg('テンプレートを保存しました');
 }
 async function delTpl(id){
   if(!confirm('このテンプレを削除しますか？')) return;
@@ -479,18 +586,6 @@ const TEMPLATE_VARS=[
   ['#会社名#','会社名'],['#会社電話番号#','電話'],['#会社メールアドレス#','メール'],
   ['#会社住所#','住所'],['#会社営業時間#','営業時間'],['#会社定休日#','定休日'],['#公式LINE#','公式LINE'],
 ];
-function renderVarLegend(){
-  const box=document.getElementById('var-legend'); if(!box) return;
-  box.innerHTML='<div style="font-size:11px;color:#6b7280;margin-bottom:4px;">差し込み文字（クリックで本文に挿入）：</div>'+
-    TEMPLATE_VARS.map(([tok,label])=>`<button type="button" onclick="insertVar('${tok}')" title="${label}" style="font-size:11px;background:#ECFDF5;border:1px solid #A7F3D0;color:#0F766E;border-radius:6px;padding:2px 7px;margin:0 4px 4px 0;cursor:pointer;">${tok}</button>`).join('');
-}
-function insertVar(tok){
-  const ta=document.getElementById('ntpl-body'); if(!ta) return;
-  const s=ta.selectionStart||0, e=ta.selectionEnd||0;
-  ta.value=ta.value.slice(0,s)+tok+ta.value.slice(e);
-  ta.focus(); ta.selectionStart=ta.selectionEnd=s+tok.length;
-}
-
 async function saveSettings(){
   try{
     const r=await fetch('/api/mail-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});
@@ -536,7 +631,6 @@ async function fetchNow(){
 document.addEventListener('DOMContentLoaded', async function(){
   await loadTemplates();
   renderTplList();
-  renderVarLegend();
   if(document.getElementById('cp_company_name')) loadCompanyProfile();
   loadSettings();
   if(document.getElementById('portal-rows')) loadPortals();
