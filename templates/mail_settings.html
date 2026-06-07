@@ -59,28 +59,6 @@
 
   <div id="msg" class="msg"></div>
 
-  <!-- 管理者向け初期設定ガイド（OAuth未設定時に表示） -->
-  <div class="card" id="oauth-setup-card" style="display:none; border:2px solid #fde047; background:#fffdf5;">
-    <h2 style="color:#92400e;">⚙️ 管理者の初期設定が必要です（メール送受信を有効化）</h2>
-    <p style="font-size:12px;color:#6b7280;margin:-6px 0 12px;line-height:1.8;">
-      このサーバー(Railway)は通常のメール送信(SMTP)が使えないため、<b>Gmailでの送受信はGoogle連携(OAuth)で行います</b>。
-      下記の初期設定（1回のみ）を行うと、各店舗が「Googleで連携」ボタンで利用できるようになります。
-    </p>
-    <ol style="font-size:12.5px;color:#374151;line-height:1.9;padding-left:20px;margin:0;">
-      <li><b>Railway</b> のプロジェクト → Variables に、ローカル <code>.env</code> と同じ値で2つ追加：<br>
-        <code style="background:#eef2f7;padding:1px 6px;border-radius:4px;">GOOGLE_CLIENT_ID</code> ／
-        <code style="background:#eef2f7;padding:1px 6px;border-radius:4px;">GOOGLE_CLIENT_SECRET</code>
-        <span style="color:#9ca3af;">（設定後Railwayが自動再起動）</span></li>
-      <li><b>Google Cloud Console</b> → 該当のOAuthクライアント → 「承認済みのリダイレクトURI」に次を追加：<br>
-        <span style="display:inline-flex;align-items:center;gap:8px;margin-top:4px;">
-          <code id="redirect-uri" style="background:#ecfeff;border:1px solid #a5f3fc;padding:3px 8px;border-radius:5px;">https://app.mieroom.cloud/oauth/google/callback</code>
-          <button class="btn" style="padding:3px 8px;font-size:11px;" onclick="copyRedirect()">コピー</button>
-        </span></li>
-      <li><b>OAuth同意画面</b> → スコープに <code>https://mail.google.com/</code> を追加。テストモードなら連携するGmailを「テストユーザー」に追加。</li>
-    </ol>
-    <p style="font-size:11px;color:#9ca3af;margin:12px 0 0;">設定が完了すると、このカードは消えて「Googleで連携する」ボタンが表示されます。</p>
-  </div>
-
   <!-- Google連携（推奨・OAuth） -->
   <div class="card" id="oauth-card" style="display:none; border:2px solid #5EEAD4;">
     <h2>🔗 Googleアカウントで連携（推奨）</h2>
@@ -164,11 +142,27 @@
     </div>
   </div>
 
+  <!-- 自動返信テンプレート管理 -->
+  <div class="card">
+    <h2>📝 自動返信テンプレート</h2>
+    <p style="font-size:12px;color:#6b7280;margin:-6px 0 12px;line-height:1.6;">
+      自動返信に使う文面を作成します。<b>媒体ごとに違う内容</b>を用意して、下の「ポータル登録」で媒体に割り当てられます。
+    </p>
+    <div id="tpl-list" style="display:flex;flex-direction:column;gap:10px;"></div>
+    <div style="margin-top:14px;border-top:1px dashed #e5e7eb;padding-top:12px;">
+      <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:6px;">新しいテンプレを追加</div>
+      <input id="ntpl-title" type="text" placeholder="テンプレ名（例：SUUMO用）" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:6px;box-sizing:border-box;">
+      <input id="ntpl-subject" type="text" placeholder="件名（例：お問い合わせありがとうございます）" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;margin-bottom:6px;box-sizing:border-box;">
+      <textarea id="ntpl-body" rows="4" placeholder="本文" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;font-family:inherit;resize:vertical;"></textarea>
+      <div style="text-align:right;margin-top:8px;"><button class="btn primary" onclick="addTemplate()">追加する</button></div>
+    </div>
+  </div>
+
   <!-- ポータル登録 -->
   <div class="card">
-    <h2>🏢 ポータル登録（差出人 → 媒体名）</h2>
+    <h2>🏢 ポータル登録（差出人 → 媒体名 → 自動返信）</h2>
     <p style="font-size:12px;color:#6b7280;margin:-6px 0 12px;line-height:1.6;">
-      反響メールの<b>差出人アドレス</b>（または <b>@ドメイン</b>）と、表示したい<b>媒体名</b>を登録します。<br>
+      反響メールの<b>差出人アドレス</b>（または <b>@ドメイン</b>）と、表示したい<b>媒体名</b>、その媒体に届いたときに送る<b>自動返信テンプレ</b>を登録します。<br>
       登録した差出人は「信頼ポータル」として、<b>確実にその媒体名で取り込み</b>ます（取りこぼし防止）。
     </p>
     <div id="portal-rows"></div>
@@ -185,10 +179,10 @@
   </div>
   <div class="status-line" id="status-line"></div>
 
-  <!-- 手順 -->
-  <div class="card">
-    <h2>🔑 アプリパスワードの作り方（かんたんマニュアル）</h2>
-    <div class="steps">
+  <!-- 手順（折りたたみ） -->
+  <details class="card">
+    <summary style="cursor:pointer;font-size:14px;font-weight:800;color:#0F766E;">🔑 アプリパスワードの作り方（クリックで開く）</summary>
+    <div class="steps" style="margin-top:12px;">
       <p style="margin:0 0 4px;"><b>「アプリパスワード」とは？</b><br>
       Gmailのメールを安全に自動取込するための、<b>このアプリ専用の16桁の合言葉</b>です。普段ログインに使うGoogleのパスワードとは別物で、漏れても本体アカウントは安全。いつでも無効化できます。</p>
       <p style="margin:6px 0 0;color:#6b7280;">⏱ 所要 約5分／連携したいGmailアカウントで、最初に1回だけ行えばOKです。<br>
@@ -252,7 +246,7 @@
 
       <div class="man-note">🔒 アプリパスワードはこのアプリのメール取込専用です。Googleの「アプリパスワード」ページからいつでも削除（無効化）できます。削除すると取込は止まりますが、Google本体のパスワードやアカウントには影響しません。</div>
     </div>
-  </div>
+  </details>
 </div>
 {% endblock %}
 
@@ -344,14 +338,54 @@ async function googleDisconnect(){
   history.replaceState({}, '', '/mail-settings');
 })();
 
+let _TEMPLATES=[];
+async function loadTemplates(){
+  try{ _TEMPLATES=await fetch('/api/mail-templates').then(r=>r.json()); }catch(_){ _TEMPLATES=[]; }
+}
+function renderTplList(){
+  const box=document.getElementById('tpl-list'); if(!box) return;
+  box.innerHTML = _TEMPLATES.length ? _TEMPLATES.map(t=>`
+    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;">
+      <input value="${escAttr(t.title)}" onchange="updTpl(${t.id},'title',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:13px;font-weight:700;margin-bottom:5px;box-sizing:border-box;">
+      <input value="${escAttr(t.subject)}" placeholder="件名" onchange="updTpl(${t.id},'subject',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px;margin-bottom:5px;box-sizing:border-box;">
+      <textarea rows="3" onchange="updTpl(${t.id},'body',this.value)" style="width:100%;border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px;box-sizing:border-box;font-family:inherit;resize:vertical;">${escAttr(t.body)}</textarea>
+      <div style="text-align:right;margin-top:5px;"><button class="btn" style="border-color:#fca5a5;color:#ef4444;" onclick="delTpl(${t.id})">削除</button></div>
+    </div>`).join('') : '<p style="color:#9ca3af;font-size:12px;">テンプレがありません。下から追加してください。</p>';
+}
+async function refreshTemplatesUI(){
+  await loadTemplates();
+  renderTplList();
+  // 既存のセレクトを作り直し（選択保持）
+  const def=document.getElementById('auto_reply_template_id');
+  if(def){ const v=def.value; def.innerHTML=tplOptions(v,'— テンプレを選択 —'); def.value=v; }
+  document.querySelectorAll('.p-tpl').forEach(sel=>{ const v=sel.value; sel.innerHTML=tplOptions(v); sel.value=v; });
+}
+async function addTemplate(){
+  const title=document.getElementById('ntpl-title').value.trim();
+  const subject=document.getElementById('ntpl-subject').value.trim();
+  const body=document.getElementById('ntpl-body').value.trim();
+  if(!title||!body){ showMsg('テンプレ名と本文を入力してください', false); return; }
+  await fetch('/api/mail-templates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,subject,body})});
+  document.getElementById('ntpl-title').value='';document.getElementById('ntpl-subject').value='';document.getElementById('ntpl-body').value='';
+  await refreshTemplatesUI(); showMsg('テンプレを追加しました');
+}
+async function updTpl(id,field,value){
+  await fetch(`/api/mail-templates/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({[field]:value})});
+  const t=_TEMPLATES.find(x=>x.id===id); if(t) t[field]=value;
+}
+async function delTpl(id){
+  if(!confirm('このテンプレを削除しますか？')) return;
+  await fetch(`/api/mail-templates/${id}`,{method:'DELETE'});
+  await refreshTemplatesUI(); showMsg('削除しました');
+}
+function tplOptions(selectedId, emptyLabel){
+  return `<option value="">${emptyLabel||'（自動返信なし）'}</option>`+
+    _TEMPLATES.map(t=>`<option value="${t.id}" ${String(t.id)===String(selectedId)?'selected':''}>${escAttr(t.title)}</option>`).join('');
+}
 async function loadTemplatesIntoSelect(selectedId){
-  try{
-    const tpls=await fetch('/api/mail-templates').then(r=>r.json());
-    const sel=document.getElementById('auto_reply_template_id');
-    sel.innerHTML='<option value="">— テンプレを選択 —</option>'+
-      tpls.map(t=>`<option value="${t.id}">${(t.title||'').replace(/</g,'&lt;')}</option>`).join('');
-    if(selectedId) sel.value=String(selectedId);
-  }catch(_){}
+  if(!_TEMPLATES.length) await loadTemplates();
+  const sel=document.getElementById('auto_reply_template_id');
+  if(sel) sel.innerHTML=tplOptions(selectedId, '— テンプレを選択 —');
 }
 
 function payload(){
@@ -368,31 +402,35 @@ function payload(){
 }
 
 function escAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
-function portalRowHTML(matcher,media){
-  return `<div class="portal-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+function portalRowHTML(matcher,media,tplId){
+  return `<div class="portal-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap;">
     <input type="text" class="p-matcher" value="${escAttr(matcher)}" placeholder="info@smocca.jp または @smocca.jp"
-      style="flex:2;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;">
+      style="flex:2;min-width:180px;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;">
     <span style="color:#9ca3af;font-weight:700;">→</span>
     <input type="text" class="p-media" value="${escAttr(media)}" placeholder="スモッカ"
-      style="flex:1;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;">
+      style="flex:1;min-width:90px;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;">
+    <span style="color:#9ca3af;font-size:11px;">自動返信</span>
+    <select class="p-tpl" title="この媒体の自動返信テンプレ" style="flex:1;min-width:140px;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;">${tplOptions(tplId)}</select>
     <button type="button" onclick="this.closest('.portal-row').remove()"
       style="border:none;background:none;color:#ef4444;cursor:pointer;font-size:16px;line-height:1;" title="削除">✕</button>
   </div>`;
 }
-function addPortalRow(matcher='',media=''){
-  document.getElementById('portal-rows').insertAdjacentHTML('beforeend', portalRowHTML(matcher,media));
+function addPortalRow(matcher='',media='',tplId=''){
+  document.getElementById('portal-rows').insertAdjacentHTML('beforeend', portalRowHTML(matcher,media,tplId));
 }
 async function loadPortals(){
+  if(!_TEMPLATES.length) await loadTemplates();
   try{
     const r=await fetch('/api/portal-sources'); const list=await r.json();
     const box=document.getElementById('portal-rows'); box.innerHTML='';
-    if(!list.length){ addPortalRow(); } else { list.forEach(p=>addPortalRow(p.matcher,p.media)); }
+    if(!list.length){ addPortalRow(); } else { list.forEach(p=>addPortalRow(p.matcher,p.media,p.auto_reply_template_id||'')); }
   }catch(_){ document.getElementById('portal-rows').innerHTML=''; addPortalRow(); }
 }
 function collectPortals(){
   return [...document.querySelectorAll('.portal-row')].map(row=>({
     matcher: row.querySelector('.p-matcher').value.trim(),
     media: row.querySelector('.p-media').value.trim(),
+    auto_reply_template_id: (row.querySelector('.p-tpl')||{}).value || null,
   })).filter(x=>x.matcher && x.media);
 }
 
@@ -435,6 +473,11 @@ async function fetchNow(){
   }catch(_){ el.textContent='❌ 通信エラー'; el.style.color='#b91c1c'; }
 }
 
-document.addEventListener('DOMContentLoaded', function(){ loadSettings(); loadPortals(); });
+document.addEventListener('DOMContentLoaded', async function(){
+  await loadTemplates();
+  renderTplList();
+  loadSettings();
+  loadPortals();
+});
 </script>
 {% endblock %}

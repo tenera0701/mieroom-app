@@ -902,6 +902,7 @@ class PortalSource(db.Model):
     matcher    = db.Column(db.String(200))   # 差出人アドレス or @ドメイン（部分一致）
     media      = db.Column(db.String(100))   # 媒体名
     enabled    = db.Column(db.Boolean, default=True)
+    auto_reply_template_id = db.Column(db.Integer, nullable=True)  # この媒体の自動返信テンプレ
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -1534,6 +1535,16 @@ def migrate_db():
     except Exception as e:
         print(f"  Skip mail_setting columns: {e}")
 
+    # portal_source の auto_reply_template_id カラムを追加
+    try:
+        cursor.execute("PRAGMA table_info(portal_source)")
+        pscols = {r[1] for r in cursor.fetchall()}
+        if pscols and 'auto_reply_template_id' not in pscols:
+            cursor.execute("ALTER TABLE portal_source ADD COLUMN auto_reply_template_id INTEGER")
+            print("  Added column portal_source.auto_reply_template_id")
+    except Exception as e:
+        print(f"  Skip portal_source.auto_reply_template_id: {e}")
+
     # mail_template の category（フォルダ）カラムを追加
     try:
         cursor.execute("PRAGMA table_info(mail_template)")
@@ -1631,6 +1642,7 @@ def migrate_postgres():
         ("mail_setting",             "oauth_email",     "VARCHAR(200)"),
         ("mail_setting",             "auto_reply_enabled", "BOOLEAN DEFAULT FALSE"),
         ("mail_setting",             "auto_reply_template_id", "INTEGER"),
+        ("portal_source",            "auto_reply_template_id", "INTEGER"),
         ("mail_template",            "category",        "VARCHAR(120) DEFAULT ''"),
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
         ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
@@ -3927,20 +3939,34 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
             M.logout()
         except Exception:
             pass
-        # 新着反響への自動返信（設定ONかつテンプレ指定かつお客様メールあり）
-        if new_exts and ms.auto_reply_enabled and ms.auto_reply_template_id:
-            tpl = MailTemplate.query.get(ms.auto_reply_template_id)
-            if tpl:
-                for ext in new_exts:
-                    rec = EchoRecord.query.filter_by(store_id=store_id, external_id=ext).first()
-                    if not rec or not rec.customer_email:
-                        continue
-                    try:
-                        send_mail_for_store(store_id, rec.id,
-                                            tpl.subject or 'お問い合わせありがとうございます',
-                                            tpl.body or '', base_url=APP_BASE_URL)
-                    except Exception as e:
-                        print(f"auto-reply send error (echo={rec.id}): {e}")
+        # 新着反響への自動返信（設定ONかつお客様メールあり。媒体ごとにテンプレを切替）
+        if new_exts and ms.auto_reply_enabled:
+            # 媒体名 → テンプレID（ポータル登録ごとの指定）
+            media_tpl = {}
+            for p in PortalSource.query.filter_by(store_id=store_id).all():
+                if p.media and p.auto_reply_template_id:
+                    media_tpl.setdefault(p.media, p.auto_reply_template_id)
+            default_tpl_id = ms.auto_reply_template_id
+            _tpl_cache = {}
+            def _get_tpl(tid):
+                if not tid:
+                    return None
+                if tid not in _tpl_cache:
+                    _tpl_cache[tid] = MailTemplate.query.get(tid)
+                return _tpl_cache[tid]
+            for ext in new_exts:
+                rec = EchoRecord.query.filter_by(store_id=store_id, external_id=ext).first()
+                if not rec or not rec.customer_email:
+                    continue
+                tpl = _get_tpl(media_tpl.get(rec.media)) or _get_tpl(default_tpl_id)
+                if not tpl:
+                    continue
+                try:
+                    send_mail_for_store(store_id, rec.id,
+                                        tpl.subject or 'お問い合わせありがとうございます',
+                                        tpl.body or '', base_url=APP_BASE_URL)
+                except Exception as e:
+                    print(f"auto-reply send error (echo={rec.id}): {e}")
         ms.last_fetch_at = datetime.utcnow()
         mtxt = f" / {merged}件まとめ" if merged else ""
         ms.last_result = f"取得OK：{imported}件追加{mtxt} / {scanned}件確認（{datetime.now():%m/%d %H:%M}）"
@@ -4542,7 +4568,8 @@ def api_portal_sources_get():
     sid = allowed[0] if allowed else None
     items = (PortalSource.query.filter_by(store_id=sid).order_by(PortalSource.id.asc()).all()
              if sid else [])
-    return jsonify([{'matcher': p.matcher or '', 'media': p.media or '', 'enabled': bool(p.enabled)}
+    return jsonify([{'matcher': p.matcher or '', 'media': p.media or '', 'enabled': bool(p.enabled),
+                     'auto_reply_template_id': p.auto_reply_template_id}
                     for p in items])
 
 
@@ -4560,8 +4587,10 @@ def api_portal_sources_save():
         m = (r.get('matcher') or '').strip()[:200]
         md = (r.get('media') or '').strip()[:100]
         if m and md:
+            arid = r.get('auto_reply_template_id')
             db.session.add(PortalSource(store_id=sid, matcher=m, media=md,
-                                        enabled=bool(r.get('enabled', True))))
+                                        enabled=bool(r.get('enabled', True)),
+                                        auto_reply_template_id=(int(arid) if arid else None)))
     db.session.commit()
     request_mail_sync()
     return jsonify({'status': 'ok'})

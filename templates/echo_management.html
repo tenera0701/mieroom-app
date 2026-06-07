@@ -824,7 +824,7 @@ function renderTable() {
       <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_reply',${!!r.has_reply})">${r.has_reply ? '<span class="chk-yes">〇</span>' : '<span class="chk-no">—</span>'}</td>
       <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_phone',${!!r.has_phone})">${r.has_phone ? '<span class="chk-yes">〇</span>' : '<span class="chk-no">—</span>'}</td>
       <td style="cursor:pointer;" onclick="toggleFlag(${r.id},'has_line',${!!r.has_line})">${r.has_line ? '<span class="chk-yes">〇</span>' : '<span class="chk-no">—</span>'}</td>
-      <td class="left" style="max-width:140px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="クリックで開く" onclick="openMemoEdit(${r.id})">${escHtml((r.memo||'').replace(/\n/g,' / ')) || '<span style="color:#cbd5e1;">（クリックで入力）</span>'}</td>
+      <td class="left" style="max-width:160px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="クリックで開く" onclick="openMemoEdit(${r.id})">${(()=>{const n=(r.memo?(r.memo.match(/【追加反響/g)||[]).length:0);const b=n?`<span style="background:#ef4444;color:#fff;font-size:9px;font-weight:800;border-radius:8px;padding:1px 6px;margin-right:4px;white-space:nowrap;">追加反響${n>1?'×'+n:''}</span>`:'';return b+(escHtml((r.memo||'').replace(/\n/g,' / ')) || '<span style="color:#cbd5e1;">（クリックで入力）</span>');})()}</td>
       <td style="white-space:nowrap;">
         <button class="btn-sm" onclick="openMail(${r.id})"
           style="border:1px solid #5EEAD4;background:#F0FDFA;color:#0F766E;border-radius:5px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;position:relative;">
