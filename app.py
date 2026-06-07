@@ -6388,64 +6388,97 @@ def api_kpi_monthly():
 
 @app.route("/api/kpi/staff")
 def api_kpi_staff():
-    """スタッフ別KPIデータを返す"""
+    """スタッフ別KPIデータを返す。
+    実データから集計：反響数=反響管理表 / 接客数=接客管理表 / 申込数・契約数=申込一覧表 /
+    売上=入金済み一覧（入金日が当月の承認済み金額）。
+    目標(target_sales)と編集用のkpi_idのみKPI台帳(SalesKPI)から取得。"""
     year  = request.args.get('year',  type=int) or current_ym()[0]
     month = request.args.get('month', type=int) or current_ym()[1]
     store_id    = request.args.get('store_id', type=int)
     allowed_ids = get_allowed_store_ids()
+    filter_ids = [store_id] if (store_id and store_id in allowed_ids) else allowed_ids
+    if not filter_ids:
+        return jsonify([])
 
-    # テナント分離: 許可されたstore_idのみ
-    query = SalesKPI.query.filter_by(year=year, month=month).filter(SalesKPI.store_id.in_(allowed_ids))
-    if store_id and store_id in allowed_ids:
-        query = query.filter(SalesKPI.store_id == store_id)
-    kpis = query.all()
+    import calendar as _cal
+    m_start = date(year, month, 1)
+    m_end   = date(year, month, _cal.monthrange(year, month)[1])
 
-    # 顧客管理表(ApplicationRecord)からスタッフ別の申込数・付帯契約数を集計（成約率算出用）
-    app_q = ApplicationRecord.query.filter(
-        ApplicationRecord.store_id.in_(allowed_ids),
-        ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
-        db.extract('year',  ApplicationRecord.application_date) == year,
-        db.extract('month', ApplicationRecord.application_date) == month,
-    )
-    if store_id and store_id in allowed_ids:
-        app_q = app_q.filter(ApplicationRecord.store_id == store_id)
+    # KPI台帳（目標・編集用のみ）
+    kpi_map = {}
+    for k in SalesKPI.query.filter_by(year=year, month=month).filter(SalesKPI.store_id.in_(filter_ids)).all():
+        kpi_map[k.staff_id] = k
+
+    # 反響数（反響管理表：当月の反響レコード件数）
+    echo_cnt = {}
+    for e in EchoRecord.query.filter(EchoRecord.store_id.in_(filter_ids),
+                                     EchoRecord.echo_date >= m_start,
+                                     EchoRecord.echo_date <= m_end).all():
+        echo_cnt[e.staff_id] = echo_cnt.get(e.staff_id, 0) + 1
+
+    # 接客数（接客管理表：当月の接客レコード件数）
+    cs_cnt = {}
+    for c in CustomerServiceRecord.query.filter(CustomerServiceRecord.store_id.in_(filter_ids),
+                                                CustomerServiceRecord.service_date >= m_start,
+                                                CustomerServiceRecord.service_date <= m_end).all():
+        cs_cnt[c.staff_id] = cs_cnt.get(c.staff_id, 0) + 1
+
+    # 申込一覧表（当月申込・キャンセル除く）：申込数 / 契約数 / 付帯件数
     app_stats = {}
-    for a in app_q.all():
-        st = app_stats.setdefault(a.staff_id, {'app': 0, 'll': 0, 'fire': 0, 'mv': 0})
+    for a in ApplicationRecord.query.filter(
+            ApplicationRecord.store_id.in_(filter_ids),
+            ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
+            db.extract('year',  ApplicationRecord.application_date) == year,
+            db.extract('month', ApplicationRecord.application_date) == month).all():
+        st = app_stats.setdefault(a.staff_id, {'app': 0, 'contracts': 0, 'll': 0, 'fire': 0, 'mv': 0})
         st['app'] += 1
-        if a.lifeline:       st['ll']   += 1
-        if a.fire_insurance: st['fire'] += 1
-        if a.moving:         st['mv']   += 1
+        if a.status == '契約': st['contracts'] += 1
+        if a.lifeline:         st['ll']   += 1
+        if a.fire_insurance:   st['fire'] += 1
+        if a.moving:           st['mv']   += 1
+
+    # 売上（入金済み一覧：入金日が当月の承認済み金額をスタッフ別に集計）
+    paid_rev = {}
+    for r in ApplicationRecord.query.filter(
+            ApplicationRecord.store_id.in_(filter_ids),
+            ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替'])).all():
+        amt = 0
+        if _approved_in_month(r, 'brokerage', year, month): amt += (r.brokerage_fee or 0)
+        if _approved_in_month(r, 'option', year, month):    amt += (r.option_amount or 0)
+        if _approved_in_month(r, 'ad', year, month):         amt += _ad_yen(r)
+        if amt:
+            paid_rev[r.staff_id] = paid_rev.get(r.staff_id, 0) + amt
+
+    # 表示対象：実績があった or KPI台帳に行があるスタッフの和集合
+    staff_ids = set(kpi_map) | set(echo_cnt) | set(cs_cnt) | set(app_stats) | set(paid_rev)
+    staff_ids.discard(None)
 
     result = []
-    for kpi in kpis:
-        staff = Staff.query.get(kpi.staff_id)
-        store = Store.query.get(kpi.store_id)
-        result.append({
-            'kpi_id':      kpi.id,
-            'staff_id':    kpi.staff_id,
-            'staff_name':  staff.name if staff else '不明',
-            'store_name':  store.name if store else '不明',
-            'role':        staff.role if staff else '',
-            'inquiries':   kpi.inquiries,
-            'store_visits':kpi.store_visits,
-            'viewings':    kpi.viewings,
-            'applications':kpi.applications,
-            'contracts':   kpi.contracts,
-            'cancellations': kpi.cancellations,
-            'sales_amount':kpi.sales_amount,
-            'option_sales':kpi.option_sales,
-            'estimated_sales':     kpi.estimated_sales or 0,
-            'target_sales':        kpi.target_sales or 0,
-            'fire_insurance_count':kpi.fire_insurance_count or 0,
-            'lifeline_count':      kpi.lifeline_count or 0,
-            'moving_count':        kpi.moving_count or 0,
-        })
-        # 顧客管理表ベースの付帯契約数・成約率（申込数に対して）
-        st = app_stats.get(kpi.staff_id, {'app': 0, 'll': 0, 'fire': 0, 'mv': 0})
+    for sid in staff_ids:
+        staff = Staff.query.get(sid)
+        if not staff or staff.store_id not in filter_ids:
+            continue
+        kpi = kpi_map.get(sid)
+        st  = app_stats.get(sid, {'app': 0, 'contracts': 0, 'll': 0, 'fire': 0, 'mv': 0})
         app_ct = st['app']
         _r = lambda c: round(c / app_ct * 100, 1) if app_ct else 0
-        result[-1].update({
+        store = Store.query.get(staff.store_id)
+        result.append({
+            'kpi_id':       kpi.id if kpi else None,
+            'staff_id':     sid,
+            'staff_name':   staff.name,
+            'store_name':   store.name if store else '',
+            'role':         staff.role or '',
+            'inquiries':    echo_cnt.get(sid, 0),    # 反響数＝反響管理表
+            'store_visits': cs_cnt.get(sid, 0),      # 接客数＝接客管理表
+            'viewings':     0,
+            'applications': app_ct,                  # 申込数＝申込一覧表
+            'contracts':    st['contracts'],         # 契約数＝申込一覧表（ステータス=契約）
+            'cancellations': kpi.cancellations if kpi else 0,
+            'sales_amount': paid_rev.get(sid, 0),    # 売上＝入金済み一覧
+            'option_sales': kpi.option_sales if kpi else 0,
+            'estimated_sales': (kpi.estimated_sales or 0) if kpi else 0,
+            'target_sales':    (kpi.target_sales or 0) if kpi else 0,
             'app_count_real':  app_ct,
             'll_contracts':    st['ll'],
             'fire_contracts':  st['fire'],
