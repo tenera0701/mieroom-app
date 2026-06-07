@@ -3453,6 +3453,13 @@ def _email_attachments(msg):
 
 
 APP_BASE_URL = os.getenv('APP_BASE_URL', 'https://app.mieroom.cloud')
+
+
+def _fmt_jst(dt, fmt='%Y-%m-%d %H:%M'):
+    """UTC保存の日時を日本時間(JST=UTC+9)の文字列に変換"""
+    if not dt:
+        return ''
+    return (dt + timedelta(hours=9)).strftime(fmt)
 _IMG_EXTS = ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp')
 
 
@@ -3969,7 +3976,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                     print(f"auto-reply send error (echo={rec.id}): {e}")
         ms.last_fetch_at = datetime.utcnow()
         mtxt = f" / {merged}件まとめ" if merged else ""
-        ms.last_result = f"取得OK：{imported}件追加{mtxt} / {scanned}件確認（{datetime.now():%m/%d %H:%M}）"
+        ms.last_result = f"取得OK：{imported}件追加{mtxt} / {scanned}件確認（{_fmt_jst(datetime.utcnow(), '%m/%d %H:%M')}）"
         db.session.commit()
         return {'ok': True, 'imported': imported, 'merged': merged, 'scanned': scanned}
     except imaplib.IMAP4.error as e:
@@ -4382,7 +4389,7 @@ def api_mail_settings_get():
         'has_password': bool(ms.imap_pass),
         'custom_keywords': ms.custom_keywords or '',
         'last_result': ms.last_result or '',
-        'last_fetch_at': ms.last_fetch_at.strftime('%Y-%m-%d %H:%M') if ms.last_fetch_at else None,
+        'last_fetch_at': _fmt_jst(ms.last_fetch_at) if ms.last_fetch_at else None,
         'oauth_available': oauth_available,
         'oauth_connected': bool(ms.oauth_refresh_token),
         'oauth_email': ms.oauth_email or '',
@@ -4638,9 +4645,9 @@ def api_echo_messages(rid):
             'subject': m.subject or '',
             'body': m.body or '',
             'from': m.from_addr or '',
-            'at': m.created_at.strftime('%Y-%m-%d %H:%M') if m.created_at else '',
+            'at': _fmt_jst(m.created_at),
             'read': bool(m.opened_at) if m.direction == 'out' else None,
-            'read_at': m.opened_at.strftime('%Y-%m-%d %H:%M') if m.opened_at else '',
+            'read_at': _fmt_jst(m.opened_at),
             'attachments': atts_by_msg.get(m.id, []),
         } for m in msgs],
     })
@@ -5187,7 +5194,7 @@ def api_chat_messages(cid):
     return jsonify({'messages': [{
         'id': m.id, 'user_id': m.user_id, 'user_name': m.user_name or '',
         'body': m.body or '', 'mine': m.user_id == u.id,
-        'at': m.created_at.strftime('%Y-%m-%d %H:%M') if m.created_at else '',
+        'at': _fmt_jst(m.created_at),
         'read_count': _read_count(m),
         'attachments': atts_by.get(m.id, []),
     } for m in msgs]})
