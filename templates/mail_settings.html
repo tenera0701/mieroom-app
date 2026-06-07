@@ -166,8 +166,11 @@
       </div>
       <div style="padding:16px 18px;overflow-y:auto;">
         <input type="hidden" id="te-id">
-        <div class="field"><label>テンプレ名</label>
-          <input id="te-title" type="text" placeholder="例：SUUMO用" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;"></div>
+        <div class="field"><label>媒体（フォルダ）</label>
+          <input id="te-category" type="text" list="te-cat-list" placeholder="例：SUUMO / HOME'S（空欄は「未分類」）" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;">
+          <datalist id="te-cat-list"></datalist></div>
+        <div class="field" style="margin-top:10px;"><label>テンプレ名</label>
+          <input id="te-title" type="text" placeholder="例：初回返信" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;"></div>
         <div class="field" style="margin-top:10px;"><label>件名</label>
           <input id="te-subject" type="text" placeholder="例：お問い合わせありがとうございます" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;"></div>
 
@@ -442,21 +445,65 @@ async function googleDisconnect(){
 })();
 
 let _TEMPLATES=[];
+let _MEDIA_LIST=[];   // 媒体マスタ（フォルダ候補）
 async function loadTemplates(){
   try{ _TEMPLATES=await fetch('/api/mail-templates').then(r=>r.json()); }catch(_){ _TEMPLATES=[]; }
 }
+async function loadMediaList(){
+  try{ const m=await fetch('/api/media-types').then(r=>r.json()); _MEDIA_LIST=(m||[]).map(x=>x.name).filter(Boolean); }catch(_){ _MEDIA_LIST=[]; }
+}
+// フォルダ（媒体）候補：媒体マスタ＋既存テンプレのフォルダ＋「ポータル以外」
+function categoryChoices(){
+  const set=[];
+  const push=v=>{ v=(v||'').trim(); if(v && set.indexOf(v)<0) set.push(v); };
+  _MEDIA_LIST.forEach(push);
+  _TEMPLATES.forEach(t=>push(t.category));
+  push('ポータル以外');
+  return set;
+}
+function fillCategoryDatalist(){
+  const dl=document.getElementById('te-cat-list'); if(!dl) return;
+  dl.innerHTML=categoryChoices().map(c=>`<option value="${escAttr(c)}">`).join('');
+}
+// テンプレをフォルダ（媒体）ごとにまとめる。空は「未分類」
+function groupTemplatesByFolder(){
+  const groups={}; const order=[];
+  _TEMPLATES.forEach(t=>{
+    const key=(t.category||'').trim() || '未分類';
+    if(!groups[key]){ groups[key]=[]; order.push(key); }
+    groups[key].push(t);
+  });
+  // 「未分類」は最後に
+  order.sort((a,b)=> (a==='未分類')-(b==='未分類') || a.localeCompare(b,'ja'));
+  return order.map(k=>({folder:k, items:groups[k]}));
+}
 function renderTplList(){
   const box=document.getElementById('tpl-list'); if(!box) return;
-  box.innerHTML = _TEMPLATES.length ? _TEMPLATES.map(t=>`
-    <div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;">
-      <div style="flex:1;min-width:0;">
-        <div style="font-size:13px;font-weight:700;color:#111827;">${escAttr(t.title)||'（無題）'}
-          ${t.is_html?'<span style="font-size:9px;background:#0D9488;color:#fff;border-radius:6px;padding:1px 6px;margin-left:4px;">HTML</span>':''}</div>
-        <div style="font-size:11px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escAttr(t.subject)||'（件名なし）'}</div>
+  if(!_TEMPLATES.length){
+    box.innerHTML='<p style="color:#9ca3af;font-size:12px;">テンプレがありません。「＋ 新しいテンプレートを作成」から追加してください。</p>';
+    return;
+  }
+  box.innerHTML = groupTemplatesByFolder().map(g=>`
+    <div style="margin-bottom:12px;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:6px;background:#F0FDFA;padding:8px 12px;border-bottom:1px solid #99f6e4;">
+        <span style="font-size:14px;">📁</span>
+        <span style="font-size:13px;font-weight:800;color:#0F766E;">${escAttr(g.folder)}</span>
+        <span style="font-size:11px;color:#6b7280;">（${g.items.length}件）</span>
       </div>
-      <button class="btn" onclick="openTplEditor(${t.id})">編集</button>
-      <button class="btn" style="border-color:#fca5a5;color:#ef4444;" onclick="delTpl(${t.id})">削除</button>
-    </div>`).join('') : '<p style="color:#9ca3af;font-size:12px;">テンプレがありません。「＋ 新しいテンプレートを作成」から追加してください。</p>';
+      <div style="padding:8px 10px;display:flex;flex-direction:column;gap:6px;">
+        ${g.items.map(t=>`
+          <div style="border:1px solid #e5e7eb;border-radius:8px;padding:9px 12px;display:flex;align-items:center;gap:10px;">
+            <span style="color:#9ca3af;flex-shrink:0;">└</span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:700;color:#111827;">${escAttr(t.title)||'（無題）'}
+                ${t.is_html?'<span style="font-size:9px;background:#0D9488;color:#fff;border-radius:6px;padding:1px 6px;margin-left:4px;">HTML</span>':''}</div>
+              <div style="font-size:11px;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escAttr(t.subject)||'（件名なし）'}</div>
+            </div>
+            <button class="btn" onclick="openTplEditor(${t.id})">編集</button>
+            <button class="btn" style="border-color:#fca5a5;color:#ef4444;" onclick="delTpl(${t.id})">削除</button>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
 }
 async function refreshTemplatesUI(){
   await loadTemplates();
@@ -472,6 +519,8 @@ function openTplEditor(id){
   const t=id ? _TEMPLATES.find(x=>x.id===id) : null;
   document.getElementById('te-id').value = t ? t.id : '';
   document.getElementById('te-heading').textContent = t ? 'テンプレートを編集' : '新しいテンプレート';
+  fillCategoryDatalist();
+  document.getElementById('te-category').value = t ? (t.category||'') : '';
   document.getElementById('te-title').value = t ? (t.title||'') : '';
   document.getElementById('te-subject').value = t ? (t.subject||'') : '';
   document.getElementById('te-error').style.display='none';
@@ -554,7 +603,8 @@ async function saveTplEditor(){
   const err=document.getElementById('te-error');
   const plain=isHtml ? document.getElementById('te-body-html').innerText.trim() : body;
   if(!title || !plain){ err.textContent='テンプレ名と本文を入力してください'; err.style.display='block'; return; }
-  const data={title, subject, body, is_html:isHtml};
+  const category=(document.getElementById('te-category').value||'').trim();
+  const data={category, title, subject, body, is_html:isHtml};
   if(id){ await fetch('/api/mail-templates/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); }
   else { await fetch('/api/mail-templates',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); }
   closeTplEditor();
@@ -567,8 +617,10 @@ async function delTpl(id){
   await refreshTemplatesUI(); showMsg('削除しました');
 }
 function tplOptions(selectedId, emptyLabel){
-  return `<option value="">${emptyLabel||'（自動返信なし）'}</option>`+
-    _TEMPLATES.map(t=>`<option value="${t.id}" ${String(t.id)===String(selectedId)?'selected':''}>${escAttr(t.title)}</option>`).join('');
+  const opt=t=>`<option value="${t.id}" ${String(t.id)===String(selectedId)?'selected':''}>${escAttr(t.title)}</option>`;
+  const groups=groupTemplatesByFolder()
+    .map(g=>`<optgroup label="${escAttr(g.folder)}">${g.items.map(opt).join('')}</optgroup>`).join('');
+  return `<option value="">${emptyLabel||'（自動返信なし）'}</option>`+groups;
 }
 async function loadTemplatesIntoSelect(selectedId){
   if(!_TEMPLATES.length) await loadTemplates();
@@ -713,6 +765,7 @@ async function fetchNow(){
 
 document.addEventListener('DOMContentLoaded', async function(){
   await loadTemplates();
+  loadMediaList();
   renderTplList();
   if(document.getElementById('cp_company_name')) loadCompanyProfile();
   loadSettings();
