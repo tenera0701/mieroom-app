@@ -1,6 +1,6 @@
 {% extends 'mgmt_base.html' %}
-{% block title %}反響取込設定 | ミエルーム管理ツール{% endblock %}
-{% block breadcrumb %}反響取込設定{% endblock %}
+{% block title %}{{ page_title|default('反響取込設定') }} | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}{{ page_title|default('反響取込設定') }}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -51,14 +51,18 @@
 {% endblock %}
 
 {% block content %}
+{% set mode = mode|default('import') %}
 <div class="ms-wrap">
   <div class="ms-head">
-    <h1>反響メール 自動取込設定</h1>
-    <p>SUUMO・HOME'S・スモッカ等の反響メールが届くGmailを連携すると、<b>反響管理表</b>へ自動で取り込みます。</p>
+    <h1>{{ page_title|default('反響メール 自動取込設定') }}</h1>
+    {% if mode == 'templates' %}<p>自動返信メールの<b>会社情報</b>と<b>文面テンプレート</b>を作成します。</p>
+    {% elif mode == 'automation' %}<p>反響が届いたときの<b>自動返信</b>のON/OFFと、使うテンプレートを設定します。</p>
+    {% else %}<p>SUUMO・HOME'S・スモッカ等の反響メールが届くGmailを連携すると、<b>反響管理表</b>へ自動で取り込みます。</p>{% endif %}
   </div>
 
   <div id="msg" class="msg"></div>
 
+  {% if mode == 'import' %}
   <!-- Google連携（推奨・OAuth） -->
   <div class="card" id="oauth-card" style="display:none; border:2px solid #5EEAD4;">
     <h2>🔗 Googleアカウントで連携（推奨）</h2>
@@ -107,20 +111,6 @@
       </div>
     </div>
 
-    <!-- 自動返信 -->
-    <div class="toggle-row" style="margin-top:14px;border-top:1px dashed #e5e7eb;padding-top:14px;">
-      <label class="switch"><input type="checkbox" id="auto_reply_enabled"><span class="slider"></span></label>
-      <div>
-        <div style="font-size:13px; font-weight:700; color:#374151;">新着反響に自動返信する</div>
-        <div class="hint" style="margin:0;">反響が取り込まれた瞬間に、選んだテンプレを<b>お客様へ自動送信</b>します（お客様のメールアドレスがある反響のみ）。</div>
-      </div>
-    </div>
-    <div class="field" id="auto-reply-tpl-wrap" style="margin-top:10px;display:none;">
-      <label>自動返信に使うテンプレート</label>
-      <select id="auto_reply_template_id"><option value="">— テンプレを選択 —</option></select>
-      <div class="hint">テンプレは反響管理表のメール画面「📋 テンプレ → ＋管理」で追加・編集できます。<br>
-        <b style="color:#b45309;">※ 送信機能が有効（メール連携済み）のときだけ動作します。</b></div>
-    </div>
     <div class="field" style="margin-top:14px;">
       <label>取り込んだ反響のデフォルト担当（任意）</label>
       <select id="default_staff_id">
@@ -141,7 +131,9 @@
       </div>
     </div>
   </div>
+  {% endif %}{# end import: 接続・取込設定 #}
 
+  {% if mode == 'templates' %}
   <!-- 会社情報（差し込み用） -->
   <div class="card">
     <h2>🏢 会社情報（自動返信メールの差し込み用）</h2>
@@ -175,7 +167,29 @@
       <div style="text-align:right;margin-top:8px;"><button class="btn primary" onclick="addTemplate()">追加する</button></div>
     </div>
   </div>
+  {% endif %}{# end templates #}
 
+  {% if mode == 'automation' %}
+  <!-- 自動返信 設定 -->
+  <div class="card">
+    <h2>🤖 自動返信</h2>
+    <div class="toggle-row">
+      <label class="switch"><input type="checkbox" id="auto_reply_enabled"><span class="slider"></span></label>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#374151;">新着反響に自動返信する</div>
+        <div class="hint" style="margin:0;">反響が取り込まれた瞬間に、選んだテンプレを<b>お客様へ自動送信</b>します（お客様のメールアドレスがある反響のみ）。</div>
+      </div>
+    </div>
+    <div class="field" id="auto-reply-tpl-wrap" style="margin-top:12px;display:none;">
+      <label>既定の自動返信テンプレート（媒体が未指定のとき使用）</label>
+      <select id="auto_reply_template_id"><option value="">— テンプレを選択 —</option></select>
+      <div class="hint">媒体ごとの振り分けは下の「ポータル登録」で設定します。文面は「メールテンプレート設定」で作成・編集できます。<br>
+        <b style="color:#b45309;">※ 送信機能が有効（メール連携済み）のときだけ動作します。</b></div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if mode in ['import', 'automation'] %}
   <!-- ポータル登録 -->
   <div class="card">
     <h2>🏢 ポータル登録（差出人 → 媒体名 → 自動返信）</h2>
@@ -189,14 +203,16 @@
       例：<code>info@smocca.jp</code> → スモッカ ／ <code>@suumo.jp</code> → SUUMO ／ <code>@homes.co.jp</code> → HOME'S
     </div>
   </div>
+  {% endif %}{# end import/automation: ポータル登録 #}
 
   <div class="btn-row" style="margin-bottom:18px;">
     <button class="btn primary" onclick="saveSettings()">💾 設定を保存</button>
-    <button class="btn" onclick="fetchNow()">⬇️ 今すぐ取得</button>
+    {% if mode == 'import' %}<button class="btn" onclick="fetchNow()">⬇️ 今すぐ取得</button>{% endif %}
     <span id="fetch-result" style="font-size:12px;"></span>
   </div>
   <div class="status-line" id="status-line"></div>
 
+  {% if mode == 'import' %}
   <!-- 手順（折りたたみ） -->
   <details class="card">
     <summary style="cursor:pointer;font-size:14px;font-weight:800;color:#0F766E;">🔑 アプリパスワードの作り方（クリックで開く）</summary>
@@ -265,6 +281,7 @@
       <div class="man-note">🔒 アプリパスワードはこのアプリのメール取込専用です。Googleの「アプリパスワード」ページからいつでも削除（無効化）できます。削除すると取込は止まりますが、Google本体のパスワードやアカウントには影響しません。</div>
     </div>
   </details>
+  {% endif %}{# end import: アプリパスワード手順 #}
 </div>
 {% endblock %}
 
@@ -276,54 +293,45 @@ function showMsg(text, ok=true){
   setTimeout(()=>el.classList.remove('show'), 4000);
 }
 
+function setV(id,v){ const el=document.getElementById(id); if(el!==null && el!==undefined){ if(el.type==='checkbox') el.checked=!!v; else el.value=(v==null?'':v); } }
 async function loadSettings(){
   try{
     const r=await fetch('/api/mail-settings'); const d=await r.json();
-    document.getElementById('imap_user').value=d.imap_user||'';
-    document.getElementById('imap_host').value=d.imap_host||'imap.gmail.com';
-    document.getElementById('enabled').checked=!!d.enabled;
-    document.getElementById('default_staff_id').value=d.default_staff_id||'';
-    document.getElementById('custom_keywords').value=d.custom_keywords||'';
-    if(d.has_password){ document.getElementById('imap_pass').placeholder='●●●●（設定済み・変更時のみ入力）'; }
-    // 自動返信
-    await loadTemplatesIntoSelect(d.auto_reply_template_id);
+    setV('imap_user', d.imap_user); setV('imap_host', d.imap_host||'imap.gmail.com');
+    setV('enabled', d.enabled); setV('default_staff_id', d.default_staff_id);
+    setV('custom_keywords', d.custom_keywords);
+    if(d.has_password){ const ip=document.getElementById('imap_pass'); if(ip) ip.placeholder='●●●●（設定済み・変更時のみ入力）'; }
+    // 自動返信（automationページのみ）
     const ar=document.getElementById('auto_reply_enabled');
-    ar.checked=!!d.auto_reply_enabled;
-    document.getElementById('auto-reply-tpl-wrap').style.display = ar.checked ? 'block' : 'none';
-    ar.onchange=()=>{ document.getElementById('auto-reply-tpl-wrap').style.display = ar.checked ? 'block' : 'none'; };
-    const sl=document.getElementById('status-line');
-    let txt='';
-    if(d.last_fetch_at) txt+='最終取得: '+d.last_fetch_at+'　';
-    if(d.last_result) txt+=d.last_result;
-    sl.textContent=txt;
-
-    // Google連携（OAuth）
-    const setupCard=document.getElementById('oauth-setup-card');
-    if(setupCard){
-      setupCard.style.display = d.oauth_available ? 'none' : 'block';
-      const ru=document.getElementById('redirect-uri');
-      if(ru) ru.textContent = location.origin + '/oauth/google/callback';
+    if(ar){
+      await loadTemplatesIntoSelect(d.auto_reply_template_id);
+      ar.checked=!!d.auto_reply_enabled;
+      const wrap=document.getElementById('auto-reply-tpl-wrap');
+      if(wrap){ wrap.style.display = ar.checked ? 'block' : 'none';
+        ar.onchange=()=>{ wrap.style.display = ar.checked ? 'block' : 'none'; }; }
     }
-    if(d.oauth_available){
-      document.getElementById('oauth-card').style.display='block';
-      document.getElementById('apppass-note').style.display='block';
-      const st=document.getElementById('oauth-status');
-      const cbtn=document.getElementById('oauth-connect-btn');
-      const dbtn=document.getElementById('oauth-disconnect-btn');
-      if(d.oauth_connected){
-        st.innerHTML='✅ <b>連携済み</b>：'+(d.oauth_email||'')+'　送受信ともにこのアカウントで動作します。';
-        st.style.color='#065F46';
-        cbtn.textContent='別のGoogleアカウントで連携し直す';
-        dbtn.style.display='inline-block';
+    const sl=document.getElementById('status-line');
+    if(sl){ let txt=''; if(d.last_fetch_at) txt+='最終取得: '+d.last_fetch_at+'　'; if(d.last_result) txt+=d.last_result; sl.textContent=txt; }
+
+    // Google連携（OAuth・importページのみ）
+    const oauthCard=document.getElementById('oauth-card');
+    if(oauthCard){
+      const note=document.getElementById('apppass-note');
+      if(d.oauth_available){
+        oauthCard.style.display='block'; if(note) note.style.display='block';
+        const st=document.getElementById('oauth-status');
+        const cbtn=document.getElementById('oauth-connect-btn');
+        const dbtn=document.getElementById('oauth-disconnect-btn');
+        if(d.oauth_connected){
+          st.innerHTML='✅ <b>連携済み</b>：'+(d.oauth_email||'')+'　送受信ともにこのアカウントで動作します。';
+          st.style.color='#065F46'; cbtn.textContent='別のGoogleアカウントで連携し直す'; dbtn.style.display='inline-block';
+        }else{
+          st.innerHTML='未連携です。下のボタンからGoogleアカウントを連携してください。';
+          st.style.color='#6b7280'; cbtn.textContent='Googleで連携する'; dbtn.style.display='none';
+        }
       }else{
-        st.innerHTML='未連携です。下のボタンからGoogleアカウントを連携してください。';
-        st.style.color='#6b7280';
-        cbtn.textContent='Googleで連携する';
-        dbtn.style.display='none';
+        oauthCard.style.display='none'; if(note) note.style.display='none';
       }
-    }else{
-      document.getElementById('oauth-card').style.display='none';
-      document.getElementById('apppass-note').style.display='none';
     }
   }catch(_){}
 }
@@ -407,16 +415,16 @@ async function loadTemplatesIntoSelect(selectedId){
 }
 
 function payload(){
-  return {
-    imap_user:document.getElementById('imap_user').value.trim(),
-    imap_host:document.getElementById('imap_host').value.trim(),
-    imap_pass:document.getElementById('imap_pass').value,
-    enabled:document.getElementById('enabled').checked,
-    default_staff_id:document.getElementById('default_staff_id').value||null,
-    custom_keywords:document.getElementById('custom_keywords').value,
-    auto_reply_enabled:document.getElementById('auto_reply_enabled').checked,
-    auto_reply_template_id:document.getElementById('auto_reply_template_id').value||null,
-  };
+  // ページに存在する項目だけ送る（部分更新・他ページの設定を消さない）
+  const p={};
+  const u=document.getElementById('imap_user');
+  if(u){ p.imap_user=u.value.trim(); p.imap_host=(document.getElementById('imap_host')||{}).value||'imap.gmail.com'; p.imap_pass=(document.getElementById('imap_pass')||{}).value; }
+  const en=document.getElementById('enabled'); if(en) p.enabled=en.checked;
+  const ds=document.getElementById('default_staff_id'); if(ds) p.default_staff_id=ds.value||null;
+  const ck=document.getElementById('custom_keywords'); if(ck) p.custom_keywords=ck.value;
+  const ar=document.getElementById('auto_reply_enabled'); if(ar) p.auto_reply_enabled=ar.checked;
+  const at=document.getElementById('auto_reply_template_id'); if(at) p.auto_reply_template_id=at.value||null;
+  return p;
 }
 
 function escAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
@@ -487,11 +495,13 @@ async function saveSettings(){
   try{
     const r=await fetch('/api/mail-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});
     if(!r.ok) throw new Error();
-    await fetch('/api/portal-sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sources:collectPortals()})});
-    await fetch('/api/company-profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(companyPayload())});
-    document.getElementById('imap_pass').value='';
+    if(document.getElementById('portal-rows'))
+      await fetch('/api/portal-sources',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sources:collectPortals()})});
+    if(document.getElementById('cp_company_name'))
+      await fetch('/api/company-profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(companyPayload())});
+    const ip=document.getElementById('imap_pass'); if(ip) ip.value='';
     showMsg('設定を保存しました。');
-    loadSettings(); loadPortals();
+    loadSettings(); if(document.getElementById('portal-rows')) loadPortals();
   }catch(_){ showMsg('保存に失敗しました。', false); }
 }
 
@@ -527,9 +537,9 @@ document.addEventListener('DOMContentLoaded', async function(){
   await loadTemplates();
   renderTplList();
   renderVarLegend();
-  loadCompanyProfile();
+  if(document.getElementById('cp_company_name')) loadCompanyProfile();
   loadSettings();
-  loadPortals();
+  if(document.getElementById('portal-rows')) loadPortals();
 });
 </script>
 {% endblock %}

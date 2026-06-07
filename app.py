@@ -4465,14 +4465,40 @@ def request_mail_sync():
 
 
 # ── 反響メール取込 設定ページ・API ──
+def _render_mail_settings(mode, title):
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    staff_list = Staff.query.filter(Staff.store_id == sid, Staff.is_active == True).all() if sid else []
+    return render_template("mail_settings.html", staff_list=staff_list, mode=mode, page_title=title)
+
+
 @app.route("/mail-settings")
 @login_required
 @block_super_admin
 def mail_settings_page():
-    allowed = get_allowed_store_ids()
-    sid = allowed[0] if allowed else None
-    staff_list = Staff.query.filter(Staff.store_id == sid, Staff.is_active == True).all() if sid else []
-    return render_template("mail_settings.html", staff_list=staff_list)
+    # 旧URLは「メール自動取込設定」へ
+    return redirect(url_for('settings_mail_import'))
+
+
+@app.route("/settings/mail-templates")
+@login_required
+@block_super_admin
+def settings_mail_templates():
+    return _render_mail_settings('templates', 'メールテンプレート設定')
+
+
+@app.route("/settings/mail-import")
+@login_required
+@block_super_admin
+def settings_mail_import():
+    return _render_mail_settings('import', 'メール自動取込設定')
+
+
+@app.route("/settings/mail-automation")
+@login_required
+@block_super_admin
+def settings_mail_automation():
+    return _render_mail_settings('automation', 'メール自動化設定')
 
 
 @app.route("/api/mail-settings", methods=["GET"])
@@ -4517,18 +4543,23 @@ def api_mail_settings_save():
     if not ms:
         ms = MailSetting(store_id=sid)
         db.session.add(ms)
-    ms.imap_user = (data.get('imap_user') or '').strip()[:200]
-    ms.imap_host = ((data.get('imap_host') or '').strip() or 'imap.gmail.com')[:120]
+    # 部分更新：payloadに含まれるキーのみ更新（ページ分割で他項目を消さない）
+    if 'imap_user' in data:
+        ms.imap_user = (data.get('imap_user') or '').strip()[:200]
+    if 'imap_host' in data:
+        ms.imap_host = ((data.get('imap_host') or '').strip() or 'imap.gmail.com')[:120]
     pw = data.get('imap_pass')
     if pw:  # 入力があった時のみ更新（空欄なら既存パスワードを維持）
         ms.imap_pass = pw.replace(' ', '').strip()[:200]
-    ms.enabled = bool(data.get('enabled'))
-    # 有効化した時点を取込開始日時にする（過去メールは取り込まない）
-    if ms.enabled and ms.import_after is None:
-        ms.import_after = datetime.utcnow()
-    dsid = data.get('default_staff_id')
-    ms.default_staff_id = int(dsid) if dsid else None
-    ms.custom_keywords = (data.get('custom_keywords') or '')[:5000]
+    if 'enabled' in data:
+        ms.enabled = bool(data.get('enabled'))
+        if ms.enabled and ms.import_after is None:
+            ms.import_after = datetime.utcnow()
+    if 'default_staff_id' in data:
+        dsid = data.get('default_staff_id')
+        ms.default_staff_id = int(dsid) if dsid else None
+    if 'custom_keywords' in data:
+        ms.custom_keywords = (data.get('custom_keywords') or '')[:5000]
     if 'auto_reply_enabled' in data:
         ms.auto_reply_enabled = bool(data.get('auto_reply_enabled'))
     if 'auto_reply_template_id' in data:

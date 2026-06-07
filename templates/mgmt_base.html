@@ -487,6 +487,70 @@
           }
         </script>
 
+        {# ── 各種設定グループ（クリックで開閉） ── #}
+        {% if role != 'staff' %}
+        {% set in_settings2 = request.path in ['/settings/mail-templates', '/settings/mail-import', '/settings/mail-automation'] %}
+        <a href="#" id="settings2-toggle" class="nav-item" onclick="toggleSettings2(event)">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <span class="nav-label">各種設定</span>
+          <svg id="settings2-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+               style="width:14px;height:14px;margin-left:auto;transition:transform .2s;transform:rotate({{ '90deg' if in_settings2 else '0deg' }});">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </a>
+        <div id="settings2-group" style="{% if not in_settings2 %}display:none;{% endif %}">
+          <a href="/settings/mail-templates"
+             class="nav-item {% if request.path == '/settings/mail-templates' %}active{% endif %}"
+             style="padding-left:36px; font-size:12px; opacity:0.9;">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <span class="nav-label">└ メールテンプレート設定</span>
+          </a>
+          <a href="/settings/mail-import"
+             class="nav-item {% if request.path == '/settings/mail-import' %}active{% endif %}"
+             style="padding-left:36px; font-size:12px; opacity:0.9;">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            <span class="nav-label">└ メール自動取込設定</span>
+          </a>
+          <a href="/settings/mail-automation"
+             class="nav-item {% if request.path == '/settings/mail-automation' %}active{% endif %}"
+             style="padding-left:36px; font-size:12px; opacity:0.9;">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+            <span class="nav-label">└ メール自動化設定</span>
+          </a>
+        </div>
+        <script>
+          (function(){
+            var inS2 = {{ 'true' if in_settings2 else 'false' }};
+            try {
+              if (!inS2 && localStorage.getItem('settings2Open') === '1') {
+                var g=document.getElementById('settings2-group');
+                var c=document.getElementById('settings2-chevron');
+                if(g){ g.style.display=''; }
+                if(c){ c.style.transform='rotate(90deg)'; }
+              }
+            } catch(_){}
+          })();
+          function toggleSettings2(e){
+            e.preventDefault();
+            var g=document.getElementById('settings2-group');
+            var c=document.getElementById('settings2-chevron');
+            var open = g.style.display !== 'none';
+            if(open){ g.style.display='none'; if(c) c.style.transform='rotate(0deg)'; try{ localStorage.setItem('settings2Open','0'); }catch(_){} }
+            else { g.style.display=''; if(c) c.style.transform='rotate(90deg)'; try{ localStorage.setItem('settings2Open','1'); }catch(_){} }
+          }
+        </script>
+        {% endif %}
+
         <div class="nav-section-label">設定</div>
 
         <a href="/settings"
