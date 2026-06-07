@@ -29,14 +29,8 @@
   .btn-sm:hover { background:#f3f4f6; }
   .btn-del  { border-color:#fca5a5; color:#ef4444; }
   .btn-del:hover { background:#fee2e2; }
-  /* 操作列：幅制限を解除して全ボタンを表示＋右端に固定して常に見えるように */
-  thead th.op-col, tbody td.op-col {
-    max-width:none; overflow:visible; white-space:nowrap;
-    position:sticky; right:0; z-index:2; box-shadow:-3px 0 5px rgba(0,0,0,0.05);
-  }
-  tbody td.op-col { background:#fff; }
-  thead th.op-col { background:#F0FDFA; z-index:3; }
-  tbody tr:hover td.op-col { background:#F0FDFA; }
+  /* 操作列：幅制限を解除して全ボタン（メール・返信不要・削除）を表示 */
+  thead th.op-col, tbody td.op-col { max-width:none; overflow:visible; white-space:nowrap; }
   .followup-date { font-size:11px; color:#059669; font-weight:600; }
   .followup-empty { color:#e5e7eb; font-size:11px; }
   /* 未返信（お客様から返信あり・こちら未返信）の行を赤い左ラインで即可視化 */
