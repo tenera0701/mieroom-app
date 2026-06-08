@@ -35,16 +35,27 @@
   .side { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:12px; }
   .side h3 { font-size:13px; font-weight:800; color:#0F766E; margin:0 0 8px; }
   .name-input { width:100%; border:1px solid #d1d5db; border-radius:6px; padding:7px 9px; font-size:13px; margin-bottom:8px; box-sizing:border-box; }
-  .saved-item { display:flex; align-items:center; justify-content:space-between; gap:6px; padding:7px 8px; border:1px solid #eef2f2; border-radius:6px; margin-bottom:6px; }
-  .saved-item .nm { font-size:12px; font-weight:600; color:#111827; cursor:pointer; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .saved-item .dt { font-size:10px; color:#9ca3af; }
-  .saved-del { border:none; background:none; color:#ef4444; cursor:pointer; font-size:14px; }
   .hint { font-size:11px; color:#9ca3af; margin-top:8px; line-height:1.6; }
   .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
   .alert.show { display:block; }
   .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
   .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
   #size-tip { position:fixed; z-index:3000; background:#0F766E; color:#fff; font-size:11px; font-weight:700; padding:3px 7px; border-radius:5px; pointer-events:none; display:none; white-space:nowrap; }
+  /* ライブラリ */
+  .lib-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:10px; }
+  .folder-bar { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; align-items:center; }
+  .folder-chip { display:inline-flex; align-items:center; gap:6px; border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:18px; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; }
+  .folder-chip.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .folder-chip .cnt { background:rgba(0,0,0,0.08); border-radius:10px; padding:0 6px; font-size:11px; }
+  .folder-chip.active .cnt { background:rgba(255,255,255,0.25); }
+  .mini { border:none; background:none; cursor:pointer; font-size:11px; color:inherit; opacity:.75; padding:0 1px; }
+  .plan-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
+  .plan-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:7px; }
+  .plan-card .pn { font-size:14px; font-weight:800; color:#111827; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .plan-card .pd { font-size:11px; color:#9ca3af; }
+  .plan-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .plan-sel { border:1px solid #d1d5db; border-radius:6px; padding:4px 6px; font-size:11px; flex:1; min-width:90px; }
+  .empty { color:#9ca3af; font-size:13px; padding:30px; text-align:center; border:1px dashed #e5e7eb; border-radius:10px; }
 </style>
 {% endblock %}
 
@@ -52,64 +63,80 @@
 <div style="max-width:1320px;margin:0 auto;">
   <div id="alert-msg" class="alert"></div>
   <div id="size-tip"></div>
-  <div class="fp-head">
-    <div>
-      <h1 class="fp-title">間取り作成</h1>
-      <p class="fp-sub">「部屋を描く」でドラッグ → 壁・部屋名・帖数が入ります。左の部品も配置でき、すべてグリッドに吸着します。</p>
-    </div>
-  </div>
 
-  <!-- 描画ツール -->
-  <div class="toolbar">
-    <button class="tb-btn" id="draw-room-btn" onclick="toggleRoomMode()">🏠 部屋を描く</button>
-    <select class="tb-sel" id="room-type" title="部屋の種類"></select>
-    <span class="tb-sep"></span>
-    <button class="tb-btn" id="grid-btn" onclick="toggleGrid()">▦ グリッド ON</button>
-    <span class="tb-note">1マス＝910mm（半間）。半マス(455mm)に吸着します。</span>
-  </div>
-
-  <!-- 編集ツール -->
-  <div class="toolbar">
-    <label class="tb-btn">🖼 下絵を取込
-      <input type="file" accept="image/*" onchange="addBg(event)" style="display:none;">
-    </label>
-    <button class="tb-btn" onclick="toggleBgLock()" id="bg-lock-btn">🔒 下絵を固定</button>
-    <span class="tb-sep"></span>
-    <button class="tb-btn" onclick="addText()">＋ テキスト</button>
-    <button class="tb-btn" onclick="addLine()">＋ 線</button>
-    <label class="tb-btn">＋ ロゴ
-      <input type="file" accept="image/*" onchange="addLogo(event)" style="display:none;">
-    </label>
-    <span class="tb-sep"></span>
-    <button type="button" class="tb-color color-swatch" id="color-picker" data-value="#333333" title="線・文字の色" onclick="openColorPalette(this, function(col){ applyColor(col); })" style="background:#333333;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;padding:0;"></button>
-    <button class="tb-btn" onclick="rotateSel()">⟳ 回転</button>
-    <button class="tb-btn" onclick="dupSel()">⧉ 複製</button>
-    <button class="tb-btn" onclick="bringFront()">最前面</button>
-    <button class="tb-btn" onclick="sendBack()">最背面</button>
-    <button class="tb-btn danger" onclick="delSel()">🗑 削除</button>
-    <span class="tb-sep"></span>
-    <button class="tb-btn" onclick="exportPNG()">📤 画像で書き出し</button>
-  </div>
-
-  <div class="layout">
-    <div class="palette" id="palette"></div>
-    <div class="canvas-wrap">
-      <canvas id="fp-canvas" width="900" height="660"></canvas>
-    </div>
-    <div class="side">
-      <h3>保存</h3>
-      <input type="text" id="fp-name" class="name-input" placeholder="間取り名（例: グランドメゾン 505）">
-      <div style="display:flex;gap:6px;margin-bottom:10px;">
-        <button class="tb-btn primary" style="flex:1;justify-content:center;" onclick="saveFp()">💾 保存</button>
-        <button class="tb-btn" onclick="newFp()">新規</button>
+  <!-- ===== ライブラリ（最初に表示） ===== -->
+  <div id="library-view">
+    <div class="lib-head">
+      <div>
+        <h1 class="fp-title">間取り作成</h1>
+        <p class="fp-sub">物件名・部屋タイプ別にフォルダで管理できます。新規作成、または保存済みを開いてください。</p>
       </div>
-      <h3>保存済み</h3>
-      <div id="saved-list"><p style="font-size:12px;color:#9ca3af;">なし</p></div>
-      <p class="hint">
-        ・「部屋を描く」をON→ドラッグで部屋を作成（壁＋部屋名＋帖数）。<br>
-        ・部品はクリックで配置、ドラッグ移動・四隅で拡大縮小・上の○で回転。<br>
-        ・下絵を取込→「下絵を固定」でトレースできます。
-      </p>
+      <button class="tb-btn primary" style="font-size:13px;padding:9px 16px;" onclick="openNew()">＋ 新規作成</button>
+    </div>
+
+    <div class="folder-bar" id="folder-bar"></div>
+    <div id="plan-grid" class="plan-grid"></div>
+  </div>
+
+  <!-- ===== エディタ ===== -->
+  <div id="editor-view" style="display:none;">
+    <div class="fp-head">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button class="tb-btn" onclick="showLibrary()">← 一覧へ戻る</button>
+        <div>
+          <h1 class="fp-title" style="font-size:17px;">間取り編集 <span id="ed-folder-label" style="font-size:12px;color:#6b7280;font-weight:600;"></span></h1>
+        </div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button class="tb-btn" id="draw-room-btn" onclick="toggleRoomMode()">🏠 部屋を描く</button>
+      <select class="tb-sel" id="room-type" title="部屋の種類"></select>
+      <span class="tb-sep"></span>
+      <button class="tb-btn" id="grid-btn" onclick="toggleGrid()">▦ グリッド ON</button>
+      <span class="tb-note">1マス＝910mm（半間）。半マス(455mm)に吸着します。</span>
+    </div>
+
+    <div class="toolbar">
+      <label class="tb-btn">🖼 下絵を取込
+        <input type="file" accept="image/*" onchange="addBg(event)" style="display:none;">
+      </label>
+      <button class="tb-btn" onclick="toggleBgLock()" id="bg-lock-btn">🔒 下絵を固定</button>
+      <span class="tb-sep"></span>
+      <button class="tb-btn" onclick="addText()">＋ テキスト</button>
+      <button class="tb-btn" onclick="addLine()">＋ 線</button>
+      <label class="tb-btn">＋ ロゴ
+        <input type="file" accept="image/*" onchange="addLogo(event)" style="display:none;">
+      </label>
+      <span class="tb-sep"></span>
+      <button type="button" class="tb-color color-swatch" id="color-picker" data-value="#333333" title="線・文字の色" onclick="openColorPalette(this, function(col){ applyColor(col); })" style="background:#333333;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;padding:0;"></button>
+      <button class="tb-btn" onclick="rotateSel()">⟳ 回転</button>
+      <button class="tb-btn" onclick="dupSel()">⧉ 複製</button>
+      <button class="tb-btn" onclick="bringFront()">最前面</button>
+      <button class="tb-btn" onclick="sendBack()">最背面</button>
+      <button class="tb-btn danger" onclick="delSel()">🗑 削除</button>
+      <span class="tb-sep"></span>
+      <button class="tb-btn" onclick="exportPNG()">📤 画像で書き出し</button>
+    </div>
+
+    <div class="layout">
+      <div class="palette" id="palette"></div>
+      <div class="canvas-wrap">
+        <canvas id="fp-canvas" width="900" height="660"></canvas>
+      </div>
+      <div class="side">
+        <h3>保存</h3>
+        <input type="text" id="fp-name" class="name-input" placeholder="間取り名（例: グランドメゾン 505）">
+        <select class="name-input" id="fp-folder" title="保存先フォルダ"></select>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+          <button class="tb-btn primary" style="flex:1;justify-content:center;" onclick="saveFp()">💾 保存</button>
+        </div>
+        <p class="hint">
+          ・「部屋を描く」をON→ドラッグで部屋を作成（壁＋部屋名＋帖数）。<br>
+          ・部品はクリックで配置、ドラッグ移動・四隅で拡大縮小・上の○で回転。<br>
+          ・保存先フォルダを選んで保存できます。
+        </p>
+      </div>
     </div>
   </div>
 </div>
@@ -117,28 +144,20 @@
 
 {% block extra_scripts %}
 <script>
-let canvas, currentId = null;
+let canvas, currentId = null, editingFolderId = null;
 
 /* 縮尺・グリッド */
-const MODULE_MM = 910;          // 1マス=半間=910mm
-const PX_PER_MODULE = 46;       // 1マスの画面px
-const SNAP_PX = PX_PER_MODULE / 2;            // 半マス(455mm)に吸着
-const PX_PER_MM = PX_PER_MODULE / MODULE_MM;
+const MODULE_MM = 910, PX_PER_MODULE = 46;
+const SNAP_PX = PX_PER_MODULE / 2, PX_PER_MM = PX_PER_MODULE / MODULE_MM;
 let gridOn = true;
 
 const ROOM_TYPES = [
-  {t:'洋室', c:'rgba(34,197,94,0.16)'},
-  {t:'和室', c:'rgba(202,138,4,0.18)'},
-  {t:'LDK', c:'rgba(168,85,247,0.14)'},
-  {t:'DK', c:'rgba(234,88,12,0.14)'},
-  {t:'K', c:'rgba(234,88,12,0.14)'},
-  {t:'浴室', c:'rgba(56,189,248,0.20)'},
-  {t:'洗面', c:'rgba(56,189,248,0.12)'},
-  {t:'トイレ', c:'rgba(148,163,184,0.18)'},
-  {t:'玄関', c:'rgba(120,120,120,0.14)'},
-  {t:'廊下', c:'rgba(0,0,0,0.05)'},
-  {t:'クローゼット', c:'rgba(0,0,0,0.06)'},
-  {t:'バルコニー', c:'rgba(125,211,252,0.10)'},
+  {t:'洋室', c:'rgba(34,197,94,0.16)'}, {t:'和室', c:'rgba(202,138,4,0.18)'},
+  {t:'LDK', c:'rgba(168,85,247,0.14)'}, {t:'DK', c:'rgba(234,88,12,0.14)'},
+  {t:'K', c:'rgba(234,88,12,0.14)'}, {t:'浴室', c:'rgba(56,189,248,0.20)'},
+  {t:'洗面', c:'rgba(56,189,248,0.12)'}, {t:'トイレ', c:'rgba(148,163,184,0.18)'},
+  {t:'玄関', c:'rgba(120,120,120,0.14)'}, {t:'廊下', c:'rgba(0,0,0,0.05)'},
+  {t:'クローゼット', c:'rgba(0,0,0,0.06)'}, {t:'バルコニー', c:'rgba(125,211,252,0.10)'},
 ];
 
 function showAlert(msg, type='success') {
@@ -146,8 +165,142 @@ function showAlert(msg, type='success') {
   el.textContent = msg; el.className = `alert alert-${type} show`;
   setTimeout(() => el.classList.remove('show'), 3500);
 }
+function escFp(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function snap(v){ return Math.round(v / SNAP_PX) * SNAP_PX; }
 function mmFromPx(px){ return Math.round(px / PX_PER_MM); }
+
+/* ===== ライブラリ ===== */
+let curFolderId = 'all';   // 'all' | 'unfiled' | number
+let libFolders = [];
+
+function showLibrary(){
+  document.getElementById('library-view').style.display = '';
+  document.getElementById('editor-view').style.display = 'none';
+  loadLibrary();
+}
+function showEditor(){
+  document.getElementById('library-view').style.display = 'none';
+  document.getElementById('editor-view').style.display = '';
+  if (canvas) setTimeout(() => canvas.calcOffset(), 30);
+}
+
+async function loadLibrary(){
+  let folders = [], unfiled = 0;
+  try { const r = await fetch('/api/floorplan-folders'); if (r.ok) { const d = await r.json(); folders = d.folders||[]; unfiled = d.unfiled_count||0; } } catch(_){}
+  libFolders = folders;
+  renderFolderBar(folders, unfiled);
+  fillFolderSelect();
+  loadPlans();
+}
+
+function renderFolderBar(folders, unfiled){
+  const total = unfiled + folders.reduce((s,f)=>s+f.count, 0);
+  const el = document.getElementById('folder-bar');
+  let html = '';
+  html += `<button class="folder-chip ${curFolderId==='all'?'active':''}" onclick="selectFolder('all')">すべて <span class="cnt">${total}</span></button>`;
+  html += `<button class="folder-chip ${curFolderId==='unfiled'?'active':''}" onclick="selectFolder('unfiled')">未分類 <span class="cnt">${unfiled}</span></button>`;
+  folders.forEach(f => {
+    const active = curFolderId === f.id;
+    html += `<span class="folder-chip ${active?'active':''}">
+      <span onclick="selectFolder(${f.id})" style="cursor:pointer;">${escFp(f.name)} <span class="cnt">${f.count}</span></span>
+      <button class="mini" title="名前変更" onclick="renameFolder(${f.id})">✎</button>
+      <button class="mini" title="削除" onclick="deleteFolder(${f.id})">🗑</button>
+    </span>`;
+  });
+  html += `<button class="folder-chip" style="border-style:dashed;color:#0F766E;" onclick="createFolder()">＋ フォルダ作成</button>`;
+  el.innerHTML = html;
+}
+
+function selectFolder(key){ curFolderId = key; loadLibrary(); }
+
+async function loadPlans(){
+  let url = '/api/floorplans';
+  if (typeof curFolderId === 'number') url += '?folder_id=' + curFolderId;
+  let list = [];
+  try { const r = await fetch(url); list = r.ok ? await r.json() : []; } catch(_){}
+  if (curFolderId === 'unfiled') list = list.filter(p => !p.folder_id);
+  renderPlans(list);
+}
+
+function folderOptions(selectedId){
+  let o = `<option value="">未分類</option>`;
+  libFolders.forEach(f => { o += `<option value="${f.id}" ${f.id===selectedId?'selected':''}>${escFp(f.name)}</option>`; });
+  return o;
+}
+
+function renderPlans(list){
+  const el = document.getElementById('plan-grid');
+  if (!list.length) { el.innerHTML = '<div class="empty">この場所に間取りはありません。「＋ 新規作成」から作成できます。</div>'; return; }
+  el.innerHTML = list.map(p => `
+    <div class="plan-card">
+      <div class="pn" title="${escFp(p.name)}">${escFp(p.name)}</div>
+      <div class="pd">更新: ${p.updated_at || '-'}</div>
+      <div class="plan-row">
+        <button class="tb-btn primary" style="flex:1;justify-content:center;" onclick="openPlan(${p.id}, ${p.folder_id || 'null'})">開く</button>
+        <button class="tb-btn danger" onclick="delFp(${p.id})">🗑</button>
+      </div>
+      <div class="plan-row">
+        <span style="font-size:11px;color:#6b7280;">フォルダ:</span>
+        <select class="plan-sel" onchange="movePlan(${p.id}, this.value)">${folderOptions(p.folder_id)}</select>
+      </div>
+    </div>`).join('');
+}
+
+async function createFolder(){
+  const name = prompt('フォルダ名を入力してください（例: グランドメゾン / 1LDK）'); if (!name) return;
+  try {
+    const r = await fetch('/api/floorplan-folders', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name}) });
+    if (!r.ok) throw new Error();
+    loadLibrary();
+  } catch(_) { showAlert('フォルダ作成に失敗しました。', 'error'); }
+}
+async function renameFolder(id){
+  const cur = (libFolders.find(f=>f.id===id)||{}).name || '';
+  const name = prompt('新しいフォルダ名', cur); if (!name) return;
+  try { await fetch('/api/floorplan-folders/'+id, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name}) }); loadLibrary(); } catch(_){}
+}
+async function deleteFolder(id){
+  if (!confirm('このフォルダを削除しますか？（中の間取りは「未分類」に移動します）')) return;
+  try { await fetch('/api/floorplan-folders/'+id, { method:'DELETE' }); if (curFolderId===id) curFolderId='all'; loadLibrary(); } catch(_){}
+}
+async function movePlan(id, folderId){
+  try { await fetch('/api/floorplans/'+id+'/move', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({folder_id: folderId ? +folderId : null}) }); loadLibrary(); } catch(_){}
+}
+
+function fillFolderSelect(){
+  const sel = document.getElementById('fp-folder');
+  if (sel) sel.innerHTML = folderOptions(editingFolderId);
+}
+function setFolderLabel(){
+  const f = libFolders.find(x => x.id === editingFolderId);
+  document.getElementById('ed-folder-label').textContent = f ? `（${f.name}）` : '（未分類）';
+}
+
+/* 新規・開く */
+function openNew(){
+  currentId = null;
+  editingFolderId = (typeof curFolderId === 'number') ? curFolderId : null;
+  document.getElementById('fp-name').value = '';
+  canvas.clear(); canvas.backgroundColor = '#ffffff'; drawGrid();
+  document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
+  fillFolderSelect(); setFolderLabel();
+  showEditor();
+}
+async function openPlan(id, folderId){
+  try {
+    const res = await fetch('/api/floorplans/'+id);
+    if (!res.ok) return;
+    const f = await res.json();
+    currentId = f.id; editingFolderId = folderId || null;
+    document.getElementById('fp-name').value = f.name || '';
+    canvas.clear();
+    if (f.data) canvas.loadFromJSON(JSON.parse(f.data), () => { drawGrid(); canvas.renderAll(); });
+    else { drawGrid(); canvas.renderAll(); }
+    document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
+    fillFolderSelect(); setFolderLabel();
+    showEditor();
+  } catch(_) { showAlert('読み込みに失敗しました。', 'error'); }
+}
 
 /* ===== 部品ライブラリ ===== */
 const S = {
@@ -177,12 +330,8 @@ const CATALOG = [
     {label:'ドア', svg:S.door, w:80}, {label:'引き戸', svg:S.sliding, w:120},
     {label:'窓', svg:S.window, w:120},
   ]},
-  { key:'heya', label:'壁', open:false, items:[
-    {label:'壁', svg:S.wall, w:160},
-  ]},
-  { key:'kaidan', label:'階段', open:false, items:[
-    {label:'階段', svg:S.stairs, w:80},
-  ]},
+  { key:'heya', label:'壁', open:false, items:[ {label:'壁', svg:S.wall, w:160} ]},
+  { key:'kaidan', label:'階段', open:false, items:[ {label:'階段', svg:S.stairs, w:80} ]},
   { key:'kagu', label:'家具', open:false, items:[
     {label:'ベッド', svg:S.bed, w:110}, {label:'ソファ', svg:S.sofa, w:140},
     {label:'テーブル', svg:S.table, w:110}, {label:'冷蔵庫', svg:S.fridge, w:60},
@@ -204,8 +353,7 @@ function buildPalette() {
           </div>`).join('')}
       </div>
     </div>`).join('');
-  const sel = document.getElementById('room-type');
-  sel.innerHTML = ROOM_TYPES.map((r,i)=>`<option value="${i}">${r.t}</option>`).join('');
+  document.getElementById('room-type').innerHTML = ROOM_TYPES.map((r,i)=>`<option value="${i}">${r.t}</option>`).join('');
 }
 
 function addPart(ci, ii) {
@@ -213,7 +361,7 @@ function addPart(ci, ii) {
   fabric.loadSVGFromString(it.svg, (objects, options) => {
     const obj = fabric.util.groupSVGElements(objects, options);
     const scale = it.w / (obj.width || it.w);
-    obj.set({ left: 380, top: 250, scaleX: scale, scaleY: scale, originX:'center', originY:'center' });
+    obj.set({ left:380, top:250, scaleX:scale, scaleY:scale, originX:'center', originY:'center' });
     obj.partLabel = it.label;
     canvas.add(obj); canvas.setActiveObject(obj); canvas.renderAll();
   });
@@ -248,34 +396,27 @@ function toggleRoomMode() {
 }
 function roomColor() { return ROOM_TYPES[+document.getElementById('room-type').value || 0].c; }
 function roomName() { return ROOM_TYPES[+document.getElementById('room-type').value || 0].t; }
-
 function showSizeTip(wpx, hpx, e) {
   const tip = document.getElementById('size-tip');
   const wmm = mmFromPx(wpx), hmm = mmFromPx(hpx);
-  const m2 = (wmm * hmm) / 1e6, jo = m2 / 1.62;
+  const jo = ((wmm * hmm) / 1e6) / 1.62;
   tip.textContent = `${wmm}×${hmm}mm ／ ${jo.toFixed(1)}帖`;
-  tip.style.left = (e.clientX + 14) + 'px';
-  tip.style.top = (e.clientY + 14) + 'px';
+  tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px';
   tip.style.display = 'block';
 }
 function hideSizeTip() { document.getElementById('size-tip').style.display = 'none'; }
-
 function finalizeRoom(left, top, w, h) {
-  const rect = new fabric.Rect({
-    left, top, width: w, height: h,
-    fill: roomColor(), stroke: '#333', strokeWidth: 5, strokeUniform: true,
-    roomType: roomName(),
-  });
+  const rect = new fabric.Rect({ left, top, width:w, height:h, fill:roomColor(),
+    stroke:'#333', strokeWidth:5, strokeUniform:true, roomType:roomName() });
   const wmm = mmFromPx(w), hmm = mmFromPx(h);
   const jo = ((wmm * hmm) / 1e6) / 1.62;
   const label = new fabric.IText(`${roomName()}\n${jo.toFixed(1)}帖`, {
-    left: left + w/2, top: top + h/2, originX:'center', originY:'center',
-    fontSize: 14, fill:'#111827', textAlign:'center', fontFamily:'sans-serif',
-  });
+    left:left + w/2, top:top + h/2, originX:'center', originY:'center',
+    fontSize:14, fill:'#111827', textAlign:'center', fontFamily:'sans-serif' });
   canvas.add(rect); canvas.add(label); canvas.renderAll();
 }
 
-/* ===== 既存ツール ===== */
+/* ===== キャンバス ===== */
 function initCanvas() {
   canvas = new fabric.Canvas('fp-canvas', { backgroundColor:'#ffffff', preserveObjectStacking:true });
   canvas.on('object:moving', e => {
@@ -391,65 +532,26 @@ function serializeCanvas() {
   drawGrid();
   return json;
 }
-
 async function saveFp() {
   const name = document.getElementById('fp-name').value.trim() || '無題';
-  const payload = { id: currentId, name, data: serializeCanvas() };
+  const fsel = document.getElementById('fp-folder').value;
+  editingFolderId = fsel ? +fsel : null;
+  const payload = { id: currentId, name, data: serializeCanvas(), folder_id: editingFolderId };
   try {
     const res = await fetch('/api/floorplans', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
     if (!res.ok) throw new Error();
     const j = await res.json(); currentId = j.id;
-    showAlert('間取りを保存しました。'); loadList();
+    setFolderLabel();
+    showAlert('間取りを保存しました。');
   } catch(_) { showAlert('保存に失敗しました。', 'error'); }
-}
-function newFp() {
-  if (!confirm('新規作成します。保存していない変更は失われます。よろしいですか？')) return;
-  currentId = null; document.getElementById('fp-name').value = '';
-  canvas.clear(); canvas.backgroundColor = '#ffffff';
-  drawGrid();
-  document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
-}
-async function loadList() {
-  try {
-    const res = await fetch('/api/floorplans');
-    const list = res.ok ? await res.json() : [];
-    const el = document.getElementById('saved-list');
-    if (!list.length) { el.innerHTML = '<p style="font-size:12px;color:#9ca3af;">なし</p>'; return; }
-    el.innerHTML = list.map(f => `
-      <div class="saved-item">
-        <div style="flex:1;overflow:hidden;">
-          <div class="nm" onclick="loadFp(${f.id})" title="クリックで開く">${escFp(f.name)}</div>
-          <div class="dt">${f.updated_at}</div>
-        </div>
-        <button class="saved-del" onclick="delFp(${f.id})" title="削除">✕</button>
-      </div>`).join('');
-  } catch(_) {}
-}
-function escFp(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-async function loadFp(id) {
-  try {
-    const res = await fetch(`/api/floorplans/${id}`);
-    if (!res.ok) return;
-    const f = await res.json();
-    currentId = f.id; document.getElementById('fp-name').value = f.name || '';
-    canvas.clear();
-    if (f.data) canvas.loadFromJSON(JSON.parse(f.data), () => { drawGrid(); canvas.renderAll(); });
-    else { drawGrid(); canvas.renderAll(); }
-    document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
-    showAlert('間取りを読み込みました。');
-  } catch(_) { showAlert('読み込みに失敗しました。', 'error'); }
 }
 async function delFp(id) {
   if (!confirm('この間取りを削除しますか？')) return;
-  try {
-    await fetch(`/api/floorplans/${id}`, { method:'DELETE' });
-    if (currentId === id) { currentId = null; }
-    loadList();
-  } catch(_) {}
+  try { await fetch('/api/floorplans/'+id, { method:'DELETE' }); if (currentId === id) currentId = null; loadLibrary(); } catch(_){}
 }
 
 document.addEventListener('keydown', e => {
-  if (!canvas) return;
+  if (!canvas || document.getElementById('editor-view').style.display === 'none') return;
   const ae = document.activeElement;
   if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
   if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -459,6 +561,6 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && roomMode) toggleRoomMode();
 });
 
-document.addEventListener('DOMContentLoaded', () => { initCanvas(); buildPalette(); drawGrid(); loadList(); });
+document.addEventListener('DOMContentLoaded', () => { initCanvas(); buildPalette(); drawGrid(); showLibrary(); });
 </script>
 {% endblock %}

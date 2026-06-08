@@ -692,10 +692,20 @@ class FloorPlan(db.Model):
     __tablename__ = 'floor_plan'
     id = db.Column(db.Integer, primary_key=True)
     store_id = db.Column(db.Integer)
+    folder_id = db.Column(db.Integer, nullable=True)   # 所属フォルダ（NULL=未分類）
     name = db.Column(db.String(200))
     data = db.Column(db.Text)   # fabric.js canvas JSON（背景画像のbase64含む）
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class FloorPlanFolder(db.Model):
+    """間取りのフォルダ（物件名・部屋タイプ別などで分類）。店舗ごと。"""
+    __tablename__ = 'floor_plan_folder'
+    id = db.Column(db.Integer, primary_key=True)
+    store_id = db.Column(db.Integer)
+    name = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class DocCompanyInfo(db.Model):
@@ -1728,6 +1738,7 @@ def migrate_postgres():
         ("app_user", "admin_can_manage_stores", "BOOLEAN DEFAULT FALSE"),
         ("app_user", "admin_can_delete_tenant", "BOOLEAN DEFAULT FALSE"),
         ("app_user", "admin_can_lock_tenant",   "BOOLEAN DEFAULT FALSE"),
+        ("floor_plan", "folder_id", "INTEGER"),
     ]
     # 各カラムを独立した接続で追加（1つの失敗が他に波及しない）
     for tbl, col, typedef in new_cols:
@@ -3342,8 +3353,10 @@ def api_floorplans_list():
     q = FloorPlan.query
     if sid:
         q = q.filter(FloorPlan.store_id == sid)
+    if request.args.get('folder_id'):
+        q = q.filter(FloorPlan.folder_id == request.args.get('folder_id', type=int))
     items = q.order_by(FloorPlan.updated_at.desc()).all()
-    return jsonify([{'id': f.id, 'name': f.name or '無題',
+    return jsonify([{'id': f.id, 'name': f.name or '無題', 'folder_id': f.folder_id,
                      'updated_at': f.updated_at.strftime('%Y-%m-%d %H:%M') if f.updated_at else ''}
                     for f in items])
 
@@ -3366,6 +3379,8 @@ def api_floorplans_create():
         db.session.add(fp)
     fp.name = (data.get('name') or '無題')[:200]
     fp.data = data.get('data') or ''
+    if 'folder_id' in data:
+        fp.folder_id = data.get('folder_id') or None
     fp.updated_at = datetime.utcnow()
     db.session.commit()
     return jsonify({'status': 'ok', 'id': fp.id})
@@ -3393,6 +3408,90 @@ def api_floorplans_delete(fid):
     if fp.store_id not in allowed:
         return jsonify({'error': '権限がありません'}), 403
     db.session.delete(fp)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── 間取りフォルダ ──
+@app.route("/api/floorplan-folders", methods=["GET"])
+@login_required
+def api_floorplan_folders_list():
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    folders = (FloorPlanFolder.query.filter_by(store_id=sid).order_by(FloorPlanFolder.name.asc()).all()
+               if sid else [])
+    counts = {}
+    if sid:
+        rows = (db.session.query(FloorPlan.folder_id, db.func.count(FloorPlan.id))
+                .filter(FloorPlan.store_id == sid).group_by(FloorPlan.folder_id).all())
+        counts = {fid: c for fid, c in rows}
+    return jsonify({
+        'folders': [{'id': f.id, 'name': f.name or '無題', 'count': counts.get(f.id, 0)} for f in folders],
+        'unfiled_count': counts.get(None, 0),
+    })
+
+
+@app.route("/api/floorplan-folders", methods=["POST"])
+@login_required
+def api_floorplan_folders_create():
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    name = ((request.get_json() or {}).get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'フォルダ名を入力してください'}), 400
+    f = FloorPlanFolder(store_id=sid, name=name[:200])
+    db.session.add(f)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': f.id})
+
+
+@app.route("/api/floorplan-folders/<int:folder_id>", methods=["PUT"])
+@login_required
+def api_floorplan_folders_rename(folder_id):
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
+    allowed = get_allowed_store_ids()
+    f = FloorPlanFolder.query.get_or_404(folder_id)
+    if f.store_id not in allowed:
+        return jsonify({'error': '権限がありません'}), 403
+    name = ((request.get_json() or {}).get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'フォルダ名を入力してください'}), 400
+    f.name = name[:200]
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/floorplan-folders/<int:folder_id>", methods=["DELETE"])
+@login_required
+def api_floorplan_folders_delete(folder_id):
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
+    allowed = get_allowed_store_ids()
+    f = FloorPlanFolder.query.get_or_404(folder_id)
+    if f.store_id not in allowed:
+        return jsonify({'error': '権限がありません'}), 403
+    # フォルダ内の間取りは削除せず「未分類」へ移す
+    FloorPlan.query.filter_by(store_id=f.store_id, folder_id=f.id).update({'folder_id': None})
+    db.session.delete(f)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/floorplans/<int:fid>/move", methods=["PUT"])
+@login_required
+def api_floorplans_move(fid):
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
+    allowed = get_allowed_store_ids()
+    fp = FloorPlan.query.get_or_404(fid)
+    if fp.store_id not in allowed:
+        return jsonify({'error': '権限がありません'}), 403
+    fp.folder_id = (request.get_json() or {}).get('folder_id') or None
     db.session.commit()
     return jsonify({'status': 'ok'})
 
