@@ -695,6 +695,7 @@ class FloorPlan(db.Model):
     folder_id = db.Column(db.Integer, nullable=True)   # 所属フォルダ（NULL=未分類）
     name = db.Column(db.String(200))
     data = db.Column(db.Text)   # fabric.js canvas JSON（背景画像のbase64含む）
+    thumb = db.Column(db.Text)  # 一覧用サムネイル（dataURL）
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1739,6 +1740,7 @@ def migrate_postgres():
         ("app_user", "admin_can_delete_tenant", "BOOLEAN DEFAULT FALSE"),
         ("app_user", "admin_can_lock_tenant",   "BOOLEAN DEFAULT FALSE"),
         ("floor_plan", "folder_id", "INTEGER"),
+        ("floor_plan", "thumb", "TEXT"),
     ]
     # 各カラムを独立した接続で追加（1つの失敗が他に波及しない）
     for tbl, col, typedef in new_cols:
@@ -3357,6 +3359,7 @@ def api_floorplans_list():
         q = q.filter(FloorPlan.folder_id == request.args.get('folder_id', type=int))
     items = q.order_by(FloorPlan.updated_at.desc()).all()
     return jsonify([{'id': f.id, 'name': f.name or '無題', 'folder_id': f.folder_id,
+                     'thumb': f.thumb or '',
                      'updated_at': f.updated_at.strftime('%Y-%m-%d %H:%M') if f.updated_at else ''}
                     for f in items])
 
@@ -3379,6 +3382,8 @@ def api_floorplans_create():
         db.session.add(fp)
     fp.name = (data.get('name') or '無題')[:200]
     fp.data = data.get('data') or ''
+    if 'thumb' in data:
+        fp.thumb = data.get('thumb') or None
     if 'folder_id' in data:
         fp.folder_id = data.get('folder_id') or None
     fp.updated_at = datetime.utcnow()
