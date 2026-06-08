@@ -48,6 +48,8 @@
   .folder-chip.active { background:var(--primary); color:#fff; border-color:var(--primary); }
   .folder-chip .cnt { background:rgba(0,0,0,0.08); border-radius:10px; padding:0 6px; font-size:11px; }
   .folder-chip.active .cnt { background:rgba(255,255,255,0.25); }
+  .folder-chip.new-chip { background:var(--primary); color:#fff; border-color:var(--primary); min-width:170px; justify-content:center; font-size:13px; padding:8px 16px; }
+  .folder-chip.new-chip:hover { background:var(--primary-dark); }
   .mini { border:none; background:none; cursor:pointer; font-size:11px; color:inherit; opacity:.75; padding:0 1px; }
   .plan-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; }
   .plan-card { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:7px; }
@@ -71,7 +73,6 @@
         <h1 class="fp-title">間取り作成</h1>
         <p class="fp-sub">物件名・部屋タイプ別にフォルダで管理できます。新規作成、または保存済みを開いてください。</p>
       </div>
-      <button class="tb-btn primary" style="font-size:13px;padding:9px 16px;" onclick="openNew()">＋ 新規作成</button>
     </div>
 
     <div class="folder-bar" id="folder-bar"></div>
@@ -90,11 +91,13 @@
     </div>
 
     <div class="toolbar">
-      <button class="tb-btn" id="draw-room-btn" onclick="toggleRoomMode()">🏠 部屋を描く</button>
+      <span style="font-size:12px;font-weight:800;color:#374151;">部屋を描く</span>
+      <button class="tb-btn" id="rect-mode-btn" onclick="setDrawMode('rect')" title="ドラッグで四角い部屋">⬛ 囲み入力</button>
+      <button class="tb-btn" id="poly-mode-btn" onclick="setDrawMode('poly')" title="角をクリックして多角形（△やL字）。ダブルクリックで確定">△ 頂点入力</button>
       <select class="tb-sel" id="room-type" title="部屋の種類"></select>
       <span class="tb-sep"></span>
       <button class="tb-btn" id="grid-btn" onclick="toggleGrid()">▦ グリッド ON</button>
-      <span class="tb-note">1マス＝910mm（半間）。半マス(455mm)に吸着します。</span>
+      <span class="tb-note">頂点入力：角をクリック→ダブルクリックで確定。1マス=910mm、半マスに吸着。</span>
     </div>
 
     <div class="toolbar">
@@ -197,6 +200,7 @@ function renderFolderBar(folders, unfiled){
   const total = unfiled + folders.reduce((s,f)=>s+f.count, 0);
   const el = document.getElementById('folder-bar');
   let html = '';
+  html += `<button class="folder-chip new-chip" onclick="openNew()">＋ 新規作成</button>`;
   html += `<button class="folder-chip ${curFolderId==='all'?'active':''}" onclick="selectFolder('all')">すべて <span class="cnt">${total}</span></button>`;
   html += `<button class="folder-chip ${curFolderId==='unfiled'?'active':''}" onclick="selectFolder('unfiled')">未分類 <span class="cnt">${unfiled}</span></button>`;
   folders.forEach(f => {
@@ -384,18 +388,26 @@ function toggleGrid() {
   drawGrid();
 }
 
-/* ===== 部屋を描く ===== */
-let roomMode = false, drawing = false, startX = 0, startY = 0, tempRect = null;
-function toggleRoomMode() {
-  roomMode = !roomMode;
-  document.getElementById('draw-room-btn').classList.toggle('primary', roomMode);
-  canvas.selection = !roomMode;
-  canvas.skipTargetFind = roomMode;
-  canvas.defaultCursor = roomMode ? 'crosshair' : 'default';
-  if (roomMode) canvas.discardActiveObject().renderAll();
+/* ===== 部屋を描く（囲み入力＝四角 / 頂点入力＝多角形） ===== */
+let drawMode = null;   // null | 'rect' | 'poly'
+let drawing = false, startX = 0, startY = 0, tempRect = null;
+let polyPoints = [], polyLine = null;
+
+function setDrawMode(m) {
+  drawMode = (drawMode === m) ? null : m;
+  resetPoly(); drawing = false; if (tempRect) { canvas.remove(tempRect); tempRect = null; }
+  document.getElementById('rect-mode-btn').classList.toggle('primary', drawMode === 'rect');
+  document.getElementById('poly-mode-btn').classList.toggle('primary', drawMode === 'poly');
+  const active = !!drawMode;
+  canvas.selection = !active; canvas.skipTargetFind = active;
+  canvas.defaultCursor = active ? 'crosshair' : 'default';
+  if (active) canvas.discardActiveObject();
+  canvas.renderAll();
 }
+function resetPoly() { if (polyLine) { canvas.remove(polyLine); polyLine = null; } polyPoints = []; hideSizeTip(); if (canvas) canvas.renderAll(); }
 function roomColor() { return ROOM_TYPES[+document.getElementById('room-type').value || 0].c; }
 function roomName() { return ROOM_TYPES[+document.getElementById('room-type').value || 0].t; }
+
 function showSizeTip(wpx, hpx, e) {
   const tip = document.getElementById('size-tip');
   const wmm = mmFromPx(wpx), hmm = mmFromPx(hpx);
@@ -404,16 +416,52 @@ function showSizeTip(wpx, hpx, e) {
   tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px';
   tip.style.display = 'block';
 }
+function showAreaTip(jo, e) {
+  const tip = document.getElementById('size-tip');
+  tip.textContent = `${jo.toFixed(1)}帖（ダブルクリックで確定）`;
+  tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px';
+  tip.style.display = 'block';
+}
 function hideSizeTip() { document.getElementById('size-tip').style.display = 'none'; }
+
+function addRoomLabel(cx, cy, jo) {
+  const label = new fabric.IText(`${roomName()}\n${jo.toFixed(1)}帖`, {
+    left:cx, top:cy, originX:'center', originY:'center',
+    fontSize:14, fill:'#111827', textAlign:'center', fontFamily:'sans-serif' });
+  canvas.add(label);
+}
 function finalizeRoom(left, top, w, h) {
   const rect = new fabric.Rect({ left, top, width:w, height:h, fill:roomColor(),
     stroke:'#333', strokeWidth:5, strokeUniform:true, roomType:roomName() });
   const wmm = mmFromPx(w), hmm = mmFromPx(h);
   const jo = ((wmm * hmm) / 1e6) / 1.62;
-  const label = new fabric.IText(`${roomName()}\n${jo.toFixed(1)}帖`, {
-    left:left + w/2, top:top + h/2, originX:'center', originY:'center',
-    fontSize:14, fill:'#111827', textAlign:'center', fontFamily:'sans-serif' });
-  canvas.add(rect); canvas.add(label); canvas.renderAll();
+  canvas.add(rect); addRoomLabel(left + w/2, top + h/2, jo); canvas.renderAll();
+}
+
+/* 頂点入力（多角形：△・L字など） */
+function polyAreaPx(pts) {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) { const j = (i+1) % pts.length; a += pts[i].x*pts[j].y - pts[j].x*pts[i].y; }
+  return Math.abs(a) / 2;
+}
+function polyCentroid(pts) { let x=0, y=0; pts.forEach(p => { x+=p.x; y+=p.y; }); return { x:x/pts.length, y:y/pts.length }; }
+function polyJo(pts) { return (polyAreaPx(pts) / (PX_PER_MM*PX_PER_MM) / 1e6) / 1.62; }
+function updatePolyLine(cursor) {
+  if (polyLine) { canvas.remove(polyLine); polyLine = null; }
+  const pts = cursor ? polyPoints.concat([cursor]) : polyPoints.slice();
+  if (!pts.length) { canvas.renderAll(); return; }
+  polyLine = new fabric.Polyline(pts, { stroke:'#0D9488', strokeWidth:2, strokeDashArray:[4,3],
+    fill:'rgba(13,148,136,0.06)', selectable:false, evented:false, objectCaching:false });
+  canvas.add(polyLine); polyLine.bringToFront(); canvas.renderAll();
+}
+function finalizePoly() {
+  const pts = [];
+  polyPoints.forEach(p => { const l = pts[pts.length-1]; if (!l || Math.hypot(p.x-l.x, p.y-l.y) > 1) pts.push(p); });
+  if (pts.length < 3) { resetPoly(); return; }
+  const poly = new fabric.Polygon(pts, { fill:roomColor(), stroke:'#333', strokeWidth:5, strokeUniform:true, roomType:roomName() });
+  const jo = polyJo(pts); const c = polyCentroid(pts);
+  resetPoly();
+  canvas.add(poly); addRoomLabel(c.x, c.y, jo); canvas.renderAll();
 }
 
 /* ===== キャンバス ===== */
@@ -424,30 +472,43 @@ function initCanvas() {
     o.set({ left: snap(o.left), top: snap(o.top) });
   });
   canvas.on('mouse:down', opt => {
-    if (!roomMode) return;
-    const p = canvas.getPointer(opt.e);
-    drawing = true; startX = snap(p.x); startY = snap(p.y);
-    tempRect = new fabric.Rect({ left:startX, top:startY, width:1, height:1,
-      fill:'rgba(13,148,136,0.06)', stroke:'#0D9488', strokeDashArray:[4,4], strokeWidth:1,
-      selectable:false, evented:false });
-    canvas.add(tempRect);
+    if (drawMode === 'rect') {
+      const p = canvas.getPointer(opt.e);
+      drawing = true; startX = snap(p.x); startY = snap(p.y);
+      tempRect = new fabric.Rect({ left:startX, top:startY, width:1, height:1,
+        fill:'rgba(13,148,136,0.06)', stroke:'#0D9488', strokeDashArray:[4,4], strokeWidth:1,
+        selectable:false, evented:false });
+      canvas.add(tempRect);
+    } else if (drawMode === 'poly') {
+      const p = canvas.getPointer(opt.e); const x = snap(p.x), y = snap(p.y);
+      if (polyPoints.length >= 3) {
+        const f = polyPoints[0];
+        if (Math.hypot(x - f.x, y - f.y) < SNAP_PX) { finalizePoly(); return; }
+      }
+      polyPoints.push({ x, y }); updatePolyLine();
+    }
   });
   canvas.on('mouse:move', opt => {
-    if (!roomMode || !drawing) return;
-    const p = canvas.getPointer(opt.e);
-    const x = snap(p.x), y = snap(p.y);
-    tempRect.set({ left:Math.min(startX,x), top:Math.min(startY,y), width:Math.abs(x-startX), height:Math.abs(y-startY) });
-    showSizeTip(Math.abs(x-startX), Math.abs(y-startY), opt.e);
-    canvas.renderAll();
+    if (drawMode === 'rect' && drawing) {
+      const p = canvas.getPointer(opt.e); const x = snap(p.x), y = snap(p.y);
+      tempRect.set({ left:Math.min(startX,x), top:Math.min(startY,y), width:Math.abs(x-startX), height:Math.abs(y-startY) });
+      showSizeTip(Math.abs(x-startX), Math.abs(y-startY), opt.e);
+      canvas.renderAll();
+    } else if (drawMode === 'poly' && polyPoints.length) {
+      const p = canvas.getPointer(opt.e); const x = snap(p.x), y = snap(p.y);
+      updatePolyLine({ x, y });
+      showAreaTip(polyJo(polyPoints.concat([{ x, y }])), opt.e);
+    }
   });
   canvas.on('mouse:up', () => {
-    if (!roomMode || !drawing) return;
+    if (drawMode !== 'rect' || !drawing) return;
     drawing = false; hideSizeTip();
     const w = tempRect.width, h = tempRect.height, left = tempRect.left, top = tempRect.top;
     canvas.remove(tempRect); tempRect = null;
     if (w < SNAP_PX || h < SNAP_PX) { canvas.renderAll(); return; }
     finalizeRoom(left, top, w, h);
   });
+  canvas.on('mouse:dblclick', () => { if (drawMode === 'poly') finalizePoly(); });
 }
 
 function addBg(e) {
@@ -558,7 +619,8 @@ document.addEventListener('keydown', e => {
     const o = canvas.getActiveObject();
     if (o && !(o.isEditing)) { delSel(); e.preventDefault(); }
   }
-  if (e.key === 'Escape' && roomMode) toggleRoomMode();
+  if (e.key === 'Escape' && drawMode) setDrawMode(drawMode);
+  if (e.key === 'Enter' && drawMode === 'poly') finalizePoly();
 });
 
 document.addEventListener('DOMContentLoaded', () => { initCanvas(); buildPalette(); drawGrid(); showLibrary(); });
