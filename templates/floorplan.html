@@ -6,19 +6,30 @@
 <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
 <style>
   :root { --primary:#0D9488; --primary-dark:#0F766E; }
-  .fp-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:10px; }
+  .fp-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:10px; }
   .fp-title { font-size:20px; font-weight:800; color:#111827; margin:0; }
   .fp-sub { font-size:12px; color:#6b7280; margin:2px 0 0; }
-  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; margin-bottom:12px; }
-  .tb-btn { display:inline-flex; align-items:center; gap:5px; border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:7px; padding:7px 11px; font-size:12px; font-weight:600; cursor:pointer; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:6px; align-items:center; background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:8px 10px; margin-bottom:10px; }
+  .tb-btn { display:inline-flex; align-items:center; gap:5px; border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:7px; padding:6px 10px; font-size:12px; font-weight:600; cursor:pointer; }
   .tb-btn:hover { background:#F0FDFA; border-color:#5EEAD4; }
   .tb-btn.primary { background:var(--primary); color:#fff; border-color:var(--primary); }
   .tb-btn.primary:hover { background:var(--primary-dark); }
   .tb-btn.danger { color:#ef4444; border-color:#fca5a5; }
-  .tb-sep { width:1px; height:24px; background:#e5e7eb; margin:0 2px; }
-  .tb-color { width:30px; height:30px; border:1px solid #d1d5db; border-radius:6px; padding:2px; cursor:pointer; }
-  .layout { display:grid; grid-template-columns:1fr 240px; gap:14px; align-items:start; }
-  @media (max-width:900px){ .layout { grid-template-columns:1fr; } }
+  .tb-sep { width:1px; height:22px; background:#e5e7eb; margin:0 2px; }
+  .tb-color { width:28px; height:28px; border:1px solid #d1d5db; border-radius:6px; padding:2px; cursor:pointer; }
+  .layout { display:grid; grid-template-columns:212px 1fr 224px; gap:12px; align-items:start; }
+  @media (max-width:1100px){ .layout { grid-template-columns:1fr; } }
+  .palette { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:8px; max-height:680px; overflow:auto; }
+  .cat { border:1px solid #eef2f2; border-radius:8px; margin-bottom:7px; overflow:hidden; }
+  .cat-head { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; background:#F0FDFA; cursor:pointer; user-select:none; font-size:12px; font-weight:800; color:#0F766E; }
+  .cat-head .chev { transition:transform .15s; }
+  .cat.open .cat-head .chev { transform:rotate(90deg); }
+  .cat-body { display:none; grid-template-columns:1fr 1fr; gap:6px; padding:8px; }
+  .cat.open .cat-body { display:grid; }
+  .part { display:flex; flex-direction:column; align-items:center; gap:3px; border:1px solid #e5e7eb; border-radius:8px; padding:6px 4px; cursor:pointer; background:#fff; }
+  .part:hover { border-color:#5EEAD4; background:#F0FDFA; }
+  .part svg { width:34px; height:34px; }
+  .part span { font-size:10px; color:#374151; text-align:center; line-height:1.1; }
   .canvas-wrap { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px; overflow:auto; }
   .side { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:12px; }
   .side h3 { font-size:13px; font-weight:800; color:#0F766E; margin:0 0 8px; }
@@ -36,19 +47,21 @@
 {% endblock %}
 
 {% block content %}
-<div style="max-width:1300px;margin:0 auto;">
+<div style="max-width:1320px;margin:0 auto;">
   <div id="alert-msg" class="alert"></div>
   <div class="fp-head">
     <div>
       <h1 class="fp-title">間取り作成</h1>
-      <p class="fp-sub">間取り画像を取り込んで、テキスト・部屋・線・ロゴを編集 → 画像で書き出し</p>
+      <p class="fp-sub">左の部品をクリックで配置 → 個別にドラッグ移動・回転・拡大縮小。間取り画像は「下絵」に取り込んでトレースできます。</p>
     </div>
   </div>
 
   <div class="toolbar">
-    <label class="tb-btn">📷 背景画像
+    <label class="tb-btn">🖼 下絵を取込
       <input type="file" accept="image/*" onchange="addBg(event)" style="display:none;">
     </label>
+    <button class="tb-btn" onclick="toggleBgLock()" id="bg-lock-btn" title="下絵を固定/解除">🔒 下絵を固定</button>
+    <span class="tb-sep"></span>
     <button class="tb-btn" onclick="addText()">＋ テキスト</button>
     <button class="tb-btn" onclick="addRoom()">＋ 部屋(枠)</button>
     <button class="tb-btn" onclick="addLine()">＋ 線</button>
@@ -56,18 +69,26 @@
       <input type="file" accept="image/*" onchange="addLogo(event)" style="display:none;">
     </label>
     <span class="tb-sep"></span>
-    <button type="button" class="tb-color color-swatch" id="color-picker" data-value="#0D9488" title="選択中の色" onclick="openColorPalette(this, function(col){ applyColor(col); })" style="background:#0D9488;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;padding:0;"></button>
-    <button class="tb-btn" onclick="bringFront()">最前面へ</button>
-    <button class="tb-btn" onclick="sendBack()">最背面へ</button>
+    <button type="button" class="tb-color color-swatch" id="color-picker" data-value="#333333" title="線・文字の色" onclick="openColorPalette(this, function(col){ applyColor(col); })" style="background:#333333;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;padding:0;"></button>
+    <button class="tb-btn" onclick="rotateSel()" title="90°回転">⟳ 回転</button>
+    <button class="tb-btn" onclick="dupSel()" title="複製">⧉ 複製</button>
+    <button class="tb-btn" onclick="bringFront()">最前面</button>
+    <button class="tb-btn" onclick="sendBack()">最背面</button>
     <button class="tb-btn danger" onclick="delSel()">🗑 削除</button>
     <span class="tb-sep"></span>
-    <button class="tb-btn" onclick="exportPNG()">🖼 画像で書き出し</button>
+    <button class="tb-btn" onclick="exportPNG()">📤 画像で書き出し</button>
   </div>
 
   <div class="layout">
+    <!-- 部品ライブラリ -->
+    <div class="palette" id="palette"></div>
+
+    <!-- キャンバス -->
     <div class="canvas-wrap">
-      <canvas id="fp-canvas" width="940" height="660"></canvas>
+      <canvas id="fp-canvas" width="900" height="660"></canvas>
     </div>
+
+    <!-- 保存 -->
     <div class="side">
       <h3>保存</h3>
       <input type="text" id="fp-name" class="name-input" placeholder="間取り名（例: グランドメゾン 505）">
@@ -78,9 +99,9 @@
       <h3>保存済み</h3>
       <div id="saved-list"><p style="font-size:12px;color:#9ca3af;">なし</p></div>
       <p class="hint">
-        ・図形/文字はドラッグで移動、四隅で拡大縮小、文字はダブルクリックで編集。<br>
-        ・選択して上の色で色変更。<br>
-        ・「画像で書き出し」でPNG保存できます。
+        ・部品はドラッグで移動、四隅で拡大縮小、上の○で回転。<br>
+        ・選択して「複製」「回転」「削除」。<br>
+        ・下絵を取り込んだら「下絵を固定」で動かないようにできます。
       </p>
     </div>
   </div>
@@ -97,6 +118,77 @@ function showAlert(msg, type='success') {
   setTimeout(() => el.classList.remove('show'), 3500);
 }
 
+/* ===== 部品ライブラリ（SVGで描画した間取り記号） ===== */
+const S = {
+  toilet: `<svg viewBox="0 0 60 92"><rect x="8" y="3" width="44" height="18" rx="3" fill="#fff" stroke="#333" stroke-width="2"/><ellipse cx="30" cy="56" rx="22" ry="31" fill="#fff" stroke="#333" stroke-width="2"/><ellipse cx="30" cy="53" rx="13" ry="20" fill="#fff" stroke="#333" stroke-width="1.5"/></svg>`,
+  bath: `<svg viewBox="0 0 100 70"><rect x="2" y="2" width="96" height="66" rx="10" fill="#fff" stroke="#333" stroke-width="2"/><rect x="10" y="10" width="80" height="50" rx="8" fill="#eaf6ff" stroke="#333" stroke-width="1.5"/><circle cx="80" cy="20" r="3" fill="#333"/></svg>`,
+  kitchen: `<svg viewBox="0 0 124 60"><rect x="2" y="2" width="120" height="56" rx="3" fill="#fff" stroke="#333" stroke-width="2"/><circle cx="32" cy="30" r="11" fill="none" stroke="#333" stroke-width="2"/><circle cx="62" cy="30" r="11" fill="none" stroke="#333" stroke-width="2"/><rect x="88" y="16" width="26" height="28" rx="3" fill="none" stroke="#333" stroke-width="2"/></svg>`,
+  washbasin: `<svg viewBox="0 0 70 60"><rect x="2" y="2" width="66" height="56" rx="4" fill="#fff" stroke="#333" stroke-width="2"/><ellipse cx="35" cy="33" rx="22" ry="16" fill="#eaf6ff" stroke="#333" stroke-width="1.5"/><circle cx="35" cy="12" r="2.5" fill="#333"/></svg>`,
+  washer: `<svg viewBox="0 0 60 60"><rect x="2" y="2" width="56" height="56" rx="4" fill="#fff" stroke="#333" stroke-width="2"/><circle cx="30" cy="34" r="16" fill="none" stroke="#333" stroke-width="2"/><circle cx="14" cy="13" r="3" fill="#333"/></svg>`,
+  door: `<svg viewBox="0 0 80 80"><path d="M8 76 L8 6" stroke="#333" stroke-width="3"/><path d="M8 6 L70 6" stroke="#333" stroke-width="2.5"/><path d="M70 6 A62 62 0 0 1 8 68" fill="none" stroke="#333" stroke-width="1.2" stroke-dasharray="4 3"/></svg>`,
+  sliding: `<svg viewBox="0 0 100 18"><rect x="2" y="2" width="52" height="6" fill="#fff" stroke="#333" stroke-width="1.5"/><rect x="46" y="10" width="52" height="6" fill="#fff" stroke="#333" stroke-width="1.5"/></svg>`,
+  window: `<svg viewBox="0 0 100 16"><rect x="2" y="4" width="96" height="8" fill="#fff" stroke="#333" stroke-width="1.5"/><line x1="2" y1="8" x2="98" y2="8" stroke="#333" stroke-width="1"/></svg>`,
+  wall: `<svg viewBox="0 0 100 12"><rect x="0" y="0" width="100" height="12" fill="#555"/></svg>`,
+  stairs: `<svg viewBox="0 0 60 100"><rect x="2" y="2" width="56" height="96" fill="#fff" stroke="#333" stroke-width="2"/><g stroke="#333" stroke-width="1.3"><line x1="2" y1="16" x2="58" y2="16"/><line x1="2" y1="30" x2="58" y2="30"/><line x1="2" y1="44" x2="58" y2="44"/><line x1="2" y1="58" x2="58" y2="58"/><line x1="2" y1="72" x2="58" y2="72"/><line x1="2" y1="86" x2="58" y2="86"/></g><path d="M30 96 L30 6" stroke="#333" stroke-width="1.5"/><path d="M24 14 L30 6 L36 14" fill="none" stroke="#333" stroke-width="1.5"/></svg>`,
+  bed: `<svg viewBox="0 0 80 112"><rect x="2" y="2" width="76" height="108" rx="4" fill="#fff" stroke="#333" stroke-width="2"/><rect x="9" y="9" width="62" height="24" rx="3" fill="#eef2ff" stroke="#333" stroke-width="1.5"/></svg>`,
+  sofa: `<svg viewBox="0 0 112 62"><rect x="2" y="16" width="108" height="44" rx="6" fill="#fff" stroke="#333" stroke-width="2"/><rect x="2" y="3" width="108" height="18" rx="6" fill="#fff" stroke="#333" stroke-width="2"/></svg>`,
+  table: `<svg viewBox="0 0 90 60"><rect x="2" y="2" width="86" height="56" rx="4" fill="#fff" stroke="#333" stroke-width="2"/></svg>`,
+  fridge: `<svg viewBox="0 0 50 62"><rect x="2" y="2" width="46" height="58" rx="3" fill="#fff" stroke="#333" stroke-width="2"/><line x1="2" y1="26" x2="48" y2="26" stroke="#333" stroke-width="1.5"/><line x1="40" y1="10" x2="40" y2="20" stroke="#333" stroke-width="2"/></svg>`,
+  closet: `<svg viewBox="0 0 90 50"><rect x="2" y="2" width="86" height="46" fill="#fff" stroke="#333" stroke-width="2"/><line x1="45" y1="2" x2="45" y2="48" stroke="#333" stroke-width="1.5"/><path d="M2 2 L45 48 M88 2 L45 48" stroke="#333" stroke-width="0.8"/></svg>`,
+};
+const CATALOG = [
+  { key:'jusetsu', label:'住設', open:true, items:[
+    {label:'トイレ', svg:S.toilet, w:60}, {label:'お風呂', svg:S.bath, w:130},
+    {label:'キッチン', svg:S.kitchen, w:150}, {label:'洗面', svg:S.washbasin, w:90},
+    {label:'洗濯機', svg:S.washer, w:70},
+  ]},
+  { key:'tategu', label:'建具', open:false, items:[
+    {label:'ドア', svg:S.door, w:80}, {label:'引き戸', svg:S.sliding, w:120},
+    {label:'窓', svg:S.window, w:120},
+  ]},
+  { key:'heya', label:'部屋・壁', open:false, items:[
+    {label:'壁', svg:S.wall, w:160},
+  ]},
+  { key:'kaidan', label:'階段', open:false, items:[
+    {label:'階段', svg:S.stairs, w:80},
+  ]},
+  { key:'kagu', label:'家具', open:false, items:[
+    {label:'ベッド', svg:S.bed, w:110}, {label:'ソファ', svg:S.sofa, w:140},
+    {label:'テーブル', svg:S.table, w:110}, {label:'冷蔵庫', svg:S.fridge, w:60},
+    {label:'クローゼット', svg:S.closet, w:120},
+  ]},
+];
+
+function buildPalette() {
+  const root = document.getElementById('palette');
+  root.innerHTML = CATALOG.map((c, ci) => `
+    <div class="cat ${c.open ? 'open' : ''}" id="cat-${c.key}">
+      <div class="cat-head" onclick="this.parentElement.classList.toggle('open')">
+        <span>${c.label}</span><span class="chev">▶</span>
+      </div>
+      <div class="cat-body">
+        ${c.items.map((it, ii) => `
+          <div class="part" onclick="addPart(${ci},${ii})" title="${it.label}">
+            ${it.svg}<span>${it.label}</span>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function addPart(ci, ii) {
+  const it = CATALOG[ci].items[ii];
+  fabric.loadSVGFromString(it.svg, (objects, options) => {
+    const obj = fabric.util.groupSVGElements(objects, options);
+    const scale = it.w / (obj.width || it.w);
+    obj.set({
+      left: 360 + Math.random()*40, top: 240 + Math.random()*40,
+      scaleX: scale, scaleY: scale, originX:'center', originY:'center',
+    });
+    obj.partLabel = it.label;
+    canvas.add(obj); canvas.setActiveObject(obj); canvas.renderAll();
+  });
+}
+
 function initCanvas() {
   canvas = new fabric.Canvas('fp-canvas', { backgroundColor: '#ffffff', preserveObjectStacking: true });
 }
@@ -107,31 +199,39 @@ function addBg(e) {
   reader.onload = ev => {
     fabric.Image.fromURL(ev.target.result, img => {
       const scale = Math.min(canvas.width / img.width, canvas.height / img.height, 1);
-      img.set({ left: (canvas.width - img.width*scale)/2, top: (canvas.height - img.height*scale)/2, scaleX: scale, scaleY: scale });
+      img.set({ left: (canvas.width - img.width*scale)/2, top: (canvas.height - img.height*scale)/2, scaleX: scale, scaleY: scale, opacity: 0.85 });
       img.set('isBg', true);
-      canvas.add(img); canvas.sendToBack(img); canvas.setActiveObject(img); canvas.renderAll();
+      canvas.add(img); canvas.sendToBack(img); canvas.discardActiveObject(); canvas.renderAll();
     });
   };
   reader.readAsDataURL(file);
   e.target.value = '';
 }
 
+function _bgObj() { return canvas.getObjects().find(o => o.isBg); }
+function toggleBgLock() {
+  const bg = _bgObj();
+  if (!bg) { showAlert('先に下絵を取り込んでください。', 'error'); return; }
+  const willLock = bg.selectable !== false;   // 現在選択可なら固定する
+  bg.set({ selectable: !willLock, evented: !willLock });
+  if (willLock) canvas.discardActiveObject();
+  canvas.renderAll();
+  document.getElementById('bg-lock-btn').textContent = willLock ? '🔓 下絵を解除' : '🔒 下絵を固定';
+}
+
 function addText() {
   const t = new fabric.IText('テキスト', { left: 60, top: 60, fontSize: 22, fill: getColor(), fontFamily: 'sans-serif' });
   canvas.add(t); canvas.setActiveObject(t); canvas.renderAll();
 }
-
 function addRoom() {
   const r = new fabric.Rect({ left: 80, top: 80, width: 160, height: 120,
-    fill: 'rgba(13,148,136,0.10)', stroke: getColor(), strokeWidth: 2 });
+    fill: 'rgba(13,148,136,0.06)', stroke: getColor(), strokeWidth: 2 });
   canvas.add(r); canvas.setActiveObject(r); canvas.renderAll();
 }
-
 function addLine() {
   const l = new fabric.Line([60, 200, 260, 200], { stroke: getColor(), strokeWidth: 3 });
   canvas.add(l); canvas.setActiveObject(l); canvas.renderAll();
 }
-
 function addLogo(e) {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
@@ -147,19 +247,25 @@ function addLogo(e) {
 }
 
 function getColor() { return document.getElementById('color-picker').dataset.value; }
-
 function applyColor(c) {
-  const o = canvas.getActiveObject(); if (!o) return;
-  if (o.type === 'i-text' || o.type === 'text') o.set('fill', c);
-  else if (o.type === 'line') o.set('stroke', c);
-  else o.set('stroke', c);
+  const objs = canvas.getActiveObjects(); if (!objs.length) return;
+  objs.forEach(o => {
+    if (o.type === 'i-text' || o.type === 'text') o.set('fill', c);
+    else if (o.type === 'line') o.set('stroke', c);
+    else if (o.type === 'group') { (o._objects||[]).forEach(p => { if (p.stroke) p.set('stroke', c); }); }
+    else o.set('stroke', c);
+  });
   canvas.renderAll();
 }
 
 function delSel() {
-  const objs = canvas.getActiveObjects();
-  objs.forEach(o => canvas.remove(o));
+  canvas.getActiveObjects().forEach(o => canvas.remove(o));
   canvas.discardActiveObject(); canvas.renderAll();
+}
+function rotateSel() { const o = canvas.getActiveObject(); if (o) { o.rotate(((o.angle||0)+90)%360); canvas.renderAll(); } }
+function dupSel() {
+  const o = canvas.getActiveObject(); if (!o) return;
+  o.clone(cl => { cl.set({ left:(o.left||0)+20, top:(o.top||0)+20 }); canvas.add(cl); canvas.setActiveObject(cl); canvas.renderAll(); });
 }
 function bringFront() { const o = canvas.getActiveObject(); if (o) { canvas.bringToFront(o); canvas.renderAll(); } }
 function sendBack() { const o = canvas.getActiveObject(); if (o) { canvas.sendToBack(o); canvas.renderAll(); } }
@@ -174,7 +280,7 @@ function exportPNG() {
 
 async function saveFp() {
   const name = document.getElementById('fp-name').value.trim() || '無題';
-  const payload = { id: currentId, name, data: JSON.stringify(canvas.toJSON(['isBg'])) };
+  const payload = { id: currentId, name, data: JSON.stringify(canvas.toJSON(['isBg','partLabel','selectable','evented'])) };
   try {
     const res = await fetch('/api/floorplans', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     if (!res.ok) throw new Error();
@@ -187,6 +293,7 @@ function newFp() {
   if (!confirm('新規作成します。保存していない変更は失われます。よろしいですか？')) return;
   currentId = null; document.getElementById('fp-name').value = '';
   canvas.clear(); canvas.backgroundColor = '#ffffff'; canvas.renderAll();
+  document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
 }
 
 async function loadList() {
@@ -197,7 +304,7 @@ async function loadList() {
     if (!list.length) { el.innerHTML = '<p style="font-size:12px;color:#9ca3af;">なし</p>'; return; }
     el.innerHTML = list.map(f => `
       <div class="saved-item">
-        <div>
+        <div style="flex:1;overflow:hidden;">
           <div class="nm" onclick="loadFp(${f.id})" title="クリックで開く">${escFp(f.name)}</div>
           <div class="dt">${f.updated_at}</div>
         </div>
@@ -216,6 +323,7 @@ async function loadFp(id) {
     canvas.clear();
     if (f.data) canvas.loadFromJSON(JSON.parse(f.data), () => canvas.renderAll());
     else canvas.renderAll();
+    document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
     showAlert('間取りを読み込みました。');
   } catch(_) { showAlert('読み込みに失敗しました。', 'error'); }
 }
@@ -229,16 +337,16 @@ async function delFp(id) {
   } catch(_) {}
 }
 
-// Deleteキーで選択削除
 document.addEventListener('keydown', e => {
-  if ((e.key === 'Delete' || e.key === 'Backspace') && canvas) {
-    const ae = document.activeElement;
-    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
+  if (!canvas) return;
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return;
+  if (e.key === 'Delete' || e.key === 'Backspace') {
     const o = canvas.getActiveObject();
     if (o && !(o.isEditing)) { delSel(); e.preventDefault(); }
   }
 });
 
-document.addEventListener('DOMContentLoaded', () => { initCanvas(); loadList(); });
+document.addEventListener('DOMContentLoaded', () => { initCanvas(); buildPalette(); loadList(); });
 </script>
 {% endblock %}
