@@ -204,7 +204,16 @@ async function processTplFile(f){
   if(!/\.xlsx$/i.test(f.name)){ showAlert('対応形式は .xlsx ファイルのみです。','error'); return; }
   if(f.size > 10*1024*1024){ showAlert('ファイルサイズが10MBを超えています。','error'); return; }
   const name = document.getElementById('tpl-name').value.trim();
-  const fd = new FormData(); fd.append('file', f); if(name) fd.append('name', name);
+  // ファイル実体を先に読み込む（Googleドライブ等の「オンラインのみ」ファイル対策）
+  let blob;
+  try{
+    blob = new Blob([await f.arrayBuffer()], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  }catch(_){
+    showAlert('ファイルの中身を読み込めませんでした。Googleドライブ等の「オンラインのみ」ファイルの可能性があります。右クリック→「オフラインで使用可能にする」等で端末にダウンロードしてからお試しください。','error');
+    return;
+  }
+  if(blob.size === 0){ showAlert('ファイルが空、または読み込めませんでした。','error'); return; }
+  const fd = new FormData(); fd.append('file', blob, f.name); if(name) fd.append('name', name);
   showAlert('アップロード中…');
   try{
     const r = await fetch('/api/doc-templates', {method:'POST', body:fd});
