@@ -94,15 +94,17 @@
       </div>
     </div>
 
-    <div class="lib-search-box">
-      <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="#0D9488" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-      </svg>
-      <input id="lib-search" type="text" placeholder="間取り名で検索（全フォルダ横断）" oninput="onSearch(this.value)" autocomplete="off"
-        style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;">
-      <button onclick="clearSearch()" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:0 2px;" title="クリア">✕</button>
+    <div id="lib-controls" style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;">
+      <div id="lib-top" style="margin-bottom:0;"></div>
+      <div class="lib-search-box" style="margin-bottom:0;flex:1;max-width:360px;min-width:220px;">
+        <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="#0D9488" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <input id="lib-search" type="text" placeholder="間取り名で検索（全フォルダ横断）" oninput="onSearch(this.value)" autocomplete="off"
+          style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;">
+        <button onclick="clearSearch()" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:0 2px;" title="クリア">✕</button>
+      </div>
     </div>
-    <div id="lib-top"></div>
     <div id="lib-body"></div>
   </div>
 
@@ -220,7 +222,7 @@ function showLibrary(){
 function showEditor(){
   document.getElementById('library-view').style.display = 'none';
   document.getElementById('editor-view').style.display = '';
-  if (canvas) setTimeout(() => canvas.calcOffset(), 30);
+  if (canvas) setTimeout(() => { fitCanvas(); canvas.calcOffset(); }, 30);
 }
 
 async function loadLibrary(){
@@ -343,7 +345,8 @@ function openNew(){
   currentId = null;
   editingFolderId = (curView === 'inside' && typeof curFolder === 'number') ? curFolder : null;
   document.getElementById('fp-name').value = '';
-  canvas.clear(); canvas.backgroundColor = '#ffffff'; setZoom(1); drawGrid();
+  canvas.clear(); canvas.backgroundColor = '#ffffff'; zoom = 1;
+  document.getElementById('zoom-label').textContent = '100%';
   document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
   fillFolderSelect(); setFolderLabel();
   showEditor();
@@ -355,9 +358,9 @@ async function openPlan(id, folderId){
     const f = await res.json();
     currentId = f.id; editingFolderId = folderId || null;
     document.getElementById('fp-name').value = f.name || '';
-    canvas.clear(); setZoom(1);
-    if (f.data) canvas.loadFromJSON(JSON.parse(f.data), () => { drawGrid(); canvas.renderAll(); });
-    else { drawGrid(); canvas.renderAll(); }
+    canvas.clear(); zoom = 1; document.getElementById('zoom-label').textContent = '100%';
+    if (f.data) canvas.loadFromJSON(JSON.parse(f.data), () => { fitCanvas(); canvas.renderAll(); });
+    else { fitCanvas(); canvas.renderAll(); }
     document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
     fillFolderSelect(); setFolderLabel();
     showEditor();
@@ -434,8 +437,9 @@ function drawGrid() {
   canvas.getObjects().filter(o => o.isGrid).forEach(o => canvas.remove(o));
   if (gridOn) {
     const opt = { stroke:'#e5e7eb', selectable:false, evented:false, isGrid:true, strokeWidth:1, hoverCursor:'default' };
-    for (let x = 0; x <= canvas.width; x += PX_PER_MODULE) canvas.add(new fabric.Line([x,0,x,canvas.height], opt));
-    for (let y = 0; y <= canvas.height; y += PX_PER_MODULE) canvas.add(new fabric.Line([0,y,canvas.width,y], opt));
+    const W = canvas.width / zoom, H = canvas.height / zoom;   // 表示中のシーン範囲いっぱいに描く
+    for (let x = 0; x <= W; x += PX_PER_MODULE) canvas.add(new fabric.Line([x,0,x,H], opt));
+    for (let y = 0; y <= H; y += PX_PER_MODULE) canvas.add(new fabric.Line([0,y,W,y], opt));
   }
   canvas.getObjects().filter(o => o.isGrid).forEach(o => canvas.sendToBack(o));
   canvas.renderAll();
@@ -446,12 +450,19 @@ function toggleGrid() {
   drawGrid();
 }
 /* ===== ズーム（編集エリアの拡大/縮小） ===== */
+function fitCanvas() {
+  const wrap = document.querySelector('.canvas-wrap');
+  if (!wrap || !wrap.clientWidth) return;
+  const w = Math.max(640, Math.floor(wrap.clientWidth - 22));
+  canvas.setDimensions({ width: w, height: 760 });
+  canvas.setZoom(zoom);
+  drawGrid();
+}
 function setZoom(z) {
   zoom = Math.max(0.4, Math.min(2.5, Math.round(z * 10) / 10));
   canvas.setZoom(zoom);
-  canvas.setDimensions({ width: BASE_W * zoom, height: BASE_H * zoom });
   const lbl = document.getElementById('zoom-label'); if (lbl) lbl.textContent = Math.round(zoom * 100) + '%';
-  canvas.renderAll();
+  drawGrid();
 }
 function zoomIn() { setZoom(zoom + 0.2); }
 function zoomOut() { setZoom(zoom - 0.2); }
@@ -656,10 +667,9 @@ function sendBack() { const o = canvas.getActiveObject(); if (o) { canvas.sendTo
 
 function exportPNG() {
   canvas.discardActiveObject();
-  const z = zoom; if (z !== 1) { canvas.setZoom(1); canvas.setDimensions({ width:BASE_W, height:BASE_H }); }
-  canvas.renderAll();
+  const z = zoom; if (z !== 1) { canvas.setZoom(1); canvas.renderAll(); }
   const url = canvas.toDataURL({ format:'png', multiplier:2 });
-  if (z !== 1) { canvas.setZoom(z); canvas.setDimensions({ width:BASE_W*z, height:BASE_H*z }); canvas.renderAll(); }
+  if (z !== 1) { canvas.setZoom(z); canvas.renderAll(); }
   const a = document.createElement('a');
   const nm = (document.getElementById('fp-name').value || '間取り').replace(/[\\/:*?"<>|]/g, '_');
   a.href = url; a.download = nm + '.png'; a.click();
@@ -672,9 +682,9 @@ function serializeWithThumb() {
   canvas.discardActiveObject(); canvas.renderAll();
   const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','selectable','evented','strokeUniform']));
   let thumb = '';
-  const z = zoom; if (z !== 1) { canvas.setZoom(1); canvas.setDimensions({ width:BASE_W, height:BASE_H }); }
-  try { thumb = canvas.toDataURL({ format:'jpeg', quality:0.6, multiplier: 300 / BASE_W }); } catch(_){}
-  if (z !== 1) { canvas.setZoom(z); canvas.setDimensions({ width:BASE_W*z, height:BASE_H*z }); }
+  const z = zoom; if (z !== 1) { canvas.setZoom(1); canvas.renderAll(); }
+  try { thumb = canvas.toDataURL({ format:'jpeg', quality:0.6, multiplier: 300 / canvas.width }); } catch(_){}
+  if (z !== 1) { canvas.setZoom(z); }
   drawGrid();
   return { json, thumb };
 }
@@ -714,6 +724,10 @@ document.addEventListener('keydown', e => {
   }
   if (e.key === 'Escape' && drawMode) setDrawMode(drawMode);
   if (e.key === 'Enter' && drawMode === 'poly') finalizePoly();
+});
+
+window.addEventListener('resize', () => {
+  if (document.getElementById('editor-view').style.display !== 'none') fitCanvas();
 });
 
 document.addEventListener('DOMContentLoaded', () => { initCanvas(); buildPalette(); drawGrid(); showLibrary(); });
