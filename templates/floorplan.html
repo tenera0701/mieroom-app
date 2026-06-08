@@ -94,16 +94,14 @@
       </div>
     </div>
 
-    <div id="lib-controls" style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;">
-      <div id="lib-top" style="margin-bottom:0;"></div>
-      <div class="lib-search-box" style="margin-bottom:0;flex:1;max-width:360px;min-width:220px;">
-        <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="#0D9488" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-        </svg>
-        <input id="lib-search" type="text" placeholder="間取り名で検索（全フォルダ横断）" oninput="onSearch(this.value)" autocomplete="off"
-          style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;">
-        <button onclick="clearSearch()" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:0 2px;" title="クリア">✕</button>
-      </div>
+    <div id="lib-top"></div>
+    <div class="lib-search-box" style="max-width:520px;">
+      <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="#0D9488" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+      <input id="lib-search" type="text" placeholder="間取り名で検索（全フォルダ横断）" oninput="onSearch(this.value)" autocomplete="off"
+        style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;">
+      <button onclick="clearSearch()" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:0 2px;" title="クリア">✕</button>
     </div>
     <div id="lib-body"></div>
   </div>
