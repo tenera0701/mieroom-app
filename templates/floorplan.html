@@ -146,8 +146,8 @@
       </label>
       <button class="tb-btn" onclick="addCompanyLogo()" title="会社情報に登録したロゴを挿入">🏢 会社ロゴ</button>
       <span class="tb-sep"></span>
-      <label class="tb-btn" style="gap:4px;" title="背景色">背景<input type="color" id="bg-color" value="#ffffff" onchange="setBgColor(this.value)" style="width:24px;height:22px;border:none;background:none;padding:0;cursor:pointer;"></label>
-      <label class="tb-btn" style="gap:4px;" title="グリッド色">格子<input type="color" id="grid-color" value="#e5e7eb" onchange="setGridColor(this.value)" style="width:24px;height:22px;border:none;background:none;padding:0;cursor:pointer;"></label>
+      <span class="tb-btn" style="gap:5px;cursor:default;" title="背景色">背景<button type="button" class="color-swatch" id="bg-color" data-value="#ffffff" onclick="openColorPalette(this, function(col){ setBgColor(col); })" style="width:22px;height:20px;border:1px solid #d1d5db;border-radius:4px;padding:0;cursor:pointer;background:#ffffff;"></button></span>
+      <span class="tb-btn" style="gap:5px;cursor:default;" title="グリッド色">格子<button type="button" class="color-swatch" id="grid-color" data-value="#e5e7eb" onclick="openColorPalette(this, function(col){ setGridColor(col); })" style="width:22px;height:20px;border:1px solid #d1d5db;border-radius:4px;padding:0;cursor:pointer;background:#e5e7eb;"></button></span>
       <span class="tb-sep"></span>
       <button type="button" class="tb-color color-swatch" id="color-picker" data-value="#333333" title="線・文字の色" onclick="openColorPalette(this, function(col){ applyColor(col); })" style="background:#333333;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;padding:0;"></button>
       <button class="tb-btn" onclick="rotateSel()">⟳ 回転</button>
