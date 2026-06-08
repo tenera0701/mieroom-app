@@ -30,7 +30,8 @@
   .tpl-name { font-weight:700; color:#111827; font-size:14px; }
   .tpl-meta { font-size:11px; color:#6b7280; }
   .tpl-actions { margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; }
-  .up-zone { border:2px dashed #c7d2fe; border-radius:10px; padding:16px; text-align:center; background:#f5f3ff; }
+  .up-zone { border:2px dashed #c7d2fe; border-radius:10px; padding:16px; text-align:center; background:#f5f3ff; transition:.12s; }
+  .up-zone.drag { border-color:#6D28D9; background:#ede9fe; transform:scale(1.01); }
   .up-zone input[type=text] { border:1px solid #d1d5db; border-radius:6px; padding:7px 9px; font-size:13px; margin-right:8px; }
   .hint { font-size:12px; color:#6b7280; background:#F0FDFA; border:1px solid #99f6e4; border-radius:8px; padding:10px 12px; margin-bottom:14px; line-height:1.7; }
   .hint code { background:#fff; border:1px solid #d1fae5; border-radius:4px; padding:1px 6px; color:#0F766E; font-weight:700; }
@@ -95,7 +96,7 @@
       <input type="text" id="tpl-name" placeholder="帳票名（例：賃貸借契約書）">
       <button class="btn btn-purple btn-sm" onclick="document.getElementById('tpl-file').click()">📄 Excelをアップロード</button>
       <input type="file" id="tpl-file" accept=".xlsx" style="display:none" onchange="uploadTpl(event)">
-      <div class="tpl-meta" style="margin-top:8px;">対応形式：.xlsx（10MBまで）</div>
+      <div class="tpl-meta" style="margin-top:8px;">対応形式：.xlsx（10MBまで）／ここにファイルをドラッグ＆ドロップでも登録できます</div>
     </div>
     <div id="tpl-list" style="margin-top:14px;"></div>
   </div>
@@ -193,18 +194,40 @@ async function loadTemplates(){
   }catch(_){}
 }
 async function uploadTpl(ev){
-  const f = ev.target.files && ev.target.files[0]; if(!f) return;
+  const f = ev.target.files && ev.target.files[0];
+  await processTplFile(f);
+  ev.target.value='';
+}
+// クリック・ドラッグ＆ドロップ共通のアップロード処理
+async function processTplFile(f){
+  if(!f) return;
+  if(!/\.xlsx$/i.test(f.name)){ showAlert('対応形式は .xlsx ファイルのみです。','error'); return; }
+  if(f.size > 10*1024*1024){ showAlert('ファイルサイズが10MBを超えています。','error'); return; }
   const name = document.getElementById('tpl-name').value.trim();
   const fd = new FormData(); fd.append('file', f); if(name) fd.append('name', name);
   showAlert('アップロード中…');
   try{
     const r = await fetch('/api/doc-templates', {method:'POST', body:fd});
     const j = await r.json(); if(!r.ok) throw new Error(j.error||'アップロード失敗');
-    document.getElementById('tpl-name').value=''; ev.target.value='';
+    document.getElementById('tpl-name').value='';
     showAlert(`登録しました（タグ ${(j.tags||[]).length}個を検出）。「タグ割当」で区分を確認してください。`);
     loadTemplates();
-  }catch(e){ ev.target.value=''; showAlert(e.message,'error'); }
+  }catch(e){ showAlert(e.message,'error'); }
 }
+// アップロード枠へのドラッグ＆ドロップ対応
+(function(){
+  const z = document.getElementById('up-zone');
+  if(!z) return;
+  // ページ全体での既定動作（ファイルを開く）を抑止
+  ['dragover','drop'].forEach(t=>window.addEventListener(t,ev=>ev.preventDefault(),false));
+  ['dragenter','dragover'].forEach(t=>z.addEventListener(t,ev=>{ ev.preventDefault(); ev.stopPropagation(); z.classList.add('drag'); }));
+  z.addEventListener('dragleave',ev=>{ ev.preventDefault(); ev.stopPropagation(); if(!z.contains(ev.relatedTarget)) z.classList.remove('drag'); });
+  z.addEventListener('drop',ev=>{
+    ev.preventDefault(); ev.stopPropagation(); z.classList.remove('drag');
+    const f = ev.dataTransfer && ev.dataTransfer.files;
+    if(f && f.length) processTplFile(f[0]);
+  });
+})();
 async function delTpl(id, name){
   if(!confirm(`テンプレート「${name}」を削除しますか？`)) return;
   try{
