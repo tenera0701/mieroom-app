@@ -144,6 +144,10 @@
       <label class="tb-btn">＋ ロゴ
         <input type="file" accept="image/*" onchange="addLogo(event)" style="display:none;">
       </label>
+      <button class="tb-btn" onclick="addCompanyLogo()" title="会社情報に登録したロゴを挿入">🏢 会社ロゴ</button>
+      <span class="tb-sep"></span>
+      <label class="tb-btn" style="gap:4px;" title="背景色">背景<input type="color" id="bg-color" value="#ffffff" onchange="setBgColor(this.value)" style="width:24px;height:22px;border:none;background:none;padding:0;cursor:pointer;"></label>
+      <label class="tb-btn" style="gap:4px;" title="グリッド色">格子<input type="color" id="grid-color" value="#e5e7eb" onchange="setGridColor(this.value)" style="width:24px;height:22px;border:none;background:none;padding:0;cursor:pointer;"></label>
       <span class="tb-sep"></span>
       <button type="button" class="tb-color color-swatch" id="color-picker" data-value="#333333" title="線・文字の色" onclick="openColorPalette(this, function(col){ applyColor(col); })" style="background:#333333;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;padding:0;"></button>
       <button class="tb-btn" onclick="rotateSel()">⟳ 回転</button>
@@ -186,7 +190,7 @@ let canvas, currentId = null, editingFolderId = null;
 const MODULE_MM = 910, PX_PER_MODULE = 46;
 const SNAP_PX = PX_PER_MODULE / 2, PX_PER_MM = PX_PER_MODULE / MODULE_MM;
 const BASE_W = 900, BASE_H = 660;
-let gridOn = true, zoom = 1;
+let gridOn = true, zoom = 1, gridColor = '#e5e7eb';
 
 const ROOM_TYPES = [
   {t:'洋室', c:'rgba(34,197,94,0.16)'}, {t:'和室', c:'rgba(202,138,4,0.18)'},
@@ -382,23 +386,58 @@ const S = {
   table: `<svg viewBox="0 0 90 60"><rect x="2" y="2" width="86" height="56" rx="4" fill="#fff" stroke="#333" stroke-width="2"/></svg>`,
   fridge: `<svg viewBox="0 0 50 62"><rect x="2" y="2" width="46" height="58" rx="3" fill="#fff" stroke="#333" stroke-width="2"/><line x1="2" y1="26" x2="48" y2="26" stroke="#333" stroke-width="1.5"/><line x1="40" y1="10" x2="40" y2="20" stroke="#333" stroke-width="2"/></svg>`,
   closet: `<svg viewBox="0 0 90 50"><rect x="2" y="2" width="86" height="46" fill="#fff" stroke="#333" stroke-width="2"/><line x1="45" y1="2" x2="45" y2="48" stroke="#333" stroke-width="1.5"/><path d="M2 2 L45 48 M88 2 L45 48" stroke="#333" stroke-width="0.8"/></svg>`,
+  sink: `<svg viewBox="0 0 90 60"><rect x="2" y="2" width="86" height="56" rx="3" fill="#fff" stroke="#333" stroke-width="2"/><rect x="12" y="12" width="48" height="36" rx="4" fill="#eaf6ff" stroke="#333" stroke-width="1.5"/><circle cx="74" cy="14" r="3" fill="#333"/></svg>`,
+  stove: `<svg viewBox="0 0 80 60"><rect x="2" y="2" width="76" height="56" rx="3" fill="#fff" stroke="#333" stroke-width="2"/><g fill="none" stroke="#333" stroke-width="1.5"><circle cx="26" cy="22" r="9"/><circle cx="54" cy="22" r="9"/><circle cx="40" cy="44" r="7"/></g></svg>`,
+  ih: `<svg viewBox="0 0 80 60"><rect x="2" y="2" width="76" height="56" rx="3" fill="#fff" stroke="#333" stroke-width="2"/><circle cx="28" cy="26" r="11" fill="none" stroke="#333" stroke-width="1.5"/><circle cx="56" cy="26" r="11" fill="none" stroke="#333" stroke-width="1.5"/><line x1="14" y1="48" x2="66" y2="48" stroke="#333" stroke-width="1.5"/></svg>`,
+  dishwasher: `<svg viewBox="0 0 60 60"><rect x="2" y="2" width="56" height="56" rx="3" fill="#fff" stroke="#333" stroke-width="2"/><rect x="12" y="14" width="36" height="34" fill="none" stroke="#333" stroke-width="1.2"/><circle cx="30" cy="8" r="2" fill="#333"/></svg>`,
+  hood: `<svg viewBox="0 0 90 42"><path d="M6 40 L20 6 L70 6 L84 40 Z" fill="#fff" stroke="#333" stroke-width="2"/><line x1="14" y1="27" x2="76" y2="27" stroke="#333" stroke-width="1"/></svg>`,
+  washbasinWide: `<svg viewBox="0 0 110 60"><rect x="2" y="2" width="106" height="56" rx="3" fill="#fff" stroke="#333" stroke-width="2"/><ellipse cx="30" cy="32" rx="20" ry="15" fill="#eaf6ff" stroke="#333" stroke-width="1.5"/><circle cx="30" cy="13" r="2.5" fill="#333"/></svg>`,
+  toiletTankless: `<svg viewBox="0 0 50 84"><rect x="14" y="4" width="22" height="9" rx="3" fill="#fff" stroke="#333" stroke-width="1.5"/><ellipse cx="25" cy="50" rx="20" ry="30" fill="#fff" stroke="#333" stroke-width="2"/><ellipse cx="25" cy="48" rx="12" ry="19" fill="#fff" stroke="#333" stroke-width="1.5"/></svg>`,
+  shoebox: `<svg viewBox="0 0 90 36"><rect x="2" y="2" width="86" height="32" fill="#fff" stroke="#333" stroke-width="2"/><line x1="30" y1="2" x2="30" y2="34" stroke="#333" stroke-width="1"/><line x1="60" y1="2" x2="60" y2="34" stroke="#333" stroke-width="1"/></svg>`,
+  psmb: `<svg viewBox="0 0 54 50"><rect x="2" y="2" width="50" height="46" fill="#fff" stroke="#333" stroke-width="2"/><text x="27" y="31" font-size="15" text-anchor="middle" fill="#333" font-family="sans-serif">PS</text></svg>`,
+  heater: `<svg viewBox="0 0 50 64"><rect x="2" y="2" width="46" height="60" rx="2" fill="#fff" stroke="#333" stroke-width="2"/><line x1="2" y1="46" x2="48" y2="46" stroke="#333" stroke-width="1"/><circle cx="25" cy="54" r="3" fill="none" stroke="#333" stroke-width="1.2"/></svg>`,
+  acIndoor: `<svg viewBox="0 0 110 28"><rect x="2" y="2" width="106" height="24" rx="6" fill="#fff" stroke="#333" stroke-width="2"/><line x1="10" y1="18" x2="100" y2="18" stroke="#333" stroke-width="1"/></svg>`,
+  acOutdoor: `<svg viewBox="0 0 80 56"><rect x="2" y="2" width="76" height="52" rx="3" fill="#fff" stroke="#333" stroke-width="2"/><circle cx="40" cy="28" r="16" fill="none" stroke="#333" stroke-width="1.5"/><line x1="40" y1="12" x2="40" y2="44" stroke="#333" stroke-width="0.8"/><line x1="24" y1="28" x2="56" y2="28" stroke="#333" stroke-width="0.8"/></svg>`,
+  acSpace: `<svg viewBox="0 0 80 56"><rect x="2" y="2" width="76" height="52" fill="none" stroke="#333" stroke-width="1.5" stroke-dasharray="5 3"/><path d="M2 2 L78 54 M78 2 L2 54" stroke="#333" stroke-width="0.6"/></svg>`,
+  airSupply: `<svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#fff" stroke="#333" stroke-width="2"/><path d="M8 8 L36 36 M36 8 L8 36" stroke="#333" stroke-width="1.2"/></svg>`,
+  airExhaust: `<svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#fff" stroke="#333" stroke-width="2"/><g stroke="#333" stroke-width="1.5"><line x1="22" y1="22" x2="22" y2="6"/><line x1="22" y1="22" x2="36" y2="30"/><line x1="22" y1="22" x2="8" y2="30"/></g></svg>`,
+  drain: `<svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#fff" stroke="#333" stroke-width="2"/><g stroke="#333" stroke-width="1"><line x1="22" y1="4" x2="22" y2="40"/><line x1="4" y1="22" x2="40" y2="22"/><line x1="10" y1="10" x2="34" y2="34"/><line x1="34" y1="10" x2="10" y2="34"/></g></svg>`,
+  hatch: `<svg viewBox="0 0 50 50"><rect x="2" y="2" width="46" height="46" fill="#fff" stroke="#333" stroke-width="2"/><path d="M2 2 L48 48" stroke="#333" stroke-width="1"/></svg>`,
+  handrail: `<svg viewBox="0 0 120 16"><line x1="6" y1="8" x2="114" y2="8" stroke="#333" stroke-width="3"/><circle cx="6" cy="8" r="4" fill="#fff" stroke="#333" stroke-width="2"/><circle cx="114" cy="8" r="4" fill="#fff" stroke="#333" stroke-width="2"/></svg>`,
+  dryPole: `<svg viewBox="0 0 120 24"><line x1="14" y1="4" x2="14" y2="20" stroke="#333" stroke-width="2"/><line x1="106" y1="4" x2="106" y2="20" stroke="#333" stroke-width="2"/><circle cx="14" cy="18" r="4" fill="none" stroke="#333" stroke-width="1.5"/><circle cx="106" cy="18" r="4" fill="none" stroke="#333" stroke-width="1.5"/><line x1="10" y1="6" x2="110" y2="6" stroke="#333" stroke-width="1.5" stroke-dasharray="4 3"/></svg>`,
 };
 const CATALOG = [
-  { key:'jusetsu', label:'住設', open:true, items:[
-    {label:'トイレ', svg:S.toilet, w:60}, {label:'お風呂', svg:S.bath, w:130},
-    {label:'キッチン', svg:S.kitchen, w:150}, {label:'洗面', svg:S.washbasin, w:90},
-    {label:'洗濯機', svg:S.washer, w:70},
+  { key:'kitchen', label:'キッチン', open:true, items:[
+    {label:'キッチン', svg:S.kitchen, w:150}, {label:'シンク', svg:S.sink, w:120},
+    {label:'コンロ', svg:S.stove, w:100}, {label:'IHコンロ', svg:S.ih, w:100},
+    {label:'食洗機', svg:S.dishwasher, w:70}, {label:'レンジフード', svg:S.hood, w:120},
+  ]},
+  { key:'water', label:'水まわり', open:false, items:[
+    {label:'洗面台', svg:S.washbasin, w:90}, {label:'洗面台(ワイド)', svg:S.washbasinWide, w:140},
+    {label:'洗濯機', svg:S.washer, w:70}, {label:'ユニットバス', svg:S.bath, w:130},
+    {label:'トイレ', svg:S.toilet, w:60}, {label:'トイレ(タンクレス)', svg:S.toiletTankless, w:60},
+  ]},
+  { key:'storage', label:'収納・玄関', open:false, items:[
+    {label:'クローゼット', svg:S.closet, w:120}, {label:'玄関収納', svg:S.shoebox, w:120},
+    {label:'PS・MB', svg:S.psmb, w:60},
   ]},
   { key:'tategu', label:'建具', open:false, items:[
     {label:'ドア', svg:S.door, w:80}, {label:'引き戸', svg:S.sliding, w:120},
     {label:'窓', svg:S.window, w:120},
   ]},
-  { key:'heya', label:'壁', open:false, items:[ {label:'壁', svg:S.wall, w:160} ]},
-  { key:'kaidan', label:'階段', open:false, items:[ {label:'階段', svg:S.stairs, w:80} ]},
+  { key:'setsubi', label:'設備・屋外', open:false, items:[
+    {label:'給湯器', svg:S.heater, w:60}, {label:'エアコン(室内機)', svg:S.acIndoor, w:130},
+    {label:'エアコン(室外機)', svg:S.acOutdoor, w:90}, {label:'室外機置場', svg:S.acSpace, w:90},
+    {label:'給気口', svg:S.airSupply, w:46}, {label:'換気口', svg:S.airExhaust, w:46},
+    {label:'排水桝', svg:S.drain, w:46}, {label:'点検口', svg:S.hatch, w:50},
+    {label:'手すり', svg:S.handrail, w:120}, {label:'物干し金物', svg:S.dryPole, w:120},
+  ]},
   { key:'kagu', label:'家具', open:false, items:[
     {label:'ベッド', svg:S.bed, w:110}, {label:'ソファ', svg:S.sofa, w:140},
     {label:'テーブル', svg:S.table, w:110}, {label:'冷蔵庫', svg:S.fridge, w:60},
-    {label:'クローゼット', svg:S.closet, w:120},
+  ]},
+  { key:'kouzou', label:'構造', open:false, items:[
+    {label:'壁', svg:S.wall, w:160}, {label:'階段', svg:S.stairs, w:80},
   ]},
 ];
 
@@ -434,7 +473,7 @@ function addPart(ci, ii) {
 function drawGrid() {
   canvas.getObjects().filter(o => o.isGrid).forEach(o => canvas.remove(o));
   if (gridOn) {
-    const opt = { stroke:'#e5e7eb', selectable:false, evented:false, isGrid:true, strokeWidth:1, hoverCursor:'default' };
+    const opt = { stroke:gridColor, selectable:false, evented:false, isGrid:true, strokeWidth:1, hoverCursor:'default' };
     const W = canvas.width / zoom, H = canvas.height / zoom;   // 表示中のシーン範囲いっぱいに描く
     for (let x = 0; x <= W; x += PX_PER_MODULE) canvas.add(new fabric.Line([x,0,x,H], opt));
     for (let y = 0; y <= H; y += PX_PER_MODULE) canvas.add(new fabric.Line([0,y,W,y], opt));
@@ -643,6 +682,19 @@ function addLogo(e) {
   reader.readAsDataURL(file);
   e.target.value = '';
 }
+function addCompanyLogo() {
+  const im = new Image();
+  im.onload = () => {
+    const f = new fabric.Image(im);
+    const scale = Math.min(180 / f.width, 90 / f.height, 1);
+    f.set({ left: (canvas.width / zoom) - f.width * scale - 20, top: 16, scaleX: scale, scaleY: scale });
+    canvas.add(f); canvas.setActiveObject(f); canvas.renderAll();
+  };
+  im.onerror = () => showAlert('会社情報にロゴ画像が登録されていません。（設定→会社情報で登録できます）', 'error');
+  im.src = '/api/company-logo?t=' + Date.now();
+}
+function setBgColor(c) { canvas.backgroundColor = c; canvas.renderAll(); }
+function setGridColor(c) { gridColor = c; drawGrid(); }
 function getColor() { return document.getElementById('color-picker').dataset.value; }
 function applyColor(c) {
   const objs = canvas.getActiveObjects(); if (!objs.length) return;
