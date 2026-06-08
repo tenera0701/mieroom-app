@@ -58,7 +58,12 @@
   .plan-row { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
   .plan-sel { border:1px solid #d1d5db; border-radius:6px; padding:4px 6px; font-size:11px; flex:1; min-width:90px; }
   .empty { color:#9ca3af; font-size:13px; padding:30px; text-align:center; border:1px dashed #e5e7eb; border-radius:10px; }
-  #lib-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+  #lib-top { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+  .big-btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:10px; padding:15px 34px; font-size:15px; font-weight:800; cursor:pointer; }
+  .big-btn:hover { background:#F0FDFA; border-color:#5EEAD4; }
+  .big-btn.primary { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .big-btn.primary:hover { background:var(--primary-dark); }
+  .lib-search-box { display:flex; align-items:center; gap:8px; background:#fff; border:1.5px solid #5EEAD4; border-radius:10px; padding:9px 14px; box-shadow:0 2px 8px rgba(13,148,136,0.08); max-width:520px; margin-bottom:16px; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:14px; }
   .fcard, .pcard { background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; display:flex; flex-direction:column; box-shadow:0 1px 3px rgba(0,0,0,0.05); }
   .fcard .cover { height:118px; background:#F0FDFA; display:flex; align-items:center; justify-content:center; overflow:hidden; cursor:pointer; }
@@ -89,6 +94,14 @@
       </div>
     </div>
 
+    <div class="lib-search-box">
+      <svg style="width:18px;height:18px;flex-shrink:0;" fill="none" stroke="#0D9488" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+      </svg>
+      <input id="lib-search" type="text" placeholder="間取り名で検索（全フォルダ横断）" oninput="onSearch(this.value)" autocomplete="off"
+        style="flex:1;border:none;outline:none;font-size:13px;color:#111827;background:transparent;">
+      <button onclick="clearSearch()" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:16px;padding:0 2px;" title="クリア">✕</button>
+    </div>
     <div id="lib-top"></div>
     <div id="lib-body"></div>
   </div>
@@ -214,7 +227,41 @@ async function loadLibrary(){
   try { const r = await fetch('/api/floorplan-folders'); if (r.ok){ const d = await r.json(); libFolders = (d.folders||[]).map(f=>({id:f.id,name:f.name})); } } catch(_){ libFolders = []; }
   try { const r = await fetch('/api/floorplans'); allPlans = r.ok ? await r.json() : []; } catch(_){ allPlans = []; }
   fillFolderSelect();
-  if (curView === 'inside') renderInside(); else renderFolders();
+  renderLib();
+}
+
+let searchQ = '';
+function onSearch(v){ searchQ = (v || '').trim(); renderLib(); }
+function clearSearch(){ searchQ = ''; const i = document.getElementById('lib-search'); if (i) i.value = ''; renderLib(); }
+function renderLib(){
+  if (searchQ) renderSearch();
+  else if (curView === 'inside') renderInside();
+  else renderFolders();
+}
+function renderSearch(){
+  const q = searchQ.toLowerCase();
+  const ps = allPlans.filter(p => (p.name || '').toLowerCase().includes(q));
+  document.getElementById('lib-top').innerHTML =
+    `<button class="tb-btn" onclick="clearSearch()">← 一覧へ戻る</button>
+     <span style="font-size:14px;font-weight:800;color:#111827;">「${escFp(searchQ)}」の検索結果 <span style="font-size:12px;color:#6b7280;font-weight:600;">${ps.length}件</span></span>`;
+  document.getElementById('lib-body').innerHTML = ps.length
+    ? `<div class="grid">${ps.map(p => planCardHTML(p, true)).join('')}</div>`
+    : '<div class="empty">該当する間取りはありません。</div>';
+}
+function planCardHTML(p, showFolder){
+  const fname = p.folder_id ? folderName(p.folder_id) : '未分類';
+  return `
+    <div class="pcard">
+      <div class="pcover" onclick="openPlan(${p.id}, ${p.folder_id||'null'})">${p.thumb?`<img src="${p.thumb}">`:'<span style="color:#cbd5e1;font-size:34px;">🏠</span>'}</div>
+      <div class="pbody">
+        <div class="pn" title="${escFp(p.name)}">${escFp(p.name)}</div>
+        <div class="pd">${showFolder?`📁 ${escFp(fname)} ・ `:''}更新: ${p.updated_at||'-'}</div>
+        <div class="plan-row">
+          <button class="tb-btn primary" style="flex:1;justify-content:center;" onclick="openPlan(${p.id}, ${p.folder_id||'null'})">編集</button>
+          <button class="tb-btn danger" onclick="delFp(${p.id})">🗑</button>
+        </div>
+        <div class="plan-row"><span style="font-size:11px;color:#6b7280;">移動:</span><select class="plan-sel" onchange="movePlan(${p.id}, this.value)">${folderOptions(p.folder_id)}</select></div>
+      </div></div>`;
 }
 
 function plansIn(key){ return key === 'unfiled' ? allPlans.filter(p=>!p.folder_id) : allPlans.filter(p=>p.folder_id===key); }
@@ -229,8 +276,8 @@ function folderOptions(selectedId){
 function renderFolders(){
   curView = 'folders';
   document.getElementById('lib-top').innerHTML =
-    `<button class="tb-btn primary" style="font-size:13px;padding:10px 26px;" onclick="openNew()">＋ 新規作成</button>
-     <button class="tb-btn" onclick="createFolder()">＋ フォルダ作成</button>`;
+    `<button class="big-btn primary" onclick="openNew()">＋ 新規作成</button>
+     <button class="big-btn" onclick="createFolder()">＋ フォルダ作成</button>`;
   let html = '';
   libFolders.forEach(f => {
     const cnt = plansIn(f.id).length, cov = coverOf(f.id);
@@ -258,19 +305,7 @@ function renderInside(){
      <span style="font-size:15px;font-weight:800;color:#111827;">📁 ${escFp(folderName(curFolder))} <span style="font-size:12px;color:#6b7280;font-weight:600;">${ps.length}件</span></span>
      <button class="tb-btn primary" onclick="openNew()">＋ この場所に新規作成</button>`;
   if (!ps.length){ document.getElementById('lib-body').innerHTML = '<div class="empty">このフォルダに間取りはありません。「＋ この場所に新規作成」から作成できます。</div>'; return; }
-  const cards = ps.map(p => `
-    <div class="pcard">
-      <div class="pcover" onclick="openPlan(${p.id}, ${p.folder_id||'null'})">${p.thumb?`<img src="${p.thumb}">`:'<span style="color:#cbd5e1;font-size:34px;">🏠</span>'}</div>
-      <div class="pbody">
-        <div class="pn" title="${escFp(p.name)}">${escFp(p.name)}</div>
-        <div class="pd">更新: ${p.updated_at||'-'}</div>
-        <div class="plan-row">
-          <button class="tb-btn primary" style="flex:1;justify-content:center;" onclick="openPlan(${p.id}, ${p.folder_id||'null'})">編集</button>
-          <button class="tb-btn danger" onclick="delFp(${p.id})">🗑</button>
-        </div>
-        <div class="plan-row"><span style="font-size:11px;color:#6b7280;">移動:</span><select class="plan-sel" onchange="movePlan(${p.id}, this.value)">${folderOptions(p.folder_id)}</select></div>
-      </div></div>`).join('');
-  document.getElementById('lib-body').innerHTML = `<div class="grid">${cards}</div>`;
+  document.getElementById('lib-body').innerHTML = `<div class="grid">${ps.map(p => planCardHTML(p, false)).join('')}</div>`;
 }
 
 async function createFolder(){
