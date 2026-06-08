@@ -112,6 +112,11 @@
       <button class="tb-btn" onclick="addRoomType()" title="部屋タイプを追加">＋種類</button>
       <span class="tb-sep"></span>
       <button class="tb-btn" id="grid-btn" onclick="toggleGrid()">▦ グリッド ON</button>
+      <span class="tb-sep"></span>
+      <button class="tb-btn" onclick="zoomOut()" title="縮小">🔍−</button>
+      <span id="zoom-label" style="font-size:12px;font-weight:700;color:#374151;min-width:42px;text-align:center;">100%</span>
+      <button class="tb-btn" onclick="zoomIn()" title="拡大">🔍＋</button>
+      <button class="tb-btn" onclick="zoomReset()" title="等倍に戻す">等倍</button>
       <span class="tb-note">頂点入力：角をクリック→ダブルクリックで確定。1マス=910mm、半マスに吸着。</span>
     </div>
 
@@ -167,7 +172,8 @@ let canvas, currentId = null, editingFolderId = null;
 /* 縮尺・グリッド */
 const MODULE_MM = 910, PX_PER_MODULE = 46;
 const SNAP_PX = PX_PER_MODULE / 2, PX_PER_MM = PX_PER_MODULE / MODULE_MM;
-let gridOn = true;
+const BASE_W = 900, BASE_H = 660;
+let gridOn = true, zoom = 1;
 
 const ROOM_TYPES = [
   {t:'洋室', c:'rgba(34,197,94,0.16)'}, {t:'和室', c:'rgba(202,138,4,0.18)'},
@@ -302,7 +308,7 @@ function openNew(){
   currentId = null;
   editingFolderId = (curView === 'inside' && typeof curFolder === 'number') ? curFolder : null;
   document.getElementById('fp-name').value = '';
-  canvas.clear(); canvas.backgroundColor = '#ffffff'; drawGrid();
+  canvas.clear(); canvas.backgroundColor = '#ffffff'; setZoom(1); drawGrid();
   document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
   fillFolderSelect(); setFolderLabel();
   showEditor();
@@ -314,7 +320,7 @@ async function openPlan(id, folderId){
     const f = await res.json();
     currentId = f.id; editingFolderId = folderId || null;
     document.getElementById('fp-name').value = f.name || '';
-    canvas.clear();
+    canvas.clear(); setZoom(1);
     if (f.data) canvas.loadFromJSON(JSON.parse(f.data), () => { drawGrid(); canvas.renderAll(); });
     else { drawGrid(); canvas.renderAll(); }
     document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
@@ -404,6 +410,17 @@ function toggleGrid() {
   document.getElementById('grid-btn').textContent = gridOn ? '▦ グリッド ON' : '▦ グリッド OFF';
   drawGrid();
 }
+/* ===== ズーム（編集エリアの拡大/縮小） ===== */
+function setZoom(z) {
+  zoom = Math.max(0.4, Math.min(2.5, Math.round(z * 10) / 10));
+  canvas.setZoom(zoom);
+  canvas.setDimensions({ width: BASE_W * zoom, height: BASE_H * zoom });
+  const lbl = document.getElementById('zoom-label'); if (lbl) lbl.textContent = Math.round(zoom * 100) + '%';
+  canvas.renderAll();
+}
+function zoomIn() { setZoom(zoom + 0.2); }
+function zoomOut() { setZoom(zoom - 0.2); }
+function zoomReset() { setZoom(1); }
 
 /* ===== 部屋を描く（囲み入力＝四角 / 頂点入力＝多角形） ===== */
 let drawMode = null;   // null | 'rect' | 'poly'
@@ -416,7 +433,7 @@ function setDrawMode(m) {
   document.getElementById('rect-mode-btn').classList.toggle('primary', drawMode === 'rect');
   document.getElementById('poly-mode-btn').classList.toggle('primary', drawMode === 'poly');
   const active = !!drawMode;
-  canvas.selection = !active; canvas.skipTargetFind = active;
+  canvas.selection = !active; canvas.skipTargetFind = false;
   canvas.defaultCursor = active ? 'crosshair' : 'default';
   if (active) canvas.discardActiveObject();
   canvas.renderAll();
@@ -489,6 +506,13 @@ function initCanvas() {
     o.set({ left: snap(o.left), top: snap(o.top) });
   });
   canvas.on('mouse:down', opt => {
+    // 描画モード中でも、設備など既存オブジェクトをクリックしたら選択モードに切替
+    if (drawMode && opt.target && !opt.target.isGrid) {
+      const t = opt.target;
+      setDrawMode(drawMode);           // 現在の描画モードを解除
+      canvas.setActiveObject(t); canvas.renderAll();
+      return;
+    }
     if (drawMode === 'rect') {
       const p = canvas.getPointer(opt.e);
       drawing = true; startX = snap(p.x); startY = snap(p.y);
@@ -596,8 +620,11 @@ function bringFront() { const o = canvas.getActiveObject(); if (o) { canvas.brin
 function sendBack() { const o = canvas.getActiveObject(); if (o) { canvas.sendToBack(o); canvas.getObjects().filter(g=>g.isGrid).forEach(g=>canvas.sendToBack(g)); canvas.renderAll(); } }
 
 function exportPNG() {
-  canvas.discardActiveObject(); canvas.renderAll();
+  canvas.discardActiveObject();
+  const z = zoom; if (z !== 1) { canvas.setZoom(1); canvas.setDimensions({ width:BASE_W, height:BASE_H }); }
+  canvas.renderAll();
   const url = canvas.toDataURL({ format:'png', multiplier:2 });
+  if (z !== 1) { canvas.setZoom(z); canvas.setDimensions({ width:BASE_W*z, height:BASE_H*z }); canvas.renderAll(); }
   const a = document.createElement('a');
   const nm = (document.getElementById('fp-name').value || '間取り').replace(/[\\/:*?"<>|]/g, '_');
   a.href = url; a.download = nm + '.png'; a.click();
@@ -610,7 +637,9 @@ function serializeWithThumb() {
   canvas.discardActiveObject(); canvas.renderAll();
   const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','selectable','evented','strokeUniform']));
   let thumb = '';
-  try { thumb = canvas.toDataURL({ format:'jpeg', quality:0.6, multiplier: 300 / canvas.width }); } catch(_){}
+  const z = zoom; if (z !== 1) { canvas.setZoom(1); canvas.setDimensions({ width:BASE_W, height:BASE_H }); }
+  try { thumb = canvas.toDataURL({ format:'jpeg', quality:0.6, multiplier: 300 / BASE_W }); } catch(_){}
+  if (z !== 1) { canvas.setZoom(z); canvas.setDimensions({ width:BASE_W*z, height:BASE_H*z }); }
   drawGrid();
   return { json, thumb };
 }
