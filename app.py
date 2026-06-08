@@ -3501,6 +3501,97 @@ def api_floorplans_move(fid):
     return jsonify({'status': 'ok'})
 
 
+# ── 間取り AI取込（画像→部屋・設備に自動分解） ──
+FLOORPLAN_FIXTURE_TYPES = ['toilet','toiletTankless','bath','kitchen','sink','stove','ih','dishwasher',
+    'hood','washbasin','washbasinWide','washer','fridge','stairs','door','sliding','window','heater',
+    'acIndoor','acOutdoor','shoebox','closet','bed','sofa','table','psmb']
+FLOORPLAN_ROOM_TYPES = ['洋室','和室','LDK','DK','K','浴室','洗面','トイレ','玄関','廊下','クローゼット','バルコニー']
+
+
+@app.route("/api/floorplans/ai-import", methods=["POST"])
+@login_required
+def api_floorplans_ai_import():
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return jsonify({'error': 'AI取込が未設定です（管理者にお問い合わせください）'}), 503
+    data = request.get_json(silent=True) or {}
+    img = (data.get('image') or '').strip()
+    mime = data.get('mime') or 'image/png'
+    if img.startswith('data:') and ',' in img:
+        head, img = img.split(',', 1)
+        m = re.match(r'data:([^;]+)', head)
+        if m:
+            mime = m.group(1)
+    if not img:
+        return jsonify({'error': '画像がありません'}), 400
+
+    prompt = (
+        "あなたは不動産の間取り図を解析する専門アシスタントです。\n"
+        "添付の間取り図画像を解析し、部屋(rooms)と設備(fixtures)を抽出してJSONで返してください。\n"
+        "座標は画像全体を基準に、左上(0,0)・右下(1,1)の0〜1正規化値（xは右方向、yは下方向）。\n\n"
+        "返すJSON構造:\n"
+        '{\n'
+        '  "rooms": [ {"type":"<部屋種別>", "label":"<図中の表記 例:洋室6帖。無ければ省略>", "points":[[x,y],[x,y],[x,y],...]} ],\n'
+        '  "fixtures": [ {"type":"<設備キー>", "cx":<中心x>, "cy":<中心y>, "w":<幅0〜1>, "rot":<0/90/180/270>} ]\n'
+        '}\n\n'
+        "部屋種別(type)は次から選ぶ: " + "、".join(FLOORPLAN_ROOM_TYPES) + "（最も近いもの。既定は洋室）\n"
+        "設備キー(type)は次の英語から選ぶ: " + ", ".join(FLOORPLAN_FIXTURE_TYPES) + "\n"
+        "（toilet=トイレ, toiletTankless=タンクレストイレ, bath=ユニットバス/浴室, kitchen=システムキッチン, "
+        "sink=シンク, stove=ガスコンロ, ih=IHコンロ, dishwasher=食洗機, hood=レンジフード, washbasin=洗面台, "
+        "washbasinWide=ワイド洗面台, washer=洗濯機置場, fridge=冷蔵庫置場, stairs=階段, door=ドア, sliding=引き戸, "
+        "window=窓, heater=給湯器, acIndoor=エアコン室内機, acOutdoor=エアコン室外機, shoebox=玄関収納/下足入, "
+        "closet=クローゼット/収納, bed=ベッド, sofa=ソファ, table=テーブル, psmb=PS/MB)\n\n"
+        "ルール:\n"
+        "1. JSONオブジェクトを1つだけ返す。説明文やマークダウンは一切付けない。\n"
+        "2. roomsのpointsは各部屋の外形を3点以上の多角形（長方形なら4点）で表す。\n"
+        "3. 確実に読み取れるものだけ返す。無理な推測はしない。\n"
+        "4. 図面に無い設備は入れない。\n"
+    )
+    doc_block = {"type": "image", "source": {"type": "base64", "media_type": mime, "data": img}}
+    try:
+        msg = anthropic_client.messages.create(
+            model="claude-sonnet-4-6", max_tokens=4000,
+            messages=[{"role": "user", "content": [doc_block, {"type": "text", "text": prompt}]}],
+        )
+        text = "".join(getattr(b, 'text', '') for b in msg.content).strip()
+    except Exception as e:
+        return jsonify({'error': f'AI解析に失敗しました: {e}'}), 502
+
+    out = {'rooms': [], 'fixtures': []}
+    try:
+        s, e = text.find('{'), text.rfind('}')
+        parsed = json.loads(text[s:e + 1]) if (s >= 0 and e > s) else {}
+        rooms = []
+        for r in (parsed.get('rooms') or []):
+            pts = []
+            for p in (r.get('points') or []):
+                try:
+                    pts.append([min(1.0, max(0.0, float(p[0]))), min(1.0, max(0.0, float(p[1])))])
+                except Exception:
+                    continue
+            if len(pts) < 3:
+                continue
+            rooms.append({'type': r.get('type') or '洋室', 'label': str(r.get('label') or '')[:30], 'points': pts})
+        fixtures = []
+        for f in (parsed.get('fixtures') or []):
+            if f.get('type') not in FLOORPLAN_FIXTURE_TYPES:
+                continue
+            try:
+                fixtures.append({'type': f['type'],
+                                 'cx': min(1.0, max(0.0, float(f.get('cx', 0)))),
+                                 'cy': min(1.0, max(0.0, float(f.get('cy', 0)))),
+                                 'w': min(1.0, max(0.005, float(f.get('w', 0.06)))),
+                                 'rot': int(f.get('rot', 0) or 0)})
+            except Exception:
+                continue
+        out['rooms'] = rooms[:80]
+        out['fixtures'] = fixtures[:150]
+    except Exception:
+        pass
+    return jsonify(out)
+
+
 # ── 反響メール自動取込（IMAP） ─────────────────────────────
 
 # ① 差出人ドメイン/アドレス → 媒体名（部分一致）

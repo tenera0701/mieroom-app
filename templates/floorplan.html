@@ -134,6 +134,9 @@
     </div>
 
     <div class="toolbar">
+      <label class="tb-btn" style="background:#0D9488;color:#fff;border-color:#0D9488;font-weight:800;" title="間取り画像をAIで解析して、部屋・設備を自動でパーツ化して配置">🤖 AI取込
+        <input type="file" accept="image/*" onchange="aiImport(event)" style="display:none;">
+      </label>
       <label class="tb-btn">🖼 下絵を取込
         <input type="file" accept="image/*" onchange="addBg(event)" style="display:none;">
       </label>
@@ -695,6 +698,66 @@ function addCompanyLogo() {
 }
 function setBgColor(c) { canvas.backgroundColor = c; canvas.renderAll(); }
 function setGridColor(c) { gridColor = c; drawGrid(); }
+
+/* ===== AI取込（画像→部屋・設備を自動でパーツ化） ===== */
+function downscaleDataUrl(im, maxDim) {
+  const s = Math.min(1, maxDim / Math.max(im.width, im.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(im.width * s));
+  c.height = Math.max(1, Math.round(im.height * s));
+  c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.9);
+}
+function aiImport(e) {
+  const file = e.target.files[0]; if (!file) return;
+  e.target.value = '';
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const im = new Image();
+    im.onload = async () => {
+      const sceneW = canvas.width / zoom, sceneH = canvas.height / zoom;
+      const scale = Math.min(sceneW / im.width, sceneH / im.height, 1);
+      const rw = im.width * scale, rh = im.height * scale;
+      const rx = (sceneW - rw) / 2, ry = (sceneH - rh) / 2;
+      showAlert('AIが間取りを解析中です…（30秒〜1分ほどかかります）');
+      let payload; try { payload = downscaleDataUrl(im, 1500); } catch(_) { payload = ev.target.result; }
+      try {
+        const res = await fetch('/api/floorplans/ai-import', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ image: payload, mime: 'image/jpeg' }) });
+        const d = await res.json();
+        if (!res.ok) { showAlert(d.error || 'AI解析に失敗しました。', 'error'); return; }
+        renderAiResult(d, rx, ry, rw, rh, im);
+      } catch(_) { showAlert('通信に失敗しました。', 'error'); }
+    };
+    im.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function renderAiResult(d, rx, ry, rw, rh, im) {
+  const bg = new fabric.Image(im, { left:rx, top:ry, scaleX:rw/im.width, scaleY:rh/im.height, opacity:0.18 });
+  bg.set('isBg', true);
+  canvas.add(bg); canvas.sendToBack(bg);
+  (d.rooms || []).forEach(r => {
+    const pts = r.points.map(p => ({ x: rx + p[0]*rw, y: ry + p[1]*rh }));
+    if (pts.length < 3) return;
+    const rt = ROOM_TYPES.find(x => x.t === r.type);
+    canvas.add(new fabric.Polygon(pts, { fill: rt ? rt.c : 'rgba(34,197,94,0.16)', stroke:'#333', strokeWidth:4, strokeUniform:true, roomType: r.type }));
+    let cx = 0, cy = 0; pts.forEach(p => { cx += p.x; cy += p.y; }); cx /= pts.length; cy /= pts.length;
+    canvas.add(new fabric.IText(r.label || r.type, { left:cx, top:cy, originX:'center', originY:'center', fontSize:13, fill:'#111827', textAlign:'center', fontFamily:'sans-serif' }));
+  });
+  (d.fixtures || []).forEach(f => {
+    const svg = S[f.type]; if (!svg) return;
+    fabric.loadSVGFromString(svg, (objs, opts) => {
+      const o = fabric.util.groupSVGElements(objs, opts);
+      const targetW = Math.max(18, f.w * rw);
+      const sc = targetW / (o.width || targetW);
+      o.set({ left: rx + f.cx*rw, top: ry + f.cy*rh, originX:'center', originY:'center', scaleX:sc, scaleY:sc, angle: f.rot || 0, partLabel: f.type });
+      canvas.add(o); canvas.renderAll();
+    });
+  });
+  drawGrid();
+  canvas.renderAll();
+  showAlert(`AI取込：部屋${(d.rooms||[]).length}件・設備${(d.fixtures||[]).length}件を配置しました。位置・サイズは手動で調整できます。`);
+}
 function getColor() { return document.getElementById('color-picker').dataset.value; }
 function applyColor(c) {
   const objs = canvas.getActiveObjects(); if (!objs.length) return;
