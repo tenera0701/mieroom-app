@@ -8158,7 +8158,7 @@ def _render_settings(mode):
     else:
         accounts = []
     titles = {'staff': 'スタッフ管理', 'accounts': 'ログイン管理',
-              'company': '会社情報', 'profile': 'ID/パス管理'}
+              'company': '会社情報', 'profile': 'ID・パス管理'}
     return render_template("settings.html",
                            stores=stores, staff_list=staff_list, accounts=accounts,
                            store_name_map=store_name_map,
