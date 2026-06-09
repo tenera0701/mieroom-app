@@ -1017,8 +1017,13 @@ function centroidOf(pts) { let x = 0, y = 0; pts.forEach(p => { x += p.x; y += p
 function toggleVertexEdit() {
   if (_vtxPoly) { finishVertexEdit(); return; }
   let o = canvas.getActiveObject();
+  // 部屋名ラベル（文字）を選んでいる場合は、その部屋本体を対象にする
+  if (o && o.isRoomLabel && o.roomId) {
+    const room = canvas.getObjects().find(x => x.roomType && !x.isRoomLabel && x.roomId === o.roomId);
+    if (room) o = room;
+  }
   const ok = o && !o.isMask && (o.type === 'polygon' || (o.type === 'rect' && o.roomType));
-  if (!ok) { showAlert('部屋（囲み入力・頂点入力どちらでも可）を選んでから押してください。', 'error'); return; }
+  if (!ok) { showAlert('部屋（囲み入力・頂点入力どちらでも可）を選んでから押してください。\n※部屋の枠線あたりをクリックして選んでください。', 'error'); return; }
   if (drawMode) setDrawMode(drawMode);   // 描画モードを解除
   // 囲み入力（矩形）の部屋は、多角形に変換して角をドラッグできるようにする
   if (o.type === 'rect') {
