@@ -726,7 +726,7 @@ function drawGrid() {
 function captureState() {
   const grid = canvas.getObjects().filter(o => o.isGrid);
   grid.forEach(o => canvas.remove(o));
-  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','roomId','isRoomLabel','isMask','selectable','evented','strokeUniform']));
+  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','roomId','isRoomLabel','isMask','maskDX','maskDY','selectable','evented','strokeUniform']));
   drawGrid();
   return json;
 }
@@ -816,7 +816,9 @@ function setDrawMode(m) {
   document.getElementById('poly-mode-btn').classList.toggle('primary', drawMode === 'poly');
   const eb = document.getElementById('erase-mode-btn'); if (eb) eb.classList.toggle('primary', drawMode === 'erase');
   const active = !!drawMode;
-  canvas.selection = !active; canvas.skipTargetFind = false;
+  canvas.selection = !active;
+  // 壁消し中はオブジェクトを掴めない（移動・選択させず、壁消しだけ動作）
+  canvas.skipTargetFind = (drawMode === 'erase');
   canvas.defaultCursor = active ? 'crosshair' : 'default';
   if (active) canvas.discardActiveObject();
   canvas.renderAll();
@@ -904,8 +906,18 @@ function hideSizeTip() { document.getElementById('size-tip').style.display = 'no
 
 /* 部屋とラベルを結びつける（部屋を動かすとラベルも一緒に動く） */
 let _roomSeq = 0;
+let _lastRoom = null;   // 直前に作成・選択した部屋（角度編集のフォールバック用）
 function newRoomId() { return 'r' + Date.now().toString(36) + '_' + (_roomSeq++); }
 function labelForRoom(id) { return canvas.getObjects().find(o => o.isRoomLabel && o.roomId === id); }
+/* 部屋を動かすと、その部屋に紐づく壁消しマスクも一緒に動かす */
+function syncRoomMasks(room) {
+  if (!room || !room.roomId) return;
+  canvas.getObjects().forEach(o => {
+    if (o.isMask && o.roomId === room.roomId && o.maskDX != null) {
+      o.set({ left: room.left + o.maskDX, top: room.top + o.maskDY }); o.setCoords();
+    }
+  });
+}
 function syncRoomLabel(room) {
   if (!room || !room.roomId) return;
   const lbl = labelForRoom(room.roomId);
@@ -934,7 +946,7 @@ function finalizeRoom(left, top, w, h) {
   applyRoomFill(rect, s);
   const wmm = mmFromPx(w), hmm = mmFromPx(h);
   const jo = ((wmm * hmm) / 1e6) / 1.62;
-  canvas.add(rect); addRoomLabel(left + w/2, top + h/2, jo, rid); canvas.renderAll();
+  canvas.add(rect); addRoomLabel(left + w/2, top + h/2, jo, rid); _lastRoom = rect; canvas.renderAll();
 }
 /* 壁消し：ドラッグした始点〜終点から、消す「枠」の細い帯（グリッド吸着）を求める */
 function eraseRectFrom(x0, y0, x1, y1) {
@@ -980,7 +992,9 @@ function eraseWallRange(r) {
     width:  r.horizontal ? r.width : th,
     height: r.horizontal ? th : r.height,
     fill: canvas.backgroundColor || '#ffffff', stroke: 'rgba(0,0,0,0)', strokeWidth: 0, isMask: true, objectCaching: false });
-  canvas.add(mask); mask.bringToFront(); canvas.setActiveObject(mask); canvas.renderAll(); pushHistory();
+  // 壁消し箇所を部屋に紐付け（部屋を動かすと一緒に動く）
+  if (room && room.roomId) { mask.roomId = room.roomId; mask.maskDX = mask.left - room.left; mask.maskDY = mask.top - room.top; }
+  canvas.add(mask); mask.bringToFront(); canvas.renderAll(); pushHistory();
 }
 
 /* 頂点入力（多角形：△・L字など） */
@@ -1011,7 +1025,7 @@ function finalizePoly() {
   applyRoomFill(poly, s);
   const jo = polyJo(pts); const c = polyCentroid(pts);
   resetPoly();
-  canvas.add(poly); addRoomLabel(c.x, c.y, jo, rid); canvas.renderAll();
+  canvas.add(poly); addRoomLabel(c.x, c.y, jo, rid); _lastRoom = poly; canvas.renderAll();
 }
 
 /* ===== 角度編集：頂点をドラッグして傾斜の角度を変える ===== */
@@ -1029,22 +1043,24 @@ function rectCornerPoints(rect) {
 function centroidOf(pts) { let x = 0, y = 0; pts.forEach(p => { x += p.x; y += p.y; }); return { x: x / pts.length, y: y / pts.length }; }
 function toggleVertexEdit() {
   if (_vtxPoly) { finishVertexEdit(); return; }
+  if (drawMode) setDrawMode(drawMode);   // 描画モード（囲み入力など）を解除しておく
   let o = canvas.getActiveObject();
   // 部屋名ラベル（文字）を選んでいる場合は、その部屋本体を対象にする
   if (o && o.isRoomLabel && o.roomId) {
     const room = canvas.getObjects().find(x => x.roomType && !x.isRoomLabel && x.roomId === o.roomId);
     if (room) o = room;
   }
-  const ok = o && !o.isMask && (o.type === 'polygon' || (o.type === 'rect' && o.roomType));
-  if (!ok) { showAlert('部屋（囲み入力・頂点入力どちらでも可）を選んでから押してください。\n※部屋の枠線あたりをクリックして選んでください。', 'error'); return; }
-  if (drawMode) setDrawMode(drawMode);   // 描画モードを解除
+  const isRoom = x => x && !x.isMask && (x.type === 'polygon' || (x.type === 'rect' && x.roomType));
+  // 何も選んでいなければ「直前に作った／編集した部屋」を対象にする
+  if (!isRoom(o) && _lastRoom && canvas.getObjects().indexOf(_lastRoom) >= 0 && isRoom(_lastRoom)) o = _lastRoom;
+  if (!isRoom(o)) { showAlert('部屋（囲み入力・頂点入力どちらでも可）を選んでから押してください。\n※部屋の枠線あたりをクリックして選んでください。', 'error'); return; }
   // 囲み入力（矩形）の部屋は、多角形に変換して角をドラッグできるようにする
   if (o.type === 'rect') {
     const pts = rectCornerPoints(o);
     const poly = new fabric.Polygon(pts.map(p => ({ x: p.x, y: p.y })), {
       fill: o.fill, stroke: o.stroke, strokeWidth: o.strokeWidth, strokeDashArray: o.strokeDashArray,
       strokeUniform: true, roomType: o.roomType, roomId: o.roomId });
-    canvas.remove(o); canvas.add(poly); o = poly;
+    canvas.remove(o); canvas.add(poly); o = poly; _lastRoom = poly;
   }
   _vtxPoly = o;
   _vtxPts = polyAbsPoints(o).map(p => ({ x: p.x, y: p.y }));
@@ -1077,7 +1093,7 @@ function rebuildVtxPoly() {
 function finishVertexEdit() {
   _vtxHandles.forEach(h => canvas.remove(h)); _vtxHandles = [];
   const poly = _vtxPoly; _vtxPoly = null; _vtxPts = [];
-  if (poly) { poly.selectable = true; poly.evented = true; canvas.setActiveObject(poly); }
+  if (poly) { poly.selectable = true; poly.evented = true; _lastRoom = poly; canvas.setActiveObject(poly); }
   const btn = document.getElementById('vtx-btn'); if (btn) { btn.classList.remove('primary'); btn.textContent = '📐 角度編集'; }
   canvas.renderAll(); pushHistory();
 }
@@ -1096,7 +1112,7 @@ function initCanvas() {
       return;
     }
     if (!o.partLabel) o.set({ left: snap(o.left), top: snap(o.top) });   // 部屋・テキストはグリッドに吸着／設備は自由
-    if (o.roomType) syncRoomLabel(o);   // 部屋を動かすと部屋名ラベルも一緒に動く
+    if (o.roomType) { syncRoomLabel(o); syncRoomMasks(o); }   // 部屋を動かすとラベル・壁消し箇所も一緒に動く
   });
   // 拡大・回転・変形の確定時もラベルを部屋の中心へ追従
   canvas.on('object:scaling',  e => { if (e.target && e.target.roomType) syncRoomLabel(e.target); });
@@ -1105,7 +1121,7 @@ function initCanvas() {
     if (e.target.roomType) syncRoomLabel(e.target);
     showAngleTip(e.target.angle, e.e);   // 回転中の角度を表示
   });
-  canvas.on('object:modified', e => { if (e.target && e.target.roomType) syncRoomLabel(e.target); hideSizeTip(); });
+  canvas.on('object:modified', e => { if (e.target && e.target.roomType) { syncRoomLabel(e.target); syncRoomMasks(e.target); } hideSizeTip(); });
   canvas.on('mouse:up', () => hideSizeTip());
   // 変更を履歴に記録（戻る用）
   canvas.on('object:added',    onCanvasChange);
@@ -1170,7 +1186,7 @@ function initCanvas() {
       const p = canvas.getPointer(opt.e);
       const r = eraseRectFrom(startX, startY, p.x, p.y);
       canvas.remove(tempRect); tempRect = null;
-      if ((r.horizontal ? r.width : r.height) < 4) { canvas.renderAll(); return; }
+      if ((r.horizontal ? r.width : r.height) < 8) { canvas.renderAll(); return; }   // 小さすぎる操作（点）は無視
       eraseWallRange(r);   // ドラッグ区間の「枠」だけを消す
       return;
     }
@@ -1505,7 +1521,7 @@ function serializeWithThumb() {
   const grid = canvas.getObjects().filter(o => o.isGrid);
   grid.forEach(o => canvas.remove(o));
   canvas.discardActiveObject(); canvas.renderAll();
-  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','roomId','isRoomLabel','isMask','selectable','evented','strokeUniform']));
+  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','roomId','isRoomLabel','isMask','maskDX','maskDY','selectable','evented','strokeUniform']));
   let thumb = '';
   const z = zoom; if (z !== 1) { canvas.setZoom(1); canvas.renderAll(); }
   try { thumb = canvas.toDataURL({ format:'jpeg', quality:0.6, multiplier: 300 / canvas.width }); } catch(_){}
