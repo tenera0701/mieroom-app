@@ -164,7 +164,7 @@
       <span style="font-size:12px;font-weight:800;color:#374151;">部屋を描く</span>
       <button class="tb-btn" id="rect-mode-btn" onclick="setDrawMode('rect')" title="ドラッグで四角い部屋">⬛ 囲み入力</button>
       <button class="tb-btn" id="poly-mode-btn" onclick="setDrawMode('poly')" title="角をクリックして多角形（△やL字）。ダブルクリックで確定">△ 頂点入力</button>
-      <button class="tb-btn" id="erase-mode-btn" onclick="setDrawMode('erase')" title="ドラッグした範囲の壁を隠す（開口部・つなぎ目づくり）">🧽 壁消し</button>
+      <button class="tb-btn" id="erase-mode-btn" onclick="setDrawMode('erase')" title="壁をクリックすると、その箇所をグリッド1マス分だけ消します（開口部・つなぎ目づくり）">🧽 壁消し</button>
       <button class="tb-btn" id="vtx-btn" onclick="toggleVertexEdit()" title="頂点入力で作った部屋の角（頂点）をドラッグして角度を変更">📐 角度編集</button>
       <select class="tb-sel" id="room-type" title="部屋の種類"></select>
       <button class="tb-btn" onclick="addRoomType()" title="部屋タイプを追加">＋種類</button>
@@ -893,6 +893,14 @@ function showAreaTip(jo, e) {
   tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px';
   tip.style.display = 'block';
 }
+function showAngleTip(angle, e) {
+  const tip = document.getElementById('size-tip');
+  const a = Math.round((((angle || 0) % 360) + 360) % 360);
+  const flat = (a % 90 === 0), diag = (a % 45 === 0);
+  tip.textContent = a + '°' + (flat ? '（まっすぐ）' : (diag ? '（斜め45°）' : ''));
+  if (e) { tip.style.left = (e.clientX + 14) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; }
+  tip.style.display = 'block';
+}
 function hideSizeTip() { document.getElementById('size-tip').style.display = 'none'; }
 
 /* 部屋とラベルを結びつける（部屋を動かすとラベルも一緒に動く） */
@@ -929,12 +937,25 @@ function finalizeRoom(left, top, w, h) {
   const jo = ((wmm * hmm) / 1e6) / 1.62;
   canvas.add(rect); addRoomLabel(left + w/2, top + h/2, jo, rid); canvas.renderAll();
 }
-/* 壁の一部を隠す「壁消し」マスク（背景色で塗りつぶし、移動・削除可） */
-function finalizeMask(left, top, w, h) {
-  const mask = new fabric.Rect({ left, top, width:w, height:h,
-    fill: canvas.backgroundColor || '#ffffff', stroke: 'rgba(0,0,0,0)', strokeWidth: 0,
-    isMask: true, objectCaching: false });
-  canvas.add(mask); mask.bringToFront(); canvas.setActiveObject(mask); canvas.renderAll();
+/* 壁消し：クリックした位置の壁を、グリッド1マス分の線（背景色マスク）で消す */
+function eraseWallAt(p) {
+  const M = PX_PER_MODULE, th = 14;          // th=マスクの太さ（壁を覆う）
+  const nx = Math.round(p.x / M) * M;        // 最寄りの縦グリッド線
+  const ny = Math.round(p.y / M) * M;        // 最寄りの横グリッド線
+  const dx = Math.abs(p.x - nx), dy = Math.abs(p.y - ny);
+  let mask;
+  if (dx <= dy) {
+    // 縦の壁（x=nx）を、クリックしたマス1つ分（縦）だけ消す
+    const cellTop = Math.floor(p.y / M) * M;
+    mask = new fabric.Rect({ left: nx - th / 2, top: cellTop, width: th, height: M,
+      fill: canvas.backgroundColor || '#ffffff', stroke: 'rgba(0,0,0,0)', strokeWidth: 0, isMask: true, objectCaching: false });
+  } else {
+    // 横の壁（y=ny）を、クリックしたマス1つ分（横）だけ消す
+    const cellLeft = Math.floor(p.x / M) * M;
+    mask = new fabric.Rect({ left: cellLeft, top: ny - th / 2, width: M, height: th,
+      fill: canvas.backgroundColor || '#ffffff', stroke: 'rgba(0,0,0,0)', strokeWidth: 0, isMask: true, objectCaching: false });
+  }
+  canvas.add(mask); mask.bringToFront(); canvas.renderAll(); pushHistory();
 }
 
 /* 頂点入力（多角形：△・L字など） */
@@ -1018,6 +1039,8 @@ function finishVertexEdit() {
 /* ===== キャンバス ===== */
 function initCanvas() {
   canvas = new fabric.Canvas('fp-canvas', { backgroundColor:'#ffffff', preserveObjectStacking:true });
+  // 回転は15°刻みでカチッと止める（垂直・水平・斜め45°が分かりやすい）
+  fabric.Object.prototype.snapAngle = 15;
   canvas.on('object:moving', e => {
     const o = e.target; if (!o || o.isBg || o.isGrid) return;
     if (o.isVertexHandle) {   // 角度編集：頂点ハンドルをドラッグ
@@ -1031,8 +1054,13 @@ function initCanvas() {
   });
   // 拡大・回転・変形の確定時もラベルを部屋の中心へ追従
   canvas.on('object:scaling',  e => { if (e.target && e.target.roomType) syncRoomLabel(e.target); });
-  canvas.on('object:rotating', e => { if (e.target && e.target.roomType) syncRoomLabel(e.target); });
-  canvas.on('object:modified', e => { if (e.target && e.target.roomType) syncRoomLabel(e.target); });
+  canvas.on('object:rotating', e => {
+    if (!e.target) return;
+    if (e.target.roomType) syncRoomLabel(e.target);
+    showAngleTip(e.target.angle, e.e);   // 回転中の角度を表示
+  });
+  canvas.on('object:modified', e => { if (e.target && e.target.roomType) syncRoomLabel(e.target); hideSizeTip(); });
+  canvas.on('mouse:up', () => hideSizeTip());
   // 変更を履歴に記録（戻る用）
   canvas.on('object:added',    onCanvasChange);
   canvas.on('object:removed',  onCanvasChange);
@@ -1049,14 +1077,15 @@ function initCanvas() {
       canvas.setActiveObject(t); canvas.renderAll();
       return;
     }
-    if (drawMode === 'rect' || drawMode === 'erase') {
+    if (drawMode === 'erase') {
+      eraseWallAt(canvas.getPointer(opt.e));   // クリックでグリッド1マス分の壁を消す
+      return;
+    }
+    if (drawMode === 'rect') {
       const p = canvas.getPointer(opt.e);
-      const er = (drawMode === 'erase');
-      drawing = true;
-      startX = er ? p.x : snap(p.x); startY = er ? p.y : snap(p.y);   // 壁消しは細かく合わせたいので吸着なし
+      drawing = true; startX = snap(p.x); startY = snap(p.y);
       tempRect = new fabric.Rect({ left:startX, top:startY, width:1, height:1,
-        fill: er ? 'rgba(239,68,68,0.12)' : 'rgba(13,148,136,0.06)',
-        stroke: er ? '#ef4444' : '#0D9488', strokeDashArray:[4,4], strokeWidth:1,
+        fill:'rgba(13,148,136,0.06)', stroke:'#0D9488', strokeDashArray:[4,4], strokeWidth:1,
         selectable:false, evented:false });
       canvas.add(tempRect);
     } else if (drawMode === 'poly') {
@@ -1069,12 +1098,10 @@ function initCanvas() {
     }
   });
   canvas.on('mouse:move', opt => {
-    if ((drawMode === 'rect' || drawMode === 'erase') && drawing) {
-      const p = canvas.getPointer(opt.e);
-      const er = (drawMode === 'erase');
-      const x = er ? p.x : snap(p.x), y = er ? p.y : snap(p.y);
+    if (drawMode === 'rect' && drawing) {
+      const p = canvas.getPointer(opt.e); const x = snap(p.x), y = snap(p.y);
       tempRect.set({ left:Math.min(startX,x), top:Math.min(startY,y), width:Math.abs(x-startX), height:Math.abs(y-startY) });
-      if (!er) showSizeTip(Math.abs(x-startX), Math.abs(y-startY), opt.e);
+      showSizeTip(Math.abs(x-startX), Math.abs(y-startY), opt.e);
       canvas.renderAll();
     } else if (drawMode === 'poly' && polyPoints.length) {
       const p = canvas.getPointer(opt.e); const x = snap(p.x), y = snap(p.y);
@@ -1083,13 +1110,12 @@ function initCanvas() {
     }
   });
   canvas.on('mouse:up', () => {
-    if ((drawMode !== 'rect' && drawMode !== 'erase') || !drawing) return;
-    const er = (drawMode === 'erase');
+    if (drawMode !== 'rect' || !drawing) return;
     drawing = false; hideSizeTip();
     const w = tempRect.width, h = tempRect.height, left = tempRect.left, top = tempRect.top;
     canvas.remove(tempRect); tempRect = null;
-    if (er) { if (w < 3 || h < 3) { canvas.renderAll(); return; } finalizeMask(left, top, w, h); }
-    else    { if (w < SNAP_PX || h < SNAP_PX) { canvas.renderAll(); return; } finalizeRoom(left, top, w, h); }
+    if (w < SNAP_PX || h < SNAP_PX) { canvas.renderAll(); return; }
+    finalizeRoom(left, top, w, h);
   });
   canvas.on('mouse:dblclick', () => { if (drawMode === 'poly') finalizePoly(); });
 }
