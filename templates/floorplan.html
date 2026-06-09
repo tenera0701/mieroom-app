@@ -125,6 +125,8 @@
       <button class="tb-btn" onclick="addRoomType()" title="部屋タイプを追加">＋種類</button>
       <span class="tb-sep"></span>
       <button class="tb-btn" id="grid-btn" onclick="toggleGrid()">▦ グリッド ON</button>
+      <button class="tb-btn" id="roomlabel-btn" onclick="toggleRoomLabels()" title="部屋名・帖数の表示／非表示">🏷 部屋名 ON</button>
+      <button class="tb-btn" id="undo-btn" onclick="undo()" title="ひとつ前の状態に戻す（Ctrl+Z）">↩ 戻る</button>
       <span class="tb-sep"></span>
       <button class="tb-btn" onclick="zoomOut()" title="縮小">🔍−</button>
       <span id="zoom-label" style="font-size:12px;font-weight:700;color:#374151;min-width:42px;text-align:center;">100%</span>
@@ -177,6 +179,10 @@
         <p class="hint">
           ・「部屋を描く」をON→ドラッグで部屋を作成（壁＋部屋名＋帖数）。<br>
           ・部品はクリックで配置、ドラッグ移動・四隅で拡大縮小・上の○で回転。<br>
+          ・選択中に <b>矢印キー / テンキー(2486)</b> で1pxずつ微調整（Shiftで10px）。<br>
+          ・<b>戻る</b>（↩ / Ctrl+Z）でひとつ前に戻せます。<br>
+          ・<b>部屋名 ON/OFF</b> で部屋名・帖数の表示を切替。<br>
+          ・画像書き出しは<b>グリッドなし</b>で、間取りを中心にトリミングして保存します。<br>
           ・保存先フォルダを選んで保存できます。
         </p>
       </div>
@@ -194,6 +200,9 @@ const MODULE_MM = 910, PX_PER_MODULE = 46;
 const SNAP_PX = PX_PER_MODULE / 2, PX_PER_MM = PX_PER_MODULE / MODULE_MM;
 const BASE_W = 900, BASE_H = 660;
 let gridOn = true, zoom = 1, gridColor = '#e5e7eb';
+let roomLabelsOn = true;
+/* 履歴（戻る） */
+let _history = [], _histIdx = -1, _histLock = false, _gridBusy = false;
 
 const ROOM_TYPES = [
   {t:'洋室', c:'rgba(34,197,94,0.16)'}, {t:'和室', c:'rgba(202,138,4,0.18)'},
@@ -353,8 +362,14 @@ function openNew(){
   canvas.clear(); canvas.backgroundColor = '#ffffff'; zoom = 1;
   document.getElementById('zoom-label').textContent = '100%';
   document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
+  resetRoomLabelState();
   fillFolderSelect(); setFolderLabel();
   showEditor();
+  setTimeout(resetHistory, 50);
+}
+function resetRoomLabelState() {
+  roomLabelsOn = true;
+  const b = document.getElementById('roomlabel-btn'); if (b) b.textContent = '🏷 部屋名 ON';
 }
 async function openPlan(id, folderId){
   try {
@@ -364,8 +379,9 @@ async function openPlan(id, folderId){
     currentId = f.id; editingFolderId = folderId || null;
     document.getElementById('fp-name').value = f.name || '';
     canvas.clear(); zoom = 1; document.getElementById('zoom-label').textContent = '100%';
-    if (f.data) canvas.loadFromJSON(JSON.parse(f.data), () => { fitCanvas(); canvas.renderAll(); });
-    else { fitCanvas(); canvas.renderAll(); }
+    resetRoomLabelState();
+    if (f.data) canvas.loadFromJSON(JSON.parse(f.data), () => { fitCanvas(); canvas.renderAll(); resetHistory(); });
+    else { fitCanvas(); canvas.renderAll(); resetHistory(); }
     document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
     fillFolderSelect(); setFolderLabel();
     showEditor();
@@ -474,6 +490,7 @@ function addPart(ci, ii) {
 
 /* ===== グリッド ===== */
 function drawGrid() {
+  _gridBusy = true;
   canvas.getObjects().filter(o => o.isGrid).forEach(o => canvas.remove(o));
   if (gridOn) {
     const opt = { stroke:gridColor, selectable:false, evented:false, isGrid:true, strokeWidth:1, hoverCursor:'default' };
@@ -483,6 +500,54 @@ function drawGrid() {
   }
   canvas.getObjects().filter(o => o.isGrid).forEach(o => canvas.sendToBack(o));
   canvas.renderAll();
+  _gridBusy = false;
+}
+/* ===== 履歴（戻る） ===== */
+function captureState() {
+  const grid = canvas.getObjects().filter(o => o.isGrid);
+  grid.forEach(o => canvas.remove(o));
+  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','isRoomLabel','selectable','evented','strokeUniform']));
+  drawGrid();
+  return json;
+}
+function resetHistory() { _history = [captureState()]; _histIdx = 0; updateUndoBtn(); }
+function pushHistory() {
+  if (_histLock || _gridBusy) return;
+  const json = captureState();
+  if (_history[_histIdx] === json) return;     // 変化なしは積まない
+  _history = _history.slice(0, _histIdx + 1);   // やり直し分は破棄
+  _history.push(json);
+  if (_history.length > 40) _history.shift();   // 上限
+  _histIdx = _history.length - 1;
+  updateUndoBtn();
+}
+function updateUndoBtn() {
+  const b = document.getElementById('undo-btn'); if (!b) return;
+  b.style.opacity = _histIdx > 0 ? '1' : '0.45';
+}
+function undo() {
+  if (_histIdx <= 0) return;
+  _histIdx--;
+  const json = _history[_histIdx];
+  _histLock = true;
+  canvas.loadFromJSON(json, () => {
+    canvas.getObjects().filter(o => o.isRoomLabel).forEach(o => o.visible = roomLabelsOn);
+    fitCanvas(); canvas.renderAll();
+    _histLock = false; updateUndoBtn();
+  });
+}
+function onCanvasChange(e) {
+  if (_histLock || _gridBusy) return;
+  if (e && e.target && e.target.isGrid) return;   // グリッド線は履歴に含めない
+  pushHistory();
+}
+/* ===== 部屋名・帖数の表示オンオフ ===== */
+function toggleRoomLabels() {
+  roomLabelsOn = !roomLabelsOn;
+  canvas.getObjects().filter(o => o.isRoomLabel).forEach(o => o.visible = roomLabelsOn);
+  const b = document.getElementById('roomlabel-btn');
+  if (b) b.textContent = roomLabelsOn ? '🏷 部屋名 ON' : '🏷 部屋名 OFF';
+  canvas.discardActiveObject(); canvas.renderAll();
 }
 function toggleGrid() {
   gridOn = !gridOn;
@@ -547,7 +612,8 @@ function hideSizeTip() { document.getElementById('size-tip').style.display = 'no
 function addRoomLabel(cx, cy, jo) {
   const label = new fabric.IText(`${roomName()}\n${jo.toFixed(1)}帖`, {
     left:cx, top:cy, originX:'center', originY:'center',
-    fontSize:14, fill:'#111827', textAlign:'center', fontFamily:'sans-serif' });
+    fontSize:14, fill:'#111827', textAlign:'center', fontFamily:'sans-serif', isRoomLabel:true });
+  label.visible = roomLabelsOn;
   canvas.add(label);
 }
 function finalizeRoom(left, top, w, h) {
@@ -591,6 +657,10 @@ function initCanvas() {
     const o = e.target; if (!o || o.isBg || o.isGrid) return;
     o.set({ left: snap(o.left), top: snap(o.top) });
   });
+  // 変更を履歴に記録（戻る用）
+  canvas.on('object:added',    onCanvasChange);
+  canvas.on('object:removed',  onCanvasChange);
+  canvas.on('object:modified', onCanvasChange);
   canvas.on('mouse:down', opt => {
     // 描画モード中でも、設備など既存オブジェクトをクリックしたら選択モードに切替
     if (drawMode && opt.target && !opt.target.isGrid) {
@@ -742,7 +812,9 @@ function renderAiResult(d, rx, ry, rw, rh, im) {
     const rt = ROOM_TYPES.find(x => x.t === r.type);
     canvas.add(new fabric.Polygon(pts, { fill: rt ? rt.c : 'rgba(34,197,94,0.16)', stroke:'#333', strokeWidth:4, strokeUniform:true, roomType: r.type }));
     let cx = 0, cy = 0; pts.forEach(p => { cx += p.x; cy += p.y; }); cx /= pts.length; cy /= pts.length;
-    canvas.add(new fabric.IText(r.label || r.type, { left:cx, top:cy, originX:'center', originY:'center', fontSize:13, fill:'#111827', textAlign:'center', fontFamily:'sans-serif' }));
+    const _lbl = new fabric.IText(r.label || r.type, { left:cx, top:cy, originX:'center', originY:'center', fontSize:13, fill:'#111827', textAlign:'center', fontFamily:'sans-serif', isRoomLabel:true });
+    _lbl.visible = roomLabelsOn;
+    canvas.add(_lbl);
   });
   (d.fixtures || []).forEach(f => {
     const svg = S[f.type]; if (!svg) return;
@@ -778,11 +850,42 @@ function dupSel() {
 function bringFront() { const o = canvas.getActiveObject(); if (o) { canvas.bringToFront(o); canvas.renderAll(); } }
 function sendBack() { const o = canvas.getActiveObject(); if (o) { canvas.sendToBack(o); canvas.getObjects().filter(g=>g.isGrid).forEach(g=>canvas.sendToBack(g)); canvas.renderAll(); } }
 
+/* 入力した間取り（グリッド以外）の外接矩形をシーン座標で返す */
+function contentBounds() {
+  const objs = canvas.getObjects().filter(o => !o.isGrid && o.visible !== false);
+  if (!objs.length) return null;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  objs.forEach(o => {
+    const r = o.getBoundingRect(true, true);   // absolute（ビューポート変換を無視したシーン座標）
+    minX = Math.min(minX, r.left); minY = Math.min(minY, r.top);
+    maxX = Math.max(maxX, r.left + r.width); maxY = Math.max(maxY, r.top + r.height);
+  });
+  return { minX, minY, maxX, maxY };
+}
 function exportPNG() {
   canvas.discardActiveObject();
-  const z = zoom; if (z !== 1) { canvas.setZoom(1); canvas.renderAll(); }
-  const url = canvas.toDataURL({ format:'png', multiplier:2 });
-  if (z !== 1) { canvas.setZoom(z); canvas.renderAll(); }
+  const z = zoom; if (z !== 1) { canvas.setZoom(1); }
+  // グリッドを書き出しに含めない（一時的に非表示）
+  const grid = canvas.getObjects().filter(o => o.isGrid);
+  grid.forEach(o => o.visible = false);
+  canvas.renderAll();
+
+  // 入力した間取りを中心に（外接矩形＋余白でトリミング）
+  const b = contentBounds();
+  const pad = 48;
+  const opt = { format:'png', multiplier:2 };
+  if (b) {
+    opt.left   = Math.max(0, b.minX - pad);
+    opt.top    = Math.max(0, b.minY - pad);
+    opt.width  = (b.maxX - b.minX) + pad * 2;
+    opt.height = (b.maxY - b.minY) + pad * 2;
+  }
+  const url = canvas.toDataURL(opt);
+
+  grid.forEach(o => o.visible = true);
+  if (z !== 1) { canvas.setZoom(z); }
+  canvas.renderAll();
+
   const a = document.createElement('a');
   const nm = (document.getElementById('fp-name').value || '間取り').replace(/[\\/:*?"<>|]/g, '_');
   a.href = url; a.download = nm + '.png'; a.click();
@@ -793,7 +896,7 @@ function serializeWithThumb() {
   const grid = canvas.getObjects().filter(o => o.isGrid);
   grid.forEach(o => canvas.remove(o));
   canvas.discardActiveObject(); canvas.renderAll();
-  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','selectable','evented','strokeUniform']));
+  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','isRoomLabel','selectable','evented','strokeUniform']));
   let thumb = '';
   const z = zoom; if (z !== 1) { canvas.setZoom(1); canvas.renderAll(); }
   try { thumb = canvas.toDataURL({ format:'jpeg', quality:0.6, multiplier: 300 / canvas.width }); } catch(_){}
@@ -827,13 +930,30 @@ async function delFp(id) {
   try { await fetch('/api/floorplans/'+id, { method:'DELETE' }); if (currentId === id) currentId = null; loadLibrary(); } catch(_){}
 }
 
+// 矢印キー／テンキー（2=下,4=左,6=右,8=上）での微調整移動
+const NUDGE = {
+  ArrowLeft:[-1,0], ArrowRight:[1,0], ArrowUp:[0,-1], ArrowDown:[0,1],
+  Numpad4:[-1,0], Numpad6:[1,0], Numpad8:[0,-1], Numpad2:[0,1],
+};
 document.addEventListener('keydown', e => {
   if (!canvas || document.getElementById('editor-view').style.display === 'none') return;
   const ae = document.activeElement;
   if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
+  // 戻る（Ctrl+Z / Cmd+Z）
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { undo(); e.preventDefault(); return; }
   if (e.key === 'Delete' || e.key === 'Backspace') {
     const o = canvas.getActiveObject();
     if (o && !(o.isEditing)) { delSel(); e.preventDefault(); }
+  }
+  // 選択中オブジェクトの微調整（吸着なし。Shiftで大きく動かす）
+  const nd = NUDGE[e.code] || NUDGE[e.key];
+  if (nd) {
+    const o = canvas.getActiveObject();
+    if (o && !o.isEditing) {
+      const step = e.shiftKey ? 10 : 1;
+      o.set({ left: (o.left || 0) + nd[0] * step, top: (o.top || 0) + nd[1] * step });
+      o.setCoords(); canvas.renderAll(); pushHistory(); e.preventDefault();
+    }
   }
   if (e.key === 'Escape' && drawMode) setDrawMode(drawMode);
   if (e.key === 'Enter' && drawMode === 'poly') finalizePoly();
