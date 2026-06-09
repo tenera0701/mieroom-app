@@ -969,27 +969,41 @@ function roomUnderErase(r) {
   }
   return null;
 }
-/* ドラッグ区間の「枠（壁の線）」だけを、背景色の細い帯で覆って消す（塗り＝赤などは増やさない） */
+function _mkMask(left, top, w, h, fill, room) {
+  const m = new fabric.Rect({ left, top, width: w, height: h, fill,
+    stroke: 'rgba(0,0,0,0)', strokeWidth: 0, isMask: true, objectCaching: false });
+  if (room && room.roomId) { m.roomId = room.roomId; m.maskDX = m.left - room.left; m.maskDY = m.top - room.top; }
+  return m;
+}
+/* ドラッグ区間の「枠（壁の線）」だけを消す。室内側は部屋の色・外側は背景色の2枚で覆う
+   （室内の色は変えず・外にもはみ出さず・黒い線も残さない） */
 function eraseWallRange(r) {
   const room = roomUnderErase(r);
-  if (!room) { showAlert('部屋の壁（枠線）の上をドラッグして消してください。', 'error'); return; }   // 部屋が無い場所では消さない（残像防止）
-  const th = ((room && room.strokeWidth) ? room.strokeWidth : 6) + 3;   // 壁の太さぶんだけ
-  let cx = r.cx, cy = r.cy;
-  // 部屋の実際の端（壁の中心線）に合わせて、赤がはみ出さないようにする
-  if (room && room.type === 'rect' && !room.angle) {
-    const rw = room.width * (room.scaleX || 1), rh = room.height * (room.scaleY || 1);
-    if (r.horizontal) { const t = room.top, b = room.top + rh; cy = Math.abs(cy - t) <= Math.abs(cy - b) ? t : b; }
-    else              { const l = room.left, rt = room.left + rw; cx = Math.abs(cx - l) <= Math.abs(cx - rt) ? l : rt; }
+  if (!room) { showAlert('部屋の壁（枠線）の上をドラッグして消してください。', 'error'); return; }
+  const sw = room.strokeWidth || 6;
+  const half = sw / 2 + 1.5;            // 壁の片側ぶん
+  const ext = half;                     // 端を少し延ばして角まで覆う
+  const c = room.getCenterPoint();
+  const roomFill = room.fill, bg = canvas.backgroundColor || '#ffffff';
+  const isRect = room.type === 'rect' && !room.angle;
+  const masks = [];
+  if (r.horizontal) {
+    let wallY = r.cy;
+    if (isRect) { const rh = room.height * (room.scaleY || 1), t = room.top, b = room.top + rh; wallY = Math.abs(r.cy - t) <= Math.abs(r.cy - b) ? t : b; }
+    const x = r.left - ext, w = r.width + ext * 2;
+    const insideDown = c.y > wallY;     // 室内が下側か
+    masks.push(_mkMask(x, insideDown ? wallY : wallY - half, w, half, roomFill, room));  // 室内側＝部屋の色
+    masks.push(_mkMask(x, insideDown ? wallY - half : wallY, w, half, bg, room));        // 外側＝背景色
+  } else {
+    let wallX = r.cx;
+    if (isRect) { const rw = room.width * (room.scaleX || 1), l = room.left, rt = room.left + rw; wallX = Math.abs(r.cx - l) <= Math.abs(r.cx - rt) ? l : rt; }
+    const y = r.top - ext, h = r.height + ext * 2;
+    const insideRight = c.x > wallX;    // 室内が右側か
+    masks.push(_mkMask(insideRight ? wallX : wallX - half, y, half, h, roomFill, room));  // 室内側＝部屋の色
+    masks.push(_mkMask(insideRight ? wallX - half : wallX, y, half, h, bg, room));        // 外側＝背景色
   }
-  const mask = new fabric.Rect({
-    left: r.horizontal ? r.left : cx - th / 2,
-    top:  r.horizontal ? cy - th / 2 : r.top,
-    width:  r.horizontal ? r.width : th,
-    height: r.horizontal ? th : r.height,
-    fill: canvas.backgroundColor || '#ffffff', stroke: 'rgba(0,0,0,0)', strokeWidth: 0, isMask: true, objectCaching: false });
-  // 壁消し箇所を部屋に紐付け（部屋を動かすと一緒に動く）
-  if (room && room.roomId) { mask.roomId = room.roomId; mask.maskDX = mask.left - room.left; mask.maskDY = mask.top - room.top; }
-  canvas.add(mask); mask.bringToFront(); canvas.renderAll(); pushHistory();
+  masks.forEach(m => { canvas.add(m); m.bringToFront(); });
+  canvas.renderAll(); pushHistory();
 }
 
 /* 頂点入力（多角形：△・L字など） */
