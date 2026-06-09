@@ -3389,6 +3389,16 @@ def floorplan_page():
     return render_template("floorplan.html")
 
 
+@app.route("/image-editor")
+@login_required
+@block_super_admin
+def image_editor_page():
+    """画像編集ページ（物件画像にロゴを付ける）。間取り作成と同じオプション。"""
+    if not current_has_floorplan():
+        return redirect(url_for('customer_management'))
+    return render_template("image_editor.html")
+
+
 @app.route("/api/floorplans", methods=["GET"])
 @login_required
 def api_floorplans_list():

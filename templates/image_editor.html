@@ -1,0 +1,184 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}画像編集 | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}画像編集{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/fabric@5.3.0/dist/fabric.min.js"></script>
+<style>
+  :root { --primary:#0D9488; --primary-dark:#0F766E; }
+  .ie-head { margin-bottom:10px; }
+  .ie-title { font-size:20px; font-weight:800; color:#111827; margin:0; }
+  .ie-sub { font-size:12px; color:#6b7280; margin:2px 0 0; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:6px; align-items:center; background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:8px 10px; margin-bottom:8px; }
+  .tb-btn { display:inline-flex; align-items:center; gap:5px; border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:7px; padding:6px 10px; font-size:12px; font-weight:600; cursor:pointer; }
+  .tb-btn:hover { background:#F0FDFA; border-color:#5EEAD4; }
+  .tb-btn.primary { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .tb-btn.danger { color:#ef4444; border-color:#fca5a5; }
+  .tb-sep { width:1px; height:22px; background:#e5e7eb; margin:0 2px; }
+  .canvas-wrap { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px; overflow:auto; position:relative; }
+  .drop-hint { position:absolute; inset:10px; border:2px dashed #c7d2fe; border-radius:10px; display:flex; align-items:center; justify-content:center; color:#6b7280; font-size:14px; font-weight:700; pointer-events:none; background:rgba(245,243,255,0.6); }
+  .drop-hint.hide { display:none; }
+  .canvas-wrap.drag { outline:3px solid #5EEAD4; }
+  .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
+  .alert.show { display:block; }
+  .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
+  .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1100px;margin:0 auto;">
+  <div id="alert-msg" class="alert"></div>
+  <div class="ie-head">
+    <h1 class="ie-title">画像編集</h1>
+    <p class="ie-sub">物件画像をドラッグ＆ドロップで取り込み、ロゴを付けられます（位置・大きさは自由に調整）。</p>
+  </div>
+
+  <div class="toolbar">
+    <label class="tb-btn">🖼 画像を取込
+      <input type="file" accept="image/*" onchange="importPhoto(event)" style="display:none;">
+    </label>
+    <span class="tb-sep"></span>
+    <label class="tb-btn">＋ ロゴ画像
+      <input type="file" accept="image/*" onchange="addLogo(event)" style="display:none;">
+    </label>
+    <button class="tb-btn" onclick="addCompanyLogo()" title="会社情報に登録したロゴを挿入">🏢 会社ロゴ</button>
+    <button class="tb-btn" onclick="removeBg()" title="選択したロゴの背景（白などの単色）を透過">🪄 背景透過</button>
+    <span class="tb-sep"></span>
+    <button class="tb-btn" onclick="bringFront()">最前面</button>
+    <button class="tb-btn" onclick="dupSel()">⧉ 複製</button>
+    <button class="tb-btn danger" onclick="delSel()">🗑 削除</button>
+    <span class="tb-sep"></span>
+    <button class="tb-btn primary" onclick="exportPNG()">📤 画像で書き出し</button>
+  </div>
+
+  <div class="canvas-wrap" id="canvas-wrap">
+    <canvas id="ie-canvas" width="960" height="640"></canvas>
+    <div class="drop-hint" id="drop-hint">ここに物件画像をドラッグ＆ドロップ、または「🖼 画像を取込」</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let canvas;
+function showAlert(msg, type='success'){
+  const el=document.getElementById('alert-msg');
+  el.textContent=msg; el.className=`alert alert-${type} show`;
+  setTimeout(()=>el.classList.remove('show'), 3500);
+}
+function initCanvas(){
+  canvas=new fabric.Canvas('ie-canvas', { backgroundColor:'#ffffff', preserveObjectStacking:true });
+  fitCanvas();
+  window.addEventListener('resize', fitCanvas);
+}
+function fitCanvas(){
+  const wrap=document.querySelector('.canvas-wrap');
+  if(!wrap||!wrap.clientWidth) return;
+  const w=Math.max(640, Math.floor(wrap.clientWidth-22));
+  canvas.setDimensions({ width:w, height:Math.round(w*0.66) });
+  canvas.renderAll();
+}
+function hideHint(){ const h=document.getElementById('drop-hint'); if(h) h.classList.add('hide'); }
+
+/* 物件画像の取込（中央に大きく配置・背景扱い） */
+function placePhoto(dataUrl){
+  fabric.Image.fromURL(dataUrl, img=>{
+    const scale=Math.min(canvas.width/img.width, canvas.height/img.height);
+    img.set({ left:(canvas.width-img.width*scale)/2, top:(canvas.height-img.height*scale)/2,
+      scaleX:scale, scaleY:scale, isPhoto:true });
+    canvas.add(img); canvas.sendToBack(img); canvas.setActiveObject(img); canvas.renderAll();
+    hideHint();
+  });
+}
+function importPhoto(e){
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  const reader=new FileReader();
+  reader.onload=ev=>placePhoto(ev.target.result);
+  reader.readAsDataURL(f);
+}
+function addLogo(e){
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    fabric.Image.fromURL(ev.target.result, img=>{
+      const scale=Math.min(220/img.width, 140/img.height, 1);
+      img.set({ left:24, top:24, scaleX:scale, scaleY:scale, isLogo:true });
+      canvas.add(img); canvas.setActiveObject(img); canvas.renderAll(); hideHint();
+    });
+  };
+  reader.readAsDataURL(f);
+}
+function addCompanyLogo(){
+  const im=new Image();
+  im.onload=()=>{
+    const f=new fabric.Image(im);
+    const scale=Math.min(220/f.width, 140/f.height, 1);
+    f.set({ left:24, top:24, scaleX:scale, scaleY:scale, isLogo:true });
+    canvas.add(f); canvas.setActiveObject(f); canvas.renderAll(); hideHint();
+  };
+  im.onerror=()=>showAlert('会社情報にロゴ画像が登録されていません。（設定→会社情報で登録できます）','error');
+  im.src='/api/company-logo?t='+Date.now();
+}
+/* 選択した画像の背景（四隅色に近い画素）を透過 */
+function removeBg(){
+  const o=canvas.getActiveObject();
+  if(!o || o.type!=='image'){ showAlert('背景を透過したいロゴ・画像を選択してください。','error'); return; }
+  const el=o._element||(o.getElement&&o.getElement());
+  const w=(el&&(el.naturalWidth||el.width))||0, h=(el&&(el.naturalHeight||el.height))||0;
+  if(!w||!h){ showAlert('画像を読み込めませんでした。','error'); return; }
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  const ctx=c.getContext('2d'); ctx.drawImage(el,0,0,w,h);
+  let img; try{ img=ctx.getImageData(0,0,w,h);}catch(_){ showAlert('この画像は透過処理できません。','error'); return; }
+  const d=img.data;
+  const corners=[[0,0],[w-1,0],[0,h-1],[w-1,h-1]];
+  let r0=0,g0=0,b0=0; corners.forEach(([cx,cy])=>{const i=(cy*w+cx)*4; r0+=d[i];g0+=d[i+1];b0+=d[i+2];});
+  r0/=4; g0/=4; b0/=4; const tol2=48*48;
+  for(let i=0;i<d.length;i+=4){ const dr=d[i]-r0,dg=d[i+1]-g0,db=d[i+2]-b0; if(dr*dr+dg*dg+db*db<tol2) d[i+3]=0; }
+  ctx.putImageData(img,0,0);
+  fabric.Image.fromURL(c.toDataURL('image/png'), nimg=>{
+    nimg.set({ left:o.left, top:o.top, scaleX:o.scaleX, scaleY:o.scaleY, angle:o.angle, isLogo:o.isLogo });
+    canvas.remove(o); canvas.add(nimg); canvas.setActiveObject(nimg); canvas.renderAll();
+    showAlert('背景を透過しました。');
+  });
+}
+function bringFront(){ const o=canvas.getActiveObject(); if(o){ canvas.bringToFront(o); canvas.renderAll(); } }
+function dupSel(){ const o=canvas.getActiveObject(); if(!o) return; o.clone(cl=>{ cl.set({left:(o.left||0)+20, top:(o.top||0)+20, isLogo:o.isLogo}); canvas.add(cl); canvas.setActiveObject(cl); canvas.renderAll(); }, ['isLogo','isPhoto']); }
+function delSel(){ canvas.getActiveObjects().forEach(o=>canvas.remove(o)); canvas.discardActiveObject(); canvas.renderAll(); }
+function exportPNG(){
+  canvas.discardActiveObject(); canvas.renderAll();
+  const url=canvas.toDataURL({ format:'png', multiplier:2 });
+  const a=document.createElement('a'); a.href=url; a.download='物件画像.png'; a.click();
+}
+
+/* ドラッグ＆ドロップ */
+function initDrop(){
+  const wrap=document.getElementById('canvas-wrap');
+  ['dragover','drop'].forEach(t=>window.addEventListener(t,ev=>ev.preventDefault(),false));
+  ['dragenter','dragover'].forEach(t=>wrap.addEventListener(t,ev=>{ ev.preventDefault(); ev.stopPropagation(); wrap.classList.add('drag'); }));
+  wrap.addEventListener('dragleave',ev=>{ ev.preventDefault(); ev.stopPropagation(); if(!wrap.contains(ev.relatedTarget)) wrap.classList.remove('drag'); });
+  wrap.addEventListener('drop',ev=>{
+    ev.preventDefault(); ev.stopPropagation(); wrap.classList.remove('drag');
+    const f=ev.dataTransfer&&ev.dataTransfer.files&&ev.dataTransfer.files[0];
+    if(!f||!/^image\//.test(f.type)){ showAlert('画像ファイルをドロップしてください。','error'); return; }
+    const reader=new FileReader();
+    reader.onload=async e=>{
+      let blob; try{ blob=new Blob([await f.arrayBuffer()]); }catch(_){ blob=null; }
+      placePhoto(e.target.result);
+    };
+    reader.readAsDataURL(f);
+  });
+}
+
+document.addEventListener('keydown', e=>{
+  if(!canvas) return;
+  const ae=document.activeElement;
+  if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.tagName==='SELECT')) return;
+  if(e.key==='Delete'||e.key==='Backspace'){ const o=canvas.getActiveObject(); if(o){ delSel(); e.preventDefault(); } }
+  const nudge={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]};
+  if(nudge[e.key]){ const o=canvas.getActiveObject(); if(o){ const s=e.shiftKey?10:1; o.set({left:(o.left||0)+nudge[e.key][0]*s, top:(o.top||0)+nudge[e.key][1]*s}); o.setCoords(); canvas.renderAll(); e.preventDefault(); } }
+});
+
+document.addEventListener('DOMContentLoaded', ()=>{ initCanvas(); initDrop(); });
+</script>
+{% endblock %}
