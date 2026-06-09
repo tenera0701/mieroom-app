@@ -1003,6 +1003,41 @@ class CustomerServiceRecord(db.Model):
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class VisitIntake(db.Model):
+    """来店ヒヤリング（QR受付）。お客様が初回来店時にスマホで入力した情報。店舗ごと。"""
+    __tablename__ = 'visit_intake'
+    id            = db.Column(db.Integer, primary_key=True)
+    store_id      = db.Column(db.Integer, index=True)
+    customer_name = db.Column(db.String(100))    # お名前
+    furigana      = db.Column(db.String(100))    # フリガナ
+    phone         = db.Column(db.String(40))     # 電話番号
+    email         = db.Column(db.String(200))    # メール
+    desired_area  = db.Column(db.String(200))    # 希望エリア
+    desired_rent  = db.Column(db.String(80))     # 希望賃料
+    desired_layout = db.Column(db.String(80))    # 希望間取り
+    move_in       = db.Column(db.String(80))     # 入居希望時期
+    occupants     = db.Column(db.String(80))     # 入居人数
+    budget        = db.Column(db.String(80))     # 初期費用予算
+    conditions    = db.Column(db.Text)           # こだわり条件・その他希望
+    notes         = db.Column(db.Text)           # 備考
+    handled       = db.Column(db.Boolean, default=False)   # 接客管理表へ反映済み
+    service_record_id = db.Column(db.Integer, nullable=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'store_id': self.store_id,
+            'customer_name': self.customer_name or '', 'furigana': self.furigana or '',
+            'phone': self.phone or '', 'email': self.email or '',
+            'desired_area': self.desired_area or '', 'desired_rent': self.desired_rent or '',
+            'desired_layout': self.desired_layout or '', 'move_in': self.move_in or '',
+            'occupants': self.occupants or '', 'budget': self.budget or '',
+            'conditions': self.conditions or '', 'notes': self.notes or '',
+            'handled': bool(self.handled),
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+        }
+
+
 class DropdownOption(db.Model):
     """プルダウン選択肢マスタ（テナント別・カテゴリ別）"""
     __tablename__ = 'dropdown_option'
@@ -6357,6 +6392,109 @@ def customer_service():
                            year=year, month=month, store_id=store_id,
                            cur_staff_id=cur_staff_id, is_manager=is_manager,
                            now=datetime.now())
+
+
+# ─── 来店管理（QR受付ヒヤリング） ─────────────────────────────────────────
+@app.route("/store-visits")
+@login_required
+@block_super_admin
+def store_visits_page():
+    """来店管理ページ（QR受付の一覧・QR表示・接客管理表への反映）"""
+    stores = get_allowed_stores(ignore_active=True)
+    active_ids = get_allowed_store_ids()
+    store_id = active_ids[0] if active_ids else None
+    store = Store.query.get(store_id) if store_id else None
+    return render_template("store_visits.html",
+                           stores=stores, store_id=store_id,
+                           store_name=(store.name if store else ''))
+
+
+@app.route("/visit/<int:store_id>")
+def visit_form_page(store_id):
+    """お客様向け 来店ヒヤリングフォーム（QRから・ログイン不要）"""
+    store = Store.query.get(store_id)
+    if not store:
+        return "店舗が見つかりません", 404
+    return render_template("visit_form.html", store_id=store_id, store_name=store.name or '')
+
+
+@app.route("/api/visit/<int:store_id>", methods=["POST"])
+def api_visit_submit(store_id):
+    """お客様フォームの送信（ログイン不要）。VisitIntake を作成。"""
+    store = Store.query.get(store_id)
+    if not store:
+        return jsonify({'error': '店舗が見つかりません'}), 404
+    d = request.get_json(silent=True) or request.form
+    name = (d.get('customer_name') or '').strip()
+    if not name:
+        return jsonify({'error': 'お名前を入力してください'}), 400
+    def g(k): return (d.get(k) or '').strip()[:200]
+    v = VisitIntake(
+        store_id=store_id, customer_name=name[:100], furigana=g('furigana')[:100],
+        phone=g('phone')[:40], email=g('email'),
+        desired_area=g('desired_area'), desired_rent=g('desired_rent')[:80],
+        desired_layout=g('desired_layout')[:80], move_in=g('move_in')[:80],
+        occupants=g('occupants')[:80], budget=g('budget')[:80],
+        conditions=(d.get('conditions') or '').strip(), notes=(d.get('notes') or '').strip())
+    db.session.add(v)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/visits", methods=["GET"])
+@login_required
+def api_visits_list():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    rows = (VisitIntake.query.filter_by(store_id=sid)
+            .order_by(VisitIntake.created_at.desc(), VisitIntake.id.desc()).all()) if sid else []
+    return jsonify([r.to_dict() for r in rows])
+
+
+@app.route("/api/visits/<int:vid>", methods=["DELETE"])
+@login_required
+def api_visits_delete(vid):
+    allowed = get_allowed_store_ids()
+    v = VisitIntake.query.get_or_404(vid)
+    if v.store_id not in allowed:
+        return jsonify({'error': '権限がありません'}), 403
+    db.session.delete(v)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/visits/<int:vid>/to-service", methods=["POST"])
+@login_required
+def api_visits_to_service(vid):
+    """来店ヒヤリングを接客管理表（CustomerServiceRecord）へ反映する"""
+    allowed = get_allowed_store_ids()
+    v = VisitIntake.query.get_or_404(vid)
+    if v.store_id not in allowed:
+        return jsonify({'error': '権限がありません'}), 403
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    cur_staff_id = resolve_cur_staff_id(cur_user)
+    memo_parts = []
+    if v.desired_area:   memo_parts.append(f'希望エリア：{v.desired_area}')
+    if v.desired_rent:   memo_parts.append(f'希望賃料：{v.desired_rent}')
+    if v.desired_layout: memo_parts.append(f'希望間取り：{v.desired_layout}')
+    if v.move_in:        memo_parts.append(f'入居時期：{v.move_in}')
+    if v.occupants:      memo_parts.append(f'入居人数：{v.occupants}')
+    if v.budget:         memo_parts.append(f'初期費用予算：{v.budget}')
+    if v.phone:          memo_parts.append(f'TEL：{v.phone}')
+    if v.email:          memo_parts.append(f'Mail：{v.email}')
+    if v.conditions:     memo_parts.append(f'こだわり：{v.conditions}')
+    if v.notes:          memo_parts.append(f'備考：{v.notes}')
+    rec = CustomerServiceRecord(
+        store_id=v.store_id, service_date=date.today(),
+        staff_id=cur_staff_id, customer_name=v.customer_name or '',
+        service_type='来店', visit_count=1, status='追客中',
+        memo='\n'.join(memo_parts))
+    db.session.add(rec)
+    db.session.flush()
+    v.handled = True
+    v.service_record_id = rec.id
+    db.session.commit()
+    return jsonify({'status': 'ok', 'service_record_id': rec.id})
 
 
 # ─── DropdownOption API ──────────────────────────────────────────────────

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>来店ヒヤリング | {{ store_name }}</title>
+  <style>
+    :root { --primary:#0D9488; --primary-dark:#0F766E; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Kaku Gothic ProN','Meiryo',sans-serif; background:#F0FDFA; color:#111827; }
+    .wrap { max-width:560px; margin:0 auto; padding:18px 16px 40px; }
+    .head { text-align:center; padding:18px 0 8px; }
+    .head h1 { font-size:20px; font-weight:800; margin:0 0 4px; color:#0F766E; }
+    .head p { font-size:13px; color:#6b7280; margin:0; }
+    .card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:18px 16px; box-shadow:0 2px 10px rgba(13,148,136,0.06); margin-top:14px; }
+    .field { margin-bottom:14px; }
+    .field label { display:block; font-size:13px; font-weight:700; color:#374151; margin-bottom:5px; }
+    .field .req { color:#ef4444; font-size:11px; margin-left:4px; }
+    input, select, textarea { width:100%; border:1px solid #d1d5db; border-radius:9px; padding:11px 12px; font-size:15px; background:#fff; color:#111827; }
+    input:focus, select:focus, textarea:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(13,148,136,0.12); }
+    textarea { min-height:80px; resize:vertical; }
+    .btn { width:100%; border:none; background:var(--primary); color:#fff; border-radius:10px; padding:14px; font-size:16px; font-weight:800; cursor:pointer; margin-top:6px; }
+    .btn:hover { background:var(--primary-dark); }
+    .btn:disabled { opacity:0.6; cursor:default; }
+    .done { text-align:center; padding:40px 16px; }
+    .done .ico { font-size:54px; }
+    .done h2 { color:#0F766E; font-size:20px; margin:12px 0 6px; }
+    .done p { color:#6b7280; font-size:14px; }
+    .err { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; border-radius:8px; padding:9px 12px; font-size:13px; margin-bottom:12px; display:none; }
+    .err.show { display:block; }
+    .foot { text-align:center; color:#9ca3af; font-size:11px; margin-top:18px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <h1>{{ store_name }}</h1>
+      <p>ご来店ありがとうございます。お部屋探しのご希望をお聞かせください。</p>
+    </div>
+
+    <div id="form-card" class="card">
+      <div id="err" class="err"></div>
+      <div class="field"><label>お名前<span class="req">必須</span></label><input id="customer_name" type="text" placeholder="例：山田 太郎"></div>
+      <div class="field"><label>フリガナ</label><input id="furigana" type="text" placeholder="例：ヤマダ タロウ"></div>
+      <div class="field"><label>電話番号</label><input id="phone" type="tel" inputmode="tel" placeholder="例：090-1234-5678"></div>
+      <div class="field"><label>メールアドレス</label><input id="email" type="email" inputmode="email" placeholder="例：taro@example.com"></div>
+      <div class="field"><label>希望エリア</label><input id="desired_area" type="text" placeholder="例：〇〇駅周辺 / 〇〇区"></div>
+      <div class="field"><label>希望賃料</label><input id="desired_rent" type="text" placeholder="例：8万円まで"></div>
+      <div class="field"><label>希望間取り</label>
+        <select id="desired_layout">
+          <option value="">選択してください</option>
+          <option>1R</option><option>1K</option><option>1DK</option><option>1LDK</option>
+          <option>2K</option><option>2DK</option><option>2LDK</option>
+          <option>3DK</option><option>3LDK</option><option>4LDK以上</option><option>こだわらない</option>
+        </select></div>
+      <div class="field"><label>入居希望時期</label><input id="move_in" type="text" placeholder="例：来月中 / 3月まで"></div>
+      <div class="field"><label>入居人数</label><input id="occupants" type="text" placeholder="例：1人 / 2人"></div>
+      <div class="field"><label>初期費用のご予算</label><input id="budget" type="text" placeholder="例：30万円程度"></div>
+      <div class="field"><label>こだわり条件・その他ご希望</label><textarea id="conditions" placeholder="例：ペット可、2階以上、宅配ボックス、駐車場あり など"></textarea></div>
+      <button id="submit-btn" class="btn" onclick="submitForm()">この内容で送信する</button>
+    </div>
+
+    <div id="done-card" class="done" style="display:none;">
+      <div class="ico">✅</div>
+      <h2>送信しました</h2>
+      <p>担当スタッフにお知らせしました。<br>このままお待ちください。</p>
+    </div>
+
+    <div class="foot">Powered by ミエルーム</div>
+  </div>
+
+<script>
+const STORE_ID = {{ store_id }};
+function showErr(m){ const e=document.getElementById('err'); e.textContent=m; e.classList.add('show'); window.scrollTo(0,0); }
+async function submitForm(){
+  const name=document.getElementById('customer_name').value.trim();
+  if(!name){ showErr('お名前を入力してください。'); return; }
+  const ids=['customer_name','furigana','phone','email','desired_area','desired_rent','desired_layout','move_in','occupants','budget','conditions'];
+  const data={}; ids.forEach(k=>data[k]=document.getElementById(k).value);
+  const btn=document.getElementById('submit-btn'); btn.disabled=true; btn.textContent='送信中…';
+  try{
+    const r=await fetch('/api/visit/'+STORE_ID, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||'送信に失敗しました');
+    document.getElementById('form-card').style.display='none';
+    document.getElementById('done-card').style.display='block';
+    window.scrollTo(0,0);
+  }catch(e){ showErr(e.message||'送信に失敗しました。通信環境をご確認ください。'); btn.disabled=false; btn.textContent='この内容で送信する'; }
+}
+</script>
+</body>
+</html>

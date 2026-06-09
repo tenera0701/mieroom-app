@@ -1,0 +1,154 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}来店管理 | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}来店管理{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root { --primary:#0D9488; --primary-dark:#0F766E; }
+  .sv-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .sv-title { font-size:22px; font-weight:800; color:#111827; margin:0; }
+  .sv-sub { font-size:12px; color:#6b7280; margin:4px 0 0; }
+  .panel { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:16px; }
+  .qr-box { display:flex; gap:18px; align-items:center; flex-wrap:wrap; }
+  #qr { width:160px; height:160px; background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:8px; display:flex; align-items:center; justify-content:center; }
+  .qr-info { flex:1; min-width:220px; }
+  .qr-url { font-size:12px; color:#0F766E; word-break:break-all; background:#F0FDFA; border:1px solid #99f6e4; border-radius:8px; padding:8px 10px; margin:6px 0; }
+  .btn { display:inline-flex; align-items:center; gap:5px; border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:8px; padding:7px 12px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn:hover { background:#F0FDFA; border-color:#5EEAD4; }
+  .btn.primary { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .btn.danger { color:#ef4444; border-color:#fca5a5; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  thead th { background:#F0FDFA; padding:9px 10px; text-align:left; font-weight:700; color:#374151; border-bottom:2px solid #d1fae5; white-space:nowrap; }
+  tbody td { padding:9px 10px; border-bottom:1px solid #f3f4f6; vertical-align:top; }
+  tbody tr.handled { opacity:0.55; }
+  .badge-new { background:#fef3c7; color:#92400e; border-radius:10px; padding:2px 8px; font-size:11px; font-weight:700; }
+  .badge-done { background:#CCFBF1; color:#0F766E; border-radius:10px; padding:2px 8px; font-size:11px; font-weight:700; }
+  .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
+  .alert.show { display:block; }
+  .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
+  .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+  .cond { white-space:pre-wrap; font-size:12px; color:#374151; max-width:260px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1200px;margin:0 auto;">
+  <div id="alert-msg" class="alert"></div>
+  <div class="sv-head">
+    <div>
+      <h1 class="sv-title">来店管理</h1>
+      <p class="sv-sub">お客様にQRを読み取ってもらい、ご希望条件をヒヤリング。送信された内容をここで確認し、接客管理表へ反映できます。</p>
+    </div>
+  </div>
+
+  <!-- QR -->
+  <div class="panel">
+    <div style="font-size:14px;font-weight:800;color:#0F766E;margin-bottom:10px;">📱 受付QRコード（{{ store_name }}）</div>
+    <div class="qr-box">
+      <div id="qr"></div>
+      <div class="qr-info">
+        <p style="font-size:13px;color:#374151;margin:0 0 4px;">このQRをお客様のスマホで読み取ってもらうと、ヒヤリングフォームが開きます。</p>
+        <div class="qr-url" id="qr-url">―</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn" onclick="copyUrl()">🔗 URLをコピー</button>
+          <a class="btn" id="open-link" href="#" target="_blank" rel="noopener">フォームを開く</a>
+          <button class="btn" onclick="window.print()">🖨 QRを印刷</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 受付一覧 -->
+  <div class="panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
+      <div style="font-size:14px;font-weight:800;color:#0F766E;">受付一覧 <span id="v-count" style="font-size:12px;color:#6b7280;font-weight:600;">0件</span></div>
+      <button class="btn" onclick="loadVisits()">↻ 更新</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>受付日時</th><th>お名前</th><th>連絡先</th><th>希望条件</th><th>状況</th><th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="v-tbody">
+          <tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:20px;">読み込み中…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const STORE_ID = {{ store_id if store_id else 'null' }};
+const FORM_URL = STORE_ID ? (location.origin + '/visit/' + STORE_ID) : '';
+
+function showAlert(msg, type='success'){
+  const el=document.getElementById('alert-msg');
+  el.textContent=msg; el.className=`alert alert-${type} show`;
+  setTimeout(()=>el.classList.remove('show'), 3500);
+}
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderQR(){
+  document.getElementById('qr-url').textContent = FORM_URL || '（店舗が選択されていません）';
+  const link=document.getElementById('open-link'); if(link) link.href=FORM_URL||'#';
+  const box=document.getElementById('qr'); box.innerHTML='';
+  if(FORM_URL && window.QRCode){ new QRCode(box, { text:FORM_URL, width:144, height:144, correctLevel:QRCode.CorrectLevel.M }); }
+}
+function copyUrl(){
+  if(!FORM_URL) return;
+  navigator.clipboard.writeText(FORM_URL).then(()=>showAlert('URLをコピーしました。')).catch(()=>showAlert('コピーに失敗しました。','error'));
+}
+
+function condText(r){
+  const p=[];
+  if(r.desired_area)   p.push('エリア：'+r.desired_area);
+  if(r.desired_rent)   p.push('賃料：'+r.desired_rent);
+  if(r.desired_layout) p.push('間取り：'+r.desired_layout);
+  if(r.move_in)        p.push('時期：'+r.move_in);
+  if(r.occupants)      p.push('人数：'+r.occupants);
+  if(r.budget)         p.push('予算：'+r.budget);
+  if(r.conditions)     p.push('こだわり：'+r.conditions);
+  return p.join('\n');
+}
+async function loadVisits(){
+  const tb=document.getElementById('v-tbody');
+  try{
+    const rows=await fetch('/api/visits').then(r=>r.json());
+    document.getElementById('v-count').textContent=(rows.length||0)+'件';
+    if(!rows.length){ tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:20px;">まだ受付がありません。QRから送信されるとここに表示されます。</td></tr>'; return; }
+    tb.innerHTML=rows.map(r=>`
+      <tr class="${r.handled?'handled':''}">
+        <td style="white-space:nowrap;">${esc(r.created_at)}</td>
+        <td><div style="font-weight:700;">${esc(r.customer_name)||'―'}</div><div style="font-size:11px;color:#9ca3af;">${esc(r.furigana)}</div></td>
+        <td style="font-size:12px;">${r.phone?('📞 '+esc(r.phone)+'<br>'):''}${r.email?('✉ '+esc(r.email)):''}</td>
+        <td><div class="cond">${esc(condText(r))||'―'}</div>${r.notes?('<div style="font-size:11px;color:#9ca3af;margin-top:3px;">備考：'+esc(r.notes)+'</div>'):''}</td>
+        <td>${r.handled?'<span class="badge-done">反映済</span>':'<span class="badge-new">未対応</span>'}</td>
+        <td style="white-space:nowrap;">
+          ${r.handled?'':`<button class="btn primary" onclick="toService(${r.id})">接客表へ反映</button>`}
+          <button class="btn danger" onclick="delVisit(${r.id})">削除</button>
+        </td>
+      </tr>`).join('');
+  }catch(_){ tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:#ef4444;padding:20px;">読み込みに失敗しました。</td></tr>'; }
+}
+async function toService(id){
+  if(!confirm('この来店ヒヤリングを接客管理表へ反映しますか？')) return;
+  try{
+    const r=await fetch(`/api/visits/${id}/to-service`, {method:'POST'});
+    if(!r.ok) throw new Error();
+    showAlert('接客管理表へ反映しました。'); loadVisits();
+  }catch(_){ showAlert('反映に失敗しました。','error'); }
+}
+async function delVisit(id){
+  if(!confirm('この受付を削除しますか？')) return;
+  try{ await fetch(`/api/visits/${id}`, {method:'DELETE'}); loadVisits(); }
+  catch(_){ showAlert('削除に失敗しました。','error'); }
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{ renderQR(); loadVisits(); });
+</script>
+{% endblock %}
