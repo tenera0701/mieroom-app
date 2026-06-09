@@ -1389,9 +1389,9 @@ function dupSel() {
 function bringFront() { const o = canvas.getActiveObject(); if (o) { canvas.bringToFront(o); canvas.renderAll(); } }
 function sendBack() { const o = canvas.getActiveObject(); if (o) { canvas.sendToBack(o); canvas.getObjects().filter(g=>g.isGrid).forEach(g=>canvas.sendToBack(g)); canvas.renderAll(); } }
 
-/* 入力した間取り（グリッド以外）の外接矩形をシーン座標で返す */
-function contentBounds() {
-  const objs = canvas.getObjects().filter(o => !o.isGrid && o.visible !== false);
+/* オブジェクトの外接矩形をシーン座標で返す（filterFnで対象を絞れる） */
+function contentBounds(filterFn) {
+  const objs = canvas.getObjects().filter(o => !o.isGrid && o.visible !== false && (!filterFn || filterFn(o)));
   if (!objs.length) return null;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   objs.forEach(o => {
@@ -1410,18 +1410,22 @@ function exportPNG() {
   grid.forEach(o => o.visible = false);
   canvas.renderAll();
 
-  // 入力した間取りを中心に「正方形」でトリミング（短辺を長辺に合わせる）
-  const b = contentBounds();
   const pad = 48;
   const mult = 2;
   const opt = { format:'png', multiplier:mult };
-  if (b) {
-    const side = Math.max(b.maxX - b.minX, b.maxY - b.minY) + pad * 2;
-    const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
-    opt.left = cx - side / 2;
-    opt.top  = cy - side / 2;
-    opt.width = side;
-    opt.height = side;
+  // 中心は「間取りのみ」を基準に（ロゴ・下絵などの画像は中心計算から除外）
+  const planB = contentBounds(o => !o.isBg && o.type !== 'image');
+  const allB  = contentBounds();   // ロゴ等も含む全体（はみ出して切れないように）
+  const base = planB || allB;
+  if (base) {
+    const cx = (base.minX + base.maxX) / 2, cy = (base.minY + base.maxY) / 2;   // 間取りの中心
+    let half = Math.max(base.maxX - base.minX, base.maxY - base.minY) / 2 + pad; // 間取りが収まる正方形
+    if (allB) {   // ロゴ等が外にあっても切れないよう、中心は固定したまま正方形を広げる
+      half = Math.max(half,
+        (allB.maxX + pad) - cx, cx - (allB.minX - pad),
+        (allB.maxY + pad) - cy, cy - (allB.minY - pad));
+    }
+    opt.left = cx - half; opt.top = cy - half; opt.width = half * 2; opt.height = half * 2;
   }
   const url = canvas.toDataURL(opt);
 
