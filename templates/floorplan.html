@@ -718,8 +718,10 @@ function pushHistory() {
   updateUndoBtn();
 }
 function updateUndoBtn() {
-  const u = document.getElementById('undo-btn'); if (u) u.style.opacity = _histIdx > 0 ? '1' : '0.4';
-  const r = document.getElementById('redo-btn'); if (r) r.style.opacity = _histIdx < _history.length - 1 ? '1' : '0.4';
+  const u = document.getElementById('undo-btn');
+  if (u) { const on = _histIdx > 0; u.style.opacity = on ? '1' : '0.7'; u.disabled = !on; u.style.cursor = on ? 'pointer' : 'not-allowed'; }
+  const r = document.getElementById('redo-btn');
+  if (r) { const on = _histIdx < _history.length - 1; r.style.opacity = on ? '1' : '0.7'; r.disabled = !on; r.style.cursor = on ? 'pointer' : 'not-allowed'; }
 }
 function _loadHistory(json) {
   _histLock = true;
