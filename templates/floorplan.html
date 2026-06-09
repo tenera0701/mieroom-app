@@ -202,7 +202,6 @@
       </label>
       <span class="tb-sep"></span>
       <button class="tb-btn" onclick="addText()">＋ テキスト</button>
-      <button class="tb-btn" onclick="addTextSameStyle()" title="選択中のテキストと同じ書式（フォント・サイズ・色など）で新しいテキストを作成">📋 同書式テキスト</button>
       <button class="tb-btn" onclick="addLine()">＋ 線</button>
       <label class="tb-btn">＋ ロゴ
         <input type="file" accept="image/*" onchange="addLogo(event)" style="display:none;">
@@ -225,7 +224,7 @@
     </div>
 
     <!-- 文字ツールバー（テキスト選択中のみ表示・Excel風） -->
-    <div class="toolbar" id="text-toolbar" style="display:none;">
+    <div class="toolbar" id="text-toolbar">
       <span style="font-size:12px;font-weight:800;color:#374151;">文字</span>
       <select class="tb-sel" id="tt-font" title="フォント" onchange="ttSet('fontFamily', this.value)">
         <option value="sans-serif">ゴシック（標準）</option>
@@ -434,6 +433,7 @@ function showEditor(){
   document.getElementById('editor-view').style.display = '';
   if (canvas) setTimeout(() => { fitCanvas(); canvas.calcOffset(); }, 30);
   loadRoomTypes();
+  syncTextToolbar();   // 文字ツールバーを初期表示（常時表示）
 }
 
 async function loadLibrary(){
@@ -747,7 +747,7 @@ function _loadHistory(json) {
     canvas.getObjects().filter(o => o.isRoomLabel).forEach(o => o.visible = roomLabelsOn);
     fitCanvas(); canvas.renderAll();
     _histLock = false; updateUndoBtn();
-    document.getElementById('text-toolbar').style.display = 'none';
+    syncTextToolbar();
   });
 }
 function undo() {
@@ -1377,49 +1377,54 @@ function ttActiveTexts() {
 }
 function isTextObj(o) { return o && (o.type === 'i-text' || o.type === 'text' || o.type === 'textbox'); }
 function syncTextToolbar() {
-  const bar = document.getElementById('text-toolbar');
+  // 文字ツールバーは常に表示。テキスト選択中はその書式、未選択時は「次のテキスト用の書式」を表示
   const o = canvas.getActiveObject();
   const texts = ttActiveTexts();
-  if (!texts.length) { bar.style.display = 'none'; return; }
-  bar.style.display = 'flex';
-  const t = isTextObj(o) ? o : texts[0];
+  const t = texts.length ? (isTextObj(o) ? o : texts[0]) : null;
+  const st = t ? t : lastTextStyle;
   const fontSel = document.getElementById('tt-font');
-  if (fontSel) fontSel.value = t.fontFamily || 'sans-serif';
+  if (fontSel) fontSel.value = st.fontFamily || 'sans-serif';
   const sizeSel = document.getElementById('tt-size');
-  if (sizeSel) sizeSel.value = String(Math.round(t.fontSize || 14));
-  document.getElementById('tt-bold').classList.toggle('primary', (t.fontWeight === 'bold' || t.fontWeight >= 600));
-  document.getElementById('tt-italic').classList.toggle('primary', t.fontStyle === 'italic');
-  document.getElementById('tt-underline').classList.toggle('primary', !!t.underline);
+  if (sizeSel) sizeSel.value = String(Math.round(st.fontSize || 14));
+  document.getElementById('tt-bold').classList.toggle('primary', (st.fontWeight === 'bold' || st.fontWeight >= 600));
+  document.getElementById('tt-italic').classList.toggle('primary', st.fontStyle === 'italic');
+  document.getElementById('tt-underline').classList.toggle('primary', !!st.underline);
   const sw = document.getElementById('tt-color');
-  if (sw && typeof t.fill === 'string') { sw.style.background = t.fill; sw.dataset.value = t.fill; }
-  captureTextStyle(t);   // 表示中の書式を「次のテキスト用」に記憶
+  if (sw && typeof st.fill === 'string') { sw.style.background = st.fill; sw.dataset.value = st.fill; }
+  if (t) captureTextStyle(t);   // 表示中の書式を「次のテキスト用」に記憶
 }
 function ttSet(prop, val) {
-  const texts = ttActiveTexts(); if (!texts.length) return;
-  texts.forEach(t => t.set(prop, val));
-  canvas.renderAll(); pushHistory(); syncTextToolbar();
+  const texts = ttActiveTexts();
+  if (texts.length) { texts.forEach(t => t.set(prop, val)); canvas.renderAll(); pushHistory(); }
+  else lastTextStyle[prop] = val;   // 未選択時は次のテキスト用の既定を更新
+  syncTextToolbar();
 }
 function ttToggle(kind) {
-  const texts = ttActiveTexts(); if (!texts.length) return;
-  texts.forEach(t => {
-    if (kind === 'bold')      t.set('fontWeight', (t.fontWeight === 'bold' || t.fontWeight >= 600) ? 'normal' : 'bold');
-    if (kind === 'italic')    t.set('fontStyle', t.fontStyle === 'italic' ? 'normal' : 'italic');
-    if (kind === 'underline') t.set('underline', !t.underline);
+  const texts = ttActiveTexts();
+  const targets = texts.length ? texts : [lastTextStyle];
+  targets.forEach(obj => {
+    let prop, val;
+    if (kind === 'bold')      { prop = 'fontWeight'; val = (obj.fontWeight === 'bold' || obj.fontWeight >= 600) ? 'normal' : 'bold'; }
+    if (kind === 'italic')    { prop = 'fontStyle'; val = obj.fontStyle === 'italic' ? 'normal' : 'italic'; }
+    if (kind === 'underline') { prop = 'underline'; val = !obj.underline; }
+    if (obj.set) obj.set(prop, val); else obj[prop] = val;
   });
-  canvas.renderAll(); pushHistory(); syncTextToolbar();
+  if (texts.length) { canvas.renderAll(); pushHistory(); }
+  syncTextToolbar();
 }
 function ttBump(d) {
-  const texts = ttActiveTexts(); if (!texts.length) return;
-  texts.forEach(t => t.set('fontSize', Math.max(6, Math.min(200, Math.round((t.fontSize || 14) + d * 2)))));
-  canvas.renderAll(); pushHistory(); syncTextToolbar();
+  const texts = ttActiveTexts();
+  if (texts.length) { texts.forEach(t => t.set('fontSize', Math.max(6, Math.min(200, Math.round((t.fontSize || 14) + d * 2))))); canvas.renderAll(); pushHistory(); }
+  else lastTextStyle.fontSize = Math.max(6, Math.min(200, Math.round((lastTextStyle.fontSize || 14) + d * 2)));
+  syncTextToolbar();
 }
 function ttColor(c) {
-  const texts = ttActiveTexts(); if (!texts.length) return;
-  texts.forEach(t => t.set('fill', c));
+  const texts = ttActiveTexts();
+  if (texts.length) { texts.forEach(t => t.set('fill', c)); canvas.renderAll(); pushHistory(); }
+  lastTextStyle.fill = c;
   const sw = document.getElementById('tt-color'); if (sw) { sw.style.background = c; sw.dataset.value = c; }
-  canvas.renderAll(); pushHistory(); lastTextStyle.fill = c;
 }
-function delSel() { canvas.getActiveObjects().forEach(o => canvas.remove(o)); canvas.discardActiveObject(); canvas.renderAll(); document.getElementById('text-toolbar').style.display = 'none'; }
+function delSel() { canvas.getActiveObjects().forEach(o => canvas.remove(o)); canvas.discardActiveObject(); canvas.renderAll(); syncTextToolbar(); }
 function rotateSel() { rotateBy(90); }
 function rotateBy(deg) {
   const o = canvas.getActiveObject(); if (!o) { showAlert('回転する対象を選択してください。', 'error'); return; }
