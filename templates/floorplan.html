@@ -113,6 +113,9 @@
   .rs-color-row input[type=color] { width:42px; height:24px; border:1px solid #d1d5db; border-radius:5px; padding:0; cursor:pointer; }
   .rs-tex-preview { height:72px; border:1px solid #e5e7eb; border-radius:6px; background:#fafafa center/cover no-repeat; display:flex; align-items:center; justify-content:center; margin-bottom:6px; }
   #rs-preview { border:1px solid #e5e7eb; border-radius:6px; width:100%; height:auto; background:#fff; }
+  .rs-defaults { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:10px 18px; border-top:1px solid #eef2f2; background:#fafafa; }
+  .rs-def-item { display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#374151; cursor:pointer; }
+  .rs-def-item input[type=color] { width:40px; height:24px; border:1px solid #d1d5db; border-radius:5px; padding:0; cursor:pointer; }
   .rs-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 18px; border-top:1px solid #eef2f2; flex-wrap:wrap; }
   .rs-foot .rs-hint { font-size:11px; color:#9ca3af; }
   .rs-foot > div { display:flex; gap:8px; }
@@ -131,6 +134,7 @@
         <h1 class="fp-title">間取り作成</h1>
         <p class="fp-sub">物件名・部屋タイプ別にフォルダで管理できます。新規作成、または保存済みを開いてください。</p>
       </div>
+      <button class="big-btn" onclick="openRoomSettings()" title="部屋タイプの見た目や、新規作成時の既定（背景色・格子色）を設定">⚙ 設定</button>
     </div>
 
     <div id="lib-top"></div>
@@ -344,8 +348,14 @@
           </div>
         </div>
       </div>
+      <div class="rs-defaults">
+        <span style="font-size:12px;font-weight:800;color:#374151;">🆕 新規作成時の既定：</span>
+        <label class="rs-def-item">背景色 <input type="color" id="rs-def-bg" value="#ffffff"></label>
+        <label class="rs-def-item">格子（グリッド）色 <input type="color" id="rs-def-grid" value="#e5e7eb"></label>
+        <span style="font-size:11px;color:#9ca3af;">※新しく間取りを作るときに自動で適用されます</span>
+      </div>
       <div class="rs-foot">
-        <span class="rs-hint">左で部屋を選び、各項目を編集 →「設定を保存」で確定します。</span>
+        <span class="rs-hint">部屋の見た目と「新規作成時の既定」を編集 →「設定を保存」で確定します。</span>
         <div>
           <button class="tb-btn" onclick="closeRoomSettings()">閉じる</button>
           <button class="tb-btn primary" onclick="saveRoomSettings()">💾 設定を保存</button>
@@ -432,6 +442,7 @@ function showEditor(){
 async function loadLibrary(){
   try { const r = await fetch('/api/floorplan-folders'); if (r.ok){ const d = await r.json(); libFolders = (d.folders||[]).map(f=>({id:f.id,name:f.name})); } } catch(_){ libFolders = []; }
   try { const r = await fetch('/api/floorplans'); allPlans = r.ok ? await r.json() : []; } catch(_){ allPlans = []; }
+  loadFpDefaults();   // 既定（背景・格子色）を先読み（新規作成時に適用）
   fillFolderSelect();
   renderLib();
 }
@@ -549,13 +560,24 @@ function openNew(){
   currentId = null;
   editingFolderId = (curView === 'inside' && typeof curFolder === 'number') ? curFolder : null;
   document.getElementById('fp-name').value = '';
-  canvas.clear(); canvas.backgroundColor = '#ffffff'; zoom = 1;
+  canvas.clear(); zoom = 1;
+  applyFpDefaults();   // 既定の背景色・格子色を適用
   document.getElementById('zoom-label').textContent = '100%';
   document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
   resetRoomLabelState();
   fillFolderSelect(); setFolderLabel();
   showEditor();
   setTimeout(resetHistory, 50);
+}
+/* 既定の背景色・格子色をキャンバスとツールバーのスウォッチに反映 */
+function applyFpDefaults() {
+  canvas.backgroundColor = FP_DEFAULTS.bg || '#ffffff';
+  gridColor = FP_DEFAULTS.grid || '#e5e7eb';
+  const bgsw = document.getElementById('bg-color');
+  if (bgsw) { bgsw.dataset.value = canvas.backgroundColor; bgsw.style.background = canvas.backgroundColor; }
+  const gsw = document.getElementById('grid-color');
+  if (gsw) { gsw.dataset.value = gridColor; gsw.style.background = gridColor; }
+  if (canvas) drawGrid();
 }
 function resetRoomLabelState() {
   roomLabelsOn = true;
@@ -1344,6 +1366,13 @@ let ROOM_TYPE_SETTINGS = [];   // [{id,name,...}]  サーバー保存値
 let RS_CATEGORIES = [];
 let rsCurId = null;            // 編集中の部屋タイプid
 let rsFilterCat = '';          // '' = すべて
+let FP_DEFAULTS = { bg: '#ffffff', grid: '#e5e7eb' };   // 新規作成時の既定（背景色・格子色）
+async function loadFpDefaults() {
+  try {
+    const r = await fetch('/api/floorplan-settings');
+    if (r.ok) { const d = await r.json(); FP_DEFAULTS = { bg: d.bg_color || '#ffffff', grid: d.grid_color || '#e5e7eb' }; }
+  } catch (_) {}
+}
 
 /* 床模様を 2D コンテキストに描画（床色は塗り済み前提） */
 function drawFloorPattern(ctx, x, y, w, h, key, lineColor) {
@@ -1410,10 +1439,13 @@ function refreshRoomTypeSelect() {
 /* ---- モーダル開閉 ---- */
 async function openRoomSettings() {
   await loadRoomTypes();
+  await loadFpDefaults();
   if (!ROOM_TYPE_SETTINGS.length) { showAlert('部屋タイプを読み込めませんでした。', 'error'); return; }
   rsFilterCat = '';
   rsCurId = ROOM_TYPE_SETTINGS[0].id;
   rsRenderCats(); rsRenderList(); rsFillForm();
+  const bg = document.getElementById('rs-def-bg'); if (bg) bg.value = /^#[0-9a-fA-F]{6}$/.test(FP_DEFAULTS.bg) ? FP_DEFAULTS.bg : '#ffffff';
+  const gr = document.getElementById('rs-def-grid'); if (gr) gr.value = /^#[0-9a-fA-F]{6}$/.test(FP_DEFAULTS.grid) ? FP_DEFAULTS.grid : '#e5e7eb';
   document.getElementById('rs-overlay').classList.add('open');
 }
 function closeRoomSettings() { document.getElementById('rs-overlay').classList.remove('open'); }
@@ -1594,8 +1626,16 @@ async function saveRoomSettings() {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s)
       });
     }
+    // 新規作成時の既定（背景色・格子色）も保存
+    const bg = (document.getElementById('rs-def-bg') || {}).value || '#ffffff';
+    const grid = (document.getElementById('rs-def-grid') || {}).value || '#e5e7eb';
+    await fetch('/api/floorplan-settings', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bg_color: bg, grid_color: grid })
+    });
+    FP_DEFAULTS = { bg, grid };
     await loadRoomTypes();
-    showAlert('部屋設定を保存しました。');
+    showAlert('設定を保存しました。');
     closeRoomSettings();
   } catch (_) { showAlert('保存に失敗しました。', 'error'); }
 }

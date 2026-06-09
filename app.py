@@ -740,6 +740,19 @@ class FloorPlanRoomType(db.Model):
         }
 
 
+class FloorPlanSetting(db.Model):
+    """間取りの既定設定（新規作成時の背景色・格子色など）。店舗ごと。"""
+    __tablename__ = 'floor_plan_setting'
+    id = db.Column(db.Integer, primary_key=True)
+    store_id = db.Column(db.Integer, index=True, unique=True)
+    bg_color = db.Column(db.String(20), default='#ffffff')    # 既定の背景色
+    grid_color = db.Column(db.String(20), default='#e5e7eb')  # 既定の格子（グリッド）色
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {'bg_color': self.bg_color or '#ffffff', 'grid_color': self.grid_color or '#e5e7eb'}
+
+
 class DocCompanyInfo(db.Model):
     """会社情報（テナント単位で固定。帳票の会社情報タグへ自動差し込み）。data はJSON {ラベル: 値}"""
     __tablename__ = 'doc_company_info'
@@ -3634,6 +3647,38 @@ def api_floorplan_room_types_delete(rid):
     db.session.delete(r)
     db.session.commit()
     return jsonify({'status': 'ok'})
+
+
+# ── 間取り 既定設定（新規作成時の背景色・格子色） ──
+@app.route("/api/floorplan-settings", methods=["GET"])
+@login_required
+def api_floorplan_settings_get():
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    s = FloorPlanSetting.query.filter_by(store_id=sid).first()
+    return jsonify(s.to_dict() if s else {'bg_color': '#ffffff', 'grid_color': '#e5e7eb'})
+
+
+@app.route("/api/floorplan-settings", methods=["POST"])
+@login_required
+def api_floorplan_settings_save():
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    d = request.get_json() or {}
+    s = FloorPlanSetting.query.filter_by(store_id=sid).first()
+    if not s:
+        s = FloorPlanSetting(store_id=sid)
+        db.session.add(s)
+    if 'bg_color' in d:
+        s.bg_color = (d.get('bg_color') or '#ffffff')[:20]
+    if 'grid_color' in d:
+        s.grid_color = (d.get('grid_color') or '#e5e7eb')[:20]
+    db.session.commit()
+    return jsonify({'status': 'ok', **s.to_dict()})
 
 
 # ── 間取り AI取込（画像→部屋・設備に自動分解） ──
