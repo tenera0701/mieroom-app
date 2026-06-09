@@ -709,6 +709,37 @@ class FloorPlanFolder(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class FloorPlanRoomType(db.Model):
+    """間取りの部屋タイプ設定（見た目：床の色・柄・テクスチャ・壁・部屋名表示）。店舗ごと。"""
+    __tablename__ = 'floor_plan_room_type'
+    id = db.Column(db.Integer, primary_key=True)
+    store_id = db.Column(db.Integer, index=True)
+    name = db.Column(db.String(60))          # 部屋名（例: 洋室）
+    list_name = db.Column(db.String(60))     # リスト表示名
+    category = db.Column(db.String(40))      # カテゴリー（和室/洋室/収納/玄関/廊下/階段/水廻り/設備/外部/その他）
+    sort_order = db.Column(db.Integer, default=0)
+    show_name = db.Column(db.Boolean, default=True)    # 部屋名を表示
+    show_count = db.Column(db.Boolean, default=False)  # 帖数の数値を表示
+    show_jo = db.Column(db.Boolean, default=True)      # 「帖」単位を表示
+    floor_pattern = db.Column(db.String(20), default='none')  # none/diag/diag2/grid/cross/brick/dot
+    wall_type = db.Column(db.String(20), default='wall')      # wall/double/dotted/none
+    floor_color = db.Column(db.String(20), default='#ffffff') # 床の色
+    line_color = db.Column(db.String(20), default='#333333')  # 床の線（壁）の色
+    texture_enabled = db.Column(db.Boolean, default=False)
+    texture_b64 = db.Column(db.Text, nullable=True)           # テクスチャ画像（dataURL）
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'name': self.name or '', 'list_name': self.list_name or '',
+            'category': self.category or 'その他', 'sort_order': self.sort_order or 0,
+            'show_name': bool(self.show_name), 'show_count': bool(self.show_count), 'show_jo': bool(self.show_jo),
+            'floor_pattern': self.floor_pattern or 'none', 'wall_type': self.wall_type or 'wall',
+            'floor_color': self.floor_color or '#ffffff', 'line_color': self.line_color or '#333333',
+            'texture_enabled': bool(self.texture_enabled), 'texture_b64': self.texture_b64 or '',
+        }
+
+
 class DocCompanyInfo(db.Model):
     """会社情報（テナント単位で固定。帳票の会社情報タグへ自動差し込み）。data はJSON {ラベル: 値}"""
     __tablename__ = 'doc_company_info'
@@ -3497,6 +3528,110 @@ def api_floorplans_move(fid):
     if fp.store_id not in allowed:
         return jsonify({'error': '権限がありません'}), 403
     fp.folder_id = (request.get_json() or {}).get('folder_id') or None
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── 間取り 部屋タイプ設定（見た目マスター） ──
+FLOORPLAN_ROOM_CATEGORIES = ['和室', '洋室', 'LDK', '収納', '玄関', '廊下', '階段', '水廻り',
+                             '設備', '外部', '事業用', '土地', '汎用', '共用部', 'その他']
+
+# 初期シード（保存が空のとき店舗ごとに作成）
+FLOORPLAN_ROOM_TYPE_DEFAULTS = [
+    {'name': '洋室', 'category': '洋室', 'floor_color': '#eafaf0', 'line_color': '#333333', 'floor_pattern': 'none'},
+    {'name': '和室', 'category': '和室', 'floor_color': '#fbf3d9', 'line_color': '#333333', 'floor_pattern': 'tatami'},
+    {'name': 'LDK',  'category': 'LDK',  'floor_color': '#f3eafc', 'line_color': '#333333', 'floor_pattern': 'wood'},
+    {'name': 'DK',   'category': 'LDK',  'floor_color': '#fdeede', 'line_color': '#333333', 'floor_pattern': 'wood'},
+    {'name': 'K',    'category': 'LDK',  'floor_color': '#fdeede', 'line_color': '#333333', 'floor_pattern': 'wood'},
+    {'name': '浴室', 'category': '水廻り', 'floor_color': '#e3f4fd', 'line_color': '#333333', 'floor_pattern': 'tile'},
+    {'name': '洗面', 'category': '水廻り', 'floor_color': '#eef8fd', 'line_color': '#333333', 'floor_pattern': 'tile'},
+    {'name': 'トイレ', 'category': '水廻り', 'floor_color': '#eef0f3', 'line_color': '#333333', 'floor_pattern': 'tile'},
+    {'name': '玄関', 'category': '玄関', 'floor_color': '#eeece8', 'line_color': '#333333', 'floor_pattern': 'tile'},
+    {'name': '廊下', 'category': '廊下', 'floor_color': '#f5f5f4', 'line_color': '#333333', 'floor_pattern': 'wood'},
+    {'name': 'クローゼット', 'category': '収納', 'floor_color': '#f1f1ee', 'line_color': '#333333', 'floor_pattern': 'none'},
+    {'name': '押入', 'category': '収納', 'floor_color': '#fbe7e7', 'line_color': '#333333', 'floor_pattern': 'none'},
+    {'name': 'バルコニー', 'category': '外部', 'floor_color': '#eef6fb', 'line_color': '#333333', 'floor_pattern': 'tile'},
+]
+
+
+def _floorplan_seed_room_types(sid):
+    rows = []
+    for i, d in enumerate(FLOORPLAN_ROOM_TYPE_DEFAULTS):
+        r = FloorPlanRoomType(
+            store_id=sid, name=d['name'], list_name=d['name'], category=d['category'],
+            sort_order=i, show_name=True, show_count=True, show_jo=True,
+            floor_pattern=d.get('floor_pattern', 'none'), wall_type='wall',
+            floor_color=d.get('floor_color', '#ffffff'), line_color=d.get('line_color', '#333333'),
+            texture_enabled=False)
+        db.session.add(r); rows.append(r)
+    db.session.commit()
+    return rows
+
+
+@app.route("/api/floorplan-room-types", methods=["GET"])
+@login_required
+def api_floorplan_room_types_list():
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    rows = FloorPlanRoomType.query.filter_by(store_id=sid).order_by(
+        FloorPlanRoomType.sort_order.asc(), FloorPlanRoomType.id.asc()).all()
+    if not rows and sid:
+        rows = _floorplan_seed_room_types(sid)
+    return jsonify({'categories': FLOORPLAN_ROOM_CATEGORIES,
+                    'room_types': [r.to_dict() for r in rows]})
+
+
+@app.route("/api/floorplan-room-types", methods=["POST"])
+@login_required
+def api_floorplan_room_types_save():
+    """1件の作成／更新（idがあれば更新）。"""
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    d = request.get_json() or {}
+    rid = d.get('id')
+    r = FloorPlanRoomType.query.get(rid) if rid else None
+    if r and r.store_id != sid:
+        return jsonify({'error': '権限がありません'}), 403
+    if not r:
+        r = FloorPlanRoomType(store_id=sid)
+        db.session.add(r)
+    r.name = (d.get('name') or '無名')[:60]
+    r.list_name = (d.get('list_name') or r.name)[:60]
+    r.category = (d.get('category') or 'その他')[:40]
+    if 'sort_order' in d:
+        r.sort_order = int(d.get('sort_order') or 0)
+    r.show_name = bool(d.get('show_name', True))
+    r.show_count = bool(d.get('show_count', True))
+    r.show_jo = bool(d.get('show_jo', True))
+    r.floor_pattern = (d.get('floor_pattern') or 'none')[:20]
+    r.wall_type = (d.get('wall_type') or 'wall')[:20]
+    r.floor_color = (d.get('floor_color') or '#ffffff')[:20]
+    r.line_color = (d.get('line_color') or '#333333')[:20]
+    r.texture_enabled = bool(d.get('texture_enabled'))
+    if 'texture_b64' in d:
+        tex = d.get('texture_b64') or None
+        if tex and len(tex) > 4 * 1024 * 1024:
+            return jsonify({'error': 'テクスチャ画像が大きすぎます（約3MBまで）'}), 400
+        r.texture_b64 = tex
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': r.id, 'room_type': r.to_dict()})
+
+
+@app.route("/api/floorplan-room-types/<int:rid>", methods=["DELETE"])
+@login_required
+def api_floorplan_room_types_delete(rid):
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    r = FloorPlanRoomType.query.get_or_404(rid)
+    if r.store_id != sid:
+        return jsonify({'error': '権限がありません'}), 403
+    db.session.delete(r)
     db.session.commit()
     return jsonify({'status': 'ok'})
 

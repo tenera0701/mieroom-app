@@ -77,6 +77,45 @@
   .pcard .pbody { padding:9px 11px; display:flex; flex-direction:column; gap:7px; }
   .pcard .pn { font-size:13px; font-weight:800; color:#111827; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .pcard .pd { font-size:11px; color:#9ca3af; }
+  /* ===== 部屋設定モーダル ===== */
+  .rs-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:4000; align-items:center; justify-content:center; padding:16px; }
+  .rs-overlay.open { display:flex; }
+  .rs-modal { background:#fff; border-radius:14px; width:920px; max-width:100%; max-height:92vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 70px rgba(0,0,0,0.3); }
+  .rs-head { display:flex; align-items:center; justify-content:space-between; padding:13px 18px; border-bottom:1px solid #eef2f2; }
+  .rs-head h2 { margin:0; font-size:16px; font-weight:800; color:#0F766E; }
+  .rs-x { border:none; background:#f3f4f6; border-radius:8px; width:30px; height:30px; cursor:pointer; font-size:15px; color:#374151; }
+  .rs-body { display:grid; grid-template-columns:230px 1fr 200px; gap:14px; padding:16px 18px; overflow:auto; }
+  @media (max-width:820px){ .rs-body { grid-template-columns:1fr; } }
+  .rs-left { display:flex; flex-direction:column; gap:8px; }
+  .rs-cat-wrap { display:flex; flex-wrap:wrap; gap:4px; }
+  .rs-cat { border:1px solid #d1d5db; background:#fff; border-radius:6px; padding:3px 8px; font-size:11px; cursor:pointer; color:#374151; }
+  .rs-cat.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .rs-list { border:1px solid #e5e7eb; border-radius:8px; height:230px; overflow:auto; }
+  .rs-item { padding:7px 10px; font-size:13px; cursor:pointer; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; gap:7px; }
+  .rs-item:hover { background:#F0FDFA; }
+  .rs-item.active { background:#CCFBF1; font-weight:700; }
+  .rs-sw { width:14px; height:14px; border-radius:3px; border:1px solid #d1d5db; flex:none; }
+  .rs-list-btns, .rs-order-btns { display:flex; gap:6px; }
+  .rs-list-btns .tb-btn, .rs-order-btns .tb-btn { flex:1; justify-content:center; }
+  .rs-mid { display:flex; flex-direction:column; gap:11px; }
+  .rs-field { display:flex; flex-direction:column; gap:4px; }
+  .rs-field > label { font-size:11px; font-weight:700; color:#6b7280; }
+  .rs-field input[type=text], .rs-field select { border:1px solid #d1d5db; border-radius:6px; padding:6px 9px; font-size:13px; }
+  .rs-checks { display:flex; flex-wrap:wrap; gap:12px; font-size:12px; color:#374151; }
+  .rs-checks label { display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+  .rs-patterns { display:flex; flex-wrap:wrap; gap:6px; }
+  .rs-pat { width:38px; height:30px; border:2px solid #e5e7eb; border-radius:5px; cursor:pointer; background-size:cover; }
+  .rs-pat.active { border-color:var(--primary); box-shadow:0 0 0 2px rgba(13,148,136,0.2); }
+  .rs-right { display:flex; flex-direction:column; gap:10px; }
+  .rs-card { border:1px solid #e5e7eb; border-radius:8px; padding:9px 11px; }
+  .rs-card-h { font-size:11px; font-weight:800; color:#6b7280; margin-bottom:7px; }
+  .rs-color-row { display:flex; align-items:center; justify-content:space-between; font-size:12px; color:#374151; margin-bottom:5px; }
+  .rs-color-row input[type=color] { width:42px; height:24px; border:1px solid #d1d5db; border-radius:5px; padding:0; cursor:pointer; }
+  .rs-tex-preview { height:72px; border:1px solid #e5e7eb; border-radius:6px; background:#fafafa center/cover no-repeat; display:flex; align-items:center; justify-content:center; margin-bottom:6px; }
+  #rs-preview { border:1px solid #e5e7eb; border-radius:6px; width:100%; height:auto; background:#fff; }
+  .rs-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 18px; border-top:1px solid #eef2f2; flex-wrap:wrap; }
+  .rs-foot .rs-hint { font-size:11px; color:#9ca3af; }
+  .rs-foot > div { display:flex; gap:8px; }
 </style>
 {% endblock %}
 
@@ -123,6 +162,7 @@
       <button class="tb-btn" id="poly-mode-btn" onclick="setDrawMode('poly')" title="角をクリックして多角形（△やL字）。ダブルクリックで確定">△ 頂点入力</button>
       <select class="tb-sel" id="room-type" title="部屋の種類"></select>
       <button class="tb-btn" onclick="addRoomType()" title="部屋タイプを追加">＋種類</button>
+      <button class="tb-btn" onclick="openRoomSettings()" title="部屋ごとの床の色・柄・テクスチャ・壁・部屋名表示を設定">⚙ 部屋設定</button>
       <span class="tb-sep"></span>
       <button class="tb-btn" id="grid-btn" onclick="toggleGrid()">▦ グリッド ON</button>
       <button class="tb-btn" id="roomlabel-btn" onclick="toggleRoomLabels()" title="部屋名・帖数の表示／非表示">🏷 部屋名 ON</button>
@@ -188,6 +228,82 @@
       </div>
     </div>
   </div>
+
+  <!-- ===== 部屋設定モーダル ===== -->
+  <div id="rs-overlay" class="rs-overlay">
+    <div class="rs-modal">
+      <div class="rs-head">
+        <h2>部屋リスト編集</h2>
+        <button class="rs-x" onclick="closeRoomSettings()" title="閉じる">✕</button>
+      </div>
+      <div class="rs-body">
+        <!-- 左：カテゴリー＋部屋リスト -->
+        <div class="rs-left">
+          <div class="rs-cat-wrap" id="rs-cats"></div>
+          <div class="rs-list" id="rs-list"></div>
+          <div class="rs-list-btns">
+            <button class="tb-btn" onclick="rsAddRoom()">＋ 追加</button>
+            <button class="tb-btn danger" onclick="rsDeleteRoom()">🗑 削除</button>
+          </div>
+          <div class="rs-order-btns">
+            <button class="tb-btn" onclick="rsMove(-1)" title="上へ">↑ 上へ</button>
+            <button class="tb-btn" onclick="rsMove(1)" title="下へ">↓ 下へ</button>
+          </div>
+        </div>
+
+        <!-- 中：プロパティ編集 -->
+        <div class="rs-mid">
+          <div class="rs-field"><label>部屋名</label><input type="text" id="rs-name" oninput="rsOnEdit()"></div>
+          <div class="rs-field"><label>リスト表示</label><input type="text" id="rs-listname" oninput="rsOnEdit()"></div>
+          <div class="rs-field"><label>カテゴリー</label><select id="rs-category" onchange="rsOnEdit()"></select></div>
+          <div class="rs-field"><label>部屋名表示</label>
+            <span class="rs-checks">
+              <label><input type="checkbox" id="rs-show-name" onchange="rsOnEdit()"> 部屋名</label>
+              <label><input type="checkbox" id="rs-show-count" onchange="rsOnEdit()"> 数</label>
+              <label><input type="checkbox" id="rs-show-jo" onchange="rsOnEdit()"> 帖</label>
+            </span>
+          </div>
+          <div class="rs-field"><label>床模様</label><div class="rs-patterns" id="rs-patterns"></div></div>
+          <div class="rs-field"><label>壁</label>
+            <span class="rs-checks" id="rs-walls">
+              <label><input type="radio" name="rs-wall" value="wall" onchange="rsOnEdit()"> 壁あり</label>
+              <label><input type="radio" name="rs-wall" value="double" onchange="rsOnEdit()"> 二重線</label>
+              <label><input type="radio" name="rs-wall" value="dotted" onchange="rsOnEdit()"> 点線</label>
+              <label><input type="radio" name="rs-wall" value="none" onchange="rsOnEdit()"> 壁なし</label>
+            </span>
+          </div>
+        </div>
+
+        <!-- 右：カラー・テクスチャ・描画イメージ -->
+        <div class="rs-right">
+          <div class="rs-card">
+            <div class="rs-card-h">カラー</div>
+            <div class="rs-color-row"><span>床の色</span><input type="color" id="rs-floor-color" oninput="rsOnEdit()"></div>
+            <div class="rs-color-row"><span>床の線</span><input type="color" id="rs-line-color" oninput="rsOnEdit()"></div>
+          </div>
+          <div class="rs-card">
+            <div class="rs-card-h"><label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="rs-tex-enabled" onchange="rsOnEdit()"> テクスチャ有効</label></div>
+            <div class="rs-tex-preview" id="rs-tex-preview"><span style="color:#9ca3af;font-size:11px;">画像なし</span></div>
+            <label class="tb-btn" style="justify-content:center;">参照
+              <input type="file" accept="image/*" style="display:none" onchange="rsTexUpload(event)">
+            </label>
+            <button class="tb-btn" style="justify-content:center;margin-top:4px;" onclick="rsTexClear()">画像をクリア</button>
+          </div>
+          <div class="rs-card">
+            <div class="rs-card-h">描画イメージ</div>
+            <canvas id="rs-preview" width="180" height="150"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="rs-foot">
+        <span class="rs-hint">左で部屋を選び、各項目を編集 →「設定を保存」で確定します。</span>
+        <div>
+          <button class="tb-btn" onclick="closeRoomSettings()">閉じる</button>
+          <button class="tb-btn primary" onclick="saveRoomSettings()">💾 設定を保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -237,6 +353,7 @@ function showEditor(){
   document.getElementById('library-view').style.display = 'none';
   document.getElementById('editor-view').style.display = '';
   if (canvas) setTimeout(() => { fitCanvas(); canvas.calcOffset(); }, 30);
+  loadRoomTypes();
 }
 
 async function loadLibrary(){
@@ -592,6 +709,59 @@ function setDrawMode(m) {
 function resetPoly() { if (polyLine) { canvas.remove(polyLine); polyLine = null; } polyPoints = []; hideSizeTip(); if (canvas) canvas.renderAll(); }
 function roomColor() { return ROOM_TYPES[+document.getElementById('room-type').value || 0].c; }
 function roomName() { return ROOM_TYPES[+document.getElementById('room-type').value || 0].t; }
+/* 選択中の部屋タイプの詳細設定（床の色・柄・テクスチャ・壁・部屋名表示） */
+function currentRoomSetting() {
+  const i = +document.getElementById('room-type').value || 0;
+  return (ROOM_TYPES[i] && ROOM_TYPES[i]._s) ? ROOM_TYPES[i]._s : null;
+}
+/* 床模様タイル（fabric.Pattern 用の小さなcanvas） */
+function makePatternTile(s) {
+  const t = document.createElement('canvas'); t.width = 40; t.height = 40;
+  const cx = t.getContext('2d');
+  cx.fillStyle = s.floor_color || '#ffffff'; cx.fillRect(0, 0, 40, 40);
+  drawFloorPattern(cx, 0, 0, 40, 40, s.floor_pattern, s.line_color || '#333333');
+  return t;
+}
+/* 床の塗り（色／模様／テクスチャ）を rect に適用。テクスチャは非同期で後から反映 */
+function applyRoomFill(obj, s) {
+  if (!s) { obj.set('fill', roomColor()); return; }
+  if (s.texture_enabled && s.texture_b64) {
+    obj.set('fill', s.floor_color || '#ffffff');
+    const im = new Image();
+    im.onload = () => {
+      obj.set('fill', new fabric.Pattern({ source: im, repeat: 'repeat' }));
+      canvas.renderAll();
+    };
+    im.src = s.texture_b64;
+    return;
+  }
+  if (s.floor_pattern && s.floor_pattern !== 'none') {
+    obj.set('fill', new fabric.Pattern({ source: makePatternTile(s), repeat: 'repeat' }));
+    return;
+  }
+  obj.set('fill', s.floor_color || '#ffffff');
+}
+/* 壁スタイル（壁あり/二重線/点線/壁なし） */
+function wallStyleFor(s) {
+  const color = s ? (s.line_color || '#333333') : '#333333';
+  const t = s ? s.wall_type : 'wall';
+  if (t === 'none')   return { stroke: 'rgba(0,0,0,0)', strokeWidth: 0, strokeDashArray: null };
+  if (t === 'dotted') return { stroke: color, strokeWidth: 2, strokeDashArray: [3, 3] };
+  if (t === 'double') return { stroke: color, strokeWidth: 7, strokeDashArray: null };
+  return { stroke: color, strokeWidth: 5, strokeDashArray: null };  // wall
+}
+/* 部屋名ラベルの文字（部屋名 / 数 / 帖 の表示設定に従う） */
+function roomLabelText(jo) {
+  const s = currentRoomSetting();
+  const showName = s ? s.show_name : true;
+  const showCount = s ? s.show_count : true;
+  const showJo = s ? s.show_jo : true;
+  const lines = [];
+  if (showName) lines.push(roomName());
+  const second = (showCount ? jo.toFixed(1) : '') + (showJo ? '帖' : '');
+  if (second) lines.push(second);
+  return lines.join('\n') || roomName();
+}
 
 function showSizeTip(wpx, hpx, e) {
   const tip = document.getElementById('size-tip');
@@ -610,15 +780,22 @@ function showAreaTip(jo, e) {
 function hideSizeTip() { document.getElementById('size-tip').style.display = 'none'; }
 
 function addRoomLabel(cx, cy, jo) {
-  const label = new fabric.IText(`${roomName()}\n${jo.toFixed(1)}帖`, {
+  const txt = roomLabelText(jo);
+  const label = new fabric.IText(txt, {
     left:cx, top:cy, originX:'center', originY:'center',
     fontSize:14, fill:'#111827', textAlign:'center', fontFamily:'sans-serif', isRoomLabel:true });
+  // 表示項目がすべてOFFのときはラベルを作らない
+  if (!txt) return;
   label.visible = roomLabelsOn;
   canvas.add(label);
 }
 function finalizeRoom(left, top, w, h) {
-  const rect = new fabric.Rect({ left, top, width:w, height:h, fill:roomColor(),
-    stroke:'#333', strokeWidth:5, strokeUniform:true, roomType:roomName() });
+  const s = currentRoomSetting();
+  const ws = wallStyleFor(s);
+  const rect = new fabric.Rect({ left, top, width:w, height:h,
+    stroke:ws.stroke, strokeWidth:ws.strokeWidth, strokeDashArray:ws.strokeDashArray,
+    strokeUniform:true, roomType:roomName() });
+  applyRoomFill(rect, s);
   const wmm = mmFromPx(w), hmm = mmFromPx(h);
   const jo = ((wmm * hmm) / 1e6) / 1.62;
   canvas.add(rect); addRoomLabel(left + w/2, top + h/2, jo); canvas.renderAll();
@@ -644,7 +821,11 @@ function finalizePoly() {
   const pts = [];
   polyPoints.forEach(p => { const l = pts[pts.length-1]; if (!l || Math.hypot(p.x-l.x, p.y-l.y) > 1) pts.push(p); });
   if (pts.length < 3) { resetPoly(); return; }
-  const poly = new fabric.Polygon(pts, { fill:roomColor(), stroke:'#333', strokeWidth:5, strokeUniform:true, roomType:roomName() });
+  const s = currentRoomSetting();
+  const ws = wallStyleFor(s);
+  const poly = new fabric.Polygon(pts, { stroke:ws.stroke, strokeWidth:ws.strokeWidth,
+    strokeDashArray:ws.strokeDashArray, strokeUniform:true, roomType:roomName() });
+  applyRoomFill(poly, s);
   const jo = polyJo(pts); const c = polyCentroid(pts);
   resetPoly();
   canvas.add(poly); addRoomLabel(c.x, c.y, jo); canvas.renderAll();
@@ -911,6 +1092,275 @@ function addRoomType() {
   sel.innerHTML = ROOM_TYPES.map((r,i)=>`<option value="${i}">${r.t}</option>`).join('');
   sel.value = ROOM_TYPES.length - 1;
 }
+
+/* ========================================================================
+   部屋設定（見た目マスター）
+   ======================================================================== */
+const FLOOR_PATTERNS = [
+  { key:'none',   label:'なし' },     { key:'wood',  label:'フローリング' },
+  { key:'tatami', label:'畳' },       { key:'tile',  label:'タイル' },
+  { key:'diag',   label:'斜線' },     { key:'diag2', label:'網目' },
+  { key:'brick',  label:'レンガ' },   { key:'dot',   label:'ドット' },
+];
+let ROOM_TYPE_SETTINGS = [];   // [{id,name,...}]  サーバー保存値
+let RS_CATEGORIES = [];
+let rsCurId = null;            // 編集中の部屋タイプid
+let rsFilterCat = '';          // '' = すべて
+
+/* 床模様を 2D コンテキストに描画（床色は塗り済み前提） */
+function drawFloorPattern(ctx, x, y, w, h, key, lineColor) {
+  if (!key || key === 'none') return;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.strokeStyle = lineColor; ctx.fillStyle = lineColor; ctx.lineWidth = 1;
+  const step = 8;
+  if (key === 'wood') {
+    ctx.globalAlpha = 0.32;
+    for (let yy = y; yy <= y + h; yy += 11) { ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + w, yy); ctx.stroke(); }
+  } else if (key === 'tatami') {
+    ctx.globalAlpha = 0.5;
+    for (let xx = x; xx <= x + w + 1; xx += w / 2) { ctx.beginPath(); ctx.moveTo(xx, y); ctx.lineTo(xx, y + h); ctx.stroke(); }
+    for (let yy = y; yy <= y + h + 1; yy += h / 2) { ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + w, yy); ctx.stroke(); }
+  } else if (key === 'tile') {
+    ctx.globalAlpha = 0.4;
+    for (let xx = x; xx <= x + w; xx += step) { ctx.beginPath(); ctx.moveTo(xx, y); ctx.lineTo(xx, y + h); ctx.stroke(); }
+    for (let yy = y; yy <= y + h; yy += step) { ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + w, yy); ctx.stroke(); }
+  } else if (key === 'diag') {
+    ctx.globalAlpha = 0.4;
+    for (let i = -h; i < w; i += step) { ctx.beginPath(); ctx.moveTo(x + i, y + h); ctx.lineTo(x + i + h, y); ctx.stroke(); }
+  } else if (key === 'diag2') {
+    ctx.globalAlpha = 0.4;
+    for (let i = -h; i < w; i += step) { ctx.beginPath(); ctx.moveTo(x + i, y); ctx.lineTo(x + i + h, y + h); ctx.stroke(); }
+    for (let i = -h; i < w; i += step) { ctx.beginPath(); ctx.moveTo(x + i, y + h); ctx.lineTo(x + i + h, y); ctx.stroke(); }
+  } else if (key === 'dot') {
+    ctx.globalAlpha = 0.45;
+    for (let yy = y + 5; yy < y + h; yy += 10) for (let xx = x + 5; xx < x + w; xx += 10) { ctx.beginPath(); ctx.arc(xx, yy, 1.3, 0, 7); ctx.fill(); }
+  } else if (key === 'brick') {
+    ctx.globalAlpha = 0.4; let row = 0;
+    for (let yy = y; yy <= y + h; yy += 8) {
+      ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + w, yy); ctx.stroke();
+      const off = (row % 2) * 8;
+      for (let xx = x + off; xx <= x + w; xx += 16) { ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx, yy + 8); ctx.stroke(); }
+      row++;
+    }
+  }
+  ctx.restore();
+}
+
+/* サーバーから部屋タイプ設定を読み込み、ツールバーの種類セレクトとROOM_TYPESを再構築 */
+async function loadRoomTypes() {
+  try {
+    const r = await fetch('/api/floorplan-room-types');
+    if (!r.ok) return;
+    const d = await r.json();
+    ROOM_TYPE_SETTINGS = d.room_types || [];
+    RS_CATEGORIES = d.categories || [];
+    if (ROOM_TYPE_SETTINGS.length) {
+      ROOM_TYPES.length = 0;
+      ROOM_TYPE_SETTINGS.forEach(s => ROOM_TYPES.push({ t: s.name, c: s.floor_color, _s: s }));
+      refreshRoomTypeSelect();
+    }
+  } catch (_) {}
+}
+function refreshRoomTypeSelect() {
+  const sel = document.getElementById('room-type');
+  const cur = sel.value;
+  sel.innerHTML = ROOM_TYPES.map((r, i) => `<option value="${i}">${escFp(r.t)}</option>`).join('');
+  if (cur && +cur < ROOM_TYPES.length) sel.value = cur;
+}
+
+/* ---- モーダル開閉 ---- */
+async function openRoomSettings() {
+  await loadRoomTypes();
+  if (!ROOM_TYPE_SETTINGS.length) { showAlert('部屋タイプを読み込めませんでした。', 'error'); return; }
+  rsFilterCat = '';
+  rsCurId = ROOM_TYPE_SETTINGS[0].id;
+  rsRenderCats(); rsRenderList(); rsFillForm();
+  document.getElementById('rs-overlay').classList.add('open');
+}
+function closeRoomSettings() { document.getElementById('rs-overlay').classList.remove('open'); }
+
+function rsCur() { return ROOM_TYPE_SETTINGS.find(s => s.id === rsCurId) || null; }
+
+function rsRenderCats() {
+  const cats = ['すべて'].concat(RS_CATEGORIES);
+  document.getElementById('rs-cats').innerHTML = cats.map(c => {
+    const val = (c === 'すべて') ? '' : c;
+    return `<button class="rs-cat ${rsFilterCat === val ? 'active' : ''}" onclick="rsSetCat('${val}')">${escFp(c)}</button>`;
+  }).join('');
+  // カテゴリーselectも更新
+  const sel = document.getElementById('rs-category');
+  sel.innerHTML = RS_CATEGORIES.map(c => `<option value="${escFp(c)}">${escFp(c)}</option>`).join('');
+}
+function rsSetCat(v) { rsFilterCat = v; rsRenderCats(); rsRenderList(); }
+
+function rsRenderList() {
+  const items = ROOM_TYPE_SETTINGS.filter(s => !rsFilterCat || s.category === rsFilterCat);
+  document.getElementById('rs-list').innerHTML = items.map(s =>
+    `<div class="rs-item ${s.id === rsCurId ? 'active' : ''}" onclick="rsSelect(${s.id})">
+       <span class="rs-sw" style="background:${escFp(s.floor_color)};"></span>${escFp(s.list_name || s.name)}
+     </div>`).join('') || '<div style="padding:14px;color:#9ca3af;font-size:12px;">この分類に部屋がありません</div>';
+}
+function rsSelect(id) {
+  rsCommitForm();          // 直前の編集を保持
+  rsCurId = id;
+  rsRenderList(); rsFillForm();
+}
+
+/* ---- フォーム ⇔ データ ---- */
+function rsFillForm() {
+  const s = rsCur(); if (!s) return;
+  document.getElementById('rs-name').value = s.name || '';
+  document.getElementById('rs-listname').value = s.list_name || '';
+  document.getElementById('rs-category').value = s.category || 'その他';
+  document.getElementById('rs-show-name').checked = !!s.show_name;
+  document.getElementById('rs-show-count').checked = !!s.show_count;
+  document.getElementById('rs-show-jo').checked = !!s.show_jo;
+  document.getElementById('rs-floor-color').value = rsHex(s.floor_color, '#ffffff');
+  document.getElementById('rs-line-color').value = rsHex(s.line_color, '#333333');
+  document.getElementById('rs-tex-enabled').checked = !!s.texture_enabled;
+  (document.querySelectorAll('input[name="rs-wall"]') || []).forEach(r => r.checked = (r.value === (s.wall_type || 'wall')));
+  rsRenderTexPreview(); rsRenderPatterns(); rsPaintPreview();
+}
+function rsHex(v, def) { return (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v)) ? v : def; }
+function rsCommitForm() {
+  const s = rsCur(); if (!s) return;
+  s.name = document.getElementById('rs-name').value.trim() || s.name;
+  s.list_name = document.getElementById('rs-listname').value.trim() || s.name;
+  s.category = document.getElementById('rs-category').value;
+  s.show_name = document.getElementById('rs-show-name').checked;
+  s.show_count = document.getElementById('rs-show-count').checked;
+  s.show_jo = document.getElementById('rs-show-jo').checked;
+  s.floor_color = document.getElementById('rs-floor-color').value;
+  s.line_color = document.getElementById('rs-line-color').value;
+  s.texture_enabled = document.getElementById('rs-tex-enabled').checked;
+  const w = document.querySelector('input[name="rs-wall"]:checked');
+  if (w) s.wall_type = w.value;
+}
+/* 入力のたびにデータへ反映＋プレビュー更新 */
+function rsOnEdit() { rsCommitForm(); rsRenderList(); rsRenderTexPreview(); rsRenderPatterns(); rsPaintPreview(); }
+
+/* ---- 床模様スウォッチ ---- */
+function rsRenderPatterns() {
+  const s = rsCur(); if (!s) return;
+  document.getElementById('rs-patterns').innerHTML = FLOOR_PATTERNS.map(p => {
+    const c = document.createElement('canvas'); c.width = 38; c.height = 30;
+    const cx = c.getContext('2d');
+    cx.fillStyle = rsHex(s.floor_color, '#ffffff'); cx.fillRect(0, 0, 38, 30);
+    drawFloorPattern(cx, 0, 0, 38, 30, p.key, rsHex(s.line_color, '#333333'));
+    return `<div class="rs-pat ${s.floor_pattern === p.key ? 'active' : ''}" title="${p.label}"
+              style="background-image:url(${c.toDataURL()});" onclick="rsSetPattern('${p.key}')"></div>`;
+  }).join('');
+}
+function rsSetPattern(key) { const s = rsCur(); if (s) { s.floor_pattern = key; rsRenderPatterns(); rsPaintPreview(); } }
+
+/* ---- テクスチャ ---- */
+function rsRenderTexPreview() {
+  const s = rsCur(); const el = document.getElementById('rs-tex-preview');
+  if (s && s.texture_b64) { el.style.backgroundImage = `url(${s.texture_b64})`; el.innerHTML = ''; }
+  else { el.style.backgroundImage = 'none'; el.innerHTML = '<span style="color:#9ca3af;font-size:11px;">画像なし</span>'; }
+}
+function rsTexUpload(ev) {
+  const f = ev.target.files && ev.target.files[0]; ev.target.value = '';
+  if (!f) return;
+  if (f.size > 3 * 1024 * 1024) { showAlert('画像が大きすぎます（3MBまで）。', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const s = rsCur(); if (!s) return;
+    s.texture_b64 = e.target.result; s.texture_enabled = true;
+    document.getElementById('rs-tex-enabled').checked = true;
+    rsRenderTexPreview(); rsPaintPreview();
+  };
+  reader.readAsDataURL(f);
+}
+function rsTexClear() { const s = rsCur(); if (s) { s.texture_b64 = ''; rsRenderTexPreview(); rsPaintPreview(); } }
+
+/* ---- 描画イメージ（プレビュー） ---- */
+function rsPaintPreview() {
+  const s = rsCur(); const cv = document.getElementById('rs-preview'); if (!cv || !s) return;
+  const ctx = cv.getContext('2d'); const W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  const m = 16, x = m, y = m, w = W - m * 2, h = H - m * 2;
+  // 床
+  ctx.fillStyle = rsHex(s.floor_color, '#ffffff'); ctx.fillRect(x, y, w, h);
+  const paint = () => {
+    drawFloorPattern(ctx, x, y, w, h, s.floor_pattern, rsHex(s.line_color, '#333333'));
+    // 壁
+    const wt = s.wall_type || 'wall';
+    if (wt !== 'none') {
+      ctx.strokeStyle = rsHex(s.line_color, '#333333');
+      ctx.setLineDash(wt === 'dotted' ? [3, 3] : []);
+      ctx.lineWidth = (wt === 'double') ? 4 : (wt === 'dotted' ? 1.5 : 3);
+      ctx.strokeRect(x, y, w, h);
+      if (wt === 'double') { ctx.lineWidth = 1; ctx.strokeRect(x + 4, y + 4, w - 8, h - 8); }
+      ctx.setLineDash([]);
+    }
+    // ラベル
+    const lines = [];
+    if (s.show_name) lines.push(s.name || '');
+    const second = (s.show_count ? '6.0' : '') + (s.show_jo ? '帖' : '');
+    if (second) lines.push(second);
+    ctx.fillStyle = '#111827'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    lines.forEach((ln, i) => ctx.fillText(ln, x + w / 2, y + h / 2 + (i - (lines.length - 1) / 2) * 16));
+  };
+  if (s.texture_enabled && s.texture_b64) {
+    const im = new Image();
+    im.onload = () => { const p = ctx.createPattern(im, 'repeat'); ctx.fillStyle = p; ctx.fillRect(x, y, w, h); paint(); };
+    im.src = s.texture_b64;
+  } else { paint(); }
+}
+
+/* ---- 追加・削除・並べ替え ---- */
+async function rsAddRoom() {
+  rsCommitForm();
+  const name = prompt('追加する部屋名（例: 書斎 / SIC / 納戸）'); if (!name) return;
+  try {
+    const r = await fetch('/api/floorplan-room-types', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim(), category: rsFilterCat || 'その他',
+        sort_order: ROOM_TYPE_SETTINGS.length, show_name: true, show_count: true, show_jo: true,
+        floor_color: '#eafaf0', line_color: '#333333' })
+    });
+    const j = await r.json(); if (!r.ok) throw new Error();
+    await loadRoomTypes(); rsCurId = j.id;
+    rsRenderCats(); rsRenderList(); rsFillForm();
+  } catch (_) { showAlert('追加に失敗しました。', 'error'); }
+}
+async function rsDeleteRoom() {
+  const s = rsCur(); if (!s) return;
+  if (!confirm(`部屋タイプ「${s.name}」を削除しますか？`)) return;
+  try {
+    await fetch('/api/floorplan-room-types/' + s.id, { method: 'DELETE' });
+    await loadRoomTypes();
+    rsCurId = ROOM_TYPE_SETTINGS[0] ? ROOM_TYPE_SETTINGS[0].id : null;
+    rsRenderCats(); rsRenderList(); rsFillForm();
+  } catch (_) { showAlert('削除に失敗しました。', 'error'); }
+}
+function rsMove(dir) {
+  rsCommitForm();
+  const idx = ROOM_TYPE_SETTINGS.findIndex(s => s.id === rsCurId);
+  const ni = idx + dir;
+  if (idx < 0 || ni < 0 || ni >= ROOM_TYPE_SETTINGS.length) return;
+  const arr = ROOM_TYPE_SETTINGS;
+  [arr[idx], arr[ni]] = [arr[ni], arr[idx]];
+  arr.forEach((s, i) => s.sort_order = i);
+  rsRenderList();
+}
+
+/* ---- 保存（全件まとめて保存） ---- */
+async function saveRoomSettings() {
+  rsCommitForm();
+  try {
+    for (const s of ROOM_TYPE_SETTINGS) {
+      await fetch('/api/floorplan-room-types', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s)
+      });
+    }
+    await loadRoomTypes();
+    showAlert('部屋設定を保存しました。');
+    closeRoomSettings();
+  } catch (_) { showAlert('保存に失敗しました。', 'error'); }
+}
 async function saveFp() {
   const name = document.getElementById('fp-name').value.trim() || '無題';
   const fsel = document.getElementById('fp-folder').value;
@@ -966,3 +1416,4 @@ window.addEventListener('resize', () => {
 document.addEventListener('DOMContentLoaded', () => { initCanvas(); buildPalette(); drawGrid(); showLibrary(); });
 </script>
 {% endblock %}
+
