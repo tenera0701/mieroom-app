@@ -165,6 +165,18 @@
       <button class="tb-btn" onclick="openRoomSettings()" title="部屋ごとの床の色・柄・テクスチャ・壁・部屋名表示を設定">⚙ 部屋設定</button>
       <span class="tb-sep"></span>
       <button class="tb-btn" id="grid-btn" onclick="toggleGrid()">▦ グリッド ON</button>
+      <select class="tb-sel" id="grid-module" title="1マスの実寸（グリッドサイズ）" onchange="setGridModule(this.value)">
+        <option value="910">910mm（1マス）</option>
+        <option value="1000">1000mm</option>
+        <option value="900">900mm</option>
+        <option value="606">606mm</option>
+        <option value="455">455mm</option>
+      </select>
+      <select class="tb-sel" id="grid-snap" title="吸着の細かさ" onchange="setSnapDiv(this.value)">
+        <option value="1">吸着：1マス</option>
+        <option value="2" selected>吸着：半マス</option>
+        <option value="4">吸着：1/4マス</option>
+      </select>
       <button class="tb-btn" id="roomlabel-btn" onclick="toggleRoomLabels()" title="部屋名・帖数の表示／非表示">🏷 部屋名 ON</button>
       <button class="tb-btn" id="undo-btn" onclick="undo()" title="ひとつ前の状態に戻す（Ctrl+Z）">↩ 戻る</button>
       <span class="tb-sep"></span>
@@ -202,6 +214,36 @@
       <button class="tb-btn danger" onclick="delSel()">🗑 削除</button>
       <span class="tb-sep"></span>
       <button class="tb-btn" onclick="exportPNG()">📤 画像で書き出し</button>
+    </div>
+
+    <!-- 文字ツールバー（テキスト選択中のみ表示・Excel風） -->
+    <div class="toolbar" id="text-toolbar" style="display:none;">
+      <span style="font-size:12px;font-weight:800;color:#374151;">文字</span>
+      <select class="tb-sel" id="tt-font" title="フォント" onchange="ttSet('fontFamily', this.value)">
+        <option value="sans-serif">ゴシック（標準）</option>
+        <option value="'MS PGothic','Yu Gothic',sans-serif">MS Pゴシック</option>
+        <option value="'MS Gothic',monospace">MS ゴシック</option>
+        <option value="'Yu Gothic','游ゴシック',sans-serif">游ゴシック</option>
+        <option value="'Meiryo','メイリオ',sans-serif">メイリオ</option>
+        <option value="'MS PMincho','Yu Mincho',serif">明朝</option>
+        <option value="serif">セリフ</option>
+      </select>
+      <select class="tb-sel" id="tt-size" title="サイズ" onchange="ttSet('fontSize', +this.value)">
+        <option>8</option><option>9</option><option>10</option><option>11</option><option>12</option>
+        <option>14</option><option>16</option><option>18</option><option>20</option><option>24</option>
+        <option>28</option><option>32</option><option>40</option><option>48</option>
+      </select>
+      <button class="tb-btn" id="tt-dec" title="小さく" onclick="ttBump(-1)">A−</button>
+      <button class="tb-btn" id="tt-inc" title="大きく" onclick="ttBump(1)">A＋</button>
+      <span class="tb-sep"></span>
+      <button class="tb-btn" id="tt-bold" title="太字" onclick="ttToggle('bold')" style="font-weight:900;">B</button>
+      <button class="tb-btn" id="tt-italic" title="斜体" onclick="ttToggle('italic')" style="font-style:italic;">I</button>
+      <button class="tb-btn" id="tt-underline" title="下線" onclick="ttToggle('underline')" style="text-decoration:underline;">U</button>
+      <span class="tb-btn" style="gap:5px;cursor:default;" title="文字色">色<button type="button" class="color-swatch" id="tt-color" data-value="#111827" onclick="openColorPalette(this, function(col){ ttColor(col); })" style="width:22px;height:20px;border:1px solid #d1d5db;border-radius:4px;padding:0;cursor:pointer;background:#111827;"></button></span>
+      <span class="tb-sep"></span>
+      <button class="tb-btn" id="tt-al" title="左揃え" onclick="ttSet('textAlign','left')">⬱</button>
+      <button class="tb-btn" id="tt-ac" title="中央揃え" onclick="ttSet('textAlign','center')">≡</button>
+      <button class="tb-btn" id="tt-ar" title="右揃え" onclick="ttSet('textAlign','right')">⬲</button>
     </div>
 
     <div class="layout">
@@ -312,8 +354,18 @@
 let canvas, currentId = null, editingFolderId = null;
 
 /* 縮尺・グリッド */
-const MODULE_MM = 910, PX_PER_MODULE = 46;
-const SNAP_PX = PX_PER_MODULE / 2, PX_PER_MM = PX_PER_MODULE / MODULE_MM;
+let MODULE_MM = 910;          // 1マスの実寸(mm)
+const PX_PER_MODULE = 46;     // 1マスの表示px（固定）
+let snapDiv = 2;              // 吸着の分割（1=1マス, 2=半マス, 4=1/4マス）
+let SNAP_PX = PX_PER_MODULE / snapDiv;
+let PX_PER_MM = PX_PER_MODULE / MODULE_MM;
+function applyGridSettings() {
+  SNAP_PX = PX_PER_MODULE / snapDiv;
+  PX_PER_MM = PX_PER_MODULE / MODULE_MM;
+  if (canvas) drawGrid();
+}
+function setGridModule(mm) { MODULE_MM = +mm || 910; applyGridSettings(); }
+function setSnapDiv(n) { snapDiv = +n || 2; applyGridSettings(); }
 const BASE_W = 900, BASE_H = 660;
 let gridOn = true, zoom = 1, gridColor = '#e5e7eb';
 let roomLabelsOn = true;
@@ -610,10 +662,17 @@ function drawGrid() {
   _gridBusy = true;
   canvas.getObjects().filter(o => o.isGrid).forEach(o => canvas.remove(o));
   if (gridOn) {
-    const opt = { stroke:gridColor, selectable:false, evented:false, isGrid:true, strokeWidth:1, hoverCursor:'default' };
     const W = canvas.width / zoom, H = canvas.height / zoom;   // 表示中のシーン範囲いっぱいに描く
-    for (let x = 0; x <= W; x += PX_PER_MODULE) canvas.add(new fabric.Line([x,0,x,H], opt));
-    for (let y = 0; y <= H; y += PX_PER_MODULE) canvas.add(new fabric.Line([0,y,W,y], opt));
+    const main = { stroke:gridColor, selectable:false, evented:false, isGrid:true, strokeWidth:1, hoverCursor:'default' };
+    // 吸着位置に薄い補助線を引く（部屋の端が必ず線の上に乗るようにしてズレを防ぐ）
+    const sub = { stroke:gridColor, selectable:false, evented:false, isGrid:true, strokeWidth:1, opacity:0.4, strokeDashArray:[2,3], hoverCursor:'default' };
+    const step = SNAP_PX;
+    if (step < PX_PER_MODULE - 0.5) {
+      for (let x = 0; x <= W; x += step) if (Math.abs(x % PX_PER_MODULE) > 0.5) canvas.add(new fabric.Line([x,0,x,H], sub));
+      for (let y = 0; y <= H; y += step) if (Math.abs(y % PX_PER_MODULE) > 0.5) canvas.add(new fabric.Line([0,y,W,y], sub));
+    }
+    for (let x = 0; x <= W; x += PX_PER_MODULE) canvas.add(new fabric.Line([x,0,x,H], main));
+    for (let y = 0; y <= H; y += PX_PER_MODULE) canvas.add(new fabric.Line([0,y,W,y], main));
   }
   canvas.getObjects().filter(o => o.isGrid).forEach(o => canvas.sendToBack(o));
   canvas.renderAll();
@@ -842,6 +901,10 @@ function initCanvas() {
   canvas.on('object:added',    onCanvasChange);
   canvas.on('object:removed',  onCanvasChange);
   canvas.on('object:modified', onCanvasChange);
+  // 文字ツールバーの表示／同期
+  canvas.on('selection:created', syncTextToolbar);
+  canvas.on('selection:updated', syncTextToolbar);
+  canvas.on('selection:cleared', syncTextToolbar);
   canvas.on('mouse:down', opt => {
     // 描画モード中でも、設備など既存オブジェクトをクリックしたら選択モードに切替
     if (drawMode && opt.target && !opt.target.isGrid) {
@@ -1022,7 +1085,54 @@ function applyColor(c) {
   });
   canvas.renderAll();
 }
-function delSel() { canvas.getActiveObjects().forEach(o => canvas.remove(o)); canvas.discardActiveObject(); canvas.renderAll(); }
+/* ===== 文字ツールバー（Excel風） ===== */
+function ttActiveTexts() {
+  return canvas.getActiveObjects().filter(o => o.type === 'i-text' || o.type === 'text' || o.type === 'textbox');
+}
+function isTextObj(o) { return o && (o.type === 'i-text' || o.type === 'text' || o.type === 'textbox'); }
+function syncTextToolbar() {
+  const bar = document.getElementById('text-toolbar');
+  const o = canvas.getActiveObject();
+  const texts = ttActiveTexts();
+  if (!texts.length) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  const t = isTextObj(o) ? o : texts[0];
+  const fontSel = document.getElementById('tt-font');
+  if (fontSel) fontSel.value = t.fontFamily || 'sans-serif';
+  const sizeSel = document.getElementById('tt-size');
+  if (sizeSel) sizeSel.value = String(Math.round(t.fontSize || 14));
+  document.getElementById('tt-bold').classList.toggle('primary', (t.fontWeight === 'bold' || t.fontWeight >= 600));
+  document.getElementById('tt-italic').classList.toggle('primary', t.fontStyle === 'italic');
+  document.getElementById('tt-underline').classList.toggle('primary', !!t.underline);
+  const sw = document.getElementById('tt-color');
+  if (sw && typeof t.fill === 'string') { sw.style.background = t.fill; sw.dataset.value = t.fill; }
+}
+function ttSet(prop, val) {
+  const texts = ttActiveTexts(); if (!texts.length) return;
+  texts.forEach(t => t.set(prop, val));
+  canvas.renderAll(); pushHistory(); syncTextToolbar();
+}
+function ttToggle(kind) {
+  const texts = ttActiveTexts(); if (!texts.length) return;
+  texts.forEach(t => {
+    if (kind === 'bold')      t.set('fontWeight', (t.fontWeight === 'bold' || t.fontWeight >= 600) ? 'normal' : 'bold');
+    if (kind === 'italic')    t.set('fontStyle', t.fontStyle === 'italic' ? 'normal' : 'italic');
+    if (kind === 'underline') t.set('underline', !t.underline);
+  });
+  canvas.renderAll(); pushHistory(); syncTextToolbar();
+}
+function ttBump(d) {
+  const texts = ttActiveTexts(); if (!texts.length) return;
+  texts.forEach(t => t.set('fontSize', Math.max(6, Math.min(200, Math.round((t.fontSize || 14) + d * 2)))));
+  canvas.renderAll(); pushHistory(); syncTextToolbar();
+}
+function ttColor(c) {
+  const texts = ttActiveTexts(); if (!texts.length) return;
+  texts.forEach(t => t.set('fill', c));
+  const sw = document.getElementById('tt-color'); if (sw) { sw.style.background = c; sw.dataset.value = c; }
+  canvas.renderAll(); pushHistory();
+}
+function delSel() { canvas.getActiveObjects().forEach(o => canvas.remove(o)); canvas.discardActiveObject(); canvas.renderAll(); document.getElementById('text-toolbar').style.display = 'none'; }
 function rotateSel() { const o = canvas.getActiveObject(); if (o) { o.rotate(((o.angle||0)+90)%360); canvas.renderAll(); } }
 function dupSel() {
   const o = canvas.getActiveObject(); if (!o) return;
