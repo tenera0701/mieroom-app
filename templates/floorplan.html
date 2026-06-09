@@ -206,6 +206,7 @@
         <input type="file" accept="image/*" onchange="addLogo(event)" style="display:none;">
       </label>
       <button class="tb-btn" onclick="addCompanyLogo()" title="会社情報に登録したロゴを挿入">🏢 会社ロゴ</button>
+      <button class="tb-btn" onclick="removeBg()" title="選択したロゴ・画像の背景（白などの単色）を透過する">🪄 背景透過</button>
       <span class="tb-sep"></span>
       <span class="tb-btn" style="gap:5px;cursor:default;" title="背景色">背景<button type="button" class="color-swatch" id="bg-color" data-value="#ffffff" onclick="openColorPalette(this, function(col){ setBgColor(col); })" style="width:22px;height:20px;border:1px solid #d1d5db;border-radius:4px;padding:0;cursor:pointer;background:#ffffff;"></button></span>
       <span class="tb-btn" style="gap:5px;cursor:default;" title="グリッド色">格子<button type="button" class="color-swatch" id="grid-color" data-value="#e5e7eb" onclick="openColorPalette(this, function(col){ setGridColor(col); })" style="width:22px;height:20px;border:1px solid #d1d5db;border-radius:4px;padding:0;cursor:pointer;background:#e5e7eb;"></button></span>
@@ -1064,6 +1065,36 @@ function addCompanyLogo() {
   im.onerror = () => showAlert('会社情報にロゴ画像が登録されていません。（設定→会社情報で登録できます）', 'error');
   im.src = '/api/company-logo?t=' + Date.now();
 }
+/* 選択した画像（ロゴ）の背景（単色）を透過する */
+function removeBg() {
+  const o = canvas.getActiveObject();
+  if (!o || o.type !== 'image') { showAlert('背景を透過したいロゴ・画像を選択してください。', 'error'); return; }
+  const el = o._element || (o.getElement && o.getElement());
+  const w = (el && (el.naturalWidth || el.width)) || 0, h = (el && (el.naturalHeight || el.height)) || 0;
+  if (!w || !h) { showAlert('画像を読み込めませんでした。', 'error'); return; }
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d'); ctx.drawImage(el, 0, 0, w, h);
+  let img;
+  try { img = ctx.getImageData(0, 0, w, h); } catch (e) { showAlert('この画像は透過処理できません。', 'error'); return; }
+  const d = img.data;
+  // 四隅の平均色を「背景色」とみなす
+  const corners = [[0,0],[w-1,0],[0,h-1],[w-1,h-1]];
+  let r0 = 0, g0 = 0, b0 = 0;
+  corners.forEach(([cx, cy]) => { const i = (cy * w + cx) * 4; r0 += d[i]; g0 += d[i+1]; b0 += d[i+2]; });
+  r0 /= 4; g0 /= 4; b0 /= 4;
+  const tol = 48, tol2 = tol * tol;
+  for (let i = 0; i < d.length; i += 4) {
+    const dr = d[i] - r0, dg = d[i+1] - g0, db = d[i+2] - b0;
+    if (dr*dr + dg*dg + db*db < tol2) d[i+3] = 0;   // 背景色に近い画素を透明化
+  }
+  ctx.putImageData(img, 0, 0);
+  fabric.Image.fromURL(c.toDataURL('image/png'), nimg => {
+    nimg.set({ left:o.left, top:o.top, scaleX:o.scaleX, scaleY:o.scaleY, angle:o.angle,
+      originX:o.originX, originY:o.originY, flipX:o.flipX, flipY:o.flipY });
+    canvas.remove(o); canvas.add(nimg); canvas.setActiveObject(nimg); canvas.renderAll(); pushHistory();
+    showAlert('背景を透過しました。');
+  });
+}
 function setBgColor(c) { canvas.backgroundColor = c; canvas.renderAll(); }
 function setGridColor(c) { gridColor = c; drawGrid(); }
 
@@ -1195,9 +1226,29 @@ function rotateBy(deg) {
   o.rotate((((o.angle || 0) + deg) % 360 + 360) % 360);
   o.setCoords(); canvas.renderAll(); pushHistory();
 }
+const _CLONE_PROPS = ['isBg','partLabel','roomType','roomId','isRoomLabel','selectable','evented','strokeUniform',
+  'fontFamily','fontSize','fontWeight','fontStyle','underline','textAlign'];
 function dupSel() {
   const o = canvas.getActiveObject(); if (!o) return;
-  o.clone(cl => { cl.set({ left:(o.left||0)+20, top:(o.top||0)+20 }); canvas.add(cl); canvas.setActiveObject(cl); canvas.renderAll(); });
+  o.clone(cl => {
+    if (cl.type === 'activeSelection') {
+      // 複数選択：各オブジェクトを個別に追加（グループのままにしない＝編集できるように）
+      canvas.discardActiveObject();
+      cl.canvas = canvas;
+      cl.forEachObject(obj => {
+        obj.set({ left:(obj.left||0)+20, top:(obj.top||0)+20, evented:true, selectable:true });
+        if (obj.roomType) obj.roomId = newRoomId();
+        obj.setCoords(); canvas.add(obj);
+      });
+      cl.destroy();
+    } else {
+      cl.set({ left:(o.left||0)+20, top:(o.top||0)+20, evented:true, selectable:true });
+      if (cl.roomType) cl.roomId = newRoomId();   // 複製した部屋は独立IDに
+      cl.setCoords();
+      canvas.add(cl); canvas.setActiveObject(cl);
+    }
+    canvas.renderAll(); pushHistory();
+  }, _CLONE_PROPS);
 }
 function bringFront() { const o = canvas.getActiveObject(); if (o) { canvas.bringToFront(o); canvas.renderAll(); } }
 function sendBack() { const o = canvas.getActiveObject(); if (o) { canvas.sendToBack(o); canvas.getObjects().filter(g=>g.isGrid).forEach(g=>canvas.sendToBack(g)); canvas.renderAll(); } }
@@ -1222,15 +1273,18 @@ function exportPNG() {
   grid.forEach(o => o.visible = false);
   canvas.renderAll();
 
-  // 入力した間取りを中心に（外接矩形＋余白でトリミング）
+  // 入力した間取りを中心に「正方形」でトリミング（短辺を長辺に合わせる）
   const b = contentBounds();
   const pad = 48;
-  const opt = { format:'png', multiplier:2 };
+  const mult = 2;
+  const opt = { format:'png', multiplier:mult };
   if (b) {
-    opt.left   = Math.max(0, b.minX - pad);
-    opt.top    = Math.max(0, b.minY - pad);
-    opt.width  = (b.maxX - b.minX) + pad * 2;
-    opt.height = (b.maxY - b.minY) + pad * 2;
+    const side = Math.max(b.maxX - b.minX, b.maxY - b.minY) + pad * 2;
+    const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
+    opt.left = cx - side / 2;
+    opt.top  = cy - side / 2;
+    opt.width = side;
+    opt.height = side;
   }
   const url = canvas.toDataURL(opt);
 
@@ -1238,9 +1292,22 @@ function exportPNG() {
   if (z !== 1) { canvas.setZoom(z); }
   canvas.renderAll();
 
-  const a = document.createElement('a');
   const nm = (document.getElementById('fp-name').value || '間取り').replace(/[\\/:*?"<>|]/g, '_');
-  a.href = url; a.download = nm + '.png'; a.click();
+  // はみ出した余白を白で埋めて正方形PNGに合成して保存
+  const bgCol = canvas.backgroundColor || '#ffffff';
+  const im = new Image();
+  im.onload = () => {
+    const s = Math.max(im.width, im.height);
+    const out = document.createElement('canvas'); out.width = s; out.height = s;
+    const octx = out.getContext('2d');
+    octx.fillStyle = (typeof bgCol === 'string') ? bgCol : '#ffffff';
+    octx.fillRect(0, 0, s, s);
+    octx.drawImage(im, (s - im.width) / 2, (s - im.height) / 2);
+    const a = document.createElement('a');
+    a.href = out.toDataURL('image/png'); a.download = nm + '.png'; a.click();
+  };
+  im.onerror = () => { const a = document.createElement('a'); a.href = url; a.download = nm + '.png'; a.click(); };
+  im.src = url;
 }
 
 function serializeWithThumb() {
