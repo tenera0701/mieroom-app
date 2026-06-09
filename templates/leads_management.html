@@ -757,8 +757,8 @@ function renderTrendChart(trend) {
           yAxisID: 'y',
         },
         {
-          label: '契約数',
-          data: trend.map(t => t.contracts),
+          label: '申込数',
+          data: trend.map(t => (t.applications != null ? t.applications : t.contracts)),
           backgroundColor: 'rgba(59,130,246,0.2)',
           borderColor: '#3b82f6',
           borderWidth: 2,

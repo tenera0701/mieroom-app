@@ -175,12 +175,12 @@ function render(data) {
       <td>${escc(r.management_company) || '―'}</td>
       <td style="white-space:nowrap;">${r.application_date || '―'}</td>
       <td><button class="btn-doc" onclick="location.href='/contract-customers/'+${r.id}+'/edit'">契約書類を編集</button></td>
-      <td><button onclick="markPast(${r.id})" style="padding:4px 10px;font-size:11px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;color:#374151;font-weight:600;">契約終了</button></td>
+      <td><button onclick="markPast(${r.id})" style="padding:4px 10px;font-size:11px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;color:#374151;font-weight:600;">入居完了</button></td>
     </tr>`).join('');
 }
 
 async function markPast(id) {
-  if (!confirm('この顧客を「契約終了」として顧客管理に移動しますか？')) return;
+  if (!confirm('この顧客を「入居完了」として顧客管理に移動しますか？')) return;
   try {
     const res = await fetch(`/api/contract-customers/${id}/past`, {
       method: 'POST', headers: {'Content-Type':'application/json'},

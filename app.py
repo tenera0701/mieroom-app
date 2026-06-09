@@ -7317,6 +7317,7 @@ def api_leads_monthly_stats():
         trend.append({
             'label': f'{ty}/{tm:02d}',
             'inquiries':      sum(s.inquiries for s in ms),
+            'applications':   sum(s.applications for s in ms),
             'contracts':      sum(s.contracts for s in ms),
             'estimated_sales': sum(s.estimated_sales for s in ms),
         })
@@ -7354,6 +7355,7 @@ def api_leads_trend():
         trend.append({
             'label':           f'{y}/{m:02d}',
             'inquiries':       sum(s.inquiries for s in ms),
+            'applications':    sum(s.applications for s in ms),
             'contracts':       sum(s.contracts for s in ms),
             'estimated_sales': sum(s.estimated_sales for s in ms),
         })

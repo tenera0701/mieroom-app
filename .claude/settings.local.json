@@ -25,7 +25,8 @@
       "Bash(python -c \"import ast; ast.parse\\(open\\('app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('app.py: OK'\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\('app.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\('G:/マイドライブ/Claude開発アプリ/realestate-ai/app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
-      "WebFetch(domain:soco-st.com)"
+      "WebFetch(domain:soco-st.com)",
+      "Bash(echo \"=== A: 編集中フォルダ \\(WEBアプリ\\) ===\" && ls -la \"G:/マイドライブ/Claude開発アプリ/WEBアプリ/ミエルーム/templates/mail_settings.html\" 2>&1 *)"
     ]
   }
 }
