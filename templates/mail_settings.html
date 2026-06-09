@@ -161,7 +161,10 @@
       <div style="padding:16px 18px;overflow-y:auto;">
         <input type="hidden" id="te-id">
         <div class="field"><label>媒体（フォルダ）</label>
-          <select id="te-category" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;background:#fff;color:#111827;"></select></div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <select id="te-category" style="flex:1;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;background:#fff;color:#111827;"></select>
+            <button type="button" class="btn" onclick="addNewFolder()" title="新しいフォルダを作成">＋新規フォルダ</button>
+          </div></div>
         <div class="field" style="margin-top:10px;"><label>テンプレ名</label>
           <input id="te-title" type="text" placeholder="例：初回返信" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:8px 10px;font-size:13px;box-sizing:border-box;"></div>
         <div class="field" style="margin-top:10px;"><label>件名</label>
@@ -462,6 +465,17 @@ function fillCategorySelect(cur){
   if(c && choices.indexOf(c)<0) choices.unshift(c);
   sel.innerHTML='<option value="">（未分類）</option>'+choices.map(v=>`<option value="${escAttr(v)}">${escAttr(v)}</option>`).join('');
   sel.value=c;
+}
+// 新しいフォルダ（媒体）を作成して選択
+function addNewFolder(){
+  const name=(prompt('新しいフォルダ名を入力してください（例：SUUMO / 一般 / 申込後）')||'').trim();
+  if(!name) return;
+  const sel=document.getElementById('te-category'); if(!sel) return;
+  // 既に同名があればそれを選択、無ければ先頭に追加して選択
+  let exists=false;
+  Array.from(sel.options).forEach(o=>{ if(o.value===name) exists=true; });
+  if(!exists){ const o=document.createElement('option'); o.value=name; o.textContent=name; sel.insertBefore(o, sel.firstChild.nextSibling); }
+  sel.value=name;
 }
 // テンプレをフォルダ（媒体）ごとにまとめる。空は「未分類」
 function groupTemplatesByFolder(){

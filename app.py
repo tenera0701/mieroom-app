@@ -4637,7 +4637,26 @@ TEMPLATE_VARS = [
     ('#会社定休日#', '定休日'),
     ('#インボイス番号#', 'インボイス登録番号'),
     ('#公式LINE#', '公式LINEのURL'),
+    ('#スタッフ名#', 'ログイン中スタッフの氏名'),
 ]
+
+
+def _current_staff_name():
+    """ログイン中ユーザーの担当スタッフ氏名を返す（無ければユーザー名）。"""
+    try:
+        uid = session.get('app_user_id')
+        if not uid:
+            return ''
+        u = AppUser.query.get(uid)
+        if not u:
+            return ''
+        sid = resolve_cur_staff_id(u)
+        st = Staff.query.get(sid) if sid else None
+        if st and st.name:
+            return st.name
+        return u.username or ''
+    except Exception:
+        return ''
 
 
 def _apply_template_vars(text, rec, store_id):
@@ -4665,6 +4684,8 @@ def _apply_template_vars(text, rec, store_id):
         '#インボイス番号#': (cp.invoice_number if cp else ''),
         '#公式LINE#': (cp.line_url if cp else ''),
         '#LINE#': (cp.line_url if cp else ''),
+        '#スタッフ名#': _current_staff_name(),
+        '##スタッフ名': _current_staff_name(),   # 表記ゆれ対応
     }
     for k, v in repl.items():
         text = text.replace(k, v or '')
