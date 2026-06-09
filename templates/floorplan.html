@@ -164,7 +164,7 @@
       <span style="font-size:12px;font-weight:800;color:#374151;">部屋を描く</span>
       <button class="tb-btn" id="rect-mode-btn" onclick="setDrawMode('rect')" title="ドラッグで四角い部屋">⬛ 囲み入力</button>
       <button class="tb-btn" id="poly-mode-btn" onclick="setDrawMode('poly')" title="角をクリックして多角形（△やL字）。ダブルクリックで確定">△ 頂点入力</button>
-      <button class="tb-btn" id="erase-mode-btn" onclick="setDrawMode('erase')" title="壁をクリックすると、その箇所をグリッド1マス分だけ消します（開口部・つなぎ目づくり）">🧽 壁消し</button>
+      <button class="tb-btn" id="erase-mode-btn" onclick="setDrawMode('erase')" title="壁の上をドラッグして範囲を選び、離すとその区間の枠（線）だけを消します（塗りは残る）">🧽 壁消し</button>
       <button class="tb-btn" id="vtx-btn" onclick="toggleVertexEdit()" title="部屋（囲み入力・頂点入力どちらでも）の角をドラッグして角度・形を変更">📐 角度編集</button>
       <select class="tb-sel" id="room-type" title="部屋の種類"></select>
       <button class="tb-btn" onclick="addRoomType()" title="部屋タイプを追加">＋種類</button>
@@ -215,7 +215,6 @@
       <button class="tb-btn" onclick="removeBg()" title="選択したロゴ・画像の背景（白などの単色）を透過する">🪄 背景透過</button>
       <span class="tb-sep"></span>
       <span class="tb-btn" style="gap:5px;cursor:default;" title="背景色">背景<button type="button" class="color-swatch" id="bg-color" data-value="#ffffff" onclick="openColorPalette(this, function(col){ setBgColor(col); })" style="width:22px;height:20px;border:1px solid #d1d5db;border-radius:4px;padding:0;cursor:pointer;background:#ffffff;"></button></span>
-      <span class="tb-btn" style="gap:5px;cursor:default;" title="グリッド色">格子<button type="button" class="color-swatch" id="grid-color" data-value="#e5e7eb" onclick="openColorPalette(this, function(col){ setGridColor(col); })" style="width:22px;height:20px;border:1px solid #d1d5db;border-radius:4px;padding:0;cursor:pointer;background:#e5e7eb;"></button></span>
       <span class="tb-sep"></span>
       <button type="button" class="tb-color color-swatch" id="color-picker" data-value="#333333" title="線・文字の色" onclick="openColorPalette(this, function(col){ applyColor(col); })" style="background:#333333;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;padding:0;"></button>
       <button class="tb-btn" onclick="rotateBy(-90)" title="左に90°回転">⟲ 90°</button>
@@ -937,25 +936,38 @@ function finalizeRoom(left, top, w, h) {
   const jo = ((wmm * hmm) / 1e6) / 1.62;
   canvas.add(rect); addRoomLabel(left + w/2, top + h/2, jo, rid); canvas.renderAll();
 }
-/* 壁消し：クリックした位置の壁を、グリッド1マス分の線（背景色マスク）で消す */
-function eraseWallAt(p) {
-  const M = PX_PER_MODULE, th = 14;          // th=マスクの太さ（壁を覆う）
-  const nx = Math.round(p.x / M) * M;        // 最寄りの縦グリッド線
-  const ny = Math.round(p.y / M) * M;        // 最寄りの横グリッド線
-  const dx = Math.abs(p.x - nx), dy = Math.abs(p.y - ny);
-  let mask;
-  if (dx <= dy) {
-    // 縦の壁（x=nx）を、クリックしたマス1つ分（縦）だけ消す
-    const cellTop = Math.floor(p.y / M) * M;
-    mask = new fabric.Rect({ left: nx - th / 2, top: cellTop, width: th, height: M,
-      fill: canvas.backgroundColor || '#ffffff', stroke: 'rgba(0,0,0,0)', strokeWidth: 0, isMask: true, objectCaching: false });
-  } else {
-    // 横の壁（y=ny）を、クリックしたマス1つ分（横）だけ消す
-    const cellLeft = Math.floor(p.x / M) * M;
-    mask = new fabric.Rect({ left: cellLeft, top: ny - th / 2, width: M, height: th,
-      fill: canvas.backgroundColor || '#ffffff', stroke: 'rgba(0,0,0,0)', strokeWidth: 0, isMask: true, objectCaching: false });
+/* 壁消し：ドラッグした始点〜終点から、消す「枠」の細い帯（グリッド吸着）を求める */
+function eraseRectFrom(x0, y0, x1, y1) {
+  const TH = 14;   // 帯の太さ（壁の線を覆う）
+  const dx = Math.abs(x1 - x0), dy = Math.abs(y1 - y0);
+  if (dx >= dy) {
+    // 横方向のドラッグ → 横の壁（線）を消す
+    const wallY = snap((y0 + y1) / 2);
+    const xA = snap(Math.min(x0, x1)), xB = snap(Math.max(x0, x1));
+    return { left: xA, top: wallY - TH / 2, width: Math.max(xB - xA, 2), height: TH, horizontal: true, cx: (xA + xB) / 2, cy: wallY };
   }
-  canvas.add(mask); mask.bringToFront(); canvas.renderAll(); pushHistory();
+  // 縦方向のドラッグ → 縦の壁（線）を消す
+  const wallX = snap((x0 + x1) / 2);
+  const yA = snap(Math.min(y0, y1)), yB = snap(Math.max(y0, y1));
+  return { left: wallX - TH / 2, top: yA, width: TH, height: Math.max(yB - yA, 2), horizontal: false, cx: wallX, cy: (yA + yB) / 2 };
+}
+/* 帯の付近にある部屋の塗り（色/柄/テクスチャ）を返す。無ければ背景色 */
+function roomFillForErase(r) {
+  const probes = r.horizontal ? [[r.cx, r.cy - 12], [r.cx, r.cy + 12]] : [[r.cx - 12, r.cy], [r.cx + 12, r.cy]];
+  const rooms = canvas.getObjects().filter(o => o.roomType && !o.isMask);
+  for (const [px, py] of probes) {
+    for (let i = rooms.length - 1; i >= 0; i--) {
+      rooms[i].setCoords();
+      if (rooms[i].containsPoint(new fabric.Point(px, py))) return rooms[i].fill;
+    }
+  }
+  return canvas.backgroundColor || '#ffffff';
+}
+/* ドラッグ区間の「枠（壁の線）」だけを、部屋の塗りで覆って消す（塗りは残る） */
+function eraseWallRange(r) {
+  const mask = new fabric.Rect({ left: r.left, top: r.top, width: r.width, height: r.height,
+    fill: roomFillForErase(r), stroke: 'rgba(0,0,0,0)', strokeWidth: 0, isMask: true, objectCaching: false });
+  canvas.add(mask); mask.bringToFront(); canvas.setActiveObject(mask); canvas.renderAll(); pushHistory();
 }
 
 /* 頂点入力（多角形：△・L字など） */
@@ -1094,7 +1106,11 @@ function initCanvas() {
       return;
     }
     if (drawMode === 'erase') {
-      eraseWallAt(canvas.getPointer(opt.e));   // クリックでグリッド1マス分の壁を消す
+      const p = canvas.getPointer(opt.e);
+      drawing = true; startX = p.x; startY = p.y;
+      tempRect = new fabric.Rect({ left:startX, top:startY, width:2, height:2,
+        fill:'rgba(239,68,68,0.28)', stroke:'#ef4444', strokeWidth:1, selectable:false, evented:false });
+      canvas.add(tempRect);
       return;
     }
     if (drawMode === 'rect') {
@@ -1119,13 +1135,27 @@ function initCanvas() {
       tempRect.set({ left:Math.min(startX,x), top:Math.min(startY,y), width:Math.abs(x-startX), height:Math.abs(y-startY) });
       showSizeTip(Math.abs(x-startX), Math.abs(y-startY), opt.e);
       canvas.renderAll();
+    } else if (drawMode === 'erase' && drawing) {
+      const p = canvas.getPointer(opt.e);
+      const r = eraseRectFrom(startX, startY, p.x, p.y);   // 消す枠の範囲をプレビュー
+      tempRect.set({ left:r.left, top:r.top, width:r.width, height:r.height });
+      canvas.renderAll();
     } else if (drawMode === 'poly' && polyPoints.length) {
       const p = canvas.getPointer(opt.e); const x = snap(p.x), y = snap(p.y);
       updatePolyLine({ x, y });
       showAreaTip(polyJo(polyPoints.concat([{ x, y }])), opt.e);
     }
   });
-  canvas.on('mouse:up', () => {
+  canvas.on('mouse:up', opt => {
+    if (drawMode === 'erase' && drawing) {
+      drawing = false;
+      const p = canvas.getPointer(opt.e);
+      const r = eraseRectFrom(startX, startY, p.x, p.y);
+      canvas.remove(tempRect); tempRect = null;
+      if ((r.horizontal ? r.width : r.height) < 4) { canvas.renderAll(); return; }
+      eraseWallRange(r);   // ドラッグ区間の「枠」だけを消す
+      return;
+    }
     if (drawMode !== 'rect' || !drawing) return;
     drawing = false; hideSizeTip();
     const w = tempRect.width, h = tempRect.height, left = tempRect.left, top = tempRect.top;
