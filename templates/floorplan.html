@@ -165,7 +165,7 @@
       <button class="tb-btn" id="rect-mode-btn" onclick="setDrawMode('rect')" title="ドラッグで四角い部屋">⬛ 囲み入力</button>
       <button class="tb-btn" id="poly-mode-btn" onclick="setDrawMode('poly')" title="角をクリックして多角形（△やL字）。ダブルクリックで確定">△ 頂点入力</button>
       <button class="tb-btn" id="erase-mode-btn" onclick="setDrawMode('erase')" title="壁をクリックすると、その箇所をグリッド1マス分だけ消します（開口部・つなぎ目づくり）">🧽 壁消し</button>
-      <button class="tb-btn" id="vtx-btn" onclick="toggleVertexEdit()" title="頂点入力で作った部屋の角（頂点）をドラッグして角度を変更">📐 角度編集</button>
+      <button class="tb-btn" id="vtx-btn" onclick="toggleVertexEdit()" title="部屋（囲み入力・頂点入力どちらでも）の角をドラッグして角度・形を変更">📐 角度編集</button>
       <select class="tb-sel" id="room-type" title="部屋の種類"></select>
       <button class="tb-btn" onclick="addRoomType()" title="部屋タイプを追加">＋種類</button>
       <button class="tb-btn" onclick="openRoomSettings()" title="部屋ごとの床の色・柄・テクスチャ・壁・部屋名表示を設定">⚙ 部屋設定</button>
@@ -994,12 +994,28 @@ function polyAbsPoints(poly) {
   const m = poly.calcTransformMatrix();
   return poly.points.map(p => fabric.util.transformPoint({ x: p.x - poly.pathOffset.x, y: p.y - poly.pathOffset.y }, m));
 }
+/* 矩形（囲み入力の部屋）の4隅を絶対座標で返す（回転・拡大も考慮） */
+function rectCornerPoints(rect) {
+  const m = rect.calcTransformMatrix();
+  const w = (rect.width || 0) / 2, h = (rect.height || 0) / 2;
+  return [{ x:-w, y:-h }, { x:w, y:-h }, { x:w, y:h }, { x:-w, y:h }]
+    .map(p => fabric.util.transformPoint(p, m));
+}
 function centroidOf(pts) { let x = 0, y = 0; pts.forEach(p => { x += p.x; y += p.y; }); return { x: x / pts.length, y: y / pts.length }; }
 function toggleVertexEdit() {
   if (_vtxPoly) { finishVertexEdit(); return; }
-  const o = canvas.getActiveObject();
-  if (!o || o.type !== 'polygon') { showAlert('「頂点入力」で作った部屋（多角形）を選んでから押してください。', 'error'); return; }
+  let o = canvas.getActiveObject();
+  const ok = o && !o.isMask && (o.type === 'polygon' || (o.type === 'rect' && o.roomType));
+  if (!ok) { showAlert('部屋（囲み入力・頂点入力どちらでも可）を選んでから押してください。', 'error'); return; }
   if (drawMode) setDrawMode(drawMode);   // 描画モードを解除
+  // 囲み入力（矩形）の部屋は、多角形に変換して角をドラッグできるようにする
+  if (o.type === 'rect') {
+    const pts = rectCornerPoints(o);
+    const poly = new fabric.Polygon(pts.map(p => ({ x: p.x, y: p.y })), {
+      fill: o.fill, stroke: o.stroke, strokeWidth: o.strokeWidth, strokeDashArray: o.strokeDashArray,
+      strokeUniform: true, roomType: o.roomType, roomId: o.roomId });
+    canvas.remove(o); canvas.add(poly); o = poly;
+  }
   _vtxPoly = o;
   _vtxPts = polyAbsPoints(o).map(p => ({ x: p.x, y: p.y }));
   o.selectable = false; o.evented = false; canvas.discardActiveObject();
