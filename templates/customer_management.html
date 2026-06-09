@@ -791,25 +791,38 @@ function renderUncollectedTable(list) {
     const bCell = buildSettleCell(r, 'brokerage', r.brokerage_settled, r.brokerage_approved, (r.brokerage_fee || 0) !== 0);
     const oCell = buildSettleCell(r, 'option',    r.option_settled,    r.option_approved,    (r.option_amount || 0) !== 0);
     const aCell = buildSettleCell(r, 'ad',        r.ad_settled,        r.ad_approved,        adYen !== 0);
+    const canEdit = IS_MANAGER || r.staff_id === CUR_STAFF_ID;
     tr.innerHTML = `
-      <td style="white-space:nowrap;">${r.application_date || '―'}</td>
-      <td>${r.staff_name || '―'}</td>
-      <td>${r.property_name || '―'}</td>
-      <td>${r.room_number || '―'}</td>
-      <td>${r.customer_name || '―'}</td>
-      <td style="text-align:right;">${r.rent ? r.rent.toLocaleString()+'円' : '―'}</td>
-      <td>${r.management_company || '―'}</td>
-      <td style="white-space:nowrap;">${mdDate(r.contract_start_date)}</td>
-      <td style="text-align:right;">${r.brokerage_fee ? r.brokerage_fee.toLocaleString()+'円' : '―'}</td>
-      <td style="text-align:right;">${r.option_amount ? r.option_amount.toLocaleString()+'円' : '―'}</td>
-      <td style="text-align:right;">${adDisp}</td>
-      <td style="white-space:nowrap;">${mdDate(r.ad_payment_date)}</td>
+      <td data-f="application_date"   data-t="date"   data-v="${r.application_date||''}"    style="white-space:nowrap;">${r.application_date || '―'}</td>
+      <td data-f="staff_id"           data-t="staff"  data-v="${r.staff_id||''}" data-mgr="1">${r.staff_name || '―'}</td>
+      <td data-f="property_name"      data-t="text"   data-v="${escApp(r.property_name)}"   >${r.property_name || '―'}</td>
+      <td data-f="room_number"        data-t="text"   data-v="${escApp(r.room_number)}"     >${r.room_number || '―'}</td>
+      <td data-f="customer_name"      data-t="text"   data-v="${escApp(r.customer_name)}"   >${r.customer_name || '―'}</td>
+      <td data-f="rent"               data-t="number" data-v="${r.rent||0}"                  style="text-align:right;">${r.rent ? r.rent.toLocaleString()+'円' : '―'}</td>
+      <td data-f="management_company" data-t="text"   data-v="${escApp(r.management_company)}">${r.management_company || '―'}</td>
+      <td data-f="contract_start_date" data-t="date"  data-v="${r.contract_start_date||''}"  style="white-space:nowrap;">${mdDate(r.contract_start_date)}</td>
+      <td data-f="brokerage_fee"      data-t="number" data-v="${r.brokerage_fee||0}"         style="text-align:right;">${r.brokerage_fee ? r.brokerage_fee.toLocaleString()+'円' : '―'}</td>
+      <td data-f="option_amount"      data-t="number" data-v="${r.option_amount||0}"         style="text-align:right;">${r.option_amount ? r.option_amount.toLocaleString()+'円' : '―'}</td>
+      <td data-f="ad_amount"          data-t="number" data-v="${r.ad_amount||0}"             style="text-align:right;">${adDisp}</td>
+      <td data-f="ad_payment_date"    data-t="date"   data-v="${r.ad_payment_date||''}"      style="white-space:nowrap;">${mdDate(r.ad_payment_date)}</td>
       <td style="text-align:center;white-space:nowrap;">${bCell}</td>
       <td style="text-align:center;white-space:nowrap;">${oCell}</td>
       <td style="text-align:center;white-space:nowrap;">${aCell}</td>
       <td style="white-space:nowrap;">
         <button onclick="editApp(${r.id})" style="padding:3px 8px;font-size:11px;border:1px solid #bfdbfe;border-radius:4px;background:#eff6ff;color:#1d4ed8;cursor:pointer;">詳細</button>
       </td>`;
+    if (canEdit) {
+      tr.querySelectorAll('td[data-f]').forEach(td => {
+        const field = td.dataset.f, type = td.dataset.t, val = td.dataset.v;
+        if (field === 'staff_id' && !IS_MANAGER) return;
+        td.style.cursor = 'pointer'; td.title = 'クリックで編集';
+        td.addEventListener('click', e => {
+          if (e.target.tagName === 'BUTTON') return;
+          if (type === 'staff') editCellApp(td, r.id, field, 'select', val, _APP_STAFF_PAIRS);
+          else editCellApp(td, r.id, field, type, val);
+        });
+      });
+    }
     tbody.appendChild(tr);
   });
 }
