@@ -985,21 +985,31 @@
   <!-- ===== 共通カラーパレット（全ページ共通の色選択UI：固定10色） ===== -->
   <div id="palette-pop" style="display:none;position:fixed;z-index:99999;background:#fff;border:1px solid #e5e7eb;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.18);padding:8px;"></div>
   <script>
-    // 全ページ共通の色選択は固定パレット（約10色）に統一
-    window.PALETTE_COLORS = ['#ffffff','#e5e7eb','#6b7280','#111827','#ef4444','#f59e0b','#fde047','#22c55e','#84cc16','#0D9488','#06b6d4','#3b82f6','#a855f7','#ec4899','#fecaca'];
+    // 全ページ共通の色選択は固定パレット（20色）＋微調整（カスタム色）に統一
+    window.PALETTE_COLORS = ['#ffffff','#d1d5db','#9ca3af','#6b7280','#374151','#111827',
+                             '#ef4444','#f97316','#f59e0b','#fde047','#84cc16','#22c55e',
+                             '#10b981','#0D9488','#06b6d4','#3b82f6','#6366f1','#a855f7',
+                             '#ec4899','#fecaca'];
     let _paletteCb = null, _paletteAnchor = null;
     function openColorPalette(anchor, cb){
       _paletteCb = cb;
       _paletteAnchor = anchor;
       const pop = document.getElementById('palette-pop');
       const cur = ((anchor && anchor.dataset ? anchor.dataset.value : '') || '').toLowerCase();
+      const curHex = /^#[0-9a-f]{6}$/.test(cur) ? cur : '#0d9488';
       pop.innerHTML = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;">' +
         window.PALETTE_COLORS.map(function(c){
           const sel = (c.toLowerCase() === cur);
           return '<button type="button" onmousedown="event.preventDefault()" onclick="pickPaletteColor(\'' + c + '\')" title="' + c + '" '
             + 'style="width:26px;height:26px;border-radius:6px;cursor:pointer;background:' + c
             + ';border:2px solid ' + (sel ? '#0D9488' : '#d1d5db') + ';box-shadow:' + (sel ? '0 0 0 2px #CCFBF1' : 'none') + ';"></button>';
-        }).join('') + '</div>';
+        }).join('') + '</div>'
+        + '<div style="display:flex;align-items:center;gap:7px;margin-top:8px;border-top:1px solid #eef2f2;padding-top:8px;">'
+        + '<span style="font-size:11px;color:#6b7280;font-weight:700;white-space:nowrap;">微調整</span>'
+        + '<input type="color" value="' + curHex + '" onmousedown="event.stopPropagation()" onchange="pickPaletteColor(this.value)" '
+        + 'style="width:42px;height:26px;border:1px solid #d1d5db;border-radius:6px;padding:0;cursor:pointer;">'
+        + '<span style="font-size:11px;color:#9ca3af;white-space:nowrap;">好きな色を選べます</span>'
+        + '</div>';
       pop.style.display = 'block';
       const r = anchor.getBoundingClientRect();
       const w = pop.offsetWidth || 180, h = pop.offsetHeight || 80;

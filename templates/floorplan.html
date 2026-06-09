@@ -702,7 +702,7 @@ function drawGrid() {
 function captureState() {
   const grid = canvas.getObjects().filter(o => o.isGrid);
   grid.forEach(o => canvas.remove(o));
-  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','isRoomLabel','selectable','evented','strokeUniform']));
+  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','roomId','isRoomLabel','selectable','evented','strokeUniform']));
   drawGrid();
   return json;
 }
@@ -866,26 +866,39 @@ function showAreaTip(jo, e) {
 }
 function hideSizeTip() { document.getElementById('size-tip').style.display = 'none'; }
 
-function addRoomLabel(cx, cy, jo) {
+/* 部屋とラベルを結びつける（部屋を動かすとラベルも一緒に動く） */
+let _roomSeq = 0;
+function newRoomId() { return 'r' + Date.now().toString(36) + '_' + (_roomSeq++); }
+function labelForRoom(id) { return canvas.getObjects().find(o => o.isRoomLabel && o.roomId === id); }
+function syncRoomLabel(room) {
+  if (!room || !room.roomId) return;
+  const lbl = labelForRoom(room.roomId);
+  if (!lbl) return;
+  const c = room.getCenterPoint();
+  lbl.set({ left: c.x, top: c.y }); lbl.setCoords();
+}
+function addRoomLabel(cx, cy, jo, roomId) {
   const txt = roomLabelText(jo);
-  const label = new fabric.IText(txt, {
-    left:cx, top:cy, originX:'center', originY:'center',
-    fontSize:14, fill:'#111827', textAlign:'center', fontFamily:'sans-serif', isRoomLabel:true });
   // 表示項目がすべてOFFのときはラベルを作らない
   if (!txt) return;
+  const label = new fabric.IText(txt, {
+    left:cx, top:cy, originX:'center', originY:'center',
+    fontSize:14, fill:'#111827', textAlign:'center', fontFamily:'sans-serif',
+    isRoomLabel:true, roomId: roomId || null });
   label.visible = roomLabelsOn;
   canvas.add(label);
 }
 function finalizeRoom(left, top, w, h) {
   const s = currentRoomSetting();
   const ws = wallStyleFor(s);
+  const rid = newRoomId();
   const rect = new fabric.Rect({ left, top, width:w, height:h,
     stroke:ws.stroke, strokeWidth:ws.strokeWidth, strokeDashArray:ws.strokeDashArray,
-    strokeUniform:true, roomType:roomName() });
+    strokeUniform:true, roomType:roomName(), roomId:rid });
   applyRoomFill(rect, s);
   const wmm = mmFromPx(w), hmm = mmFromPx(h);
   const jo = ((wmm * hmm) / 1e6) / 1.62;
-  canvas.add(rect); addRoomLabel(left + w/2, top + h/2, jo); canvas.renderAll();
+  canvas.add(rect); addRoomLabel(left + w/2, top + h/2, jo, rid); canvas.renderAll();
 }
 
 /* 頂点入力（多角形：△・L字など） */
@@ -910,12 +923,13 @@ function finalizePoly() {
   if (pts.length < 3) { resetPoly(); return; }
   const s = currentRoomSetting();
   const ws = wallStyleFor(s);
+  const rid = newRoomId();
   const poly = new fabric.Polygon(pts, { stroke:ws.stroke, strokeWidth:ws.strokeWidth,
-    strokeDashArray:ws.strokeDashArray, strokeUniform:true, roomType:roomName() });
+    strokeDashArray:ws.strokeDashArray, strokeUniform:true, roomType:roomName(), roomId:rid });
   applyRoomFill(poly, s);
   const jo = polyJo(pts); const c = polyCentroid(pts);
   resetPoly();
-  canvas.add(poly); addRoomLabel(c.x, c.y, jo); canvas.renderAll();
+  canvas.add(poly); addRoomLabel(c.x, c.y, jo, rid); canvas.renderAll();
 }
 
 /* ===== キャンバス ===== */
@@ -923,9 +937,13 @@ function initCanvas() {
   canvas = new fabric.Canvas('fp-canvas', { backgroundColor:'#ffffff', preserveObjectStacking:true });
   canvas.on('object:moving', e => {
     const o = e.target; if (!o || o.isBg || o.isGrid) return;
-    if (o.partLabel) return;   // 設備・家具・建具などのパーツはマス無視で自由移動
-    o.set({ left: snap(o.left), top: snap(o.top) });   // 部屋・テキストなどはグリッドに吸着
+    if (!o.partLabel) o.set({ left: snap(o.left), top: snap(o.top) });   // 部屋・テキストはグリッドに吸着／設備は自由
+    if (o.roomType) syncRoomLabel(o);   // 部屋を動かすと部屋名ラベルも一緒に動く
   });
+  // 拡大・回転・変形の確定時もラベルを部屋の中心へ追従
+  canvas.on('object:scaling',  e => { if (e.target && e.target.roomType) syncRoomLabel(e.target); });
+  canvas.on('object:rotating', e => { if (e.target && e.target.roomType) syncRoomLabel(e.target); });
+  canvas.on('object:modified', e => { if (e.target && e.target.roomType) syncRoomLabel(e.target); });
   // 変更を履歴に記録（戻る用）
   canvas.on('object:added',    onCanvasChange);
   canvas.on('object:removed',  onCanvasChange);
@@ -1090,9 +1108,10 @@ function renderAiResult(d, rx, ry, rw, rh, im) {
     const pts = r.points.map(p => ({ x: rx + p[0]*rw, y: ry + p[1]*rh }));
     if (pts.length < 3) return;
     const rt = ROOM_TYPES.find(x => x.t === r.type);
-    canvas.add(new fabric.Polygon(pts, { fill: rt ? rt.c : 'rgba(34,197,94,0.16)', stroke:'#333', strokeWidth:4, strokeUniform:true, roomType: r.type }));
+    const rid = newRoomId();
+    canvas.add(new fabric.Polygon(pts, { fill: rt ? rt.c : 'rgba(34,197,94,0.16)', stroke:'#333', strokeWidth:4, strokeUniform:true, roomType: r.type, roomId: rid }));
     let cx = 0, cy = 0; pts.forEach(p => { cx += p.x; cy += p.y; }); cx /= pts.length; cy /= pts.length;
-    const _lbl = new fabric.IText(r.label || r.type, { left:cx, top:cy, originX:'center', originY:'center', fontSize:13, fill:'#111827', textAlign:'center', fontFamily:'sans-serif', isRoomLabel:true });
+    const _lbl = new fabric.IText(r.label || r.type, { left:cx, top:cy, originX:'center', originY:'center', fontSize:13, fill:'#111827', textAlign:'center', fontFamily:'sans-serif', isRoomLabel:true, roomId: rid });
     _lbl.visible = roomLabelsOn;
     canvas.add(_lbl);
   });
@@ -1229,7 +1248,7 @@ function serializeWithThumb() {
   const grid = canvas.getObjects().filter(o => o.isGrid);
   grid.forEach(o => canvas.remove(o));
   canvas.discardActiveObject(); canvas.renderAll();
-  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','isRoomLabel','selectable','evented','strokeUniform']));
+  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','roomId','isRoomLabel','selectable','evented','strokeUniform']));
   let thumb = '';
   const z = zoom; if (z !== 1) { canvas.setZoom(1); canvas.renderAll(); }
   try { thumb = canvas.toDataURL({ format:'jpeg', quality:0.6, multiplier: 300 / canvas.width }); } catch(_){}
