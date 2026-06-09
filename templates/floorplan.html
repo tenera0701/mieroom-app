@@ -200,10 +200,6 @@
       <label class="tb-btn" style="background:#0D9488;color:#fff;border-color:#0D9488;font-weight:800;" title="間取り画像をAIで解析して、部屋・設備を自動でパーツ化して配置">🤖 AI取込
         <input type="file" accept="image/*" onchange="aiImport(event)" style="display:none;">
       </label>
-      <label class="tb-btn">🖼 下絵を取込
-        <input type="file" accept="image/*" onchange="addBg(event)" style="display:none;">
-      </label>
-      <button class="tb-btn" onclick="toggleBgLock()" id="bg-lock-btn">🔒 下絵を固定</button>
       <span class="tb-sep"></span>
       <button class="tb-btn" onclick="addText()">＋ テキスト</button>
       <button class="tb-btn" onclick="addTextSameStyle()" title="選択中のテキストと同じ書式（フォント・サイズ・色など）で新しいテキストを作成">📋 同書式テキスト</button>
@@ -564,7 +560,6 @@ function openNew(){
   canvas.clear(); zoom = 1;
   applyFpDefaults();   // 既定の背景色・格子色を適用
   document.getElementById('zoom-label').textContent = '100%';
-  document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
   resetRoomLabelState();
   fillFolderSelect(); setFolderLabel();
   showEditor();
@@ -595,7 +590,6 @@ async function openPlan(id, folderId){
     resetRoomLabelState();
     if (f.data) canvas.loadFromJSON(JSON.parse(f.data), () => { fitCanvas(); canvas.renderAll(); resetHistory(); });
     else { fitCanvas(); canvas.renderAll(); resetHistory(); }
-    document.getElementById('bg-lock-btn').textContent = '🔒 下絵を固定';
     fillFolderSelect(); setFolderLabel();
     showEditor();
   } catch(_) { showAlert('読み込みに失敗しました。', 'error'); }
@@ -978,6 +972,7 @@ function roomUnderErase(r) {
 /* ドラッグ区間の「枠（壁の線）」だけを、背景色の細い帯で覆って消す（塗り＝赤などは増やさない） */
 function eraseWallRange(r) {
   const room = roomUnderErase(r);
+  if (!room) { showAlert('部屋の壁（枠線）の上をドラッグして消してください。', 'error'); return; }   // 部屋が無い場所では消さない（残像防止）
   const th = ((room && room.strokeWidth) ? room.strokeWidth : 6) + 3;   // 壁の太さぶんだけ
   let cx = r.cx, cy = r.cy;
   // 部屋の実際の端（壁の中心線）に合わせて、赤がはみ出さないようにする
@@ -1054,17 +1049,22 @@ function toggleVertexEdit() {
   // 何も選んでいなければ「直前に作った／編集した部屋」を対象にする
   if (!isRoom(o) && _lastRoom && canvas.getObjects().indexOf(_lastRoom) >= 0 && isRoom(_lastRoom)) o = _lastRoom;
   if (!isRoom(o)) { showAlert('部屋（囲み入力・頂点入力どちらでも可）を選んでから押してください。\n※部屋の枠線あたりをクリックして選んでください。', 'error'); return; }
-  // 囲み入力（矩形）の部屋は、多角形に変換して角をドラッグできるようにする
-  if (o.type === 'rect') {
-    const pts = rectCornerPoints(o);
-    const poly = new fabric.Polygon(pts.map(p => ({ x: p.x, y: p.y })), {
-      fill: o.fill, stroke: o.stroke, strokeWidth: o.strokeWidth, strokeDashArray: o.strokeDashArray,
-      strokeUniform: true, roomType: o.roomType, roomId: o.roomId });
-    canvas.remove(o); canvas.add(poly); o = poly; _lastRoom = poly;
-  }
+  // 角の絶対座標を取得（矩形・多角形どちらも）→ グリッドに合わせて整える（微妙な斜めを防ぐ）
+  const rawPts = (o.type === 'rect') ? rectCornerPoints(o) : polyAbsPoints(o);
+  _vtxPts = rawPts.map(p => ({ x: snap(p.x), y: snap(p.y) }));
+  // 整えた頂点で多角形として作り直す（矩形→多角形変換もここで行う）
+  const style = { fill: o.fill, stroke: o.stroke, strokeWidth: o.strokeWidth, strokeDashArray: o.strokeDashArray,
+    strokeUniform: true, roomType: o.roomType, roomId: o.roomId };
+  canvas.remove(o);
+  o = new fabric.Polygon(_vtxPts.map(p => ({ x: p.x, y: p.y })), style);
+  canvas.add(o); _lastRoom = o;
   _vtxPoly = o;
-  _vtxPts = polyAbsPoints(o).map(p => ({ x: p.x, y: p.y }));
   o.selectable = false; o.evented = false; canvas.discardActiveObject();
+  syncRoomLabel(o);   // ラベルを中心へ
+  _vtxHandlesInit();
+}
+function _vtxHandlesInit() {
+  const o = _vtxPoly; if (!o) return;
   _vtxHandles = _vtxPts.map((p, i) => {
     const h = new fabric.Circle({ left:p.x, top:p.y, radius:7, fill:'#fff', stroke:'#0D9488', strokeWidth:2,
       originX:'center', originY:'center', hasControls:false, hasBorders:false,
