@@ -172,13 +172,16 @@
         <option value="606">606mm</option>
         <option value="455">455mm</option>
       </select>
-      <select class="tb-sel" id="grid-snap" title="吸着の細かさ" onchange="setSnapDiv(this.value)">
-        <option value="1">吸着：1マス</option>
-        <option value="2" selected>吸着：半マス</option>
-        <option value="4">吸着：1/4マス</option>
+      <select class="tb-sel" id="grid-snap" title="1マスの分割数（大きいほど細かく編集できる）" onchange="setSnapDiv(this.value)">
+        <option value="1">分割：1（1マス）</option>
+        <option value="2" selected>分割：2</option>
+        <option value="4">分割：4</option>
+        <option value="8">分割：8</option>
+        <option value="10">分割：10（細かい）</option>
       </select>
       <button class="tb-btn" id="roomlabel-btn" onclick="toggleRoomLabels()" title="部屋名・帖数の表示／非表示">🏷 部屋名 ON</button>
       <button class="tb-btn" id="undo-btn" onclick="undo()" title="ひとつ前の状態に戻す（Ctrl+Z）">↩ 戻る</button>
+      <button class="tb-btn" id="redo-btn" onclick="redo()" title="やり直す（Ctrl+Y）">↪ 進む</button>
       <span class="tb-sep"></span>
       <button class="tb-btn" onclick="zoomOut()" title="縮小">🔍−</button>
       <span id="zoom-label" style="font-size:12px;font-weight:700;color:#374151;min-width:42px;text-align:center;">100%</span>
@@ -197,6 +200,7 @@
       <button class="tb-btn" onclick="toggleBgLock()" id="bg-lock-btn">🔒 下絵を固定</button>
       <span class="tb-sep"></span>
       <button class="tb-btn" onclick="addText()">＋ テキスト</button>
+      <button class="tb-btn" onclick="addTextSameStyle()" title="選択中のテキストと同じ書式（フォント・サイズ・色など）で新しいテキストを作成">📋 同書式テキスト</button>
       <button class="tb-btn" onclick="addLine()">＋ 線</button>
       <label class="tb-btn">＋ ロゴ
         <input type="file" accept="image/*" onchange="addLogo(event)" style="display:none;">
@@ -207,7 +211,9 @@
       <span class="tb-btn" style="gap:5px;cursor:default;" title="グリッド色">格子<button type="button" class="color-swatch" id="grid-color" data-value="#e5e7eb" onclick="openColorPalette(this, function(col){ setGridColor(col); })" style="width:22px;height:20px;border:1px solid #d1d5db;border-radius:4px;padding:0;cursor:pointer;background:#e5e7eb;"></button></span>
       <span class="tb-sep"></span>
       <button type="button" class="tb-color color-swatch" id="color-picker" data-value="#333333" title="線・文字の色" onclick="openColorPalette(this, function(col){ applyColor(col); })" style="background:#333333;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;padding:0;"></button>
-      <button class="tb-btn" onclick="rotateSel()">⟳ 回転</button>
+      <button class="tb-btn" onclick="rotateBy(-90)" title="左に90°回転">⟲ 90°</button>
+      <button class="tb-btn" onclick="rotateBy(90)" title="右に90°回転">⟳ 90°</button>
+      <button class="tb-btn" onclick="rotateBy(180)" title="180°回転（上下反転の向き）">⤧ 180°</button>
       <button class="tb-btn" onclick="dupSel()">⧉ 複製</button>
       <button class="tb-btn" onclick="bringFront()">最前面</button>
       <button class="tb-btn" onclick="sendBack()">最背面</button>
@@ -369,8 +375,22 @@ function setSnapDiv(n) { snapDiv = +n || 2; applyGridSettings(); }
 const BASE_W = 900, BASE_H = 660;
 let gridOn = true, zoom = 1, gridColor = '#e5e7eb';
 let roomLabelsOn = true;
-/* 履歴（戻る） */
+/* 履歴（戻る／進む） */
 let _history = [], _histIdx = -1, _histLock = false, _gridBusy = false;
+/* テキストの書式テンプレ（一度決めたルールを次のテキストにも適用） */
+let lastTextStyle = { fontFamily:'sans-serif', fontSize:22, fontWeight:'normal', fontStyle:'normal', underline:false, fill:'#111827', textAlign:'left' };
+function captureTextStyle(o) {
+  if (!o) return;
+  lastTextStyle = {
+    fontFamily: o.fontFamily || 'sans-serif',
+    fontSize: o.fontSize || 22,
+    fontWeight: o.fontWeight || 'normal',
+    fontStyle: o.fontStyle || 'normal',
+    underline: !!o.underline,
+    fill: (typeof o.fill === 'string') ? o.fill : '#111827',
+    textAlign: o.textAlign || 'left',
+  };
+}
 
 const ROOM_TYPES = [
   {t:'洋室', c:'rgba(34,197,94,0.16)'}, {t:'和室', c:'rgba(202,138,4,0.18)'},
@@ -698,19 +718,25 @@ function pushHistory() {
   updateUndoBtn();
 }
 function updateUndoBtn() {
-  const b = document.getElementById('undo-btn'); if (!b) return;
-  b.style.opacity = _histIdx > 0 ? '1' : '0.45';
+  const u = document.getElementById('undo-btn'); if (u) u.style.opacity = _histIdx > 0 ? '1' : '0.4';
+  const r = document.getElementById('redo-btn'); if (r) r.style.opacity = _histIdx < _history.length - 1 ? '1' : '0.4';
 }
-function undo() {
-  if (_histIdx <= 0) return;
-  _histIdx--;
-  const json = _history[_histIdx];
+function _loadHistory(json) {
   _histLock = true;
   canvas.loadFromJSON(json, () => {
     canvas.getObjects().filter(o => o.isRoomLabel).forEach(o => o.visible = roomLabelsOn);
     fitCanvas(); canvas.renderAll();
     _histLock = false; updateUndoBtn();
+    document.getElementById('text-toolbar').style.display = 'none';
   });
+}
+function undo() {
+  if (_histIdx <= 0) return;
+  _histIdx--; _loadHistory(_history[_histIdx]);
+}
+function redo() {
+  if (_histIdx >= _history.length - 1) return;
+  _histIdx++; _loadHistory(_history[_histIdx]);
 }
 function onCanvasChange(e) {
   if (_histLock || _gridBusy) return;
@@ -895,7 +921,8 @@ function initCanvas() {
   canvas = new fabric.Canvas('fp-canvas', { backgroundColor:'#ffffff', preserveObjectStacking:true });
   canvas.on('object:moving', e => {
     const o = e.target; if (!o || o.isBg || o.isGrid) return;
-    o.set({ left: snap(o.left), top: snap(o.top) });
+    if (o.partLabel) return;   // 設備・家具・建具などのパーツはマス無視で自由移動
+    o.set({ left: snap(o.left), top: snap(o.top) });   // 部屋・テキストなどはグリッドに吸着
   });
   // 変更を履歴に記録（戻る用）
   canvas.on('object:added',    onCanvasChange);
@@ -979,8 +1006,15 @@ function toggleBgLock() {
   document.getElementById('bg-lock-btn').textContent = willLock ? '🔓 下絵を解除' : '🔒 下絵を固定';
 }
 function addText() {
-  const t = new fabric.IText('テキスト', { left:60, top:60, fontSize:22, fill:getColor(), fontFamily:'sans-serif' });
+  // 直前に使ったテキスト書式を引き継ぐ（一度決めたルールでそろえられる）
+  const t = new fabric.IText('テキスト', Object.assign({ left:60, top:60 }, lastTextStyle));
   canvas.add(t); canvas.setActiveObject(t); canvas.renderAll();
+  syncTextToolbar();
+}
+function addTextSameStyle() {
+  const o = canvas.getActiveObject();
+  if (isTextObj(o)) captureTextStyle(o);   // 選択中テキストの書式を記憶してから作成
+  addText();
 }
 function addLine() {
   const l = new fabric.Line([60,200,260,200], { stroke:getColor(), strokeWidth:3 });
@@ -1106,6 +1140,7 @@ function syncTextToolbar() {
   document.getElementById('tt-underline').classList.toggle('primary', !!t.underline);
   const sw = document.getElementById('tt-color');
   if (sw && typeof t.fill === 'string') { sw.style.background = t.fill; sw.dataset.value = t.fill; }
+  captureTextStyle(t);   // 表示中の書式を「次のテキスト用」に記憶
 }
 function ttSet(prop, val) {
   const texts = ttActiveTexts(); if (!texts.length) return;
@@ -1130,10 +1165,15 @@ function ttColor(c) {
   const texts = ttActiveTexts(); if (!texts.length) return;
   texts.forEach(t => t.set('fill', c));
   const sw = document.getElementById('tt-color'); if (sw) { sw.style.background = c; sw.dataset.value = c; }
-  canvas.renderAll(); pushHistory();
+  canvas.renderAll(); pushHistory(); lastTextStyle.fill = c;
 }
 function delSel() { canvas.getActiveObjects().forEach(o => canvas.remove(o)); canvas.discardActiveObject(); canvas.renderAll(); document.getElementById('text-toolbar').style.display = 'none'; }
-function rotateSel() { const o = canvas.getActiveObject(); if (o) { o.rotate(((o.angle||0)+90)%360); canvas.renderAll(); } }
+function rotateSel() { rotateBy(90); }
+function rotateBy(deg) {
+  const o = canvas.getActiveObject(); if (!o) { showAlert('回転する対象を選択してください。', 'error'); return; }
+  o.rotate((((o.angle || 0) + deg) % 360 + 360) % 360);
+  o.setCoords(); canvas.renderAll(); pushHistory();
+}
 function dupSel() {
   const o = canvas.getActiveObject(); if (!o) return;
   o.clone(cl => { cl.set({ left:(o.left||0)+20, top:(o.top||0)+20 }); canvas.add(cl); canvas.setActiveObject(cl); canvas.renderAll(); });
@@ -1499,6 +1539,8 @@ document.addEventListener('keydown', e => {
   if (!canvas || document.getElementById('editor-view').style.display === 'none') return;
   const ae = document.activeElement;
   if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.tagName === 'SELECT')) return;
+  // やり直し（Ctrl+Y / Ctrl+Shift+Z）
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y' || ((e.key === 'z' || e.key === 'Z') && e.shiftKey))) { redo(); e.preventDefault(); return; }
   // 戻る（Ctrl+Z / Cmd+Z）
   if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { undo(); e.preventDefault(); return; }
   if (e.key === 'Delete' || e.key === 'Backspace') {
