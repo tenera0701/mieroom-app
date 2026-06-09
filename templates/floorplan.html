@@ -201,7 +201,6 @@
         <input type="file" accept="image/*" onchange="aiImport(event)" style="display:none;">
       </label>
       <span class="tb-sep"></span>
-      <button class="tb-btn" onclick="addText()">＋ テキスト</button>
       <button class="tb-btn" onclick="addLine()">＋ 線</button>
       <label class="tb-btn">＋ ロゴ
         <input type="file" accept="image/*" onchange="addLogo(event)" style="display:none;">
@@ -225,6 +224,8 @@
 
     <!-- 文字ツールバー（テキスト選択中のみ表示・Excel風） -->
     <div class="toolbar" id="text-toolbar">
+      <button class="tb-btn" onclick="addText()">＋ テキスト</button>
+      <span class="tb-sep"></span>
       <span style="font-size:12px;font-weight:800;color:#374151;">文字</span>
       <select class="tb-sel" id="tt-font" title="フォント" onchange="ttSet('fontFamily', this.value)">
         <option value="sans-serif">ゴシック（標準）</option>
