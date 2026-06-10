@@ -294,6 +294,7 @@ class Staff(db.Model):
     role = db.Column(db.String(50), default='営業')
     is_active = db.Column(db.Boolean, default=True)
     hired_at = db.Column(db.Date)
+    color = db.Column(db.String(20))   # カレンダー表示色（任意。未設定は自動割当）
 
 
 class SalesKPI(db.Model):
@@ -1113,6 +1114,7 @@ class VisitReservation(db.Model):
     status        = db.Column(db.String(20), default='予約')   # 予約/来店済/キャンセル
     source        = db.Column(db.String(10), default='web')    # web/手動
     staff_id      = db.Column(db.Integer, index=True)           # 担当スタッフ（任意）
+    duration_min  = db.Column(db.Integer, default=60)           # 予約の長さ（分）
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -1121,7 +1123,7 @@ class VisitReservation(db.Model):
                 'furigana': self.furigana or '', 'phone': self.phone or '',
                 'email': self.email or '', 'memo': self.memo or '',
                 'status': self.status or '予約', 'source': self.source or 'web',
-                'staff_id': self.staff_id,
+                'staff_id': self.staff_id, 'duration_min': self.duration_min or 60,
                 'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else ''}
 
 
@@ -1669,15 +1671,28 @@ def migrate_db():
         except Exception as e:
             print(f"  Skip status_color.row_bg_color: {e}")
 
-    # visit_reservation に staff_id（担当スタッフ）を追加
+    # visit_reservation に staff_id（担当スタッフ）/ duration_min（長さ）を追加
     try:
         cursor.execute("PRAGMA table_info(visit_reservation)")
         vr_cols = {r[1] for r in cursor.fetchall()}
         if vr_cols and 'staff_id' not in vr_cols:
             cursor.execute("ALTER TABLE visit_reservation ADD COLUMN staff_id INTEGER")
             print("  Added column visit_reservation.staff_id")
+        if vr_cols and 'duration_min' not in vr_cols:
+            cursor.execute("ALTER TABLE visit_reservation ADD COLUMN duration_min INTEGER DEFAULT 60")
+            print("  Added column visit_reservation.duration_min")
     except Exception as e:
-        print(f"  Skip visit_reservation.staff_id: {e}")
+        print(f"  Skip visit_reservation columns: {e}")
+
+    # staff に color（カレンダー表示色）を追加
+    try:
+        cursor.execute("PRAGMA table_info(staff)")
+        st_cols = {r[1] for r in cursor.fetchall()}
+        if st_cols and 'color' not in st_cols:
+            cursor.execute("ALTER TABLE staff ADD COLUMN color VARCHAR(20)")
+            print("  Added column staff.color")
+    except Exception as e:
+        print(f"  Skip staff.color: {e}")
 
     # customer_service_record の status カラムを追加
     cursor.execute("PRAGMA table_info(customer_service_record)")
@@ -1979,6 +1994,8 @@ def migrate_postgres():
         ("floor_plan", "folder_id", "INTEGER"),
         ("floor_plan", "thumb", "TEXT"),
         ("visit_reservation", "staff_id", "INTEGER"),
+        ("visit_reservation", "duration_min", "INTEGER DEFAULT 60"),
+        ("staff", "color", "VARCHAR(20)"),
     ]
     # 各カラムを独立した接続で追加（1つの失敗が他に波及しない）
     for tbl, col, typedef in new_cols:
@@ -7300,6 +7317,11 @@ def api_reservations_update(rid):
         r.memo = (d.get('memo') or '')[:2000]
     if 'time_slot' in d:
         r.time_slot = (d.get('time_slot') or '')[:5]
+    if 'duration_min' in d:
+        try:
+            r.duration_min = max(15, min(24 * 60, int(d.get('duration_min'))))
+        except (ValueError, TypeError):
+            pass
     if 'staff_id' in d:
         sv = d.get('staff_id')
         try:
@@ -9124,7 +9146,7 @@ def api_staff_list():
     """スタッフ一覧（テナント分離）"""
     allowed_ids = get_allowed_store_ids()
     staff_list = Staff.query.filter(Staff.store_id.in_(allowed_ids), Staff.is_active == True).all()
-    result = [{'id': s.id, 'name': s.name, 'role': s.role} for s in staff_list]
+    result = [{'id': s.id, 'name': s.name, 'role': s.role, 'color': s.color} for s in staff_list]
     return jsonify(result)
 
 
@@ -9228,6 +9250,8 @@ def api_staff_update(staff_id):
         staff.role = data.get('role', staff.role)
     if 'store_id' in data:
         staff.store_id = int(data.get('store_id')) or staff.store_id
+    if 'color' in data:
+        staff.color = (data.get('color') or None)
     db.session.commit()
     return jsonify({'status': 'ok'})
 
