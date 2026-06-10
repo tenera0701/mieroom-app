@@ -104,11 +104,9 @@ function showErr(m){ const e=document.getElementById('err'); e.textContent=m; e.
 function renderDays(){
   const box=document.getElementById('days');
   const today=new Date();
-  // 翌日から受付。設定の日数か「翌月末まで」の遅い方まで表示（翌月も選べるように）
+  // 翌日から「何日先まで受付」設定の日数ぶんだけ表示
   const start=new Date(today); start.setDate(start.getDate()+1);
-  const byAhead=new Date(today); byAhead.setDate(byAhead.getDate()+DAYS_AHEAD);
-  const nextMonthEnd=new Date(today.getFullYear(), today.getMonth()+2, 0);
-  const end = nextMonthEnd>byAhead ? nextMonthEnd : byAhead;
+  const end=new Date(today); end.setDate(end.getDate()+DAYS_AHEAD);
   let html='', curMonth=null;
   for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
     const v=fmt(d);
