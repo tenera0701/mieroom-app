@@ -4511,9 +4511,15 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                 msg = emaillib.message_from_bytes(md[0][1])
             except Exception:
                 continue
+            if not mid:
+                mid = (msg.get('Message-ID') or '').strip()
             if mid:
                 seen.add(mid)   # フル取得できた時点でスキャン済みに
             scanned += 1
+            # 同じメールは二度処理しない（再起動後も有効なDB記録）
+            mid_key = ('mid:' + mid)[:160] if mid else ''
+            if mid_key and ProcessedReaction.query.filter_by(store_id=store_id, external_id=mid_key).first():
+                continue
             # 取込開始日時より前のメールは無視（過去の反響を拾わない）
             mdt = _msg_datetime(msg)
             if mdt and import_after and mdt < import_after:
@@ -4527,15 +4533,29 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                     print(f"reply handle error: {e}")
                 continue
             ext = parsed['external_id']
-            # 取込済み or 削除済み or 既存 → 取り込まない（削除後の復活を防ぐ）
-            if (ProcessedReaction.query.filter_by(store_id=store_id, external_id=ext).first()
-                    or EchoRecord.query.filter_by(store_id=store_id, external_id=ext).first()):
-                continue
-            # 同一お客様の既存反響があれば、新規行を作らずメモへ追記して1件にまとめる
+            # 重複は「氏名・メールアドレス」で判断する方針。
+            # ただし同じ問い合わせID（反響ID）を過去に処理済みで、メールの受信日時も古い場合は
+            # 過去分の再スキャンなのでスキップ（削除した反響の復活もここで防ぐ）。
+            # 新しく届いたメール（再送・再問い合わせ）は下の氏名・メール判定に進む。
+            ext_known = bool(
+                ProcessedReaction.query.filter_by(store_id=store_id, external_id=ext).first()
+                or EchoRecord.query.filter_by(store_id=store_id, external_id=ext).first())
+            if ext_known:
+                cutoff = (ms.last_fetch_at or import_after)
+                if cutoff:
+                    cutoff = cutoff - timedelta(minutes=10)   # 時計ずれの余裕
+                if not (mdt and cutoff and mdt > cutoff):
+                    if mid_key:
+                        db.session.add(ProcessedReaction(store_id=store_id, external_id=mid_key))
+                    continue
+            # 同一お客様（氏名・メールアドレス一致）の既存反響があれば、新規行を作らずメモへ追記して1件にまとめる
             target = _find_merge_target(store_id, parsed['name'], parsed.get('email'))
             if target:
                 _merge_into_echo(target, parsed)
-                db.session.add(ProcessedReaction(store_id=store_id, external_id=ext))
+                if not ext_known:
+                    db.session.add(ProcessedReaction(store_id=store_id, external_id=ext))
+                if mid_key:
+                    db.session.add(ProcessedReaction(store_id=store_id, external_id=mid_key))
                 merged += 1
                 merged_ids.add(target.id)   # 追加反響のお客様にも自動返信を送る
                 continue
@@ -4552,7 +4572,10 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                 external_id=ext,
                 customer_email=parsed.get('email') or None,
             ))
-            db.session.add(ProcessedReaction(store_id=store_id, external_id=ext))
+            if not ext_known:
+                db.session.add(ProcessedReaction(store_id=store_id, external_id=ext))
+            if mid_key:
+                db.session.add(ProcessedReaction(store_id=store_id, external_id=mid_key))
             new_exts.append(ext)
             imported += 1
         db.session.commit()
@@ -4577,7 +4600,8 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                 if tid not in _tpl_cache:
                     _tpl_cache[tid] = MailTemplate.query.get(tid)
                 return _tpl_cache[tid]
-            reply_recs = [EchoRecord.query.filter_by(store_id=store_id, external_id=ext).first()
+            reply_recs = [EchoRecord.query.filter_by(store_id=store_id, external_id=ext)
+                          .order_by(EchoRecord.id.desc()).first()
                           for ext in new_exts]
             reply_recs += [EchoRecord.query.get(rid) for rid in merged_ids]
             sent_ids = set()
@@ -4991,8 +5015,8 @@ def _idle_worker(store_id, stop_event):
             has_idle = b'IDLE' in (M.capabilities or ())
             while not stop_event.is_set():
                 if has_idle:
-                    # 最大4分でIDLEを張り直す（通知が来ない「死に接続」になっても素早く復帰）
-                    got = _imap_idle_wait(M, 240, stop_event)
+                    # 通知が来たら即フェッチ（数秒で反映）。来なくても60秒ごとに張り直してフェッチ
+                    got = _imap_idle_wait(M, 60, stop_event)
                     if got:
                         print(f"IDLE: new mail signal store={store_id}")
                 else:
@@ -5058,7 +5082,7 @@ def _mail_sync_loop():
         try:
             idle_manager.sync()
             cnt += 1
-            if cnt % 6 == 0:   # 約3分ごとに保険フェッチ（IDLE取りこぼし対策。スキャン済みスキップで軽量）
+            if cnt % 4 == 0:   # 約2分ごとに保険フェッチ（IDLE取りこぼし対策。スキャン済みスキップで軽量）
                 with app.app_context():
                     for ms in MailSetting.query.filter_by(enabled=True).all():
                         if (ms.imap_user and ms.imap_pass) or ms.oauth_refresh_token:

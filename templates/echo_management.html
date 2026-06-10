@@ -480,6 +480,8 @@ async function loadDropdownOpts() {
   STATUS_COLORS = colors || {};
   fillSelect('f-media',  r1);
   fillSelect('f-method', r2);
+  // 色が表の描画より後に届いた場合は塗り直す（背景色が抜けるのを防ぐ）
+  if (typeof records !== 'undefined' && records && records.length) renderTable();
 }
 function fillSelect(id, opts) {
   const sel = document.getElementById(id);
@@ -546,11 +548,19 @@ async function renderStatusMgr(){
     </div>`;
   }).join('') : '<p style="color:#9ca3af;font-size:13px;">状況タグがありません。下から追加してください。</p>';
 }
+const STATUS_AUTO_COLORS = ['#fee2e2','#fef3c7','#d1fae5','#dbeafe','#ede9fe','#fce7f3','#ffedd5','#ccfbf1'];
 async function addStatusOpt(){
   const inp = document.getElementById('status-mgr-input');
   const val = inp.value.trim();
   if(!val) return;
   await fetch('/api/dropdown/echo_status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({value:val})});
+  // 新しいタグには未使用の色を自動で割り当て（色なしで背景が付かないのを防ぐ。⚙からいつでも変更可）
+  if(!STATUS_COLORS[val]){
+    const used = Object.values(STATUS_COLORS);
+    const auto = STATUS_AUTO_COLORS.find(c=>!used.includes(c)) || STATUS_AUTO_COLORS[Object.keys(STATUS_COLORS).length % STATUS_AUTO_COLORS.length];
+    STATUS_COLORS[val] = auto;
+    await fetch('/api/echo-status-colors',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({colors:{[val]:auto}})});
+  }
   inp.value='';
   await renderStatusMgr();
 }
@@ -1367,13 +1377,14 @@ document.addEventListener('click', e=>{
   pop.style.display='none';
 });
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   updateLabel();
-  loadDropdownOpts();
   if (!IS_MANAGER && CUR_STAFF_ID) {
     const sel = document.getElementById('filter-staff');
     if (sel) sel.value = String(CUR_STAFF_ID);
   }
+  // 状況の色を先に読み込んでから表を描画（並走すると色なしで描画されることがあるため）
+  try { await loadDropdownOpts(); } catch(_) {}
   loadRecords();
 });
 </script>
