@@ -84,6 +84,8 @@
   .rv-chip .ctxt { overflow:hidden; text-overflow:ellipsis; }
   .rv-chip:hover { filter:brightness(0.95); }
   .rv-chip.cancel { text-decoration:line-through; opacity:.7; }
+  .rv-chip .chip-new { flex:none; background:#ef4444; color:#fff; border-radius:4px; padding:0 3px; font-size:8.5px; font-weight:800; }
+  .rv-chip .chip-web { flex:none; margin-left:auto; background:#0D9488; color:#fff; border-radius:4px; padding:0 3px; font-size:8.5px; font-weight:800; }
   /* 週・日表示（時間グリッド） */
   .tg-wrap { overflow-x:auto; }
   .tg { display:grid; min-width:560px; }
@@ -102,6 +104,12 @@
   .tg-ev.cancel { text-decoration:line-through; opacity:.7; }
   .tg-ev .ev-nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .tg-ev .ev-t { font-size:10px; font-weight:600; opacity:.85; }
+  /* Web予約バッジ（右）・NEWバッジ（左上） */
+  .tg-ev .ev-web { position:absolute; right:3px; top:3px; background:#0D9488; color:#fff; font-size:8.5px; font-weight:800; letter-spacing:.02em; padding:1px 5px; border-radius:6px; line-height:1.6; pointer-events:none; box-shadow:0 1px 2px rgba(0,0,0,.18); }
+  .tg-ev .ev-new { position:absolute; left:3px; top:3px; background:#ef4444; color:#fff; font-size:8.5px; font-weight:800; padding:1px 5px; border-radius:6px; line-height:1.6; pointer-events:none; box-shadow:0 1px 3px rgba(0,0,0,.25); animation:evNewPulse 1.5s ease-in-out infinite; }
+  @keyframes evNewPulse { 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.12); } }
+  .tg-ev.is-new .ev-nm { padding-left:42px; }
+  .tg-ev.is-web .ev-nm { padding-right:60px; }
   /* 下端のリサイズハンドル（ここを引っ張ると予約時間を変更） */
   .tg-ev-resize { position:absolute; left:0; right:0; bottom:0; height:9px; cursor:ns-resize; touch-action:none; }
   .tg-ev-resize::after { content:''; display:block; width:22px; height:3px; margin:3px auto 0; border-radius:2px; background:currentColor; opacity:.45; }
@@ -470,7 +478,9 @@ function renderMonth(){
       const chips=items.slice(0,3).map(r=>{
         const c=staffColor(r.staff_id);
         const cls=r.status==='キャンセル'?'cancel':'';
-        return `<span class="rv-chip ${cls}" style="background:${c.l};color:${c.s};border-left-color:${c.s};" onclick="event.stopPropagation();openDetail(${r.id})"><span class="ctxt">${esc(r.time_slot)} ${esc(r.customer_name)}</span></span>`;
+        const isWeb=r.source==='web';
+        const isNew=isWeb && r.status==='予約';
+        return `<span class="rv-chip ${cls}" style="background:${c.l};color:${c.s};border-left-color:${c.s};" onclick="event.stopPropagation();openDetail(${r.id})">${isNew?'<span class="chip-new">NEW</span>':''}<span class="ctxt">${esc(r.time_slot)} ${esc(r.customer_name)}</span>${isWeb?'<span class="chip-web">Web</span>':''}</span>`;
       }).join('') + (items.length>3?`<span style="font-size:10px;color:#6b7280;">他${items.length-3}件</span>`:'');
       const colCls = dow===0?'sun-col':(dow===6?'sat-col':'');
       const todayCls = ds===todayS()?'today':'';
@@ -523,9 +533,12 @@ function renderTimeGrid(){
       const durMin=r.duration_min||60;
       const h=Math.max(HOUR_PX*durMin/60-2, 22);
       const c=staffColor(r.staff_id);
-      const cls=r.status==='キャンセル'?'cancel':'';
+      const isWeb=r.source==='web';
+      const isNew=isWeb && r.status==='予約';   // Web予約でまだ未対応（予約のまま）＝新着
+      const cls=`${r.status==='キャンセル'?'cancel':''} ${isWeb?'is-web':''} ${isNew?'is-new':''}`;
       col+=`<div class="tg-ev ${cls}" data-id="${r.id}" style="top:${top}px;height:${h}px;background:${c.l};border-left-color:${c.s};color:${c.s};" onpointerdown="evDown(event, ${r.id})" title="ドラッグで移動・下端で時間変更">
-        <div class="ev-nm">${esc(r.customer_name)} 様</div><div class="ev-t">${esc(r.time_slot)}〜${r.source==='web'?'・Web':''}</div>
+        ${isNew?'<span class="ev-new">NEW</span>':''}${isWeb?'<span class="ev-web">WEB予約</span>':''}
+        <div class="ev-nm">${esc(r.customer_name)} 様</div><div class="ev-t">${esc(r.time_slot)}〜</div>
         <div class="tg-ev-resize" onpointerdown="evResizeDown(event, ${r.id})"></div></div>`;
     });
     // 現在時刻ライン
