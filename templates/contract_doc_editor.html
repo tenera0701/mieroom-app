@@ -66,7 +66,7 @@
       <button class="btn btn-light" style="white-space:nowrap;" onclick="applyRecord()">📋 申込情報を反映</button>
       <div class="ai-zone" id="ai-zone">
         <button class="btn btn-purple" id="ai-btn" onclick="document.getElementById('ai-file').click()">
-          📎 契約書・物件・顧客資料を添付
+          📎 契約書・謄本・物件資料を一括添付
         </button>
         <input type="file" id="ai-file" accept="application/pdf,image/*" multiple style="display:none" onchange="onAiFileChange(event)">
         <div style="font-size:11px;color:#6b7280;margin-top:6px;">ここにドラッグ＆ドロップでもOK ／ PDF・画像 ／ 20MBまで・最大5ファイル</div>
@@ -191,7 +191,8 @@ function renderDownloadList(){
     return `<div class="tpl-dl-row">
       <div class="tpl-dl-name">${esc(t.name)}</div>
       <div class="tpl-dl-tags">${badges||'<span style="font-size:11px;color:#9ca3af;">タグなし</span>'}</div>
-      <button class="btn btn-save btn-sm" onclick="downloadTpl(${t.id},'${esc(t.name)}')">⬇ ダウンロード</button>
+      <button class="btn btn-light" onclick="printTpl(${t.id},'${esc(t.name)}')" title="ツール上でそのまま印刷（Excel不要）">🖨 印刷</button>
+      <button class="btn btn-save btn-sm" onclick="downloadTpl(${t.id},'${esc(t.name)}')">⬇ Excel</button>
     </div>`;
   }).join('');
 }
@@ -293,6 +294,22 @@ async function saveAll(){
     });
     if(!r.ok) throw new Error(); VALUES=values; refreshBadges(); showAlert('保存しました。');
   }catch(_){ showAlert('保存に失敗しました。','error'); }
+}
+
+async function printTpl(tplId, tplName){
+  const values=collectValues();
+  showAlert('印刷ビューを生成中…','info');
+  try{
+    const r=await fetch(`/api/doc-templates/${tplId}/print-view`,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values})
+    });
+    if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.error||'生成に失敗しました'); }
+    const html=await r.text();
+    const w=window.open('','_blank');
+    if(!w) throw new Error('ポップアップがブロックされました。ブラウザの設定で許可してください。');
+    w.document.open(); w.document.write(html); w.document.close();
+    showAlert(`「${tplName}」の印刷ビューを開きました。印刷ダイアログが自動で出ます。`);
+  }catch(e){ showAlert(e.message,'error'); }
 }
 
 async function downloadTpl(tplId, tplName){

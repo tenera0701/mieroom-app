@@ -672,6 +672,12 @@ class ApplicationRecord(db.Model):
     review_ng = db.Column(db.Boolean, default=False)          # 審査×（True=審査NG→キャンセル）旧フィールド
     review_status = db.Column(db.String(10), nullable=True)  # 審査状態: None=—, 'ok'=○, 'ng'=×
     past_customer = db.Column(db.Boolean, default=False)     # True=契約終了（顧客管理へ移動）
+    # 契約管理の進捗メモ（契約中顧客一覧で編集）
+    invoice_sent = db.Column(db.Boolean, default=False)        # 請求書を送った（〇/×）
+    management_phone = db.Column(db.String(40))                # 管理会社の電話番号
+    contract_method = db.Column(db.String(10), nullable=True)  # 電子契約/書面契約
+    guarantor = db.Column(db.String(10), nullable=True)        # 連帯保証の有無（有/無）
+    contract_note = db.Column(db.Text)                         # 契約進捗メモ
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -1669,6 +1675,19 @@ def migrate_db():
     except Exception as e:
         print(f"  Skip mail_message.opened_at: {e}")
 
+    # application_record の契約進捗メモ列を追加（請求書/管理会社TEL/契約方法/連帯保証/メモ）
+    try:
+        cursor.execute("PRAGMA table_info(application_record)")
+        arcols = {r[1] for r in cursor.fetchall()}
+        for col, typedef in [('invoice_sent', 'BOOLEAN DEFAULT 0'), ('management_phone', 'VARCHAR(40)'),
+                             ('contract_method', 'VARCHAR(10)'), ('guarantor', 'VARCHAR(10)'),
+                             ('contract_note', 'TEXT')]:
+            if arcols and col not in arcols:
+                cursor.execute(f"ALTER TABLE application_record ADD COLUMN {col} {typedef}")
+                print(f"  Added column application_record.{col}")
+    except Exception as e:
+        print(f"  Skip application_record contract columns: {e}")
+
     # visit_intake の answers_json / matched_echo_id カラムを追加（カスタムアンケート回答・反響紐付け）
     try:
         cursor.execute("PRAGMA table_info(visit_intake)")
@@ -1827,6 +1846,11 @@ def migrate_postgres():
         ("application_record", "review_ng", "BOOLEAN DEFAULT FALSE"),
         ("application_record", "review_status", "VARCHAR(10)"),
         ("application_record", "past_customer", "BOOLEAN DEFAULT FALSE"),
+        ("application_record", "invoice_sent",     "BOOLEAN DEFAULT FALSE"),
+        ("application_record", "management_phone", "VARCHAR(40)"),
+        ("application_record", "contract_method",  "VARCHAR(10)"),
+        ("application_record", "guarantor",        "VARCHAR(10)"),
+        ("application_record", "contract_note",    "TEXT"),
         ("status_color", "row_bg_color", "VARCHAR(20) DEFAULT '#ffffff'"),
         ("daily_report",             "store_id",     "INTEGER"),
         ("customer_service_record",  "status",       "VARCHAR(20) DEFAULT '追客中'"),
@@ -2890,6 +2914,102 @@ def _xlsx_fill(xlsx_bytes, values):
     return out.getvalue()
 
 
+def _xlsx_to_print_html(xlsx_bytes, title):
+    """穴埋め済みxlsxを、ブラウザでそのまま印刷できるHTMLに変換する。
+    結合セル・列幅・行高・罫線・配置・太字をできる限り再現する。"""
+    import io as _io
+    from openpyxl import load_workbook
+    from openpyxl.utils import get_column_letter
+
+    def _esc(s):
+        return (str(s).replace('&', '&amp;').replace('<', '&lt;')
+                .replace('>', '&gt;').replace('\n', '<br>'))
+
+    wb = load_workbook(_io.BytesIO(xlsx_bytes), data_only=False)
+    sheets_html = []
+    for ws in wb.worksheets:
+        if ws.sheet_state != 'visible':
+            continue
+        max_row = min(ws.max_row or 1, 500)
+        max_col = min(ws.max_column or 1, 60)
+        merged, skip = {}, set()
+        for rng in ws.merged_cells.ranges:
+            merged[(rng.min_row, rng.min_col)] = (rng.max_row - rng.min_row + 1,
+                                                  rng.max_col - rng.min_col + 1)
+            for rr in range(rng.min_row, rng.max_row + 1):
+                for cc in range(rng.min_col, rng.max_col + 1):
+                    if (rr, cc) != (rng.min_row, rng.min_col):
+                        skip.add((rr, cc))
+        cols = []
+        for c in range(1, max_col + 1):
+            cd = ws.column_dimensions.get(get_column_letter(c))
+            w = cd.width if (cd and cd.width) else 8.43
+            cols.append(f'<col style="width:{int(w * 7 + 5)}px">')
+        rows = []
+        for rr in range(1, max_row + 1):
+            rd = ws.row_dimensions.get(rr)
+            h = rd.height if (rd and rd.height) else 18
+            tds = []
+            for cc in range(1, max_col + 1):
+                if (rr, cc) in skip:
+                    continue
+                cell = ws.cell(row=rr, column=cc)
+                attrs = ''
+                span = merged.get((rr, cc))
+                if span:
+                    if span[0] > 1:
+                        attrs += f' rowspan="{span[0]}"'
+                    if span[1] > 1:
+                        attrs += f' colspan="{span[1]}"'
+                st = []
+                f = cell.font
+                if f:
+                    if f.bold:
+                        st.append('font-weight:bold')
+                    if f.size:
+                        st.append(f'font-size:{round(float(f.size) * 1.33)}px')
+                al = cell.alignment
+                if al:
+                    if al.horizontal in ('center', 'right', 'left'):
+                        st.append(f'text-align:{al.horizontal}')
+                    st.append('vertical-align:middle' if al.vertical in (None, 'center') else f'vertical-align:{al.vertical}')
+                b = cell.border
+                for name, side in (('top', b.top), ('bottom', b.bottom), ('left', b.left), ('right', b.right)):
+                    if side and side.style:
+                        w_b = '2px' if side.style in ('medium', 'thick', 'double') else '1px'
+                        st.append(f'border-{name}:{w_b} solid #333')
+                try:
+                    fl = cell.fill
+                    if fl and fl.patternType == 'solid' and fl.fgColor and fl.fgColor.rgb:
+                        rgb = str(fl.fgColor.rgb)
+                        if len(rgb) == 8 and rgb.upper() not in ('00000000', 'FFFFFFFF'):
+                            st.append('background:#' + rgb[2:])
+                except Exception:
+                    pass
+                v = cell.value
+                tds.append(f'<td{attrs} style="{";".join(st)}">{_esc(v) if v is not None else ""}</td>')
+            rows.append(f'<tr style="height:{round(h * 1.33)}px">{"".join(tds)}</tr>')
+        sheets_html.append(f'<table class="sheet"><colgroup>{"".join(cols)}</colgroup>{"".join(rows)}</table>')
+
+    body = '<div class="pagebreak"></div>'.join(sheets_html) or '<p>シートがありません</p>'
+    return ('<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">'
+            f'<title>{_esc(title)}</title>'
+            '<style>'
+            "body{font-family:'Yu Gothic','Meiryo',sans-serif;margin:8mm;}"
+            'table.sheet{border-collapse:collapse;table-layout:fixed;margin-bottom:16px;}'
+            'td{font-size:12px;padding:1px 3px;overflow:hidden;word-break:break-all;white-space:pre-wrap;}'
+            '.pagebreak{page-break-after:always;}'
+            '.toolbar{position:fixed;top:8px;right:8px;z-index:10;}'
+            '@media print{.toolbar{display:none;}body{margin:0;}}'
+            '</style></head><body>'
+            '<div class="toolbar"><button onclick="window.print()" '
+            'style="padding:9px 20px;font-size:14px;font-weight:bold;background:#0D9488;color:#fff;'
+            'border:none;border-radius:8px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);">🖨 印刷する</button></div>'
+            f'{body}'
+            '<script>window.addEventListener("load",()=>setTimeout(()=>window.print(),500));</script>'
+            '</body></html>')
+
+
 # 設定＞会社情報（CompanyProfile）を、契約フォーマットの固定差し込みタグ名に対応づける
 _COMPANY_PROFILE_DOC_LABELS = [
     ('company_name',   '会社名'),
@@ -3280,6 +3400,41 @@ def api_doc_template_render(tpl_id):
     resp.headers['Content-Disposition'] = (
         "attachment; filename=\"document.xlsx\"; filename*=UTF-8''" + _urlquote(fname)
     )
+    return resp
+
+
+@app.route("/api/doc-templates/<int:tpl_id>/print-view", methods=["POST"])
+@login_required
+@block_super_admin
+def api_doc_template_print_view(tpl_id):
+    """テンプレートを穴埋めして、ブラウザでそのまま印刷できるHTMLビューを返す"""
+    import base64 as _b64
+    tid = _doc_tenant_id()
+    r = DocTemplate.query.filter_by(id=tpl_id, tenant_id=tid, is_active=True).first_or_404()
+    try:
+        mapping = json.loads(r.mapping) if r.mapping else {}
+    except Exception:
+        mapping = {}
+    payload = request.get_json() or {}
+    case_values = payload.get('values') or {}
+    company = _doc_company_data(tid)
+    values = {}
+    for tag, m in mapping.items():
+        m = m or {}
+        if m.get('scope') == 'company':
+            values[tag] = company.get(m.get('company_key') or tag, '')
+        else:
+            values[tag] = case_values.get(tag, '')
+    for k, v in case_values.items():
+        values.setdefault(k, v)
+    try:
+        raw = _b64.standard_b64decode(r.file_b64.encode())
+        filled = _xlsx_fill(raw, values)
+        html = _xlsx_to_print_html(filled, r.name or '契約書類')
+    except Exception as e:
+        return jsonify({'error': f'印刷ビューの生成に失敗しました: {e}'}), 500
+    resp = make_response(html)
+    resp.headers['Content-Type'] = 'text/html; charset=utf-8'
     return resp
 
 
@@ -11142,6 +11297,11 @@ def _app_record_to_dict(r, staff_map):
         'option_settled': bool(r.option_settled),
         'option_approved': bool(r.option_approved),
         'option_payment_date': r.option_payment_date.strftime('%Y-%m-%d') if r.option_payment_date else None,
+        'invoice_sent': bool(r.invoice_sent),
+        'management_phone': r.management_phone or '',
+        'contract_method': r.contract_method or '',
+        'guarantor': r.guarantor or '',
+        'contract_note': r.contract_note or '',
         'created_at': r.created_at.isoformat() if r.created_at else None,
     }
 
@@ -11537,13 +11697,14 @@ def api_applications_update(rid):
     data = request.get_json() or {}
     is_manager = cur_user and cur_user.role in ('owner', 'store_manager', 'super_admin')
 
-    for fld in ['media', 'property_name', 'room_number', 'customer_name', 'status', 'ad_type', 'management_company']:
+    for fld in ['media', 'property_name', 'room_number', 'customer_name', 'status', 'ad_type', 'management_company',
+                'management_phone', 'contract_method', 'guarantor', 'contract_note']:
         if fld in data: setattr(rec, fld, data[fld] or None)
     if 'staff_id' in data and is_manager:
         rec.staff_id = data['staff_id'] or None
     for fld in ['rent', 'brokerage_fee', 'ad_amount', 'option_amount']:
         if fld in data: setattr(rec, fld, float(data[fld] or 0))
-    for fld in ['lifeline', 'moving', 'fire_insurance']:
+    for fld in ['lifeline', 'moving', 'fire_insurance', 'invoice_sent']:
         if fld in data: setattr(rec, fld, bool(data[fld]))
     for fld in ['application_date', 'contract_start_date', 'ad_payment_date', 'brokerage_payment_date', 'option_payment_date']:
         if fld in data: setattr(rec, fld, _parse_date(data[fld]))

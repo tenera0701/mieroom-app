@@ -85,11 +85,16 @@
         <thead>
           <tr>
             <th>契約開始日</th><th>担当</th><th>物件名</th><th>号室</th><th>お客様名</th>
-            <th>賃料</th><th>管理会社</th><th>申込日</th><th>契約書類</th><th>操作</th>
+            <th>賃料</th><th>管理会社</th><th>申込日</th>
+            <th title="請求書を送ったか（クリックで切替）">請求書</th>
+            <th title="電子契約か書面契約か（クリックで切替）">契約方法</th>
+            <th title="連帯保証の有無（クリックで切替）">連帯保証</th>
+            <th>メモ</th>
+            <th>契約書類</th><th>操作</th>
           </tr>
         </thead>
         <tbody id="cc-tbody">
-          <tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:24px;">読み込み中...</td></tr>
+          <tr><td colspan="14" style="text-align:center;color:#9ca3af;padding:24px;">読み込み中...</td></tr>
         </tbody>
       </table>
     </div>
@@ -161,7 +166,7 @@ function render(data) {
   document.getElementById('cc-count').textContent = (data || ccData).length + '件';
   const list = data || ccData;
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:24px;">契約中の顧客はいません</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:#9ca3af;padding:24px;">契約中の顧客はいません</td></tr>';
     return;
   }
   tbody.innerHTML = list.map(r => `
@@ -172,11 +177,68 @@ function render(data) {
       <td>${escc(r.room_number) || '―'}</td>
       <td>${escc(r.customer_name) || '―'}</td>
       <td style="text-align:right;">${yen(r.rent)}</td>
-      <td>${escc(r.management_company) || '―'}</td>
+      <td>
+        <div>${escc(r.management_company) || '―'}</div>
+        <div style="font-size:11px;color:#0F766E;cursor:pointer;" title="クリックで電話番号を編集"
+             onclick="editPhone(${r.id}, this)">${r.management_phone ? '📞 ' + escc(r.management_phone) : '<span style="color:#9ca3af;">＋電話番号</span>'}</div>
+      </td>
       <td style="white-space:nowrap;">${r.application_date || '―'}</td>
+      <td style="cursor:pointer;" title="クリックで切替" onclick="ccPatch(${r.id},'invoice_sent',${!r.invoice_sent})">
+        ${r.invoice_sent ? '<span style="color:#0D9488;font-weight:800;">〇</span>' : '<span style="color:#ef4444;font-weight:800;">×</span>'}</td>
+      <td style="cursor:pointer;white-space:nowrap;" title="クリックで切替（― → 電子 → 書面)" onclick="ccCycle(${r.id},'contract_method','${escc(r.contract_method)}',['','電子','書面'])">
+        ${r.contract_method ? `<span style="background:${r.contract_method==='電子'?'#dbeafe':'#fef3c7'};border-radius:8px;padding:2px 9px;font-size:11px;font-weight:700;color:#374151;">${escc(r.contract_method)}</span>` : '<span style="color:#cbd5e1;">―</span>'}</td>
+      <td style="cursor:pointer;" title="クリックで切替（― → 有 → 無）" onclick="ccCycle(${r.id},'guarantor','${escc(r.guarantor)}',['','有','無'])">
+        ${r.guarantor === '有' ? '<span style="color:#0D9488;font-weight:800;">有</span>' : r.guarantor === '無' ? '<span style="color:#6b7280;font-weight:700;">無</span>' : '<span style="color:#cbd5e1;">―</span>'}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;text-align:left;cursor:pointer;" title="クリックで編集"
+          onclick="editNote(${r.id}, this)">${escc(r.contract_note) || '<span style="color:#cbd5e1;">（クリックで入力）</span>'}</td>
       <td><button class="btn-doc" onclick="location.href='/contract-customers/'+${r.id}+'/edit'">契約書類を編集</button></td>
       <td><button onclick="markPast(${r.id})" style="padding:4px 10px;font-size:11px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;color:#374151;font-weight:600;">入居完了</button></td>
     </tr>`).join('');
+}
+
+/* ── 契約進捗のインライン編集 ── */
+async function ccPatch(id, field, value) {
+  try {
+    const res = await fetch(`/api/applications/${id}`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({[field]: value})
+    });
+    if (!res.ok) throw new Error();
+    const rec = ccData.find(r => r.id === id);
+    if (rec) rec[field] = value;
+    filterList();
+  } catch(_) { showAlert('保存に失敗しました。', 'error'); }
+}
+function ccCycle(id, field, cur, options) {
+  const i = options.indexOf(cur);
+  const next = options[(i + 1) % options.length];
+  ccPatch(id, field, next);
+}
+function editPhone(id, el) {
+  const rec = ccData.find(r => r.id === id); if (!rec) return;
+  const cur = rec.management_phone || '';
+  const inp = document.createElement('input');
+  inp.type = 'tel'; inp.value = cur; inp.placeholder = '例：052-123-4567';
+  inp.style.cssText = 'width:130px;border:1px solid #0D9488;border-radius:4px;padding:2px 6px;font-size:12px;';
+  el.replaceChildren(inp); inp.focus();
+  let saved = false;
+  const save = () => { if (saved) return; saved = true; ccPatch(id, 'management_phone', inp.value.trim()); };
+  inp.addEventListener('blur', save);
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { saved = true; filterList(); } });
+  inp.addEventListener('click', e => e.stopPropagation());
+}
+function editNote(id, el) {
+  const rec = ccData.find(r => r.id === id); if (!rec) return;
+  if (el.querySelector('input')) return;
+  const inp = document.createElement('input');
+  inp.type = 'text'; inp.value = rec.contract_note || ''; inp.placeholder = '進捗メモ（例：鍵渡し日連絡待ち）';
+  inp.style.cssText = 'width:100%;border:1px solid #0D9488;border-radius:4px;padding:2px 6px;font-size:12px;box-sizing:border-box;';
+  el.replaceChildren(inp); inp.focus();
+  let saved = false;
+  const save = () => { if (saved) return; saved = true; ccPatch(id, 'contract_note', inp.value.trim()); };
+  inp.addEventListener('blur', save);
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { saved = true; filterList(); } });
+  inp.addEventListener('click', e => e.stopPropagation());
 }
 
 async function markPast(id) {
