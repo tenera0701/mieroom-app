@@ -1,62 +1,69 @@
 {% extends 'mgmt_base.html' %}
-{% block title %}予約カレンダー | ミエルーム管理ツール{% endblock %}
-{% block breadcrumb %}予約カレンダー{% endblock %}
+{% block title %}カレンダー | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}カレンダー{% endblock %}
 
 {% block extra_head %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   :root { --primary:#0D9488; --primary-dark:#0F766E; }
-  .rv-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
-  .rv-title { font-size:22px; font-weight:800; color:#111827; margin:0; }
-  .rv-sub { font-size:12px; color:#6b7280; margin:4px 0 0; }
+  .rv-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+  .rv-title { font-size:20px; font-weight:800; color:#111827; margin:0 14px 0 0; }
   .btn { display:inline-flex; align-items:center; gap:5px; border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:8px; padding:7px 12px; font-size:13px; font-weight:700; cursor:pointer; }
   .btn:hover { background:#F0FDFA; border-color:#5EEAD4; }
   .btn.primary { background:var(--primary); color:#fff; border-color:var(--primary); }
   .btn.danger { color:#ef4444; border-color:#fca5a5; }
   .btn.sm { padding:4px 8px; font-size:11px; border-radius:6px; }
-  .layout { display:grid; grid-template-columns: 1fr 330px; gap:14px; align-items:start; }
-  @media (max-width:1000px){ .layout { grid-template-columns:1fr; } }
-  .panel { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:14px; }
-  /* カレンダー */
-  .cal-nav { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
-  .cal-nav h2 { font-size:16px; font-weight:800; margin:0; min-width:120px; text-align:center; }
+  .nav-round { width:34px; height:34px; border-radius:50%; border:none; background:#fff; font-size:16px; cursor:pointer; color:#374151; }
+  .nav-round:hover { background:#f1f5f9; }
+  .cal-title { font-size:18px; font-weight:800; color:#111827; min-width:150px; }
+  .view-switch { display:flex; border:1px solid #d1d5db; border-radius:9px; overflow:hidden; margin-left:auto; }
+  .view-switch button { border:none; background:#fff; padding:8px 16px; font-size:13px; font-weight:700; color:#374151; cursor:pointer; }
+  .view-switch button.on { background:var(--primary); color:#fff; }
+  .panel { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; }
+  /* 月表示 */
   table.cal { width:100%; border-collapse:collapse; table-layout:fixed; }
-  .cal th { font-size:11px; color:#6b7280; padding:6px 0; border-bottom:1px solid #e5e7eb; }
+  .cal th { font-size:11px; color:#6b7280; padding:6px 0; border-bottom:1px solid #e5e7eb; font-weight:700; }
   .cal th.sun { color:#dc2626; } .cal th.sat { color:#2563eb; }
-  .cal td { height:84px; vertical-align:top; border:1px solid #f1f5f9; padding:4px 5px; cursor:pointer; }
-  .cal td:hover { background:#F0FDFA; }
-  .cal td.other { background:#fafafa; color:#cbd5e1; cursor:default; }
+  .cal td { height:96px; vertical-align:top; border:1px solid #f1f5f9; padding:3px 4px; cursor:pointer; }
+  .cal td:hover { background:#F8FFFE; }
+  .cal td.other { background:#fafafa; cursor:default; }
   .cal td.today .dnum { background:var(--primary); color:#fff; border-radius:50%; }
-  .cal td.sel { outline:2px solid var(--primary); outline-offset:-2px; }
   .dnum { font-size:12px; font-weight:700; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; }
-  .cal .sun .dnum, .cal td:first-child .dnum { color:#dc2626; }
-  .cal td:last-child .dnum { color:#2563eb; }
-  .rv-chip { display:block; font-size:10px; background:#CCFBF1; color:#0F766E; border-radius:5px; padding:1px 5px; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
-  .rv-chip.done { background:#e5e7eb; color:#6b7280; text-decoration:line-through; }
+  td.sun-col .dnum { color:#dc2626; } td.sat-col .dnum { color:#2563eb; }
+  .rv-chip { display:block; font-size:10.5px; background:#CCFBF1; color:#0F766E; border-radius:5px; padding:1px 5px; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; cursor:pointer; }
+  .rv-chip:hover { filter:brightness(0.95); }
+  .rv-chip.done { background:#dbeafe; color:#1d4ed8; }
   .rv-chip.cancel { background:#fee2e2; color:#b91c1c; text-decoration:line-through; }
-  /* 日詳細 */
-  .day-item { border:1px solid #e5e7eb; border-radius:9px; padding:9px 11px; margin-bottom:8px; }
-  .day-item .t { font-size:14px; font-weight:800; color:#0F766E; }
-  .day-item .n { font-size:13px; font-weight:700; }
-  .day-item .meta { font-size:11px; color:#6b7280; margin-top:2px; white-space:pre-wrap; }
-  .st-badge { font-size:10px; border-radius:8px; padding:1px 7px; font-weight:700; }
-  .st-予約 { background:#CCFBF1; color:#0F766E; }
-  .st-来店済 { background:#dbeafe; color:#1d4ed8; }
-  .st-キャンセル { background:#fee2e2; color:#b91c1c; }
+  /* 週・日表示（時間グリッド） */
+  .tg-wrap { overflow-x:auto; }
+  .tg { display:grid; min-width:640px; }
+  .tg .tg-headcell { border-bottom:1px solid #e5e7eb; text-align:center; font-size:12px; font-weight:700; color:#374151; padding:7px 2px; }
+  .tg .tg-headcell .dn { font-size:16px; }
+  .tg .tg-headcell.today .dn { background:var(--primary); color:#fff; border-radius:50%; display:inline-flex; width:26px; height:26px; align-items:center; justify-content:center; }
+  .tg .tg-headcell.sun { color:#dc2626; } .tg .tg-headcell.sat { color:#2563eb; }
+  .tg-time { font-size:10px; color:#94a3b8; text-align:right; padding-right:6px; transform:translateY(-6px); }
+  .tg-cell { border-left:1px solid #f1f5f9; border-top:1px solid #f1f5f9; position:relative; cursor:pointer; }
+  .tg-cell:hover { background:#F8FFFE; }
+  .tg-col { position:relative; }
+  .tg-ev { position:absolute; left:3px; right:3px; background:#CCFBF1; border-left:3px solid var(--primary); color:#0F766E; border-radius:6px; padding:3px 6px; font-size:11px; font-weight:700; overflow:hidden; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.08); z-index:2; }
+  .tg-ev:hover { filter:brightness(0.96); }
+  .tg-ev.done { background:#dbeafe; border-left-color:#2563eb; color:#1d4ed8; }
+  .tg-ev.cancel { background:#fee2e2; border-left-color:#dc2626; color:#b91c1c; text-decoration:line-through; }
+  .tg-ev .ev-t { font-size:10px; font-weight:600; opacity:.85; }
+  .now-line { position:absolute; left:0; right:0; height:2px; background:#ef4444; z-index:3; pointer-events:none; }
   .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
   .alert.show { display:block; }
   .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
   .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
-  /* 設定モーダル */
+  /* モーダル */
   .cfg-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:2500; align-items:center; justify-content:center; padding:16px; }
   .cfg-overlay.open { display:flex; }
-  .cfg-box { background:#fff; border-radius:14px; width:520px; max-width:100%; max-height:92vh; overflow-y:auto; }
+  .cfg-box { background:#fff; border-radius:14px; width:420px; max-width:100%; max-height:92vh; overflow-y:auto; }
   .cfg-row { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
-  .cfg-row label { font-size:13px; font-weight:700; color:#374151; min-width:130px; }
-  .cfg-row input[type=time], .cfg-row select, .cfg-row input[type=number] { border:1px solid #d1d5db; border-radius:7px; padding:7px 9px; font-size:13px; }
-  .wd { display:inline-flex; align-items:center; gap:3px; font-size:12px; border:1.5px solid #d1d5db; border-radius:8px; padding:5px 9px; cursor:pointer; user-select:none; }
-  .wd.on { border-color:#ef4444; background:#fee2e2; color:#b91c1c; font-weight:700; }
-  #rv-qr { width:130px; height:130px; }
+  .cfg-row label { font-size:13px; font-weight:700; color:#374151; min-width:90px; }
+  .st-badge { font-size:11px; border-radius:8px; padding:2px 9px; font-weight:700; }
+  .st-予約 { background:#CCFBF1; color:#0F766E; }
+  .st-来店済 { background:#dbeafe; color:#1d4ed8; }
+  .st-キャンセル { background:#fee2e2; color:#b91c1c; }
 </style>
 {% endblock %}
 
@@ -64,86 +71,48 @@
 <div style="max-width:1280px;margin:0 auto;">
   <div id="alert-msg" class="alert"></div>
   <div class="rv-head">
-    <div>
-      <h1 class="rv-title">予約カレンダー</h1>
-      <p class="rv-sub">お客様のWeb予約が自動でここに入ります。日付をクリックすると詳細・手動追加ができます。</p>
+    <h1 class="rv-title">📅 カレンダー</h1>
+    <button class="btn" onclick="goToday()">今日</button>
+    <button class="nav-round" onclick="nav(-1)">‹</button>
+    <button class="nav-round" onclick="nav(1)">›</button>
+    <span class="cal-title" id="cal-title"></span>
+    <div class="view-switch">
+      <button id="vw-month" class="on" onclick="setView('month')">月</button>
+      <button id="vw-week" onclick="setView('week')">週</button>
+      <button id="vw-day" onclick="setView('day')">日</button>
     </div>
-    <button class="btn" onclick="openCfg()">⚙ 顧客予約ツール設定</button>
+    <button class="btn primary" onclick="openAdd()">＋ 予約を追加</button>
+    <a class="btn" href="/settings/reservation" title="Web予約の受付時間・定休日などの設定">⚙ 予約システム設定</a>
   </div>
 
-  <div class="layout">
-    <!-- カレンダー -->
-    <div class="panel">
-      <div class="cal-nav">
-        <button class="btn" onclick="moveMonth(-1)">←</button>
-        <h2 id="cal-title"></h2>
-        <button class="btn" onclick="moveMonth(1)">→</button>
-        <button class="btn" onclick="goToday()">今日</button>
-      </div>
-      <table class="cal">
-        <thead><tr><th class="sun">日</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th class="sat">土</th></tr></thead>
-        <tbody id="cal-body"></tbody>
-      </table>
-    </div>
-
-    <!-- 日詳細 -->
-    <div class="panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-        <h3 style="margin:0;font-size:15px;font-weight:800;color:#0F766E;" id="day-title">日付を選択</h3>
-        <button class="btn primary sm" onclick="openAdd()">＋ 手動追加</button>
-      </div>
-      <div id="day-list"><p style="color:#9ca3af;font-size:13px;">カレンダーの日付をクリックしてください。</p></div>
+  <div class="panel">
+    <div id="view-month"><table class="cal">
+      <thead><tr><th class="sun">日</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th class="sat">土</th></tr></thead>
+      <tbody id="cal-body"></tbody>
+    </table></div>
+    <div id="view-time" class="tg-wrap" style="display:none;">
+      <div class="tg" id="tg"></div>
     </div>
   </div>
 </div>
 
-<!-- 設定モーダル -->
-<div class="cfg-overlay" id="cfg-overlay">
+<!-- 予約詳細モーダル -->
+<div class="cfg-overlay" id="detail-overlay">
   <div class="cfg-box">
     <div style="padding:15px 20px;border-bottom:1px solid #eef2f2;display:flex;align-items:center;justify-content:space-between;">
-      <h3 style="margin:0;font-size:15px;font-weight:800;color:#0F766E;">⚙ 顧客予約ツール設定</h3>
-      <button class="btn sm" onclick="closeCfg()">✕</button>
+      <h3 style="margin:0;font-size:15px;font-weight:800;color:#0F766E;" id="dt-title">予約の詳細</h3>
+      <button class="btn sm" onclick="closeDetail()">✕</button>
     </div>
-    <div style="padding:16px 20px;">
-      <div class="cfg-row"><label>Web予約の受付</label>
-        <label style="min-width:auto;font-weight:600;"><input type="checkbox" id="cfg-enabled"> 受け付ける</label></div>
-      <div class="cfg-row"><label>受付時間</label>
-        <input type="time" id="cfg-open" value="10:00"> 〜 <input type="time" id="cfg-close" value="18:00"></div>
-      <div class="cfg-row"><label>1枠の長さ</label>
-        <select id="cfg-slot"><option value="30">30分</option><option value="60" selected>60分</option><option value="90">90分</option><option value="120">120分</option></select></div>
-      <div class="cfg-row"><label>同じ時間帯の受付数</label>
-        <input type="number" id="cfg-max" min="1" max="10" value="1" style="width:70px;"> 組まで</div>
-      <div class="cfg-row"><label>何日先まで受付</label>
-        <input type="number" id="cfg-days" min="1" max="60" value="14" style="width:70px;"> 日</div>
-      <div class="cfg-row" style="align-items:flex-start;"><label>定休日</label>
-        <span id="cfg-wd" style="display:flex;gap:5px;flex-wrap:wrap;"></span></div>
-      <div class="cfg-row" style="align-items:flex-start;"><label>予約ページの案内文</label>
-        <textarea id="cfg-note" style="flex:1;min-height:60px;border:1px solid #d1d5db;border-radius:7px;padding:8px 10px;font-size:13px;font-family:inherit;" placeholder="例：駐車場あります。当日のご予約はお電話ください。"></textarea></div>
-      <div style="border-top:1px solid #eef2f2;padding-top:14px;margin-top:6px;">
-        <div style="font-size:13px;font-weight:800;color:#0F766E;margin-bottom:8px;">📱 お客様用 予約ページ</div>
-        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
-          <div id="rv-qr"></div>
-          <div style="flex:1;min-width:200px;">
-            <div id="rv-url" style="font-size:12px;color:#0F766E;word-break:break-all;background:#F0FDFA;border:1px solid #99f6e4;border-radius:8px;padding:8px 10px;margin-bottom:8px;"></div>
-            <button class="btn sm" onclick="copyRvUrl()">🔗 URLをコピー</button>
-            <a class="btn sm" id="rv-open" href="#" target="_blank" rel="noopener">開く</a>
-          </div>
-        </div>
-        <p style="font-size:11px;color:#9ca3af;margin:8px 0 0;">ホームページやLINE・メール署名にURLを載せたり、店頭にQRを置いてご利用ください。</p>
-      </div>
-    </div>
-    <div style="padding:12px 20px;border-top:1px solid #eef2f2;text-align:right;">
-      <button class="btn" onclick="closeCfg()">閉じる</button>
-      <button class="btn primary" onclick="saveCfg()">💾 保存</button>
-    </div>
+    <div style="padding:16px 20px;" id="dt-body"></div>
+    <div style="padding:12px 20px;border-top:1px solid #eef2f2;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;" id="dt-actions"></div>
   </div>
 </div>
 
 <!-- 手動追加モーダル -->
 <div class="cfg-overlay" id="add-overlay">
-  <div class="cfg-box" style="width:420px;">
+  <div class="cfg-box">
     <div style="padding:15px 20px;border-bottom:1px solid #eef2f2;display:flex;align-items:center;justify-content:space-between;">
-      <h3 style="margin:0;font-size:15px;font-weight:800;color:#0F766E;">＋ 予約を手動追加</h3>
+      <h3 style="margin:0;font-size:15px;font-weight:800;color:#0F766E;">＋ 予約を追加</h3>
       <button class="btn sm" onclick="closeAdd()">✕</button>
     </div>
     <div style="padding:16px 20px;">
@@ -163,12 +132,11 @@
 
 {% block extra_scripts %}
 <script>
-const STORE_ID = {{ store_id if store_id else 'null' }};
-const RESERVE_URL = STORE_ID ? (location.origin + '/reserve/' + STORE_ID) : '';
-let calY, calM;          // 表示中の年月
-let RES = [];            // 当月の予約
-let selDate = '';        // 選択日 'YYYY-MM-DD'
-const WD_NAMES = ['月','火','水','木','金','土','日'];
+let view = 'month';            // month / week / day
+let cur = new Date();          // 表示の基準日
+let RES = [];                  // 取得済み予約（表示範囲分）
+const HOUR_PX = 48;            // 時間グリッド1時間の高さ
+const DAY_START = 8, DAY_END = 20;   // 時間グリッドの表示範囲（時）
 
 function showAlert(msg, type='success'){
   const el=document.getElementById('alert-msg');
@@ -177,23 +145,66 @@ function showAlert(msg, type='success'){
 }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function pad(n){ return String(n).padStart(2,'0'); }
-function fmtD(y,m,d){ return `${y}-${pad(m)}-${pad(d)}`; }
+function fmt(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function todayS(){ return fmt(new Date()); }
+const DOW = ['日','月','火','水','木','金','土'];
 
-async function loadMonth(){
-  document.getElementById('cal-title').textContent = `${calY}年 ${calM}月`;
-  try{ RES = await fetch(`/api/reservations?year=${calY}&month=${calM}`).then(r=>r.json()); }
-  catch(_){ RES = []; }
-  renderCal();
-  if(selDate) renderDay();
+/* ── データ取得（表示範囲の月をまとめて取得） ── */
+async function fetchRange(months){
+  const seen = new Set(); RES = [];
+  for(const [y,m] of months){
+    const key = y+'-'+m; if(seen.has(key)) continue; seen.add(key);
+    try{
+      const rows = await fetch(`/api/reservations?year=${y}&month=${m}`).then(r=>r.json());
+      RES = RES.concat(rows||[]);
+    }catch(_){}
+  }
 }
-function moveMonth(d){ calM+=d; if(calM<1){calM=12;calY--;} if(calM>12){calM=1;calY++;} loadMonth(); }
-function goToday(){ const t=new Date(); calY=t.getFullYear(); calM=t.getMonth()+1; selDate=fmtD(calY,calM,t.getDate()); loadMonth(); }
+function monthsForView(){
+  if(view==='month') return [[cur.getFullYear(), cur.getMonth()+1]];
+  if(view==='week'){
+    const s = weekStart(cur), e = new Date(s); e.setDate(e.getDate()+6);
+    return [[s.getFullYear(), s.getMonth()+1],[e.getFullYear(), e.getMonth()+1]];
+  }
+  return [[cur.getFullYear(), cur.getMonth()+1]];
+}
+function weekStart(d){ const s=new Date(d); s.setDate(s.getDate()-s.getDay()); return s; }   // 日曜始まり
 
-function renderCal(){
-  const first=new Date(calY,calM-1,1);
-  const startDow=first.getDay();             // 0=日
-  const daysIn=new Date(calY,calM,0).getDate();
-  const today=new Date(); const todayS=fmtD(today.getFullYear(),today.getMonth()+1,today.getDate());
+async function refresh(){
+  await fetchRange(monthsForView());
+  renderTitle();
+  if(view==='month'){ document.getElementById('view-month').style.display=''; document.getElementById('view-time').style.display='none'; renderMonth(); }
+  else { document.getElementById('view-month').style.display='none'; document.getElementById('view-time').style.display=''; renderTimeGrid(); }
+}
+function renderTitle(){
+  const t=document.getElementById('cal-title');
+  if(view==='month') t.textContent = `${cur.getFullYear()}年 ${cur.getMonth()+1}月`;
+  else if(view==='week'){
+    const s=weekStart(cur), e=new Date(s); e.setDate(e.getDate()+6);
+    t.textContent = s.getMonth()===e.getMonth()
+      ? `${s.getFullYear()}年 ${s.getMonth()+1}月${s.getDate()}日〜${e.getDate()}日`
+      : `${s.getMonth()+1}/${s.getDate()} 〜 ${e.getMonth()+1}/${e.getDate()}`;
+  } else t.textContent = `${cur.getFullYear()}年 ${cur.getMonth()+1}月${cur.getDate()}日（${DOW[cur.getDay()]}）`;
+}
+function setView(v){
+  view=v;
+  ['month','week','day'].forEach(x=>document.getElementById('vw-'+x).classList.toggle('on', x===v));
+  refresh();
+}
+function nav(d){
+  if(view==='month') cur.setMonth(cur.getMonth()+d);
+  else if(view==='week') cur.setDate(cur.getDate()+7*d);
+  else cur.setDate(cur.getDate()+d);
+  refresh();
+}
+function goToday(){ cur=new Date(); refresh(); }
+
+/* ── 月表示 ── */
+function renderMonth(){
+  const y=cur.getFullYear(), m=cur.getMonth()+1;
+  const first=new Date(y,m-1,1);
+  const startDow=first.getDay();
+  const daysIn=new Date(y,m,0).getDate();
   const byDate={};
   RES.forEach(r=>{ (byDate[r.date]=byDate[r.date]||[]).push(r); });
   let html='', day=1;
@@ -201,13 +212,14 @@ function renderCal(){
     html+='<tr>';
     for(let dow=0;dow<7;dow++){
       if((w===0&&dow<startDow)||day>daysIn){ html+='<td class="other"></td>'; continue; }
-      const ds=fmtD(calY,calM,day);
+      const ds=`${y}-${pad(m)}-${pad(day)}`;
       const items=(byDate[ds]||[]).slice().sort((a,b)=>(a.time_slot||'').localeCompare(b.time_slot||''));
       const chips=items.slice(0,3).map(r=>{
         const cls=r.status==='来店済'?'done':(r.status==='キャンセル'?'cancel':'');
-        return `<span class="rv-chip ${cls}">${esc(r.time_slot)} ${esc(r.customer_name)}</span>`;
+        return `<span class="rv-chip ${cls}" onclick="event.stopPropagation();openDetail(${r.id})">${esc(r.time_slot)} ${esc(r.customer_name)}</span>`;
       }).join('') + (items.length>3?`<span style="font-size:10px;color:#6b7280;">他${items.length-3}件</span>`:'');
-      html+=`<td class="${ds===todayS?'today':''} ${ds===selDate?'sel':''}" onclick="pickDay('${ds}')">
+      const colCls = dow===0?'sun-col':(dow===6?'sat-col':'');
+      html+=`<td class="${ds===todayS()?'today':''} ${colCls}" onclick="openDay('${ds}')">
         <span class="dnum">${day}</span>${chips}</td>`;
       day++;
     }
@@ -215,46 +227,101 @@ function renderCal(){
   }
   document.getElementById('cal-body').innerHTML=html;
 }
-function pickDay(ds){ selDate=ds; renderCal(); renderDay(); }
+function openDay(ds){ cur=new Date(ds+'T00:00:00'); setView('day'); }
 
-function renderDay(){
-  const d=new Date(selDate);
-  document.getElementById('day-title').textContent=`${d.getMonth()+1}月${d.getDate()}日（${['日','月','火','水','木','金','土'][d.getDay()]}）の予約`;
-  const items=RES.filter(r=>r.date===selDate).sort((a,b)=>(a.time_slot||'').localeCompare(b.time_slot||''));
-  const box=document.getElementById('day-list');
-  if(!items.length){ box.innerHTML='<p style="color:#9ca3af;font-size:13px;">この日の予約はありません。</p>'; return; }
-  box.innerHTML=items.map(r=>`
-    <div class="day-item">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-        <span class="t">${esc(r.time_slot)||'--:--'}</span>
-        <span class="st-badge st-${esc(r.status)}">${esc(r.status)}</span>
-      </div>
-      <div class="n">${esc(r.customer_name)} 様 <span style="font-size:10px;color:#9ca3af;">（${r.source==='web'?'Web予約':'手動'}）</span></div>
-      <div class="meta">${r.phone?('📞 '+esc(r.phone)+'\n'):''}${r.email?('✉ '+esc(r.email)+'\n'):''}${r.memo?esc(r.memo):''}</div>
-      <div style="display:flex;gap:5px;margin-top:7px;flex-wrap:wrap;">
-        ${r.status!=='来店済'?`<button class="btn sm" onclick="setStatus(${r.id},'来店済')">✓ 来店済に</button>`:''}
-        ${r.status!=='キャンセル'?`<button class="btn sm" onclick="setStatus(${r.id},'キャンセル')">キャンセル</button>`:`<button class="btn sm" onclick="setStatus(${r.id},'予約')">予約に戻す</button>`}
-        <button class="btn danger sm" onclick="delRes(${r.id})">削除</button>
-      </div>
-    </div>`).join('');
+/* ── 週・日表示（時間グリッド） ── */
+function tParse(t){ const [h,mi]=(t||'0:0').split(':').map(Number); return h+mi/60; }
+function renderTimeGrid(){
+  const days = [];
+  if(view==='week'){ const s=weekStart(cur); for(let i=0;i<7;i++){ const d=new Date(s); d.setDate(d.getDate()+i); days.push(d); } }
+  else days.push(new Date(cur));
+
+  // 表示時間範囲（予約がはみ出す場合は広げる）
+  let hs=DAY_START, he=DAY_END;
+  RES.forEach(r=>{ if(days.some(d=>fmt(d)===r.date)){ const t=tParse(r.time_slot); hs=Math.min(hs, Math.floor(t)); he=Math.max(he, Math.ceil(t+1)); } });
+
+  const tg=document.getElementById('tg');
+  tg.style.gridTemplateColumns = `52px repeat(${days.length}, 1fr)`;
+  let html = '<div></div>';   // 左上の空き
+  days.forEach(d=>{
+    const isT = fmt(d)===todayS();
+    const cls = d.getDay()===0?'sun':(d.getDay()===6?'sat':'');
+    html += `<div class="tg-headcell ${cls} ${isT?'today':''}" style="cursor:pointer;" onclick="cur=new Date('${fmt(d)}T00:00:00');setView('day')">${DOW[d.getDay()]}<br><span class="dn">${d.getDate()}</span></div>`;
+  });
+  // 本体: 時間ラベル列＋日列（各日列はrelativeな1つの大きなセルにイベントを絶対配置）
+  const totalH=(he-hs)*HOUR_PX;
+  html += `<div style="position:relative;height:${totalH}px;">`;
+  for(let h=hs;h<he;h++) html+=`<div class="tg-time" style="position:absolute;top:${(h-hs)*HOUR_PX}px;right:0;">${h}:00</div>`;
+  html += '</div>';
+  days.forEach(d=>{
+    const ds=fmt(d);
+    let col = `<div class="tg-col" style="height:${totalH}px;">`;
+    for(let h=hs;h<he;h++){
+      col+=`<div class="tg-cell" style="position:absolute;top:${(h-hs)*HOUR_PX}px;left:0;right:0;height:${HOUR_PX}px;" onclick="quickAdd('${ds}','${pad(h)}:00')"></div>`;
+    }
+    // 予約ブロック
+    RES.filter(r=>r.date===ds).forEach(r=>{
+      const t=tParse(r.time_slot);
+      const top=(t-hs)*HOUR_PX+1;
+      const cls=r.status==='来店済'?'done':(r.status==='キャンセル'?'cancel':'');
+      col+=`<div class="tg-ev ${cls}" style="top:${top}px;height:${HOUR_PX-4}px;" onclick="event.stopPropagation();openDetail(${r.id})">
+        ${esc(r.customer_name)} 様<div class="ev-t">${esc(r.time_slot)}${r.source==='web'?'・Web':''}</div></div>`;
+    });
+    // 現在時刻ライン
+    if(ds===todayS()){
+      const now=new Date(); const nt=now.getHours()+now.getMinutes()/60;
+      if(nt>=hs&&nt<=he) col+=`<div class="now-line" style="top:${(nt-hs)*HOUR_PX}px;"></div>`;
+    }
+    col+='</div>';
+    html+=col;
+  });
+  tg.innerHTML=html;
 }
+function quickAdd(ds, time){
+  document.getElementById('add-date').value=ds;
+  document.getElementById('add-time').value=time;
+  document.getElementById('add-name').value=''; document.getElementById('add-phone').value=''; document.getElementById('add-memo').value='';
+  document.getElementById('add-overlay').classList.add('open');
+}
+
+/* ── 詳細モーダル ── */
+function openDetail(id){
+  const r=RES.find(x=>x.id===id); if(!r) return;
+  const d=new Date(r.date+'T00:00:00');
+  document.getElementById('dt-title').textContent=`${d.getMonth()+1}/${d.getDate()}（${DOW[d.getDay()]}） ${r.time_slot}`;
+  document.getElementById('dt-body').innerHTML=`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <span style="font-size:16px;font-weight:800;">${esc(r.customer_name)} 様</span>
+      <span class="st-badge st-${esc(r.status)}">${esc(r.status)}</span>
+      <span style="font-size:11px;color:#9ca3af;">${r.source==='web'?'Web予約':'手動登録'}</span>
+    </div>
+    <div style="font-size:13px;color:#374151;line-height:1.9;">
+      ${r.furigana?('フリガナ：'+esc(r.furigana)+'<br>'):''}
+      ${r.phone?('📞 <a href="tel:'+esc(r.phone)+'" style="color:#0F766E;">'+esc(r.phone)+'</a><br>'):''}
+      ${r.email?('✉ '+esc(r.email)+'<br>'):''}
+      ${r.memo?('<div style="background:#F8FAFC;border:1px solid #eef2f7;border-radius:8px;padding:8px 10px;margin-top:6px;white-space:pre-wrap;">'+esc(r.memo)+'</div>'):''}
+    </div>`;
+  document.getElementById('dt-actions').innerHTML=`
+    <button class="btn danger sm" onclick="delRes(${r.id})">🗑 削除</button>
+    <div style="display:flex;gap:6px;">
+      ${r.status!=='来店済'?`<button class="btn sm" onclick="setStatus(${r.id},'来店済')">✓ 来店済に</button>`:''}
+      ${r.status!=='キャンセル'?`<button class="btn sm" onclick="setStatus(${r.id},'キャンセル')">キャンセル</button>`:`<button class="btn sm" onclick="setStatus(${r.id},'予約')">予約に戻す</button>`}
+    </div>`;
+  document.getElementById('detail-overlay').classList.add('open');
+}
+function closeDetail(){ document.getElementById('detail-overlay').classList.remove('open'); }
 async function setStatus(id, st){
-  try{ await fetch(`/api/reservations/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:st})}); loadMonth(); }
+  try{ await fetch(`/api/reservations/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:st})}); closeDetail(); refresh(); }
   catch(_){ showAlert('更新に失敗しました','error'); }
 }
 async function delRes(id){
   if(!confirm('この予約を削除しますか？')) return;
-  try{ await fetch(`/api/reservations/${id}`,{method:'DELETE'}); loadMonth(); }
+  try{ await fetch(`/api/reservations/${id}`,{method:'DELETE'}); closeDetail(); refresh(); }
   catch(_){ showAlert('削除に失敗しました','error'); }
 }
 
-/* 手動追加 */
-function openAdd(){
-  document.getElementById('add-date').value = selDate || fmtD(calY,calM,1);
-  document.getElementById('add-time').value = '11:00';
-  document.getElementById('add-name').value=''; document.getElementById('add-phone').value=''; document.getElementById('add-memo').value='';
-  document.getElementById('add-overlay').classList.add('open');
-}
+/* ── 手動追加 ── */
+function openAdd(){ quickAdd(fmt(cur), '11:00'); }
 function closeAdd(){ document.getElementById('add-overlay').classList.remove('open'); }
 async function saveAdd(){
   const name=document.getElementById('add-name').value.trim();
@@ -264,56 +331,12 @@ async function saveAdd(){
       body:JSON.stringify({date:document.getElementById('add-date').value, time_slot:document.getElementById('add-time').value,
         customer_name:name, phone:document.getElementById('add-phone').value, memo:document.getElementById('add-memo').value})});
     if(!r.ok) throw new Error();
-    closeAdd(); selDate=document.getElementById('add-date').value;
-    const d=new Date(selDate); calY=d.getFullYear(); calM=d.getMonth()+1;
-    loadMonth(); showAlert('予約を追加しました。');
+    closeAdd();
+    cur=new Date(document.getElementById('add-date').value+'T00:00:00');
+    refresh(); showAlert('予約を追加しました。');
   }catch(_){ showAlert('追加に失敗しました','error'); }
 }
 
-/* 設定 */
-let CFG={};
-function renderWd(){
-  const box=document.getElementById('cfg-wd');
-  const set=new Set((CFG.closed_weekdays||'').split(',').filter(s=>s!==''));
-  box.innerHTML=WD_NAMES.map((n,i)=>`<span class="wd ${set.has(String(i))?'on':''}" onclick="toggleWd(${i})">${n}</span>`).join('');
-}
-function toggleWd(i){
-  const set=new Set((CFG.closed_weekdays||'').split(',').filter(s=>s!==''));
-  set.has(String(i)) ? set.delete(String(i)) : set.add(String(i));
-  CFG.closed_weekdays=[...set].join(',');
-  renderWd();
-}
-async function openCfg(){
-  try{ CFG=await fetch('/api/reservation-config').then(r=>r.json()); }catch(_){ CFG={}; }
-  document.getElementById('cfg-enabled').checked = CFG.enabled!==false;
-  document.getElementById('cfg-open').value = CFG.open_time||'10:00';
-  document.getElementById('cfg-close').value = CFG.close_time||'18:00';
-  document.getElementById('cfg-slot').value = String(CFG.slot_minutes||60);
-  document.getElementById('cfg-max').value = CFG.max_per_slot||1;
-  document.getElementById('cfg-days').value = CFG.days_ahead||14;
-  document.getElementById('cfg-note').value = CFG.note||'';
-  renderWd();
-  document.getElementById('rv-url').textContent=RESERVE_URL;
-  document.getElementById('rv-open').href=RESERVE_URL;
-  const q=document.getElementById('rv-qr'); q.innerHTML='';
-  if(RESERVE_URL && window.QRCode) new QRCode(q,{text:RESERVE_URL,width:120,height:120});
-  document.getElementById('cfg-overlay').classList.add('open');
-}
-function closeCfg(){ document.getElementById('cfg-overlay').classList.remove('open'); }
-function copyRvUrl(){ navigator.clipboard.writeText(RESERVE_URL).then(()=>showAlert('URLをコピーしました。')); }
-async function saveCfg(){
-  try{
-    const r=await fetch('/api/reservation-config',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({enabled:document.getElementById('cfg-enabled').checked,
-        open_time:document.getElementById('cfg-open').value, close_time:document.getElementById('cfg-close').value,
-        slot_minutes:+document.getElementById('cfg-slot').value, max_per_slot:+document.getElementById('cfg-max').value,
-        days_ahead:+document.getElementById('cfg-days').value, closed_weekdays:CFG.closed_weekdays||'',
-        note:document.getElementById('cfg-note').value})});
-    if(!r.ok) throw new Error();
-    closeCfg(); showAlert('設定を保存しました。お客様の予約ページに即反映されます。');
-  }catch(_){ showAlert('保存に失敗しました','error'); }
-}
-
-document.addEventListener('DOMContentLoaded', ()=>{ goToday(); });
+document.addEventListener('DOMContentLoaded', ()=>{ refresh(); });
 </script>
 {% endblock %}

@@ -1,0 +1,121 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}予約システム設定 | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}予約システム設定{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root { --primary:#0D9488; --primary-dark:#0F766E; }
+  .panel { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:18px 20px; margin-bottom:16px; max-width:760px; }
+  .panel h2 { font-size:14px; font-weight:800; color:#0F766E; margin:0 0 14px; }
+  .btn { display:inline-flex; align-items:center; gap:5px; border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:8px; padding:8px 14px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn:hover { background:#F0FDFA; border-color:#5EEAD4; }
+  .btn.primary { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .cfg-row { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+  .cfg-row > label { font-size:13px; font-weight:700; color:#374151; min-width:150px; }
+  .cfg-row input[type=time], .cfg-row select, .cfg-row input[type=number] { border:1px solid #d1d5db; border-radius:7px; padding:8px 10px; font-size:13px; }
+  .wd { display:inline-flex; align-items:center; gap:3px; font-size:12px; border:1.5px solid #d1d5db; border-radius:8px; padding:6px 10px; cursor:pointer; user-select:none; }
+  .wd.on { border-color:#ef4444; background:#fee2e2; color:#b91c1c; font-weight:700; }
+  #rv-qr { width:130px; height:130px; }
+  .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; max-width:760px; }
+  .alert.show { display:block; }
+  .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
+  .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="alert-msg" class="alert"></div>
+<div style="margin-bottom:14px;">
+  <h1 style="font-size:20px;font-weight:800;color:#111827;margin:0;">予約システム設定</h1>
+  <p style="font-size:12px;color:#6b7280;margin:4px 0 0;">お客様向けWeb来店予約の受付設定です。予約は<a href="/reservations" style="color:#0F766E;font-weight:700;">カレンダー</a>に自動で入ります。</p>
+</div>
+
+<div class="panel">
+  <h2>受付設定</h2>
+  <div class="cfg-row"><label>Web予約の受付</label>
+    <label style="min-width:auto;font-weight:600;font-size:13px;"><input type="checkbox" id="cfg-enabled"> 受け付ける</label></div>
+  <div class="cfg-row"><label>受付時間</label>
+    <input type="time" id="cfg-open" value="10:00"> 〜 <input type="time" id="cfg-close" value="18:00"></div>
+  <div class="cfg-row"><label>1枠の長さ</label>
+    <select id="cfg-slot"><option value="30">30分</option><option value="60" selected>60分</option><option value="90">90分</option><option value="120">120分</option></select></div>
+  <div class="cfg-row"><label>同じ時間帯の受付数</label>
+    <input type="number" id="cfg-max" min="1" max="10" value="1" style="width:70px;"> 組まで</div>
+  <div class="cfg-row"><label>何日先まで受付</label>
+    <input type="number" id="cfg-days" min="1" max="60" value="14" style="width:70px;"> 日</div>
+  <div class="cfg-row" style="align-items:flex-start;"><label>定休日</label>
+    <span id="cfg-wd" style="display:flex;gap:5px;flex-wrap:wrap;"></span></div>
+  <div class="cfg-row" style="align-items:flex-start;"><label>予約ページの案内文</label>
+    <textarea id="cfg-note" style="flex:1;min-height:64px;border:1px solid #d1d5db;border-radius:7px;padding:8px 10px;font-size:13px;font-family:inherit;" placeholder="例：駐車場あります。当日のご予約はお電話ください。"></textarea></div>
+  <div style="text-align:right;">
+    <button class="btn primary" onclick="saveCfg()">💾 保存</button>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>📱 お客様用 予約ページ（{{ store_name }}）</h2>
+  <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+    <div id="rv-qr"></div>
+    <div style="flex:1;min-width:220px;">
+      <div id="rv-url" style="font-size:12px;color:#0F766E;word-break:break-all;background:#F0FDFA;border:1px solid #99f6e4;border-radius:8px;padding:9px 11px;margin-bottom:8px;"></div>
+      <button class="btn" onclick="copyRvUrl()">🔗 URLをコピー</button>
+      <a class="btn" id="rv-open" href="#" target="_blank" rel="noopener">フォームを開く</a>
+    </div>
+  </div>
+  <p style="font-size:11px;color:#9ca3af;margin:10px 0 0;">ホームページやLINE・メール署名にURLを載せたり、店頭にQRを置いてご利用ください。</p>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const STORE_ID = {{ store_id if store_id else 'null' }};
+const RESERVE_URL = STORE_ID ? (location.origin + '/reserve/' + STORE_ID) : '';
+const WD_NAMES = ['月','火','水','木','金','土','日'];
+let CFG = {};
+
+function showAlert(msg, type='success'){
+  const el=document.getElementById('alert-msg');
+  el.textContent=msg; el.className=`alert alert-${type} show`;
+  setTimeout(()=>el.classList.remove('show'), 3500);
+}
+function renderWd(){
+  const box=document.getElementById('cfg-wd');
+  const set=new Set((CFG.closed_weekdays||'').split(',').filter(s=>s!==''));
+  box.innerHTML=WD_NAMES.map((n,i)=>`<span class="wd ${set.has(String(i))?'on':''}" onclick="toggleWd(${i})">${n}</span>`).join('');
+}
+function toggleWd(i){
+  const set=new Set((CFG.closed_weekdays||'').split(',').filter(s=>s!==''));
+  set.has(String(i)) ? set.delete(String(i)) : set.add(String(i));
+  CFG.closed_weekdays=[...set].join(',');
+  renderWd();
+}
+async function load(){
+  try{ CFG=await fetch('/api/reservation-config').then(r=>r.json()); }catch(_){ CFG={}; }
+  document.getElementById('cfg-enabled').checked = CFG.enabled!==false;
+  document.getElementById('cfg-open').value = CFG.open_time||'10:00';
+  document.getElementById('cfg-close').value = CFG.close_time||'18:00';
+  document.getElementById('cfg-slot').value = String(CFG.slot_minutes||60);
+  document.getElementById('cfg-max').value = CFG.max_per_slot||1;
+  document.getElementById('cfg-days').value = CFG.days_ahead||14;
+  document.getElementById('cfg-note').value = CFG.note||'';
+  renderWd();
+  document.getElementById('rv-url').textContent = RESERVE_URL || '（店舗が選択されていません）';
+  document.getElementById('rv-open').href = RESERVE_URL || '#';
+  if(RESERVE_URL && window.QRCode) new QRCode(document.getElementById('rv-qr'),{text:RESERVE_URL,width:120,height:120});
+}
+function copyRvUrl(){ if(RESERVE_URL) navigator.clipboard.writeText(RESERVE_URL).then(()=>showAlert('URLをコピーしました。')); }
+async function saveCfg(){
+  try{
+    const r=await fetch('/api/reservation-config',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({enabled:document.getElementById('cfg-enabled').checked,
+        open_time:document.getElementById('cfg-open').value, close_time:document.getElementById('cfg-close').value,
+        slot_minutes:+document.getElementById('cfg-slot').value, max_per_slot:+document.getElementById('cfg-max').value,
+        days_ahead:+document.getElementById('cfg-days').value, closed_weekdays:CFG.closed_weekdays||'',
+        note:document.getElementById('cfg-note').value})});
+    if(!r.ok) throw new Error();
+    showAlert('設定を保存しました。お客様の予約ページに即反映されます。');
+  }catch(_){ showAlert('保存に失敗しました。','error'); }
+}
+document.addEventListener('DOMContentLoaded', load);
+</script>
+{% endblock %}

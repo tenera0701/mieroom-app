@@ -7211,12 +7211,24 @@ def _reservation_slots(cfg):
 @login_required
 @block_super_admin
 def reservations_page():
-    """予約カレンダー（社内）"""
+    """カレンダー（社内・来店予約）"""
     stores = get_allowed_stores(ignore_active=True)
     active_ids = get_allowed_store_ids()
     store_id = active_ids[0] if active_ids else None
     store = Store.query.get(store_id) if store_id else None
     return render_template("reservations.html", stores=stores, store_id=store_id,
+                           store_name=(store.name if store else ''))
+
+
+@app.route("/settings/reservation")
+@login_required
+@block_super_admin
+def settings_reservation():
+    """予約システム設定（お客様向けWeb予約の受付設定）"""
+    active_ids = get_allowed_store_ids()
+    store_id = active_ids[0] if active_ids else None
+    store = Store.query.get(store_id) if store_id else None
+    return render_template("reservation_settings.html", store_id=store_id,
                            store_name=(store.name if store else ''))
 
 

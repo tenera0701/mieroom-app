@@ -129,7 +129,7 @@
       </div>
       <button class="h-tool" onclick="openNote()" title="このルームの共有メモ">📝 メモ</button>
       <button class="h-tool" onclick="openAlbum()" title="このルームで送られた画像一覧">🖼 アルバム</button>
-      <button class="h-tool" id="notif-btn" style="display:none;" onclick="enableNotify()" title="新着メッセージをPCに通知します">🔔 通知ON</button>
+      <button class="h-tool" id="notif-btn" onclick="enableNotify()" title="新着メッセージをPCに通知します">🔔 通知</button>
     </div>
     <div class="ch-body" id="ch-body"><div class="ch-empty">左のチャンネルを選んでください</div></div>
     <div class="ch-compose" id="ch-compose" style="display:none;">
@@ -610,10 +610,22 @@ function closeAlbum(){ document.getElementById('album-modal').classList.remove('
 let _lastUnreadTotal = null;
 function updateNotifBtn(){
   const b=document.getElementById('notif-btn'); if(!b) return;
-  b.style.display = ('Notification' in window && Notification.permission==='default') ? '' : 'none';
+  if(!('Notification' in window)){ b.style.display='none'; return; }
+  b.style.display='';
+  if(Notification.permission==='granted'){ b.textContent='🔔 通知ON'; b.title='PC通知は有効です（クリックでテスト通知）'; }
+  else if(Notification.permission==='denied'){ b.textContent='🔕 通知ブロック中'; b.title='ブラウザの設定（アドレスバーの🔒）から通知を許可してください'; }
+  else { b.textContent='🔔 通知をONにする'; b.title='クリックしてPC通知を許可'; }
 }
 async function enableNotify(){
   if(!('Notification' in window)){ alert('このブラウザは通知に対応していません'); return; }
+  if(Notification.permission==='granted'){
+    new Notification('ミエルーム チャット', {body:'通知は有効です🔔（テスト通知）'});
+    return;
+  }
+  if(Notification.permission==='denied'){
+    alert('通知がブラウザでブロックされています。\nアドレスバーの🔒マーク →「通知」→「許可」に変更してください。');
+    return;
+  }
   await Notification.requestPermission();
   updateNotifBtn();
   if(Notification.permission==='granted') new Notification('ミエルーム チャット', {body:'通知をオンにしました🔔'});
