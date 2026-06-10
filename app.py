@@ -4469,6 +4469,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
     merged = 0
     scanned = 0
     new_exts = []
+    merged_ids = set()   # 追加反響としてまとめた既存反響のid（自動返信対象）
     try:
         M = _open_imap(ms)
         M.select('INBOX')
@@ -4536,6 +4537,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                 _merge_into_echo(target, parsed)
                 db.session.add(ProcessedReaction(store_id=store_id, external_id=ext))
                 merged += 1
+                merged_ids.add(target.id)   # 追加反響のお客様にも自動返信を送る
                 continue
             db.session.add(EchoRecord(
                 store_id=store_id,
@@ -4560,7 +4562,8 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
         except Exception:
             pass
         # 新着反響への自動返信（設定ONかつお客様メールあり。媒体ごとにテンプレを切替）
-        if new_exts and ms.auto_reply_enabled:
+        # 追加反響（既存のお客様の別物件問い合わせ＝merged）にも自動返信を送る
+        if (new_exts or merged_ids) and ms.auto_reply_enabled:
             # 媒体名 → テンプレID（ポータル登録ごとの指定）
             media_tpl = {}
             for p in PortalSource.query.filter_by(store_id=store_id).all():
@@ -4574,10 +4577,14 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                 if tid not in _tpl_cache:
                     _tpl_cache[tid] = MailTemplate.query.get(tid)
                 return _tpl_cache[tid]
-            for ext in new_exts:
-                rec = EchoRecord.query.filter_by(store_id=store_id, external_id=ext).first()
-                if not rec or not rec.customer_email:
+            reply_recs = [EchoRecord.query.filter_by(store_id=store_id, external_id=ext).first()
+                          for ext in new_exts]
+            reply_recs += [EchoRecord.query.get(rid) for rid in merged_ids]
+            sent_ids = set()
+            for rec in reply_recs:
+                if not rec or rec.id in sent_ids or not rec.customer_email:
                     continue
+                sent_ids.add(rec.id)
                 tpl = _get_tpl(media_tpl.get(rec.media)) or _get_tpl(default_tpl_id)
                 if not tpl:
                     continue
@@ -4586,6 +4593,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                                         tpl.subject or 'お問い合わせありがとうございます',
                                         tpl.body or '', base_url=APP_BASE_URL,
                                         is_html=bool(tpl.is_html))
+                    print(f"auto-reply sent store={store_id} echo={rec.id}")
                 except Exception as e:
                     print(f"auto-reply send error (echo={rec.id}): {e}")
         ms.last_fetch_at = datetime.utcnow()
