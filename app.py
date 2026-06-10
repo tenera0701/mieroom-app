@@ -6471,7 +6471,7 @@ def _visit_to_service(v, staff_id=None):
     """来店ヒヤリングを接客管理表へ反映（お名前以外はメモへ）"""
     pairs = v.answer_pairs()
     memo = '\n'.join(f"{p['label']}：{p['value']}" for p in pairs
-                     if p.get('label') not in ('お名前',))
+                     if p.get('key') != 'customer_name' and p.get('label') != 'お名前')
     rec = CustomerServiceRecord(
         store_id=v.store_id, service_date=date.today(),
         staff_id=staff_id, customer_name=v.customer_name or '',
