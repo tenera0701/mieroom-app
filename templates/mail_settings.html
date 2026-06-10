@@ -477,6 +477,31 @@ function addNewFolder(){
   if(!exists){ const o=document.createElement('option'); o.value=name; o.textContent=name; sel.insertBefore(o, sel.firstChild.nextSibling); }
   sel.value=name;
 }
+// フォルダ名の変更（中のテンプレすべてのフォルダ名をまとめて変更）
+async function renameTplFolder(folder){
+  const items=_TEMPLATES.filter(t=>((t.category||'').trim()||'未分類')===folder);
+  const name=(prompt(`フォルダ「${folder}」の新しい名前を入力してください（${items.length}件のテンプレが移動します）`, folder)||'').trim();
+  if(!name||name===folder) return;
+  try{
+    for(const t of items){
+      await fetch('/api/mail-templates/'+t.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:name})});
+    }
+    await refreshTemplatesUI();
+    showMsg(`フォルダ名を「${name}」に変更しました。`);
+  }catch(_){ showMsg('変更に失敗しました。', false); }
+}
+// フォルダの削除（中のテンプレは「未分類」へ移動。テンプレ自体は消えない）
+async function deleteTplFolder(folder){
+  const items=_TEMPLATES.filter(t=>((t.category||'').trim()||'未分類')===folder);
+  if(!confirm(`フォルダ「${folder}」を削除しますか？\n中の${items.length}件のテンプレは「未分類」に移動します（テンプレ自体は消えません）。`)) return;
+  try{
+    for(const t of items){
+      await fetch('/api/mail-templates/'+t.id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({category:''})});
+    }
+    await refreshTemplatesUI();
+    showMsg(`フォルダ「${folder}」を削除しました。`);
+  }catch(_){ showMsg('削除に失敗しました。', false); }
+}
 // テンプレをフォルダ（媒体）ごとにまとめる。空は「未分類」
 function groupTemplatesByFolder(){
   const groups={}; const order=[];
@@ -502,6 +527,11 @@ function renderTplList(){
         <span style="font-size:14px;">📁</span>
         <span style="font-size:13px;font-weight:800;color:#0F766E;">${escAttr(g.folder)}</span>
         <span style="font-size:11px;color:#6b7280;">（${g.items.length}件）</span>
+        ${g.folder!=='未分類'?`
+        <span style="margin-left:auto;display:flex;gap:4px;">
+          <button type="button" data-folder="${escAttr(g.folder)}" onclick="event.stopPropagation();renameTplFolder(this.dataset.folder)" title="フォルダ名を変更（中のテンプレもまとめて変更）" style="border:none;background:none;cursor:pointer;font-size:12px;color:#0F766E;">✎</button>
+          <button type="button" data-folder="${escAttr(g.folder)}" onclick="event.stopPropagation();deleteTplFolder(this.dataset.folder)" title="フォルダを削除（中のテンプレは未分類へ移動）" style="border:none;background:none;cursor:pointer;font-size:12px;color:#ef4444;">🗑</button>
+        </span>`:''}
       </div>
       <div style="padding:8px 10px;display:flex;flex-direction:column;gap:6px;">
         ${g.items.map(t=>`
