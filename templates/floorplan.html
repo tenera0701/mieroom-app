@@ -247,6 +247,7 @@
       <button class="tb-btn" id="tt-bold" title="太字" onclick="ttToggle('bold')" style="font-weight:900;">B</button>
       <button class="tb-btn" id="tt-italic" title="斜体" onclick="ttToggle('italic')" style="font-style:italic;">I</button>
       <button class="tb-btn" id="tt-underline" title="下線" onclick="ttToggle('underline')" style="text-decoration:underline;">U</button>
+      <button class="tb-btn" id="tt-vertical" title="縦書き（もう一度押すと横書きに戻る）" onclick="ttToggleVertical()">縦</button>
       <span class="tb-btn" style="gap:5px;cursor:default;" title="文字色">色<button type="button" class="color-swatch" id="tt-color" data-value="#111827" onclick="openColorPalette(this, function(col){ ttColor(col); })" style="width:22px;height:20px;border:1px solid #d1d5db;border-radius:4px;padding:0;cursor:pointer;background:#111827;"></button></span>
       <span class="tb-sep"></span>
       <button class="tb-btn" id="tt-al" title="左揃え" onclick="ttSet('textAlign','left')">⬱</button>
@@ -686,12 +687,15 @@ function buildPalette() {
 }
 
 function addPart(ci, ii) {
-  const it = CATALOG[ci].items[ii];
+  const cat = CATALOG[ci];
+  const it = cat.items[ii];
   fabric.loadSVGFromString(it.svg, (objects, options) => {
     const obj = fabric.util.groupSVGElements(objects, options);
     const scale = it.w / (obj.width || it.w);
     obj.set({ left:380, top:250, scaleX:scale, scaleY:scale, originX:'center', originY:'center' });
     obj.partLabel = it.label;
+    // 建具（ドア・引き戸・窓）と構造（壁・階段）はグリッドに吸着して動く
+    obj.partSnap = (cat.key === 'tategu' || cat.key === 'kouzou');
     canvas.add(obj); canvas.setActiveObject(obj); canvas.renderAll();
   });
 }
@@ -721,7 +725,7 @@ function drawGrid() {
 function captureState() {
   const grid = canvas.getObjects().filter(o => o.isGrid);
   grid.forEach(o => canvas.remove(o));
-  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','roomId','isRoomLabel','isMask','maskDX','maskDY','selectable','evented','strokeUniform']));
+  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','partSnap','roomType','roomId','isRoomLabel','isMask','maskDX','maskDY','isVertical','selectable','evented','strokeUniform']));
   drawGrid();
   return json;
 }
@@ -1126,7 +1130,7 @@ function initCanvas() {
       if (_vtxPts[o.vtxIndex]) { _vtxPts[o.vtxIndex] = { x, y }; rebuildVtxPoly(); }
       return;
     }
-    if (!o.partLabel) o.set({ left: snap(o.left), top: snap(o.top) });   // 部屋・テキストはグリッドに吸着／設備は自由
+    if (!o.partLabel || o.partSnap) o.set({ left: snap(o.left), top: snap(o.top) });   // 部屋・テキスト・建具/構造はグリッドに吸着／設備は自由
     if (o.roomType) { syncRoomLabel(o); syncRoomMasks(o); }   // 部屋を動かすとラベル・壁消し箇所も一緒に動く
   });
   // 拡大・回転・変形の確定時もラベルを部屋の中心へ追従
@@ -1245,6 +1249,10 @@ function addText() {
   // 直前に使ったテキスト書式を引き継ぐ（一度決めたルールでそろえられる）
   const t = new fabric.IText('テキスト', Object.assign({ left:60, top:60 }, lastTextStyle));
   canvas.add(t); canvas.setActiveObject(t); canvas.renderAll();
+  // 追加したらすぐ入力できるように（全選択状態で編集開始＝そのまま打てば置き換わる）
+  t.enterEditing();
+  t.selectAll();
+  canvas.renderAll();
   syncTextToolbar();
 }
 function addTextSameStyle() {
@@ -1404,6 +1412,7 @@ function syncTextToolbar() {
   document.getElementById('tt-bold').classList.toggle('primary', (st.fontWeight === 'bold' || st.fontWeight >= 600));
   document.getElementById('tt-italic').classList.toggle('primary', st.fontStyle === 'italic');
   document.getElementById('tt-underline').classList.toggle('primary', !!st.underline);
+  const vb = document.getElementById('tt-vertical'); if (vb) vb.classList.toggle('primary', !!(t && t.isVertical));
   const sw = document.getElementById('tt-color');
   if (sw && typeof st.fill === 'string') { sw.style.background = st.fill; sw.dataset.value = st.fill; }
   if (t) captureTextStyle(t);   // 表示中の書式を「次のテキスト用」に記憶
@@ -1439,6 +1448,24 @@ function ttColor(c) {
   lastTextStyle.fill = c;
   const sw = document.getElementById('tt-color'); if (sw) { sw.style.background = c; sw.dataset.value = c; }
 }
+/* 縦書き ⇄ 横書きの切替（縦書きは1文字ずつ改行して縦に積む） */
+function ttToggleVertical() {
+  const texts = ttActiveTexts();
+  if (!texts.length) { showAlert('縦書きにするテキストを選択してください。', 'error'); return; }
+  texts.forEach(t => {
+    if (t.isEditing) t.exitEditing();
+    if (t.isVertical) {
+      t.set('text', (t.text || '').replace(/\n/g, ''));   // 横書きに戻す
+      t.isVertical = false;
+    } else {
+      t.set('text', (t.text || '').replace(/\n/g, '').split('').join('\n'));  // 縦に積む
+      t.set({ textAlign: 'center', lineHeight: 1.05 });
+      t.isVertical = true;
+    }
+    t.setCoords();
+  });
+  canvas.renderAll(); pushHistory(); syncTextToolbar();
+}
 function delSel() { canvas.getActiveObjects().forEach(o => canvas.remove(o)); canvas.discardActiveObject(); canvas.renderAll(); syncTextToolbar(); }
 function rotateSel() { rotateBy(90); }
 function rotateBy(deg) {
@@ -1446,7 +1473,7 @@ function rotateBy(deg) {
   o.rotate((((o.angle || 0) + deg) % 360 + 360) % 360);
   o.setCoords(); canvas.renderAll(); pushHistory();
 }
-const _CLONE_PROPS = ['isBg','partLabel','roomType','roomId','isRoomLabel','isMask','selectable','evented','strokeUniform',
+const _CLONE_PROPS = ['isBg','partLabel','partSnap','roomType','roomId','isRoomLabel','isMask','isVertical','selectable','evented','strokeUniform',
   'fontFamily','fontSize','fontWeight','fontStyle','underline','textAlign'];
 function dupSel() {
   const o = canvas.getActiveObject(); if (!o) return;
@@ -1541,7 +1568,7 @@ function serializeWithThumb() {
   const grid = canvas.getObjects().filter(o => o.isGrid);
   grid.forEach(o => canvas.remove(o));
   canvas.discardActiveObject(); canvas.renderAll();
-  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','roomType','roomId','isRoomLabel','isMask','maskDX','maskDY','selectable','evented','strokeUniform']));
+  const json = JSON.stringify(canvas.toJSON(['isBg','partLabel','partSnap','roomType','roomId','isRoomLabel','isMask','maskDX','maskDY','isVertical','selectable','evented','strokeUniform']));
   let thumb = '';
   const z = zoom; if (z !== 1) { canvas.setZoom(1); canvas.renderAll(); }
   try { thumb = canvas.toDataURL({ format:'jpeg', quality:0.6, multiplier: 300 / canvas.width }); } catch(_){}
