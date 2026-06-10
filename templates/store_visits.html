@@ -86,6 +86,7 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn" onclick="copyUrl()">🔗 URLをコピー</button>
           <a class="btn" id="open-link" href="#" target="_blank" rel="noopener">フォームを開く</a>
+          <button class="btn" onclick="downloadQR()">⬇ QRをダウンロード</button>
           <button class="btn" onclick="window.print()">🖨 QRカードを印刷</button>
         </div>
       </div>
@@ -168,6 +169,19 @@ function renderQR(){
 function copyUrl(){
   if(!FORM_URL) return;
   navigator.clipboard.writeText(FORM_URL).then(()=>showAlert('URLをコピーしました。')).catch(()=>showAlert('コピーに失敗しました。','error'));
+}
+function downloadQR(){
+  const box=document.getElementById('qr');
+  if(!box){ return; }
+  const canvas=box.querySelector('canvas');
+  let url='';
+  if(canvas){ url=canvas.toDataURL('image/png'); }
+  else { const img=box.querySelector('img'); if(img) url=img.src; }
+  if(!url){ showAlert('QRの生成を待っています。少し待って再度お試しください。','error'); return; }
+  const a=document.createElement('a');
+  a.href=url; a.download='来店アンケートQR.png';
+  document.body.appendChild(a); a.click(); a.remove();
+  showAlert('QRコードを保存しました。');
 }
 
 /* ===== 受付一覧 ===== */

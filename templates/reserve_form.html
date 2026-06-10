@@ -16,6 +16,10 @@
     .card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:18px 16px; box-shadow:0 2px 10px rgba(13,148,136,0.06); margin-top:14px; }
     .sec-t { font-size:14px; font-weight:800; color:#0F766E; margin:0 0 10px; }
     .days, .slots { display:flex; flex-wrap:wrap; gap:8px; }
+    #days { display:block; }
+    .month-label { font-size:13px; font-weight:800; color:#0F766E; margin:12px 0 7px; padding-bottom:4px; border-bottom:1px solid #e5e7eb; }
+    .month-label:first-child { margin-top:0; }
+    .days-row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:4px; }
     .pill { border:1.5px solid #d1d5db; border-radius:10px; padding:9px 12px; font-size:13px; cursor:pointer; background:#fff; text-align:center; min-width:74px; }
     .pill .dow { font-size:11px; color:#6b7280; display:block; }
     .pill.sel { border-color:var(--primary); background:#F0FDFA; color:#0F766E; font-weight:800; }
@@ -100,15 +104,25 @@ function showErr(m){ const e=document.getElementById('err'); e.textContent=m; e.
 function renderDays(){
   const box=document.getElementById('days');
   const today=new Date();
-  let html='';
-  for(let i=0;i<DAYS_AHEAD;i++){
-    const d=new Date(today); d.setDate(d.getDate()+i+1);   // 翌日から受付
+  // 翌日から受付。設定の日数か「翌月末まで」の遅い方まで表示（翌月も選べるように）
+  const start=new Date(today); start.setDate(start.getDate()+1);
+  const byAhead=new Date(today); byAhead.setDate(byAhead.getDate()+DAYS_AHEAD);
+  const nextMonthEnd=new Date(today.getFullYear(), today.getMonth()+2, 0);
+  const end = nextMonthEnd>byAhead ? nextMonthEnd : byAhead;
+  let html='', curMonth=null;
+  for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
     const v=fmt(d);
+    if(d.getMonth()!==curMonth){
+      if(curMonth!==null) html+='</div>';
+      curMonth=d.getMonth();
+      html+=`<div class="month-label">${d.getFullYear()}年 ${curMonth+1}月</div><div class="days-row">`;
+    }
     const dowIdx=(d.getDay()+6)%7;
     const col = d.getDay()===0?'color:#dc2626;':(d.getDay()===6?'color:#2563eb;':'');
     html+=`<div class="pill ${selDate===v?'sel':''}" onclick="pickDate('${v}')">
-      <span class="dow" style="${col}">${DOW[dowIdx]}</span>${d.getMonth()+1}/${d.getDate()}</div>`;
+      <span class="dow" style="${col}">${DOW[dowIdx]}</span>${d.getDate()}</div>`;
   }
+  if(curMonth!==null) html+='</div>';
   box.innerHTML=html;
 }
 async function pickDate(v){

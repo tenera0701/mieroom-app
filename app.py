@@ -7231,7 +7231,8 @@ def _reservation_slots(cfg):
         oh, om, ch, cm, step = 10, 0, 18, 0, 60
     slots, t = [], oh * 60 + om
     end = ch * 60 + cm
-    while t + 1 <= end:
+    # 終了時刻（例：18:00）もそのまま予約枠として選べるように t <= end とする
+    while t <= end:
         slots.append(f'{t // 60:02d}:{t % 60:02d}')
         t += step
     return slots
