@@ -618,6 +618,15 @@ function updateSummary() {
   }
 }
 
+// 行をどこか1回クリックしたらNEWバッジを消す（再描画せずバッジだけ除去＝セル編集と干渉しない）
+function clearNewBadge(id, tr){
+  const rec = records.find(r => r.id === id);
+  if (!rec || !rec.is_new) return;
+  rec.is_new = false;
+  const b = tr.querySelector('.new-badge'); if (b) b.remove();
+  fetch(`/api/echo-records/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({is_new:false})}).catch(()=>{});
+}
+
 // 未返信アラートを「返信不要」として消す
 async function dismissReply(id){
   if (!confirm('このお客様への返信は不要として、未返信アラートを消しますか？\n（お客様から新たに返信が届くと再表示されます）')) return;
@@ -836,7 +845,7 @@ function renderTable() {
       : '<span style="color:#cbd5e1;font-size:11px;">― 未設定 ―</span>';
     const newBadge = r.is_new ? '<span class="new-badge">NEW</span>' : '';
     return `
-    <tr class="${rowCls}" style="${rowStyle}" data-needsreply="${r.needs_reply ? 1 : 0}">
+    <tr class="${rowCls}" style="${rowStyle}" data-needsreply="${r.needs_reply ? 1 : 0}" onclick="clearNewBadge(${r.id}, this)">
       <td style="cursor:pointer;white-space:nowrap;" onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${newBadge}${escHtml(r.staff_name || '―')}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'echo_date','date','${r.echo_date||''}')">${r.echo_date ? fmtMD(r.echo_date) : '―'}</td>
       <td style="cursor:pointer;text-align:center;" title="クリックで状況を変更" onclick="editCell(this,${r.id},'status','select','${escJs(r.status)}',ECHO_STATUS_PAIRS)">${statusChip}</td>

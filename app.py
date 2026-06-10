@@ -5004,7 +5004,8 @@ def _imap_idle_wait(M, timeout, stop_event):
 
 
 def _idle_worker(store_id, stop_event):
-    """1店舗ぶんのIMAP接続を保持し、新着が来たら即フェッチ。切断時は自動再接続。"""
+    """1店舗ぶんのIMAP接続を保持し、5秒ごとに新着を確認して即フェッチ。切断時は自動再接続。
+    （IDLE通知は環境により届かないことがあるため、軽量なNOOPポーリングで確実に5秒以内検知）"""
     backoff = 5
     while not stop_event.is_set():
         M = None
@@ -5018,23 +5019,37 @@ def _idle_worker(store_id, stop_event):
                 user, pw = ms.imap_user, ms.imap_pass
                 o_rt, o_em = ms.oauth_refresh_token, ms.oauth_email
             M = _open_imap_raw(host, user, pw, o_rt, o_em)
-            M.select('INBOX')
+            typ, dat = M.select('INBOX')
+            try:
+                last_exists = int(dat[0]) if dat and dat[0] else -1
+            except Exception:
+                last_exists = -1
             with app.app_context():   # 接続直後にキャッチアップ
                 fetch_reactions_for_store(store_id)
             backoff = 5
-            has_idle = b'IDLE' in (M.capabilities or ())
+            ticks = 0
             while not stop_event.is_set():
-                if has_idle:
-                    # 通知が来たら即フェッチ（数秒で反映）。来なくても60秒ごとに張り直してフェッチ
-                    got = _imap_idle_wait(M, 60, stop_event)
-                    if got:
-                        print(f"IDLE: new mail signal store={store_id}")
-                else:
-                    stop_event.wait(60)                    # IDLE非対応→60秒間隔
+                stop_event.wait(5)   # 5秒ごとに新着確認
                 if stop_event.is_set():
                     break
-                with app.app_context():
-                    fetch_reactions_for_store(store_id)
+                M.noop()             # 新着があれば untagged EXISTS（メール総数の変化）が届く
+                typ, ex = M.response('EXISTS')
+                cur = None
+                try:
+                    if ex and ex[-1] is not None:
+                        cur = int(ex[-1])
+                except Exception:
+                    cur = None
+                ticks += 1
+                changed = (cur is not None and cur != last_exists)
+                if changed or ticks >= 12:   # 変化検知 or 60秒ごとの保険フェッチ
+                    if cur is not None:
+                        last_exists = cur
+                    ticks = 0
+                    if changed:
+                        print(f"mail poll: new mail detected store={store_id}")
+                    with app.app_context():
+                        fetch_reactions_for_store(store_id)
         except Exception as e:
             print(f"idle worker store={store_id} reconnect: {e}")
             stop_event.wait(backoff)
