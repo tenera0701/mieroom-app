@@ -608,18 +608,28 @@ function closeAlbum(){ document.getElementById('album-modal').classList.remove('
 
 /* ===== PC通知（ブラウザ通知） ===== */
 let _lastUnreadTotal = null;
+function notifyPref(){ return localStorage.getItem('mieroom-chat-notify') !== 'off'; }
 function updateNotifBtn(){
   const b=document.getElementById('notif-btn'); if(!b) return;
   if(!('Notification' in window)){ b.style.display='none'; return; }
   b.style.display='';
-  if(Notification.permission==='granted'){ b.textContent='🔔 通知ON'; b.title='PC通知は有効です（クリックでテスト通知）'; }
+  if(Notification.permission==='granted'){
+    if(notifyPref()){ b.textContent='🔔 通知ON'; b.title='PC通知は有効です（クリックでOFFにする）'; }
+    else { b.textContent='🔕 通知OFF'; b.title='PC通知は停止中です（クリックでONにする）'; }
+  }
   else if(Notification.permission==='denied'){ b.textContent='🔕 通知ブロック中'; b.title='ブラウザの設定（アドレスバーの🔒）から通知を許可してください'; }
   else { b.textContent='🔔 通知をONにする'; b.title='クリックしてPC通知を許可'; }
 }
 async function enableNotify(){
   if(!('Notification' in window)){ alert('このブラウザは通知に対応していません'); return; }
   if(Notification.permission==='granted'){
-    new Notification('ミエルーム チャット', {body:'通知は有効です🔔（テスト通知）'});
+    if(notifyPref()){
+      localStorage.setItem('mieroom-chat-notify','off');
+    }else{
+      localStorage.setItem('mieroom-chat-notify','on');
+      new Notification('ミエルーム チャット', {body:'通知をオンにしました🔔'});
+    }
+    updateNotifBtn();
     return;
   }
   if(Notification.permission==='denied'){
@@ -631,7 +641,7 @@ async function enableNotify(){
   if(Notification.permission==='granted') new Notification('ミエルーム チャット', {body:'通知をオンにしました🔔'});
 }
 function notifyNew(total){
-  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  if(!('Notification' in window) || Notification.permission!=='granted' || !notifyPref()) return;
   try{
     const n = new Notification('ミエルーム チャット', {body:`新着メッセージがあります（未読 ${total}件）`, tag:'mieroom-chat'});
     n.onclick = ()=>{ window.focus(); n.close(); };
