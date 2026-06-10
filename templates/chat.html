@@ -311,12 +311,8 @@ async function refreshUnread(){
     const d = await fetch('/api/chat/unread').then(r=>r.json());
     _unread = d.channels || {};
     renderChannelList();
-    // サイドバーのバッジも更新（mgmt_base.html が用意）
+    // サイドバーのバッジも更新（PC通知はmgmt_base.html側で全画面共通に発火）
     if(window.updateChatNavBadge) window.updateChatNavBadge(d.total||0);
-    // 未読が増えたらPC通知（初回は基準値の記録のみ）
-    const total = d.total||0;
-    if(_lastUnreadTotal !== null && total > _lastUnreadTotal) notifyNew(total);
-    _lastUnreadTotal = total;
   }catch(_){}
 }
 
@@ -607,7 +603,6 @@ async function openAlbum(){
 function closeAlbum(){ document.getElementById('album-modal').classList.remove('active'); }
 
 /* ===== PC通知（ブラウザ通知） ===== */
-let _lastUnreadTotal = null;
 function notifyPref(){ return localStorage.getItem('mieroom-chat-notify') !== 'off'; }
 function updateNotifBtn(){
   const b=document.getElementById('notif-btn'); if(!b) return;
@@ -639,13 +634,6 @@ async function enableNotify(){
   await Notification.requestPermission();
   updateNotifBtn();
   if(Notification.permission==='granted') new Notification('ミエルーム チャット', {body:'通知をオンにしました🔔'});
-}
-function notifyNew(total){
-  if(!('Notification' in window) || Notification.permission!=='granted' || !notifyPref()) return;
-  try{
-    const n = new Notification('ミエルーム チャット', {body:`新着メッセージがあります（未読 ${total}件）`, tag:'mieroom-chat'});
-    n.onclick = ()=>{ window.focus(); n.close(); };
-  }catch(_){}
 }
 
 // グループ作成

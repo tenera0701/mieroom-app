@@ -681,10 +681,23 @@
       else { b.style.display = 'none'; }
     };
     (function(){
+      // PC通知：未読が増えたらどの画面でも通知する（ON/OFFはチャット画面のベルで設定）
+      let lastTotal = null;
+      function notifyChatNew(total){
+        if(!('Notification' in window) || Notification.permission !== 'granted') return;
+        if(localStorage.getItem('mieroom-chat-notify') === 'off') return;
+        try{
+          const n = new Notification('ミエルーム チャット', {body:`新着メッセージがあります（未読 ${total}件）`, tag:'mieroom-chat'});
+          n.onclick = ()=>{ window.focus(); if(location.pathname !== '/chat') location.href = '/chat'; n.close(); };
+        }catch(_){}
+      }
       async function pollChatUnread(){
         try{
           const d = await fetch('/api/chat/unread').then(r=>r.json());
-          window.updateChatNavBadge(d.total || 0);
+          const total = d.total || 0;
+          window.updateChatNavBadge(total);
+          if(lastTotal !== null && total > lastTotal) notifyChatNew(total);
+          lastTotal = total;
         }catch(_){}
       }
       pollChatUnread();
