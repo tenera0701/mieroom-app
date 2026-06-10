@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>来店予約 | {{ store_name }}</title>
+  <style>
+    :root { --primary:#0D9488; --primary-dark:#0F766E; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Kaku Gothic ProN','Meiryo',sans-serif; background:#F0FDFA; color:#111827; }
+    .wrap { max-width:560px; margin:0 auto; padding:18px 16px 40px; }
+    .head { text-align:center; padding:18px 0 8px; }
+    .head .logo { max-width:200px; max-height:72px; margin:0 auto 10px; display:block; }
+    .head h1 { font-size:20px; font-weight:800; margin:0 0 4px; color:#0F766E; }
+    .head p { font-size:13px; color:#6b7280; margin:0; }
+    .card { background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:18px 16px; box-shadow:0 2px 10px rgba(13,148,136,0.06); margin-top:14px; }
+    .sec-t { font-size:14px; font-weight:800; color:#0F766E; margin:0 0 10px; }
+    .days, .slots { display:flex; flex-wrap:wrap; gap:8px; }
+    .pill { border:1.5px solid #d1d5db; border-radius:10px; padding:9px 12px; font-size:13px; cursor:pointer; background:#fff; text-align:center; min-width:74px; }
+    .pill .dow { font-size:11px; color:#6b7280; display:block; }
+    .pill.sel { border-color:var(--primary); background:#F0FDFA; color:#0F766E; font-weight:800; }
+    .pill.off { opacity:.35; pointer-events:none; text-decoration:line-through; }
+    .field { margin-bottom:14px; }
+    .field label { display:block; font-size:13px; font-weight:700; color:#374151; margin-bottom:5px; }
+    .field .req { color:#ef4444; font-size:11px; margin-left:4px; }
+    input, textarea { width:100%; border:1px solid #d1d5db; border-radius:9px; padding:11px 12px; font-size:15px; background:#fff; color:#111827; }
+    input:focus, textarea:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(13,148,136,0.12); }
+    textarea { min-height:70px; resize:vertical; }
+    .btn { width:100%; border:none; background:var(--primary); color:#fff; border-radius:10px; padding:14px; font-size:16px; font-weight:800; cursor:pointer; margin-top:6px; }
+    .btn:hover { background:var(--primary-dark); }
+    .btn:disabled { opacity:0.6; cursor:default; }
+    .done { text-align:center; padding:40px 16px; }
+    .done .ico { font-size:54px; }
+    .done h2 { color:#0F766E; font-size:20px; margin:12px 0 6px; }
+    .done p { color:#6b7280; font-size:14px; }
+    .err { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; border-radius:8px; padding:9px 12px; font-size:13px; margin-bottom:12px; display:none; }
+    .err.show { display:block; }
+    .note { font-size:12px; color:#92400e; background:#FEF3C7; border:1px solid #FDE68A; border-radius:8px; padding:9px 12px; margin-top:10px; white-space:pre-wrap; }
+    .foot { text-align:center; color:#9ca3af; font-size:11px; margin-top:18px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <img class="logo" src="/api/public/company-logo/{{ store_id }}" alt="" onerror="this.style.display='none'">
+      <h1>{{ store_name }}</h1>
+      <p>ご来店のご予約はこちらから。空いている日時をお選びください。</p>
+    </div>
+
+    {% if closed %}
+    <div class="done card">
+      <div class="ico">🙇</div>
+      <h2>Web予約は受付停止中です</h2>
+      <p>お手数ですが、お電話またはメールでお問い合わせください。</p>
+    </div>
+    {% else %}
+    {% if note %}<div class="note">{{ note }}</div>{% endif %}
+
+    <div id="form-card">
+      <div class="card">
+        <h3 class="sec-t">① ご希望の日にち</h3>
+        <div class="days" id="days"></div>
+      </div>
+      <div class="card" id="slot-card" style="display:none;">
+        <h3 class="sec-t">② ご希望の時間</h3>
+        <div class="slots" id="slots"></div>
+      </div>
+      <div class="card" id="info-card" style="display:none;">
+        <h3 class="sec-t">③ お客様情報</h3>
+        <div id="err" class="err"></div>
+        <div class="field"><label>お名前<span class="req">必須</span></label><input id="customer_name" type="text" placeholder="例：山田 太郎"></div>
+        <div class="field"><label>フリガナ</label><input id="furigana" type="text" placeholder="例：ヤマダ タロウ"></div>
+        <div class="field"><label>電話番号<span class="req">必須</span></label><input id="phone" type="tel" inputmode="tel" placeholder="例：090-1234-5678"></div>
+        <div class="field"><label>メールアドレス</label><input id="email" type="email" inputmode="email" placeholder="例：taro@example.com"></div>
+        <div class="field"><label>ご要望・ご相談内容</label><textarea id="memo" placeholder="例：1LDKを探しています / 駐車場必須 など"></textarea></div>
+        <button id="submit-btn" class="btn" onclick="submitReserve()">この内容で予約する</button>
+      </div>
+    </div>
+
+    <div id="done-card" class="done" style="display:none;">
+      <div class="ico">✅</div>
+      <h2>ご予約を受け付けました</h2>
+      <p id="done-msg"></p>
+    </div>
+    {% endif %}
+
+    <div class="foot">Powered by ミエルーム</div>
+  </div>
+
+{% if not closed %}
+<script>
+const STORE_ID = {{ store_id }};
+const DAYS_AHEAD = {{ days_ahead }};
+let selDate = '', selTime = '';
+const DOW = ['月','火','水','木','金','土','日'];
+
+function fmt(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function showErr(m){ const e=document.getElementById('err'); e.textContent=m; e.classList.add('show'); }
+
+function renderDays(){
+  const box=document.getElementById('days');
+  const today=new Date();
+  let html='';
+  for(let i=0;i<DAYS_AHEAD;i++){
+    const d=new Date(today); d.setDate(d.getDate()+i+1);   // 翌日から受付
+    const v=fmt(d);
+    const dowIdx=(d.getDay()+6)%7;
+    const col = d.getDay()===0?'color:#dc2626;':(d.getDay()===6?'color:#2563eb;':'');
+    html+=`<div class="pill ${selDate===v?'sel':''}" onclick="pickDate('${v}')">
+      <span class="dow" style="${col}">${DOW[dowIdx]}</span>${d.getMonth()+1}/${d.getDate()}</div>`;
+  }
+  box.innerHTML=html;
+}
+async function pickDate(v){
+  selDate=v; selTime='';
+  renderDays();
+  const card=document.getElementById('slot-card');
+  const box=document.getElementById('slots');
+  card.style.display='block';
+  document.getElementById('info-card').style.display='none';
+  box.innerHTML='<p style="color:#9ca3af;font-size:13px;">空き状況を確認中…</p>';
+  try{
+    const d=await fetch(`/api/reserve/${STORE_ID}/slots?date=${v}`).then(r=>r.json());
+    if(d.closed){ box.innerHTML='<p style="color:#92400e;font-size:13px;">この日は定休日です。別の日をお選びください。</p>'; return; }
+    if(!(d.slots||[]).length){ box.innerHTML='<p style="color:#9ca3af;font-size:13px;">受付時間がありません。</p>'; return; }
+    box.innerHTML=d.slots.map(s=>`<div class="pill ${s.available?'':'off'} ${selTime===s.time?'sel':''}" onclick="pickTime('${s.time}')">${s.time}${s.available?'':'<span class="dow">満</span>'}</div>`).join('');
+  }catch(_){ box.innerHTML='<p style="color:#ef4444;font-size:13px;">読み込みに失敗しました。</p>'; }
+}
+function pickTime(t){
+  selTime=t;
+  document.querySelectorAll('#slots .pill').forEach(p=>p.classList.toggle('sel', p.textContent.startsWith(t)));
+  document.getElementById('info-card').style.display='block';
+  document.getElementById('info-card').scrollIntoView({behavior:'smooth'});
+}
+async function submitReserve(){
+  const name=document.getElementById('customer_name').value.trim();
+  const phone=document.getElementById('phone').value.trim();
+  if(!selDate||!selTime){ showErr('日にちと時間を選択してください。'); return; }
+  if(!name){ showErr('お名前を入力してください。'); return; }
+  if(!phone){ showErr('電話番号を入力してください。'); return; }
+  const btn=document.getElementById('submit-btn'); btn.disabled=true; btn.textContent='送信中…';
+  try{
+    const r=await fetch(`/api/reserve/${STORE_ID}`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({date:selDate,time_slot:selTime,customer_name:name,
+        furigana:document.getElementById('furigana').value,phone,
+        email:document.getElementById('email').value,memo:document.getElementById('memo').value})});
+    const j=await r.json(); if(!r.ok) throw new Error(j.error||'送信に失敗しました');
+    document.getElementById('form-card').style.display='none';
+    const dd=new Date(selDate);
+    document.getElementById('done-msg').innerHTML=`${dd.getMonth()+1}月${dd.getDate()}日 ${selTime} にお待ちしております。<br>変更・キャンセルはお電話にてご連絡ください。`;
+    document.getElementById('done-card').style.display='block';
+    window.scrollTo(0,0);
+  }catch(e){ showErr(e.message); btn.disabled=false; btn.textContent='この内容で予約する';
+    if(String(e.message).includes('埋まりました')) pickDate(selDate); }
+}
+renderDays();
+</script>
+{% endif %}
+</body>
+</html>

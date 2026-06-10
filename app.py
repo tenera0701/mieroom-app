@@ -1098,6 +1098,52 @@ class VisitFormConfig(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class VisitReservation(db.Model):
+    """来店予約（お客様のWeb予約＋社内手動登録）。店舗ごと。"""
+    __tablename__ = 'visit_reservation'
+    id            = db.Column(db.Integer, primary_key=True)
+    store_id      = db.Column(db.Integer, index=True)
+    date          = db.Column(db.Date, index=True)
+    time_slot     = db.Column(db.String(5))     # '14:00'
+    customer_name = db.Column(db.String(100))
+    furigana      = db.Column(db.String(100))
+    phone         = db.Column(db.String(40))
+    email         = db.Column(db.String(200))
+    memo          = db.Column(db.Text)
+    status        = db.Column(db.String(20), default='予約')   # 予約/来店済/キャンセル
+    source        = db.Column(db.String(10), default='web')    # web/手動
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {'id': self.id, 'date': self.date.isoformat() if self.date else '',
+                'time_slot': self.time_slot or '', 'customer_name': self.customer_name or '',
+                'furigana': self.furigana or '', 'phone': self.phone or '',
+                'email': self.email or '', 'memo': self.memo or '',
+                'status': self.status or '予約', 'source': self.source or 'web',
+                'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else ''}
+
+
+class ReservationConfig(db.Model):
+    """顧客予約ツールの設定（受付時間・枠など）。店舗ごと。"""
+    __tablename__ = 'reservation_config'
+    id              = db.Column(db.Integer, primary_key=True)
+    store_id        = db.Column(db.Integer, index=True, unique=True)
+    enabled         = db.Column(db.Boolean, default=True)     # Web予約の受付ON/OFF
+    open_time       = db.Column(db.String(5), default='10:00')
+    close_time      = db.Column(db.String(5), default='18:00')
+    slot_minutes    = db.Column(db.Integer, default=60)       # 1枠の長さ（分）
+    closed_weekdays = db.Column(db.String(20), default='')    # 定休日 '1,2'（月=0…日=6）
+    max_per_slot    = db.Column(db.Integer, default=1)        # 同一時間帯の受付数
+    days_ahead      = db.Column(db.Integer, default=14)       # 何日先まで受付するか
+    note            = db.Column(db.Text)                      # 予約ページの案内文
+
+    def to_dict(self):
+        return {'enabled': bool(self.enabled), 'open_time': self.open_time or '10:00',
+                'close_time': self.close_time or '18:00', 'slot_minutes': self.slot_minutes or 60,
+                'closed_weekdays': self.closed_weekdays or '', 'max_per_slot': self.max_per_slot or 1,
+                'days_ahead': self.days_ahead or 14, 'note': self.note or ''}
+
+
 class DropdownOption(db.Model):
     """プルダウン選択肢マスタ（テナント別・カテゴリ別）"""
     __tablename__ = 'dropdown_option'
@@ -7136,6 +7182,215 @@ def api_visits_to_service(vid):
     rec = _visit_to_service(v, staff_id=cur_staff_id)
     db.session.commit()
     return jsonify({'status': 'ok', 'service_record_id': rec.id})
+
+
+# ─── 予約カレンダー（社内）＋顧客予約ツール（公開） ─────────────────────────
+
+def _reservation_config(store_id):
+    cfg = ReservationConfig.query.filter_by(store_id=store_id).first()
+    return cfg
+
+
+def _reservation_slots(cfg):
+    """設定から時間帯（'10:00'...）のリストを作る"""
+    try:
+        oh, om = map(int, (cfg.open_time or '10:00').split(':'))
+        ch, cm = map(int, (cfg.close_time or '18:00').split(':'))
+        step = max(15, int(cfg.slot_minutes or 60))
+    except Exception:
+        oh, om, ch, cm, step = 10, 0, 18, 0, 60
+    slots, t = [], oh * 60 + om
+    end = ch * 60 + cm
+    while t + 1 <= end:
+        slots.append(f'{t // 60:02d}:{t % 60:02d}')
+        t += step
+    return slots
+
+
+@app.route("/reservations")
+@login_required
+@block_super_admin
+def reservations_page():
+    """予約カレンダー（社内）"""
+    stores = get_allowed_stores(ignore_active=True)
+    active_ids = get_allowed_store_ids()
+    store_id = active_ids[0] if active_ids else None
+    store = Store.query.get(store_id) if store_id else None
+    return render_template("reservations.html", stores=stores, store_id=store_id,
+                           store_name=(store.name if store else ''))
+
+
+@app.route("/api/reservations", methods=["GET"])
+@login_required
+def api_reservations_list():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    year = request.args.get('year', type=int)
+    month = request.args.get('month', type=int)
+    q = VisitReservation.query.filter_by(store_id=sid)
+    if year and month:
+        from datetime import date as _d
+        start = _d(year, month, 1)
+        end = _d(year + (month // 12), (month % 12) + 1, 1)
+        q = q.filter(VisitReservation.date >= start, VisitReservation.date < end)
+    rows = q.order_by(VisitReservation.date.asc(), VisitReservation.time_slot.asc()).all()
+    return jsonify([r.to_dict() for r in rows])
+
+
+@app.route("/api/reservations", methods=["POST"])
+@login_required
+def api_reservations_add():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    d = request.get_json() or {}
+    try:
+        dt = datetime.strptime(d.get('date') or '', '%Y-%m-%d').date()
+    except Exception:
+        return jsonify({'error': '日付が不正です'}), 400
+    r = VisitReservation(store_id=sid, date=dt, time_slot=(d.get('time_slot') or '')[:5],
+                         customer_name=(d.get('customer_name') or '')[:100],
+                         phone=(d.get('phone') or '')[:40],
+                         memo=(d.get('memo') or '')[:2000], source='手動')
+    db.session.add(r)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': r.id})
+
+
+@app.route("/api/reservations/<int:rid>", methods=["PUT"])
+@login_required
+def api_reservations_update(rid):
+    allowed = get_allowed_store_ids()
+    r = VisitReservation.query.get_or_404(rid)
+    if r.store_id not in allowed:
+        return jsonify({'error': '権限がありません'}), 403
+    d = request.get_json() or {}
+    if 'status' in d:
+        r.status = (d.get('status') or '予約')[:20]
+    if 'memo' in d:
+        r.memo = (d.get('memo') or '')[:2000]
+    if 'time_slot' in d:
+        r.time_slot = (d.get('time_slot') or '')[:5]
+    if 'date' in d:
+        try:
+            r.date = datetime.strptime(d['date'], '%Y-%m-%d').date()
+        except Exception:
+            pass
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/reservations/<int:rid>", methods=["DELETE"])
+@login_required
+def api_reservations_delete(rid):
+    allowed = get_allowed_store_ids()
+    r = VisitReservation.query.get_or_404(rid)
+    if r.store_id not in allowed:
+        return jsonify({'error': '権限がありません'}), 403
+    db.session.delete(r)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route("/api/reservation-config", methods=["GET", "POST"])
+@login_required
+def api_reservation_config():
+    """顧客予約ツール設定（受付時間・枠・定休日など）"""
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    cfg = _reservation_config(sid)
+    if request.method == 'GET':
+        return jsonify(cfg.to_dict() if cfg else ReservationConfig(store_id=0).to_dict())
+    d = request.get_json() or {}
+    if not cfg:
+        cfg = ReservationConfig(store_id=sid)
+        db.session.add(cfg)
+    cfg.enabled = bool(d.get('enabled', True))
+    cfg.open_time = (d.get('open_time') or '10:00')[:5]
+    cfg.close_time = (d.get('close_time') or '18:00')[:5]
+    cfg.slot_minutes = max(15, int(d.get('slot_minutes') or 60))
+    cfg.closed_weekdays = (d.get('closed_weekdays') or '')[:20]
+    cfg.max_per_slot = max(1, int(d.get('max_per_slot') or 1))
+    cfg.days_ahead = min(60, max(1, int(d.get('days_ahead') or 14)))
+    cfg.note = (d.get('note') or '')[:2000]
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── 公開：お客様向け予約ページ ──
+@app.route("/reserve/<int:store_id>")
+def reserve_page(store_id):
+    store = Store.query.get(store_id)
+    if not store:
+        return "店舗が見つかりません", 404
+    cfg = _reservation_config(store_id)
+    if cfg and not cfg.enabled:
+        return render_template("reserve_form.html", store_id=store_id,
+                               store_name=store.name or '', closed=True,
+                               note='', days_ahead=0)
+    return render_template("reserve_form.html", store_id=store_id,
+                           store_name=store.name or '', closed=False,
+                           note=(cfg.note if cfg else '') or '',
+                           days_ahead=(cfg.days_ahead if cfg else 14) or 14)
+
+
+@app.route("/api/reserve/<int:store_id>/slots")
+def api_reserve_slots(store_id):
+    """指定日の空き時間帯を返す（公開）"""
+    store = Store.query.get(store_id)
+    if not store:
+        return jsonify({'error': '店舗が見つかりません'}), 404
+    cfg = _reservation_config(store_id) or ReservationConfig(store_id=store_id)
+    try:
+        dt = datetime.strptime(request.args.get('date') or '', '%Y-%m-%d').date()
+    except Exception:
+        return jsonify({'error': '日付が不正です'}), 400
+    closed = {int(x) for x in (cfg.closed_weekdays or '').split(',') if x.strip().isdigit()}
+    if dt.weekday() in closed:
+        return jsonify({'slots': [], 'closed': True})
+    booked = {}
+    for r in VisitReservation.query.filter_by(store_id=store_id, date=dt).all():
+        if r.status != 'キャンセル':
+            booked[r.time_slot] = booked.get(r.time_slot, 0) + 1
+    maxn = cfg.max_per_slot or 1
+    out = [{'time': s, 'available': booked.get(s, 0) < maxn} for s in _reservation_slots(cfg)]
+    return jsonify({'slots': out, 'closed': False})
+
+
+@app.route("/api/reserve/<int:store_id>", methods=["POST"])
+def api_reserve_submit(store_id):
+    """お客様の予約送信（公開）→ 社内の予約カレンダーに自動反映"""
+    store = Store.query.get(store_id)
+    if not store:
+        return jsonify({'error': '店舗が見つかりません'}), 404
+    cfg = _reservation_config(store_id) or ReservationConfig(store_id=store_id)
+    if not (cfg.enabled if cfg.id else True):
+        return jsonify({'error': '現在Web予約の受付を停止しています'}), 400
+    d = request.get_json(silent=True) or {}
+    name = (d.get('customer_name') or '').strip()
+    slot = (d.get('time_slot') or '').strip()[:5]
+    if not name:
+        return jsonify({'error': 'お名前を入力してください'}), 400
+    try:
+        dt = datetime.strptime(d.get('date') or '', '%Y-%m-%d').date()
+    except Exception:
+        return jsonify({'error': '日付を選択してください'}), 400
+    if slot not in _reservation_slots(cfg):
+        return jsonify({'error': '時間帯を選択してください'}), 400
+    # 満枠チェック
+    n = VisitReservation.query.filter(VisitReservation.store_id == store_id,
+                                      VisitReservation.date == dt,
+                                      VisitReservation.time_slot == slot,
+                                      VisitReservation.status != 'キャンセル').count()
+    if n >= (cfg.max_per_slot or 1):
+        return jsonify({'error': '申し訳ありません、この時間帯は埋まりました。別の時間帯をお選びください'}), 409
+    r = VisitReservation(
+        store_id=store_id, date=dt, time_slot=slot,
+        customer_name=name[:100], furigana=(d.get('furigana') or '').strip()[:100],
+        phone=(d.get('phone') or '').strip()[:40], email=(d.get('email') or '').strip()[:200],
+        memo=(d.get('memo') or '').strip()[:2000], source='web')
+    db.session.add(r)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
 
 
 # ─── DropdownOption API ──────────────────────────────────────────────────

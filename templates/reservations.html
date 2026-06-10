@@ -1,0 +1,319 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}予約カレンダー | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}予約カレンダー{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root { --primary:#0D9488; --primary-dark:#0F766E; }
+  .rv-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .rv-title { font-size:22px; font-weight:800; color:#111827; margin:0; }
+  .rv-sub { font-size:12px; color:#6b7280; margin:4px 0 0; }
+  .btn { display:inline-flex; align-items:center; gap:5px; border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:8px; padding:7px 12px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn:hover { background:#F0FDFA; border-color:#5EEAD4; }
+  .btn.primary { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .btn.danger { color:#ef4444; border-color:#fca5a5; }
+  .btn.sm { padding:4px 8px; font-size:11px; border-radius:6px; }
+  .layout { display:grid; grid-template-columns: 1fr 330px; gap:14px; align-items:start; }
+  @media (max-width:1000px){ .layout { grid-template-columns:1fr; } }
+  .panel { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:14px; }
+  /* カレンダー */
+  .cal-nav { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .cal-nav h2 { font-size:16px; font-weight:800; margin:0; min-width:120px; text-align:center; }
+  table.cal { width:100%; border-collapse:collapse; table-layout:fixed; }
+  .cal th { font-size:11px; color:#6b7280; padding:6px 0; border-bottom:1px solid #e5e7eb; }
+  .cal th.sun { color:#dc2626; } .cal th.sat { color:#2563eb; }
+  .cal td { height:84px; vertical-align:top; border:1px solid #f1f5f9; padding:4px 5px; cursor:pointer; }
+  .cal td:hover { background:#F0FDFA; }
+  .cal td.other { background:#fafafa; color:#cbd5e1; cursor:default; }
+  .cal td.today .dnum { background:var(--primary); color:#fff; border-radius:50%; }
+  .cal td.sel { outline:2px solid var(--primary); outline-offset:-2px; }
+  .dnum { font-size:12px; font-weight:700; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; }
+  .cal .sun .dnum, .cal td:first-child .dnum { color:#dc2626; }
+  .cal td:last-child .dnum { color:#2563eb; }
+  .rv-chip { display:block; font-size:10px; background:#CCFBF1; color:#0F766E; border-radius:5px; padding:1px 5px; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; }
+  .rv-chip.done { background:#e5e7eb; color:#6b7280; text-decoration:line-through; }
+  .rv-chip.cancel { background:#fee2e2; color:#b91c1c; text-decoration:line-through; }
+  /* 日詳細 */
+  .day-item { border:1px solid #e5e7eb; border-radius:9px; padding:9px 11px; margin-bottom:8px; }
+  .day-item .t { font-size:14px; font-weight:800; color:#0F766E; }
+  .day-item .n { font-size:13px; font-weight:700; }
+  .day-item .meta { font-size:11px; color:#6b7280; margin-top:2px; white-space:pre-wrap; }
+  .st-badge { font-size:10px; border-radius:8px; padding:1px 7px; font-weight:700; }
+  .st-予約 { background:#CCFBF1; color:#0F766E; }
+  .st-来店済 { background:#dbeafe; color:#1d4ed8; }
+  .st-キャンセル { background:#fee2e2; color:#b91c1c; }
+  .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
+  .alert.show { display:block; }
+  .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
+  .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+  /* 設定モーダル */
+  .cfg-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:2500; align-items:center; justify-content:center; padding:16px; }
+  .cfg-overlay.open { display:flex; }
+  .cfg-box { background:#fff; border-radius:14px; width:520px; max-width:100%; max-height:92vh; overflow-y:auto; }
+  .cfg-row { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+  .cfg-row label { font-size:13px; font-weight:700; color:#374151; min-width:130px; }
+  .cfg-row input[type=time], .cfg-row select, .cfg-row input[type=number] { border:1px solid #d1d5db; border-radius:7px; padding:7px 9px; font-size:13px; }
+  .wd { display:inline-flex; align-items:center; gap:3px; font-size:12px; border:1.5px solid #d1d5db; border-radius:8px; padding:5px 9px; cursor:pointer; user-select:none; }
+  .wd.on { border-color:#ef4444; background:#fee2e2; color:#b91c1c; font-weight:700; }
+  #rv-qr { width:130px; height:130px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:1280px;margin:0 auto;">
+  <div id="alert-msg" class="alert"></div>
+  <div class="rv-head">
+    <div>
+      <h1 class="rv-title">予約カレンダー</h1>
+      <p class="rv-sub">お客様のWeb予約が自動でここに入ります。日付をクリックすると詳細・手動追加ができます。</p>
+    </div>
+    <button class="btn" onclick="openCfg()">⚙ 顧客予約ツール設定</button>
+  </div>
+
+  <div class="layout">
+    <!-- カレンダー -->
+    <div class="panel">
+      <div class="cal-nav">
+        <button class="btn" onclick="moveMonth(-1)">←</button>
+        <h2 id="cal-title"></h2>
+        <button class="btn" onclick="moveMonth(1)">→</button>
+        <button class="btn" onclick="goToday()">今日</button>
+      </div>
+      <table class="cal">
+        <thead><tr><th class="sun">日</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th class="sat">土</th></tr></thead>
+        <tbody id="cal-body"></tbody>
+      </table>
+    </div>
+
+    <!-- 日詳細 -->
+    <div class="panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <h3 style="margin:0;font-size:15px;font-weight:800;color:#0F766E;" id="day-title">日付を選択</h3>
+        <button class="btn primary sm" onclick="openAdd()">＋ 手動追加</button>
+      </div>
+      <div id="day-list"><p style="color:#9ca3af;font-size:13px;">カレンダーの日付をクリックしてください。</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- 設定モーダル -->
+<div class="cfg-overlay" id="cfg-overlay">
+  <div class="cfg-box">
+    <div style="padding:15px 20px;border-bottom:1px solid #eef2f2;display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="margin:0;font-size:15px;font-weight:800;color:#0F766E;">⚙ 顧客予約ツール設定</h3>
+      <button class="btn sm" onclick="closeCfg()">✕</button>
+    </div>
+    <div style="padding:16px 20px;">
+      <div class="cfg-row"><label>Web予約の受付</label>
+        <label style="min-width:auto;font-weight:600;"><input type="checkbox" id="cfg-enabled"> 受け付ける</label></div>
+      <div class="cfg-row"><label>受付時間</label>
+        <input type="time" id="cfg-open" value="10:00"> 〜 <input type="time" id="cfg-close" value="18:00"></div>
+      <div class="cfg-row"><label>1枠の長さ</label>
+        <select id="cfg-slot"><option value="30">30分</option><option value="60" selected>60分</option><option value="90">90分</option><option value="120">120分</option></select></div>
+      <div class="cfg-row"><label>同じ時間帯の受付数</label>
+        <input type="number" id="cfg-max" min="1" max="10" value="1" style="width:70px;"> 組まで</div>
+      <div class="cfg-row"><label>何日先まで受付</label>
+        <input type="number" id="cfg-days" min="1" max="60" value="14" style="width:70px;"> 日</div>
+      <div class="cfg-row" style="align-items:flex-start;"><label>定休日</label>
+        <span id="cfg-wd" style="display:flex;gap:5px;flex-wrap:wrap;"></span></div>
+      <div class="cfg-row" style="align-items:flex-start;"><label>予約ページの案内文</label>
+        <textarea id="cfg-note" style="flex:1;min-height:60px;border:1px solid #d1d5db;border-radius:7px;padding:8px 10px;font-size:13px;font-family:inherit;" placeholder="例：駐車場あります。当日のご予約はお電話ください。"></textarea></div>
+      <div style="border-top:1px solid #eef2f2;padding-top:14px;margin-top:6px;">
+        <div style="font-size:13px;font-weight:800;color:#0F766E;margin-bottom:8px;">📱 お客様用 予約ページ</div>
+        <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+          <div id="rv-qr"></div>
+          <div style="flex:1;min-width:200px;">
+            <div id="rv-url" style="font-size:12px;color:#0F766E;word-break:break-all;background:#F0FDFA;border:1px solid #99f6e4;border-radius:8px;padding:8px 10px;margin-bottom:8px;"></div>
+            <button class="btn sm" onclick="copyRvUrl()">🔗 URLをコピー</button>
+            <a class="btn sm" id="rv-open" href="#" target="_blank" rel="noopener">開く</a>
+          </div>
+        </div>
+        <p style="font-size:11px;color:#9ca3af;margin:8px 0 0;">ホームページやLINE・メール署名にURLを載せたり、店頭にQRを置いてご利用ください。</p>
+      </div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #eef2f2;text-align:right;">
+      <button class="btn" onclick="closeCfg()">閉じる</button>
+      <button class="btn primary" onclick="saveCfg()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 手動追加モーダル -->
+<div class="cfg-overlay" id="add-overlay">
+  <div class="cfg-box" style="width:420px;">
+    <div style="padding:15px 20px;border-bottom:1px solid #eef2f2;display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="margin:0;font-size:15px;font-weight:800;color:#0F766E;">＋ 予約を手動追加</h3>
+      <button class="btn sm" onclick="closeAdd()">✕</button>
+    </div>
+    <div style="padding:16px 20px;">
+      <div class="cfg-row"><label>日付</label><input type="date" id="add-date" style="border:1px solid #d1d5db;border-radius:7px;padding:7px 9px;font-size:13px;"></div>
+      <div class="cfg-row"><label>時間</label><input type="time" id="add-time" style="border:1px solid #d1d5db;border-radius:7px;padding:7px 9px;font-size:13px;"></div>
+      <div class="cfg-row"><label>お名前</label><input type="text" id="add-name" placeholder="例：山田 太郎" style="flex:1;border:1px solid #d1d5db;border-radius:7px;padding:7px 9px;font-size:13px;"></div>
+      <div class="cfg-row"><label>電話番号</label><input type="tel" id="add-phone" style="flex:1;border:1px solid #d1d5db;border-radius:7px;padding:7px 9px;font-size:13px;"></div>
+      <div class="cfg-row" style="align-items:flex-start;"><label>メモ</label><textarea id="add-memo" style="flex:1;min-height:50px;border:1px solid #d1d5db;border-radius:7px;padding:8px 10px;font-size:13px;font-family:inherit;"></textarea></div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #eef2f2;text-align:right;">
+      <button class="btn" onclick="closeAdd()">キャンセル</button>
+      <button class="btn primary" onclick="saveAdd()">追加する</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const STORE_ID = {{ store_id if store_id else 'null' }};
+const RESERVE_URL = STORE_ID ? (location.origin + '/reserve/' + STORE_ID) : '';
+let calY, calM;          // 表示中の年月
+let RES = [];            // 当月の予約
+let selDate = '';        // 選択日 'YYYY-MM-DD'
+const WD_NAMES = ['月','火','水','木','金','土','日'];
+
+function showAlert(msg, type='success'){
+  const el=document.getElementById('alert-msg');
+  el.textContent=msg; el.className=`alert alert-${type} show`;
+  setTimeout(()=>el.classList.remove('show'), 3500);
+}
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function pad(n){ return String(n).padStart(2,'0'); }
+function fmtD(y,m,d){ return `${y}-${pad(m)}-${pad(d)}`; }
+
+async function loadMonth(){
+  document.getElementById('cal-title').textContent = `${calY}年 ${calM}月`;
+  try{ RES = await fetch(`/api/reservations?year=${calY}&month=${calM}`).then(r=>r.json()); }
+  catch(_){ RES = []; }
+  renderCal();
+  if(selDate) renderDay();
+}
+function moveMonth(d){ calM+=d; if(calM<1){calM=12;calY--;} if(calM>12){calM=1;calY++;} loadMonth(); }
+function goToday(){ const t=new Date(); calY=t.getFullYear(); calM=t.getMonth()+1; selDate=fmtD(calY,calM,t.getDate()); loadMonth(); }
+
+function renderCal(){
+  const first=new Date(calY,calM-1,1);
+  const startDow=first.getDay();             // 0=日
+  const daysIn=new Date(calY,calM,0).getDate();
+  const today=new Date(); const todayS=fmtD(today.getFullYear(),today.getMonth()+1,today.getDate());
+  const byDate={};
+  RES.forEach(r=>{ (byDate[r.date]=byDate[r.date]||[]).push(r); });
+  let html='', day=1;
+  for(let w=0;w<6 && day<=daysIn;w++){
+    html+='<tr>';
+    for(let dow=0;dow<7;dow++){
+      if((w===0&&dow<startDow)||day>daysIn){ html+='<td class="other"></td>'; continue; }
+      const ds=fmtD(calY,calM,day);
+      const items=(byDate[ds]||[]).slice().sort((a,b)=>(a.time_slot||'').localeCompare(b.time_slot||''));
+      const chips=items.slice(0,3).map(r=>{
+        const cls=r.status==='来店済'?'done':(r.status==='キャンセル'?'cancel':'');
+        return `<span class="rv-chip ${cls}">${esc(r.time_slot)} ${esc(r.customer_name)}</span>`;
+      }).join('') + (items.length>3?`<span style="font-size:10px;color:#6b7280;">他${items.length-3}件</span>`:'');
+      html+=`<td class="${ds===todayS?'today':''} ${ds===selDate?'sel':''}" onclick="pickDay('${ds}')">
+        <span class="dnum">${day}</span>${chips}</td>`;
+      day++;
+    }
+    html+='</tr>';
+  }
+  document.getElementById('cal-body').innerHTML=html;
+}
+function pickDay(ds){ selDate=ds; renderCal(); renderDay(); }
+
+function renderDay(){
+  const d=new Date(selDate);
+  document.getElementById('day-title').textContent=`${d.getMonth()+1}月${d.getDate()}日（${['日','月','火','水','木','金','土'][d.getDay()]}）の予約`;
+  const items=RES.filter(r=>r.date===selDate).sort((a,b)=>(a.time_slot||'').localeCompare(b.time_slot||''));
+  const box=document.getElementById('day-list');
+  if(!items.length){ box.innerHTML='<p style="color:#9ca3af;font-size:13px;">この日の予約はありません。</p>'; return; }
+  box.innerHTML=items.map(r=>`
+    <div class="day-item">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <span class="t">${esc(r.time_slot)||'--:--'}</span>
+        <span class="st-badge st-${esc(r.status)}">${esc(r.status)}</span>
+      </div>
+      <div class="n">${esc(r.customer_name)} 様 <span style="font-size:10px;color:#9ca3af;">（${r.source==='web'?'Web予約':'手動'}）</span></div>
+      <div class="meta">${r.phone?('📞 '+esc(r.phone)+'\n'):''}${r.email?('✉ '+esc(r.email)+'\n'):''}${r.memo?esc(r.memo):''}</div>
+      <div style="display:flex;gap:5px;margin-top:7px;flex-wrap:wrap;">
+        ${r.status!=='来店済'?`<button class="btn sm" onclick="setStatus(${r.id},'来店済')">✓ 来店済に</button>`:''}
+        ${r.status!=='キャンセル'?`<button class="btn sm" onclick="setStatus(${r.id},'キャンセル')">キャンセル</button>`:`<button class="btn sm" onclick="setStatus(${r.id},'予約')">予約に戻す</button>`}
+        <button class="btn danger sm" onclick="delRes(${r.id})">削除</button>
+      </div>
+    </div>`).join('');
+}
+async function setStatus(id, st){
+  try{ await fetch(`/api/reservations/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:st})}); loadMonth(); }
+  catch(_){ showAlert('更新に失敗しました','error'); }
+}
+async function delRes(id){
+  if(!confirm('この予約を削除しますか？')) return;
+  try{ await fetch(`/api/reservations/${id}`,{method:'DELETE'}); loadMonth(); }
+  catch(_){ showAlert('削除に失敗しました','error'); }
+}
+
+/* 手動追加 */
+function openAdd(){
+  document.getElementById('add-date').value = selDate || fmtD(calY,calM,1);
+  document.getElementById('add-time').value = '11:00';
+  document.getElementById('add-name').value=''; document.getElementById('add-phone').value=''; document.getElementById('add-memo').value='';
+  document.getElementById('add-overlay').classList.add('open');
+}
+function closeAdd(){ document.getElementById('add-overlay').classList.remove('open'); }
+async function saveAdd(){
+  const name=document.getElementById('add-name').value.trim();
+  if(!name){ alert('お名前を入力してください'); return; }
+  try{
+    const r=await fetch('/api/reservations',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({date:document.getElementById('add-date').value, time_slot:document.getElementById('add-time').value,
+        customer_name:name, phone:document.getElementById('add-phone').value, memo:document.getElementById('add-memo').value})});
+    if(!r.ok) throw new Error();
+    closeAdd(); selDate=document.getElementById('add-date').value;
+    const d=new Date(selDate); calY=d.getFullYear(); calM=d.getMonth()+1;
+    loadMonth(); showAlert('予約を追加しました。');
+  }catch(_){ showAlert('追加に失敗しました','error'); }
+}
+
+/* 設定 */
+let CFG={};
+function renderWd(){
+  const box=document.getElementById('cfg-wd');
+  const set=new Set((CFG.closed_weekdays||'').split(',').filter(s=>s!==''));
+  box.innerHTML=WD_NAMES.map((n,i)=>`<span class="wd ${set.has(String(i))?'on':''}" onclick="toggleWd(${i})">${n}</span>`).join('');
+}
+function toggleWd(i){
+  const set=new Set((CFG.closed_weekdays||'').split(',').filter(s=>s!==''));
+  set.has(String(i)) ? set.delete(String(i)) : set.add(String(i));
+  CFG.closed_weekdays=[...set].join(',');
+  renderWd();
+}
+async function openCfg(){
+  try{ CFG=await fetch('/api/reservation-config').then(r=>r.json()); }catch(_){ CFG={}; }
+  document.getElementById('cfg-enabled').checked = CFG.enabled!==false;
+  document.getElementById('cfg-open').value = CFG.open_time||'10:00';
+  document.getElementById('cfg-close').value = CFG.close_time||'18:00';
+  document.getElementById('cfg-slot').value = String(CFG.slot_minutes||60);
+  document.getElementById('cfg-max').value = CFG.max_per_slot||1;
+  document.getElementById('cfg-days').value = CFG.days_ahead||14;
+  document.getElementById('cfg-note').value = CFG.note||'';
+  renderWd();
+  document.getElementById('rv-url').textContent=RESERVE_URL;
+  document.getElementById('rv-open').href=RESERVE_URL;
+  const q=document.getElementById('rv-qr'); q.innerHTML='';
+  if(RESERVE_URL && window.QRCode) new QRCode(q,{text:RESERVE_URL,width:120,height:120});
+  document.getElementById('cfg-overlay').classList.add('open');
+}
+function closeCfg(){ document.getElementById('cfg-overlay').classList.remove('open'); }
+function copyRvUrl(){ navigator.clipboard.writeText(RESERVE_URL).then(()=>showAlert('URLをコピーしました。')); }
+async function saveCfg(){
+  try{
+    const r=await fetch('/api/reservation-config',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({enabled:document.getElementById('cfg-enabled').checked,
+        open_time:document.getElementById('cfg-open').value, close_time:document.getElementById('cfg-close').value,
+        slot_minutes:+document.getElementById('cfg-slot').value, max_per_slot:+document.getElementById('cfg-max').value,
+        days_ahead:+document.getElementById('cfg-days').value, closed_weekdays:CFG.closed_weekdays||'',
+        note:document.getElementById('cfg-note').value})});
+    if(!r.ok) throw new Error();
+    closeCfg(); showAlert('設定を保存しました。お客様の予約ページに即反映されます。');
+  }catch(_){ showAlert('保存に失敗しました','error'); }
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{ goToday(); });
+</script>
+{% endblock %}
