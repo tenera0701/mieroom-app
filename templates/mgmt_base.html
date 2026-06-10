@@ -255,7 +255,7 @@
     </div>
 
     <!-- ナビゲーション -->
-    <nav class="flex-1 overflow-y-auto py-3">
+    <nav id="sidebar-nav" class="flex-1 overflow-y-auto py-3">
       {% set role = session.get('app_user_role') %}
 
       {# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -290,6 +290,15 @@
               d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
           </svg>
           <span class="nav-label">ユーザー管理</span>
+        </a>
+
+        <a href="/admin/suggestions"
+           class="nav-item {% if request.path.startswith('/admin/suggestions') %}active{% endif %}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+          </svg>
+          <span class="nav-label">改善提案</span>
         </a>
 
       {# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -773,6 +782,16 @@
           <span class="nav-label" style="white-space:nowrap;">ヘルプ</span>
         </button>
 
+        {% if role != 'super_admin' %}
+        <!-- 改善提案（本部へ要望を送る） -->
+        <button id="suggest-btn" onclick="openSuggestModal()" class="flex items-center gap-1 rounded-lg transition" style="color:#92400e;font-size:13px;font-weight:700;padding:5px 10px;border:1px solid #FDE68A;background:#FFFBEB;" onmouseover="this.style.background='#FEF3C7'" onmouseout="this.style.background='#FFFBEB'" title="本部に改善のご提案・ご要望を送る">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+          </svg>
+          <span class="nav-label" style="white-space:nowrap;">改善提案</span>
+        </button>
+        {% endif %}
+
         <!-- ユーザーアバター -->
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style="background:#0D9488;">
@@ -809,6 +828,54 @@
     </div>
   </div>
 
+  {% if role != 'super_admin' %}
+  <!-- 改善提案モーダル -->
+  <div id="suggest-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:3200;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:#fff;border-radius:14px;width:520px;max-width:97vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 70px rgba(0,0,0,0.3);">
+      <div style="padding:14px 18px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+        <h3 style="margin:0;font-size:16px;font-weight:800;color:#92400e;">💡 改善のご提案・ご要望</h3>
+        <button onclick="closeSuggestModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#9ca3af;line-height:1;">✕</button>
+      </div>
+      <div style="padding:16px 18px;">
+        <p style="font-size:12px;color:#6b7280;margin:0 0 12px;">「こうだったら便利」「ここが使いづらい」など、本部へ直接お送りいただけます。いただいたご意見は今後の改善に活用します。</p>
+        <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:5px;">種類</label>
+        <select id="suggest-cat" style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:9px 10px;font-size:13px;margin-bottom:12px;">
+          <option value="機能要望">機能の要望</option>
+          <option value="使いづらい">使いづらい点</option>
+          <option value="不具合">不具合の報告</option>
+          <option value="その他">その他</option>
+        </select>
+        <label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:5px;">内容<span style="color:#ef4444;font-size:11px;margin-left:4px;">必須</span></label>
+        <textarea id="suggest-body" placeholder="例：カレンダーの予約を一覧でCSV出力できると助かります。" style="width:100%;min-height:120px;border:1px solid #d1d5db;border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;box-sizing:border-box;resize:vertical;"></textarea>
+        <div id="suggest-msg" style="font-size:12px;margin-top:8px;display:none;"></div>
+      </div>
+      <div style="padding:12px 18px;border-top:1px solid #e5e7eb;text-align:right;">
+        <button onclick="closeSuggestModal()" style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:7px;padding:8px 16px;font-size:13px;cursor:pointer;margin-right:6px;">閉じる</button>
+        <button id="suggest-send" onclick="sendSuggest()" style="background:#d97706;color:#fff;border:none;border-radius:7px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;">本部へ送信</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    function openSuggestModal(){ document.getElementById('suggest-overlay').style.display='flex'; }
+    function closeSuggestModal(){ document.getElementById('suggest-overlay').style.display='none'; }
+    async function sendSuggest(){
+      const body=document.getElementById('suggest-body').value.trim();
+      const msg=document.getElementById('suggest-msg');
+      if(!body){ msg.style.display='block'; msg.style.color='#ef4444'; msg.textContent='内容を入力してください。'; return; }
+      const btn=document.getElementById('suggest-send'); btn.disabled=true; btn.textContent='送信中…';
+      try{
+        const r=await fetch('/api/improvement-suggestions',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({category:document.getElementById('suggest-cat').value, body})});
+        if(!r.ok) throw new Error();
+        msg.style.display='block'; msg.style.color='#0F766E'; msg.textContent='✅ 本部へ送信しました。ありがとうございます！';
+        document.getElementById('suggest-body').value='';
+        setTimeout(closeSuggestModal, 1400);
+      }catch(_){ msg.style.display='block'; msg.style.color='#ef4444'; msg.textContent='送信に失敗しました。時間をおいて再度お試しください。'; }
+      finally{ btn.disabled=false; btn.textContent='本部へ送信'; }
+    }
+  </script>
+  {% endif %}
+
   <script>
     // ブラウザを閉じたら再ログインが必要（sessionStorage利用）
     (function() {
@@ -816,6 +883,25 @@
         // sessionStorageにフラグがなければログアウト
         window.location.replace('/app-logout');
       }
+    })();
+
+    // サイドバーのスクロール位置を保持（メニュー遷移で上に戻らないように）
+    (function(){
+      var nav = document.getElementById('sidebar-nav');
+      if(!nav) return;
+      try{
+        var saved = sessionStorage.getItem('navScroll');
+        if(saved !== null) nav.scrollTop = parseInt(saved, 10) || 0;
+      }catch(_){}
+      var t=null;
+      nav.addEventListener('scroll', function(){
+        if(t) return;
+        t = setTimeout(function(){ t=null; try{ sessionStorage.setItem('navScroll', nav.scrollTop); }catch(_){} }, 120);
+      });
+      // リンククリック時点の位置を確実に保存
+      nav.addEventListener('click', function(e){
+        if(e.target.closest('a')){ try{ sessionStorage.setItem('navScroll', nav.scrollTop); }catch(_){} }
+      });
     })();
 
     // 日時表示

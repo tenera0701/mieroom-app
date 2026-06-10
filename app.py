@@ -1115,6 +1115,7 @@ class VisitReservation(db.Model):
     source        = db.Column(db.String(10), default='web')    # web/手動
     staff_id      = db.Column(db.Integer, index=True)           # 担当スタッフ（任意）
     duration_min  = db.Column(db.Integer, default=60)           # 予約の長さ（分）
+    viewed        = db.Column(db.Boolean, default=False)        # スタッフが詳細を開いたか（NEW表示制御）
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -1124,6 +1125,30 @@ class VisitReservation(db.Model):
                 'email': self.email or '', 'memo': self.memo or '',
                 'status': self.status or '予約', 'source': self.source or 'web',
                 'staff_id': self.staff_id, 'duration_min': self.duration_min or 60,
+                'viewed': bool(self.viewed),
+                'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else ''}
+
+
+class ImprovementSuggestion(db.Model):
+    """利用者（テナント）から本部への改善提案"""
+    __tablename__ = 'improvement_suggestion'
+    id         = db.Column(db.Integer, primary_key=True)
+    tenant_id  = db.Column(db.Integer, index=True)
+    store_id   = db.Column(db.Integer)
+    user_id    = db.Column(db.Integer)
+    username   = db.Column(db.String(100))
+    company    = db.Column(db.String(200))                       # テナント（会社）名
+    category   = db.Column(db.String(40), default='その他')      # 機能要望/不具合/使いづらい/その他
+    body       = db.Column(db.Text, nullable=False)
+    status     = db.Column(db.String(20), default='未対応')      # 未対応/受理/対応済み
+    admin_note = db.Column(db.Text)                              # 本部メモ
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {'id': self.id, 'tenant_id': self.tenant_id, 'username': self.username or '',
+                'company': self.company or '', 'category': self.category or 'その他',
+                'body': self.body or '', 'status': self.status or '未対応',
+                'admin_note': self.admin_note or '',
                 'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else ''}
 
 
@@ -1681,6 +1706,9 @@ def migrate_db():
         if vr_cols and 'duration_min' not in vr_cols:
             cursor.execute("ALTER TABLE visit_reservation ADD COLUMN duration_min INTEGER DEFAULT 60")
             print("  Added column visit_reservation.duration_min")
+        if vr_cols and 'viewed' not in vr_cols:
+            cursor.execute("ALTER TABLE visit_reservation ADD COLUMN viewed BOOLEAN DEFAULT 0")
+            print("  Added column visit_reservation.viewed")
     except Exception as e:
         print(f"  Skip visit_reservation columns: {e}")
 
@@ -1995,6 +2023,7 @@ def migrate_postgres():
         ("floor_plan", "thumb", "TEXT"),
         ("visit_reservation", "staff_id", "INTEGER"),
         ("visit_reservation", "duration_min", "INTEGER DEFAULT 60"),
+        ("visit_reservation", "viewed", "BOOLEAN DEFAULT FALSE"),
         ("staff", "color", "VARCHAR(20)"),
     ]
     # 各カラムを独立した接続で追加（1つの失敗が他に波及しない）
@@ -7323,6 +7352,8 @@ def api_reservations_update(rid):
             r.duration_min = max(15, min(24 * 60, int(d.get('duration_min'))))
         except (ValueError, TypeError):
             pass
+    if 'viewed' in d:
+        r.viewed = bool(d.get('viewed'))
     if 'staff_id' in d:
         sv = d.get('staff_id')
         try:
@@ -10847,6 +10878,70 @@ def api_admin_application_update(app_id):
         rec.status = data['status']
     if 'memo' in data:
         rec.memo = data['memo']
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+# ── 改善提案（利用者→本部） ──────────────────────────────
+@app.route("/api/improvement-suggestions", methods=["POST"])
+@login_required
+def api_improvement_suggestion_create():
+    """利用者が本部へ改善提案を送信"""
+    d = request.get_json(silent=True) or {}
+    body = (d.get('body') or '').strip()
+    if not body:
+        return jsonify({'error': '内容を入力してください'}), 400
+    uid = session.get('app_user_id')
+    u = AppUser.query.get(uid) if uid else None
+    tenant = Tenant.query.get(u.tenant_id) if (u and u.tenant_id) else None
+    s = ImprovementSuggestion(
+        tenant_id=(u.tenant_id if u else None),
+        store_id=session.get('active_store_id'),
+        user_id=uid,
+        username=(u.username if u else (session.get('app_username') or '')),
+        company=(tenant.name if tenant else ''),
+        category=(d.get('category') or 'その他')[:40],
+        body=body[:4000],
+        status='未対応')
+    db.session.add(s)
+    db.session.commit()
+    return jsonify({'status': 'ok', 'id': s.id})
+
+
+@app.route("/admin/suggestions")
+@super_admin_required
+def admin_suggestions():
+    """改善提案の受理一覧（super_adminのみ）"""
+    items = ImprovementSuggestion.query.order_by(ImprovementSuggestion.created_at.desc()).all()
+    new_cnt = sum(1 for s in items if (s.status or '未対応') == '未対応')
+    return render_template("admin_suggestions.html", items=items, new_cnt=new_cnt, total=len(items))
+
+
+@app.route("/api/admin/suggestions", methods=["GET"])
+@super_admin_required
+def api_admin_suggestions_list():
+    items = ImprovementSuggestion.query.order_by(ImprovementSuggestion.created_at.desc()).all()
+    return jsonify([s.to_dict() for s in items])
+
+
+@app.route("/api/admin/suggestions/<int:sid>", methods=["PATCH"])
+@super_admin_required
+def api_admin_suggestion_update(sid):
+    s = ImprovementSuggestion.query.get_or_404(sid)
+    d = request.get_json() or {}
+    if 'status' in d:
+        s.status = (d.get('status') or '未対応')[:20]
+    if 'admin_note' in d:
+        s.admin_note = (d.get('admin_note') or '')[:2000]
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route("/api/admin/suggestions/<int:sid>", methods=["DELETE"])
+@super_admin_required
+def api_admin_suggestion_delete(sid):
+    s = ImprovementSuggestion.query.get_or_404(sid)
+    db.session.delete(s)
     db.session.commit()
     return jsonify({'ok': True})
 

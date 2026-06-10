@@ -1,0 +1,107 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}改善提案 | ミエルーム管理{% endblock %}
+{% block breadcrumb %}改善提案{% endblock %}
+
+{% block extra_head %}
+<style>
+  .sg-wrap { max-width:900px; }
+  .sg-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .sg-title { font-size:20px; font-weight:800; color:#111827; margin:0; }
+  .sg-sub { font-size:12px; color:#6b7280; margin:4px 0 0; }
+  .sg-stats { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .sg-stat { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px 16px; min-width:110px; }
+  .sg-stat .n { font-size:22px; font-weight:800; color:#0F766E; }
+  .sg-stat .l { font-size:11px; color:#6b7280; font-weight:600; }
+  .sg-card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:14px 16px; margin-bottom:12px; }
+  .sg-card.new { border-left:4px solid #ef4444; }
+  .sg-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; color:#6b7280; margin-bottom:8px; }
+  .sg-cat { font-size:11px; font-weight:800; padding:2px 8px; border-radius:7px; background:#FEF3C7; color:#92400e; }
+  .sg-company { font-weight:800; color:#111827; font-size:13px; }
+  .sg-body { font-size:14px; color:#111827; line-height:1.7; white-space:pre-wrap; word-break:break-word; }
+  .sg-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:12px; padding-top:10px; border-top:1px solid #f1f5f9; }
+  .sg-actions select, .sg-note { border:1px solid #d1d5db; border-radius:7px; padding:6px 9px; font-size:12px; }
+  .sg-note { flex:1; min-width:180px; font-family:inherit; }
+  .st-badge { font-size:11px; font-weight:800; padding:2px 9px; border-radius:8px; }
+  .st-未対応 { background:#fee2e2; color:#b91c1c; }
+  .st-受理 { background:#dbeafe; color:#1d4ed8; }
+  .st-対応済み { background:#CCFBF1; color:#0F766E; }
+  .btn { border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:7px; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; }
+  .btn:hover { background:#F0FDFA; border-color:#5EEAD4; }
+  .btn.danger { color:#ef4444; border-color:#fca5a5; }
+  .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
+  .alert.show { display:block; }
+  .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sg-wrap">
+  <div id="alert-msg" class="alert alert-success"></div>
+  <div class="sg-head">
+    <div>
+      <h1 class="sg-title">💡 改善提案</h1>
+      <p class="sg-sub">利用者の店舗から届いた改善のご提案・ご要望の一覧です。対応状況を管理できます。</p>
+    </div>
+    <button class="btn" onclick="loadSuggestions()">↻ 更新</button>
+  </div>
+
+  <div class="sg-stats">
+    <div class="sg-stat"><div class="n" id="st-total">{{ total }}</div><div class="l">総数</div></div>
+    <div class="sg-stat"><div class="n" id="st-new" style="color:#b91c1c;">{{ new_cnt }}</div><div class="l">未対応</div></div>
+  </div>
+
+  <div id="sg-list"><p style="color:#9ca3af;font-size:13px;">読み込み中…</p></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const STATUSES = ['未対応','受理','対応済み'];
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function showAlert(msg){ const el=document.getElementById('alert-msg'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2500); }
+
+async function loadSuggestions(){
+  const box=document.getElementById('sg-list');
+  try{
+    const items=await fetch('/api/admin/suggestions').then(r=>r.json());
+    document.getElementById('st-total').textContent=items.length;
+    document.getElementById('st-new').textContent=items.filter(s=>(s.status||'未対応')==='未対応').length;
+    if(!items.length){ box.innerHTML='<p style="color:#9ca3af;font-size:13px;">まだ改善提案は届いていません。</p>'; return; }
+    box.innerHTML=items.map(s=>{
+      const st=s.status||'未対応';
+      const opts=STATUSES.map(o=>`<option value="${o}" ${o===st?'selected':''}>${o}</option>`).join('');
+      return `<div class="sg-card ${st==='未対応'?'new':''}">
+        <div class="sg-meta">
+          <span class="sg-cat">${esc(s.category)}</span>
+          <span class="st-badge st-${esc(st)}">${esc(st)}</span>
+          <span class="sg-company">${esc(s.company)||'（不明な店舗）'}</span>
+          <span>${esc(s.username)}</span>
+          <span style="margin-left:auto;">${esc(s.created_at)}</span>
+        </div>
+        <div class="sg-body">${esc(s.body)}</div>
+        <div class="sg-actions">
+          <label style="font-size:12px;color:#374151;font-weight:700;">対応状況</label>
+          <select onchange="updateStatus(${s.id}, this.value)">${opts}</select>
+          <input class="sg-note" placeholder="本部メモ（任意）" value="${esc(s.admin_note)}" onchange="updateNote(${s.id}, this.value)">
+          <button class="btn danger" onclick="delSuggestion(${s.id})">削除</button>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(_){ box.innerHTML='<p style="color:#ef4444;font-size:13px;">読み込みに失敗しました。</p>'; }
+}
+async function updateStatus(id, status){
+  try{ await fetch(`/api/admin/suggestions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})}); showAlert('対応状況を更新しました。'); loadSuggestions(); }
+  catch(_){ showAlert('更新に失敗しました。'); }
+}
+async function updateNote(id, admin_note){
+  try{ await fetch(`/api/admin/suggestions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({admin_note})}); showAlert('メモを保存しました。'); }
+  catch(_){ showAlert('保存に失敗しました。'); }
+}
+async function delSuggestion(id){
+  if(!confirm('この改善提案を削除しますか？')) return;
+  try{ await fetch(`/api/admin/suggestions/${id}`,{method:'DELETE'}); loadSuggestions(); }
+  catch(_){ showAlert('削除に失敗しました。'); }
+}
+document.addEventListener('DOMContentLoaded', loadSuggestions);
+</script>
+{% endblock %}

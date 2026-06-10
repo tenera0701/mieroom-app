@@ -479,7 +479,7 @@ function renderMonth(){
         const c=staffColor(r.staff_id);
         const cls=r.status==='キャンセル'?'cancel':'';
         const isWeb=r.source==='web';
-        const isNew=isWeb && r.status==='予約';
+        const isNew=isWeb && !r.viewed;
         return `<span class="rv-chip ${cls}" style="background:${c.l};color:${c.s};border-left-color:${c.s};" onclick="event.stopPropagation();openDetail(${r.id})">${isNew?'<span class="chip-new">NEW</span>':''}<span class="ctxt">${esc(r.time_slot)} ${esc(r.customer_name)}</span>${isWeb?'<span class="chip-web">Web</span>':''}</span>`;
       }).join('') + (items.length>3?`<span style="font-size:10px;color:#6b7280;">他${items.length-3}件</span>`:'');
       const colCls = dow===0?'sun-col':(dow===6?'sat-col':'');
@@ -534,7 +534,7 @@ function renderTimeGrid(){
       const h=Math.max(HOUR_PX*durMin/60-2, 22);
       const c=staffColor(r.staff_id);
       const isWeb=r.source==='web';
-      const isNew=isWeb && r.status==='予約';   // Web予約でまだ未対応（予約のまま）＝新着
+      const isNew=isWeb && !r.viewed;   // Web予約でまだ詳細を開いていない＝新着
       const cls=`${r.status==='キャンセル'?'cancel':''} ${isWeb?'is-web':''} ${isNew?'is-new':''}`;
       col+=`<div class="tg-ev ${cls}" data-id="${r.id}" style="top:${top}px;height:${h}px;background:${c.l};border-left-color:${c.s};color:${c.s};" onpointerdown="evDown(event, ${r.id})" title="ドラッグで移動・下端で時間変更">
         ${isNew?'<span class="ev-new">NEW</span>':''}${isWeb?'<span class="ev-web">WEB予約</span>':''}
@@ -637,6 +637,13 @@ async function saveDuration(id, durMin){
 /* ── 詳細モーダル ── */
 function openDetail(id){
   const r=RES.find(x=>x.id===id); if(!r) return;
+  // Web予約を開いたら既読にしてNEWを消す
+  if(r.source==='web' && !r.viewed){
+    r.viewed=true;
+    fetch(`/api/reservations/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({viewed:true})}).catch(()=>{});
+    if(view==='month') renderMonth(); else renderTimeGrid();
+    renderMini();
+  }
   const d=new Date(r.date+'T00:00:00');
   const c=staffColor(r.staff_id);
   document.getElementById('dt-title').textContent=`${d.getMonth()+1}/${d.getDate()}（${DOW[d.getDay()]}） ${r.time_slot}`;
