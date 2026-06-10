@@ -1112,6 +1112,7 @@ class VisitReservation(db.Model):
     memo          = db.Column(db.Text)
     status        = db.Column(db.String(20), default='予約')   # 予約/来店済/キャンセル
     source        = db.Column(db.String(10), default='web')    # web/手動
+    staff_id      = db.Column(db.Integer, index=True)           # 担当スタッフ（任意）
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
@@ -1120,6 +1121,7 @@ class VisitReservation(db.Model):
                 'furigana': self.furigana or '', 'phone': self.phone or '',
                 'email': self.email or '', 'memo': self.memo or '',
                 'status': self.status or '予約', 'source': self.source or 'web',
+                'staff_id': self.staff_id,
                 'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else ''}
 
 
@@ -1667,6 +1669,16 @@ def migrate_db():
         except Exception as e:
             print(f"  Skip status_color.row_bg_color: {e}")
 
+    # visit_reservation に staff_id（担当スタッフ）を追加
+    try:
+        cursor.execute("PRAGMA table_info(visit_reservation)")
+        vr_cols = {r[1] for r in cursor.fetchall()}
+        if vr_cols and 'staff_id' not in vr_cols:
+            cursor.execute("ALTER TABLE visit_reservation ADD COLUMN staff_id INTEGER")
+            print("  Added column visit_reservation.staff_id")
+    except Exception as e:
+        print(f"  Skip visit_reservation.staff_id: {e}")
+
     # customer_service_record の status カラムを追加
     cursor.execute("PRAGMA table_info(customer_service_record)")
     csr_cols = {r[1] for r in cursor.fetchall()}
@@ -1966,6 +1978,7 @@ def migrate_postgres():
         ("app_user", "admin_can_lock_tenant",   "BOOLEAN DEFAULT FALSE"),
         ("floor_plan", "folder_id", "INTEGER"),
         ("floor_plan", "thumb", "TEXT"),
+        ("visit_reservation", "staff_id", "INTEGER"),
     ]
     # 各カラムを独立した接続で追加（1つの失敗が他に波及しない）
     for tbl, col, typedef in new_cols:
@@ -7259,10 +7272,15 @@ def api_reservations_add():
         dt = datetime.strptime(d.get('date') or '', '%Y-%m-%d').date()
     except Exception:
         return jsonify({'error': '日付が不正です'}), 400
+    staff_id = d.get('staff_id')
+    try:
+        staff_id = int(staff_id) if staff_id not in (None, '', 'null') else None
+    except (ValueError, TypeError):
+        staff_id = None
     r = VisitReservation(store_id=sid, date=dt, time_slot=(d.get('time_slot') or '')[:5],
                          customer_name=(d.get('customer_name') or '')[:100],
                          phone=(d.get('phone') or '')[:40],
-                         memo=(d.get('memo') or '')[:2000], source='手動')
+                         memo=(d.get('memo') or '')[:2000], source='手動', staff_id=staff_id)
     db.session.add(r)
     db.session.commit()
     return jsonify({'status': 'ok', 'id': r.id})
@@ -7282,6 +7300,12 @@ def api_reservations_update(rid):
         r.memo = (d.get('memo') or '')[:2000]
     if 'time_slot' in d:
         r.time_slot = (d.get('time_slot') or '')[:5]
+    if 'staff_id' in d:
+        sv = d.get('staff_id')
+        try:
+            r.staff_id = int(sv) if sv not in (None, '', 'null') else None
+        except (ValueError, TypeError):
+            r.staff_id = None
     if 'date' in d:
         try:
             r.date = datetime.strptime(d['date'], '%Y-%m-%d').date()

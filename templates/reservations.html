@@ -19,23 +19,60 @@
   .view-switch button { border:none; background:#fff; padding:8px 16px; font-size:13px; font-weight:700; color:#374151; cursor:pointer; }
   .view-switch button.on { background:var(--primary); color:#fff; }
   .panel { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; }
+
+  /* ── 2カラムレイアウト（左サイドバー＋カレンダー本体） ── */
+  .rv-layout { display:flex; gap:16px; align-items:flex-start; }
+  .rv-side { width:236px; flex:none; }
+  .rv-main { flex:1; min-width:0; }
+  /* 作成ボタン（Googleカレンダー風） */
+  .create-btn { display:inline-flex; align-items:center; gap:9px; border:1px solid #e5e7eb; background:#fff; color:#1f2937; border-radius:28px; padding:13px 22px 13px 16px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.13); margin-bottom:16px; }
+  .create-btn:hover { box-shadow:0 2px 8px rgba(0,0,0,.18); background:#F8FFFE; }
+  .create-btn .plus { font-size:22px; color:var(--primary); line-height:1; }
+  /* ミニカレンダー */
+  .mini { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:10px 11px; margin-bottom:16px; }
+  .mini-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .mini-title { font-size:13px; font-weight:800; color:#111827; }
+  .mini-nav { width:26px; height:26px; border:none; background:transparent; border-radius:50%; cursor:pointer; color:#374151; font-size:14px; }
+  .mini-nav:hover { background:#f1f5f9; }
+  table.mini-grid { width:100%; border-collapse:collapse; table-layout:fixed; }
+  .mini-grid th { font-size:10px; color:#9ca3af; font-weight:700; padding:2px 0; text-align:center; }
+  .mini-grid th.sun { color:#f87171; } .mini-grid th.sat { color:#60a5fa; }
+  .mini-grid td { text-align:center; padding:1px 0; }
+  .mini-day { width:24px; height:24px; line-height:24px; display:inline-block; font-size:11px; border-radius:50%; cursor:pointer; color:#374151; }
+  .mini-day:hover { background:#F0FDFA; }
+  .mini-day.other { color:#cbd5e1; }
+  .mini-day.sun { color:#dc2626; } .mini-day.sat { color:#2563eb; }
+  .mini-day.today { background:#CCFBF1; color:#0F766E; font-weight:800; }
+  .mini-day.sel { background:var(--primary); color:#fff; font-weight:800; }
+  .mini-day.has::after { content:''; display:block; width:4px; height:4px; border-radius:50%; background:var(--primary); margin:-3px auto 0; }
+  /* スタッフ一覧（色分け） */
+  .side-sec { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:11px 12px; }
+  .side-sec-title { font-size:12px; font-weight:800; color:#6b7280; margin:0 0 8px; letter-spacing:.03em; }
+  .staff-item { display:flex; align-items:center; gap:8px; padding:5px 2px; cursor:pointer; user-select:none; }
+  .staff-item:hover { background:#f8fafc; border-radius:6px; }
+  .staff-box { width:16px; height:16px; border-radius:5px; flex:none; border:2px solid; display:flex; align-items:center; justify-content:center; }
+  .staff-box svg { width:11px; height:11px; color:#fff; display:none; }
+  .staff-item.on .staff-box svg { display:block; }
+  .staff-name { font-size:13px; color:#374151; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .staff-item.off .staff-name { color:#9ca3af; }
+
   /* 月表示 */
   table.cal { width:100%; border-collapse:collapse; table-layout:fixed; }
   .cal th { font-size:11px; color:#6b7280; padding:6px 0; border-bottom:1px solid #e5e7eb; font-weight:700; }
   .cal th.sun { color:#dc2626; } .cal th.sat { color:#2563eb; }
-  .cal td { height:96px; vertical-align:top; border:1px solid #f1f5f9; padding:3px 4px; cursor:pointer; }
+  .cal td { height:104px; vertical-align:top; border:1px solid #f1f5f9; padding:3px 4px; cursor:pointer; }
   .cal td:hover { background:#F8FFFE; }
   .cal td.other { background:#fafafa; cursor:default; }
   .cal td.today .dnum { background:var(--primary); color:#fff; border-radius:50%; }
   .dnum { font-size:12px; font-weight:700; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; }
   td.sun-col .dnum { color:#dc2626; } td.sat-col .dnum { color:#2563eb; }
-  .rv-chip { display:block; font-size:10.5px; background:#CCFBF1; color:#0F766E; border-radius:5px; padding:1px 5px; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:700; cursor:pointer; }
+  .rv-chip { display:flex; align-items:center; gap:4px; font-size:10.5px; border-radius:5px; padding:1px 6px; margin-top:2px; overflow:hidden; white-space:nowrap; font-weight:700; cursor:pointer; border-left:3px solid; }
+  .rv-chip .ctxt { overflow:hidden; text-overflow:ellipsis; }
   .rv-chip:hover { filter:brightness(0.95); }
-  .rv-chip.done { background:#dbeafe; color:#1d4ed8; }
-  .rv-chip.cancel { background:#fee2e2; color:#b91c1c; text-decoration:line-through; }
+  .rv-chip.cancel { text-decoration:line-through; opacity:.7; }
   /* 週・日表示（時間グリッド） */
   .tg-wrap { overflow-x:auto; }
-  .tg { display:grid; min-width:640px; }
+  .tg { display:grid; min-width:560px; }
   .tg .tg-headcell { border-bottom:1px solid #e5e7eb; text-align:center; font-size:12px; font-weight:700; color:#374151; padding:7px 2px; }
   .tg .tg-headcell .dn { font-size:16px; }
   .tg .tg-headcell.today .dn { background:var(--primary); color:#fff; border-radius:50%; display:inline-flex; width:26px; height:26px; align-items:center; justify-content:center; }
@@ -44,10 +81,9 @@
   .tg-cell { border-left:1px solid #f1f5f9; border-top:1px solid #f1f5f9; position:relative; cursor:pointer; }
   .tg-cell:hover { background:#F8FFFE; }
   .tg-col { position:relative; }
-  .tg-ev { position:absolute; left:3px; right:3px; background:#CCFBF1; border-left:3px solid var(--primary); color:#0F766E; border-radius:6px; padding:3px 6px; font-size:11px; font-weight:700; overflow:hidden; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.08); z-index:2; }
+  .tg-ev { position:absolute; left:3px; right:3px; border-left:3px solid; border-radius:6px; padding:3px 6px; font-size:11px; font-weight:700; overflow:hidden; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.08); z-index:2; }
   .tg-ev:hover { filter:brightness(0.96); }
-  .tg-ev.done { background:#dbeafe; border-left-color:#2563eb; color:#1d4ed8; }
-  .tg-ev.cancel { background:#fee2e2; border-left-color:#dc2626; color:#b91c1c; text-decoration:line-through; }
+  .tg-ev.cancel { text-decoration:line-through; opacity:.7; }
   .tg-ev .ev-t { font-size:10px; font-weight:600; opacity:.85; }
   .now-line { position:absolute; left:0; right:0; height:2px; background:#ef4444; z-index:3; pointer-events:none; }
   .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
@@ -60,15 +96,24 @@
   .cfg-box { background:#fff; border-radius:14px; width:420px; max-width:100%; max-height:92vh; overflow-y:auto; }
   .cfg-row { display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
   .cfg-row label { font-size:13px; font-weight:700; color:#374151; min-width:90px; }
+  .cfg-row select, .cfg-row input, .cfg-row textarea { font-size:13px; }
   .st-badge { font-size:11px; border-radius:8px; padding:2px 9px; font-weight:700; }
   .st-予約 { background:#CCFBF1; color:#0F766E; }
   .st-来店済 { background:#dbeafe; color:#1d4ed8; }
   .st-キャンセル { background:#fee2e2; color:#b91c1c; }
+  /* 狭い画面ではサイドバーを上に積む */
+  @media (max-width:900px){
+    .rv-layout { flex-direction:column; }
+    .rv-side { width:100%; display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; }
+    .rv-side .create-btn { margin-bottom:0; }
+    .rv-side .mini { margin-bottom:0; flex:1; min-width:220px; }
+    .rv-side .side-sec { flex:1; min-width:200px; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<div style="max-width:1280px;margin:0 auto;">
+<div style="max-width:1500px;margin:0 auto;">
   <div id="alert-msg" class="alert"></div>
   <div class="rv-head">
     <h1 class="rv-title">📅 カレンダー</h1>
@@ -81,17 +126,44 @@
       <button id="vw-week" onclick="setView('week')">週</button>
       <button id="vw-day" onclick="setView('day')">日</button>
     </div>
-    <button class="btn primary" onclick="openAdd()">＋ 予約を追加</button>
-    <a class="btn" href="/settings/reservation" title="Web予約の受付時間・定休日などの設定">⚙ 予約システム設定</a>
   </div>
 
-  <div class="panel">
-    <div id="view-month"><table class="cal">
-      <thead><tr><th class="sun">日</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th class="sat">土</th></tr></thead>
-      <tbody id="cal-body"></tbody>
-    </table></div>
-    <div id="view-time" class="tg-wrap" style="display:none;">
-      <div class="tg" id="tg"></div>
+  <div class="rv-layout">
+    <!-- 左サイドバー -->
+    <aside class="rv-side">
+      <button class="create-btn" onclick="openAdd()"><span class="plus">＋</span> 作成</button>
+
+      <div class="mini">
+        <div class="mini-head">
+          <span class="mini-title" id="mini-title"></span>
+          <div>
+            <button class="mini-nav" onclick="miniNav(-1)">‹</button>
+            <button class="mini-nav" onclick="miniNav(1)">›</button>
+          </div>
+        </div>
+        <table class="mini-grid">
+          <thead><tr><th class="sun">日</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th class="sat">土</th></tr></thead>
+          <tbody id="mini-body"></tbody>
+        </table>
+      </div>
+
+      <div class="side-sec">
+        <p class="side-sec-title">スタッフ（色分け）</p>
+        <div id="staff-list"></div>
+      </div>
+    </aside>
+
+    <!-- カレンダー本体 -->
+    <div class="rv-main">
+      <div class="panel">
+        <div id="view-month"><table class="cal">
+          <thead><tr><th class="sun">日</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th class="sat">土</th></tr></thead>
+          <tbody id="cal-body"></tbody>
+        </table></div>
+        <div id="view-time" class="tg-wrap" style="display:none;">
+          <div class="tg" id="tg"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -116,11 +188,12 @@
       <button class="btn sm" onclick="closeAdd()">✕</button>
     </div>
     <div style="padding:16px 20px;">
-      <div class="cfg-row"><label>日付</label><input type="date" id="add-date" style="border:1px solid #d1d5db;border-radius:7px;padding:7px 9px;font-size:13px;"></div>
-      <div class="cfg-row"><label>時間</label><input type="time" id="add-time" style="border:1px solid #d1d5db;border-radius:7px;padding:7px 9px;font-size:13px;"></div>
-      <div class="cfg-row"><label>お名前</label><input type="text" id="add-name" placeholder="例：山田 太郎" style="flex:1;border:1px solid #d1d5db;border-radius:7px;padding:7px 9px;font-size:13px;"></div>
-      <div class="cfg-row"><label>電話番号</label><input type="tel" id="add-phone" style="flex:1;border:1px solid #d1d5db;border-radius:7px;padding:7px 9px;font-size:13px;"></div>
-      <div class="cfg-row" style="align-items:flex-start;"><label>メモ</label><textarea id="add-memo" style="flex:1;min-height:50px;border:1px solid #d1d5db;border-radius:7px;padding:8px 10px;font-size:13px;font-family:inherit;"></textarea></div>
+      <div class="cfg-row"><label>日付</label><input type="date" id="add-date" style="border:1px solid #d1d5db;border-radius:7px;padding:7px 9px;"></div>
+      <div class="cfg-row"><label>時間</label><input type="time" id="add-time" style="border:1px solid #d1d5db;border-radius:7px;padding:7px 9px;"></div>
+      <div class="cfg-row"><label>担当</label><select id="add-staff" style="flex:1;border:1px solid #d1d5db;border-radius:7px;padding:7px 9px;"></select></div>
+      <div class="cfg-row"><label>お名前</label><input type="text" id="add-name" placeholder="例：山田 太郎" style="flex:1;border:1px solid #d1d5db;border-radius:7px;padding:7px 9px;"></div>
+      <div class="cfg-row"><label>電話番号</label><input type="tel" id="add-phone" style="flex:1;border:1px solid #d1d5db;border-radius:7px;padding:7px 9px;"></div>
+      <div class="cfg-row" style="align-items:flex-start;"><label>メモ</label><textarea id="add-memo" style="flex:1;min-height:50px;border:1px solid #d1d5db;border-radius:7px;padding:8px 10px;font-family:inherit;"></textarea></div>
     </div>
     <div style="padding:12px 20px;border-top:1px solid #eef2f2;text-align:right;">
       <button class="btn" onclick="closeAdd()">キャンセル</button>
@@ -134,9 +207,32 @@
 <script>
 let view = 'month';            // month / week / day
 let cur = new Date();          // 表示の基準日
+let miniCur = new Date();      // ミニカレンダーの表示月
 let RES = [];                  // 取得済み予約（表示範囲分）
+let STAFF = [];                // スタッフ一覧
+let HIDDEN = new Set();        // 非表示にするスタッフキー（id または 'none'）
 const HOUR_PX = 48;            // 時間グリッド1時間の高さ
 const DAY_START = 8, DAY_END = 20;   // 時間グリッドの表示範囲（時）
+
+/* スタッフ色パレット（solid=濃い色 / light=薄い背景色） */
+const PALETTE = [
+  {s:'#0D9488', l:'#CCFBF1'}, {s:'#2563eb', l:'#dbeafe'}, {s:'#db2777', l:'#fce7f3'},
+  {s:'#d97706', l:'#fef3c7'}, {s:'#7c3aed', l:'#ede9fe'}, {s:'#dc2626', l:'#fee2e2'},
+  {s:'#0891b2', l:'#cffafe'}, {s:'#65a30d', l:'#ecfccb'}, {s:'#c026d3', l:'#fae8ff'},
+  {s:'#ea580c', l:'#ffedd5'},
+];
+const UNASSIGNED = {s:'#64748b', l:'#f1f5f9'};
+function staffKey(sid){ return (sid===null||sid===undefined||sid==='') ? 'none' : String(sid); }
+function staffColor(sid){
+  if(staffKey(sid)==='none') return UNASSIGNED;
+  const i = STAFF.findIndex(s=>String(s.id)===String(sid));
+  return i>=0 ? PALETTE[i % PALETTE.length] : UNASSIGNED;
+}
+function staffName(sid){
+  if(staffKey(sid)==='none') return '未割り当て';
+  const s = STAFF.find(s=>String(s.id)===String(sid));
+  return s ? s.name : '（退職スタッフ）';
+}
 
 function showAlert(msg, type='success'){
   const el=document.getElementById('alert-msg');
@@ -148,6 +244,9 @@ function pad(n){ return String(n).padStart(2,'0'); }
 function fmt(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
 function todayS(){ return fmt(new Date()); }
 const DOW = ['日','月','火','水','木','金','土'];
+
+/* 表示対象の予約だけに絞る（スタッフフィルタ） */
+function visibleRes(){ return RES.filter(r=>!HIDDEN.has(staffKey(r.staff_id))); }
 
 /* ── データ取得（表示範囲の月をまとめて取得） ── */
 async function fetchRange(months){
@@ -173,6 +272,8 @@ function weekStart(d){ const s=new Date(d); s.setDate(s.getDate()-s.getDay()); r
 async function refresh(){
   await fetchRange(monthsForView());
   renderTitle();
+  miniCur = new Date(cur.getFullYear(), cur.getMonth(), 1);
+  renderMini();
   if(view==='month'){ document.getElementById('view-month').style.display=''; document.getElementById('view-time').style.display='none'; renderMonth(); }
   else { document.getElementById('view-month').style.display='none'; document.getElementById('view-time').style.display=''; renderTimeGrid(); }
 }
@@ -199,6 +300,68 @@ function nav(d){
 }
 function goToday(){ cur=new Date(); refresh(); }
 
+/* ── ミニカレンダー ── */
+function renderMini(){
+  document.getElementById('mini-title').textContent = `${miniCur.getFullYear()}年 ${miniCur.getMonth()+1}月`;
+  const y=miniCur.getFullYear(), m=miniCur.getMonth();
+  const first=new Date(y,m,1), startDow=first.getDay();
+  const daysIn=new Date(y,m+1,0).getDate();
+  const prevDays=new Date(y,m,0).getDate();
+  const hasRes = new Set(visibleRes().map(r=>r.date));
+  let html='', cell=0;
+  for(let w=0;w<6;w++){
+    html+='<tr>';
+    for(let dow=0;dow<7;dow++,cell++){
+      let day, mm=m, yy=y, other=false;
+      if(cell<startDow){ day=prevDays-startDow+1+cell; mm=m-1; other=true; }
+      else if(cell-startDow>=daysIn){ day=cell-startDow-daysIn+1; mm=m+1; other=true; }
+      else day=cell-startDow+1;
+      const dd=new Date(yy,mm,day); const ds=fmt(dd);
+      let cls='mini-day';
+      if(other) cls+=' other';
+      else { if(dow===0) cls+=' sun'; if(dow===6) cls+=' sat'; }
+      if(ds===todayS()) cls+=' today';
+      if(ds===fmt(cur)) cls+=' sel';
+      if(!other && hasRes.has(ds)) cls+=' has';
+      html+=`<td><span class="${cls}" onclick="pickMini('${ds}')">${day}</span></td>`;
+    }
+    html+='</tr>';
+    if(cell-startDow>=daysIn) break;
+  }
+  document.getElementById('mini-body').innerHTML=html;
+}
+function miniNav(d){ miniCur=new Date(miniCur.getFullYear(), miniCur.getMonth()+d, 1); renderMini(); }
+function pickMini(ds){ cur=new Date(ds+'T00:00:00'); refresh(); }
+
+/* ── スタッフ一覧（色分け＋表示フィルタ） ── */
+function renderStaffList(){
+  const box=document.getElementById('staff-list');
+  const check='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>';
+  const rows = STAFF.map(s=>{
+    const c=staffColor(s.id); const on=!HIDDEN.has(staffKey(s.id));
+    return `<div class="staff-item ${on?'on':'off'}" onclick="toggleStaff('${staffKey(s.id)}')">
+      <span class="staff-box" style="border-color:${c.s};background:${on?c.s:'#fff'};">${check}</span>
+      <span class="staff-name">${esc(s.name)}</span></div>`;
+  }).join('');
+  const noneOn=!HIDDEN.has('none');
+  const noneRow=`<div class="staff-item ${noneOn?'on':'off'}" onclick="toggleStaff('none')">
+    <span class="staff-box" style="border-color:${UNASSIGNED.s};background:${noneOn?UNASSIGNED.s:'#fff'};">${check}</span>
+    <span class="staff-name">未割り当て</span></div>`;
+  box.innerHTML = rows + noneRow;
+}
+function toggleStaff(key){
+  if(HIDDEN.has(key)) HIDDEN.delete(key); else HIDDEN.add(key);
+  renderStaffList();
+  if(view==='month') renderMonth(); else renderTimeGrid();
+  renderMini();
+}
+function staffOptions(selected){
+  const sel = staffKey(selected);
+  let html = `<option value="" ${sel==='none'?'selected':''}>（未割り当て）</option>`;
+  html += STAFF.map(s=>`<option value="${s.id}" ${sel===String(s.id)?'selected':''}>${esc(s.name)}</option>`).join('');
+  return html;
+}
+
 /* ── 月表示 ── */
 function renderMonth(){
   const y=cur.getFullYear(), m=cur.getMonth()+1;
@@ -206,7 +369,7 @@ function renderMonth(){
   const startDow=first.getDay();
   const daysIn=new Date(y,m,0).getDate();
   const byDate={};
-  RES.forEach(r=>{ (byDate[r.date]=byDate[r.date]||[]).push(r); });
+  visibleRes().forEach(r=>{ (byDate[r.date]=byDate[r.date]||[]).push(r); });
   let html='', day=1;
   for(let w=0;w<6 && day<=daysIn;w++){
     html+='<tr>';
@@ -215,8 +378,9 @@ function renderMonth(){
       const ds=`${y}-${pad(m)}-${pad(day)}`;
       const items=(byDate[ds]||[]).slice().sort((a,b)=>(a.time_slot||'').localeCompare(b.time_slot||''));
       const chips=items.slice(0,3).map(r=>{
-        const cls=r.status==='来店済'?'done':(r.status==='キャンセル'?'cancel':'');
-        return `<span class="rv-chip ${cls}" onclick="event.stopPropagation();openDetail(${r.id})">${esc(r.time_slot)} ${esc(r.customer_name)}</span>`;
+        const c=staffColor(r.staff_id);
+        const cls=r.status==='キャンセル'?'cancel':'';
+        return `<span class="rv-chip ${cls}" style="background:${c.l};color:${c.s};border-left-color:${c.s};" onclick="event.stopPropagation();openDetail(${r.id})"><span class="ctxt">${esc(r.time_slot)} ${esc(r.customer_name)}</span></span>`;
       }).join('') + (items.length>3?`<span style="font-size:10px;color:#6b7280;">他${items.length-3}件</span>`:'');
       const colCls = dow===0?'sun-col':(dow===6?'sat-col':'');
       html+=`<td class="${ds===todayS()?'today':''} ${colCls}" onclick="openDay('${ds}')">
@@ -235,10 +399,11 @@ function renderTimeGrid(){
   const days = [];
   if(view==='week'){ const s=weekStart(cur); for(let i=0;i<7;i++){ const d=new Date(s); d.setDate(d.getDate()+i); days.push(d); } }
   else days.push(new Date(cur));
+  const shown = visibleRes();
 
   // 表示時間範囲（予約がはみ出す場合は広げる）
   let hs=DAY_START, he=DAY_END;
-  RES.forEach(r=>{ if(days.some(d=>fmt(d)===r.date)){ const t=tParse(r.time_slot); hs=Math.min(hs, Math.floor(t)); he=Math.max(he, Math.ceil(t+1)); } });
+  shown.forEach(r=>{ if(days.some(d=>fmt(d)===r.date)){ const t=tParse(r.time_slot); hs=Math.min(hs, Math.floor(t)); he=Math.max(he, Math.ceil(t+1)); } });
 
   const tg=document.getElementById('tg');
   tg.style.gridTemplateColumns = `52px repeat(${days.length}, 1fr)`;
@@ -260,11 +425,12 @@ function renderTimeGrid(){
       col+=`<div class="tg-cell" style="position:absolute;top:${(h-hs)*HOUR_PX}px;left:0;right:0;height:${HOUR_PX}px;" onclick="quickAdd('${ds}','${pad(h)}:00')"></div>`;
     }
     // 予約ブロック
-    RES.filter(r=>r.date===ds).forEach(r=>{
+    shown.filter(r=>r.date===ds).forEach(r=>{
       const t=tParse(r.time_slot);
       const top=(t-hs)*HOUR_PX+1;
-      const cls=r.status==='来店済'?'done':(r.status==='キャンセル'?'cancel':'');
-      col+=`<div class="tg-ev ${cls}" style="top:${top}px;height:${HOUR_PX-4}px;" onclick="event.stopPropagation();openDetail(${r.id})">
+      const c=staffColor(r.staff_id);
+      const cls=r.status==='キャンセル'?'cancel':'';
+      col+=`<div class="tg-ev ${cls}" style="top:${top}px;height:${HOUR_PX-4}px;background:${c.l};border-left-color:${c.s};color:${c.s};" onclick="event.stopPropagation();openDetail(${r.id})">
         ${esc(r.customer_name)} 様<div class="ev-t">${esc(r.time_slot)}${r.source==='web'?'・Web':''}</div></div>`;
     });
     // 現在時刻ライン
@@ -280,6 +446,7 @@ function renderTimeGrid(){
 function quickAdd(ds, time){
   document.getElementById('add-date').value=ds;
   document.getElementById('add-time').value=time;
+  document.getElementById('add-staff').innerHTML=staffOptions(null);
   document.getElementById('add-name').value=''; document.getElementById('add-phone').value=''; document.getElementById('add-memo').value='';
   document.getElementById('add-overlay').classList.add('open');
 }
@@ -288,12 +455,18 @@ function quickAdd(ds, time){
 function openDetail(id){
   const r=RES.find(x=>x.id===id); if(!r) return;
   const d=new Date(r.date+'T00:00:00');
+  const c=staffColor(r.staff_id);
   document.getElementById('dt-title').textContent=`${d.getMonth()+1}/${d.getDate()}（${DOW[d.getDay()]}） ${r.time_slot}`;
   document.getElementById('dt-body').innerHTML=`
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
       <span style="font-size:16px;font-weight:800;">${esc(r.customer_name)} 様</span>
       <span class="st-badge st-${esc(r.status)}">${esc(r.status)}</span>
       <span style="font-size:11px;color:#9ca3af;">${r.source==='web'?'Web予約':'手動登録'}</span>
+    </div>
+    <div class="cfg-row" style="margin-bottom:10px;">
+      <label style="min-width:auto;">担当スタッフ</label>
+      <span style="width:14px;height:14px;border-radius:4px;background:${c.s};flex:none;"></span>
+      <select id="dt-staff" onchange="setStaff(${r.id}, this.value)" style="flex:1;border:1px solid #d1d5db;border-radius:7px;padding:6px 9px;">${staffOptions(r.staff_id)}</select>
     </div>
     <div style="font-size:13px;color:#374151;line-height:1.9;">
       ${r.furigana?('フリガナ：'+esc(r.furigana)+'<br>'):''}
@@ -314,6 +487,15 @@ async function setStatus(id, st){
   try{ await fetch(`/api/reservations/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:st})}); closeDetail(); refresh(); }
   catch(_){ showAlert('更新に失敗しました','error'); }
 }
+async function setStaff(id, staffId){
+  try{
+    await fetch(`/api/reservations/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({staff_id:staffId})});
+    const r=RES.find(x=>x.id===id); if(r) r.staff_id = staffId==='' ? null : parseInt(staffId);
+    if(view==='month') renderMonth(); else renderTimeGrid();
+    renderMini();
+    showAlert(`担当を「${staffName(staffId===''?null:staffId)}」に設定しました。`);
+  }catch(_){ showAlert('担当の更新に失敗しました','error'); }
+}
 async function delRes(id){
   if(!confirm('この予約を削除しますか？')) return;
   try{ await fetch(`/api/reservations/${id}`,{method:'DELETE'}); closeDetail(); refresh(); }
@@ -329,6 +511,7 @@ async function saveAdd(){
   try{
     const r=await fetch('/api/reservations',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({date:document.getElementById('add-date').value, time_slot:document.getElementById('add-time').value,
+        staff_id:document.getElementById('add-staff').value,
         customer_name:name, phone:document.getElementById('add-phone').value, memo:document.getElementById('add-memo').value})});
     if(!r.ok) throw new Error();
     closeAdd();
@@ -337,6 +520,11 @@ async function saveAdd(){
   }catch(_){ showAlert('追加に失敗しました','error'); }
 }
 
-document.addEventListener('DOMContentLoaded', ()=>{ refresh(); });
+async function loadStaff(){
+  try{ STAFF = await fetch('/api/staff').then(r=>r.json()) || []; }catch(_){ STAFF = []; }
+  renderStaffList();
+}
+
+document.addEventListener('DOMContentLoaded', async ()=>{ await loadStaff(); refresh(); });
 </script>
 {% endblock %}
