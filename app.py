@@ -5029,7 +5029,7 @@ def _idle_worker(store_id, stop_event):
             backoff = 5
             ticks = 0
             while not stop_event.is_set():
-                stop_event.wait(5)   # 5秒ごとに新着確認
+                stop_event.wait(2)   # 2秒ごとに新着確認（NOOPは超軽量）
                 if stop_event.is_set():
                     break
                 M.noop()             # 新着があれば untagged EXISTS（メール総数の変化）が届く
@@ -5042,14 +5042,15 @@ def _idle_worker(store_id, stop_event):
                     cur = None
                 ticks += 1
                 changed = (cur is not None and cur != last_exists)
-                if changed or ticks >= 12:   # 変化検知 or 60秒ごとの保険フェッチ
+                if changed or ticks >= 30:   # 変化検知 or 60秒ごとの保険フェッチ
                     if cur is not None:
                         last_exists = cur
                     ticks = 0
                     if changed:
                         print(f"mail poll: new mail detected store={store_id}")
                     with app.app_context():
-                        fetch_reactions_for_store(store_id)
+                        # 変化検知時は最新分だけ確認して最速で取込（保険時はやや広めに）
+                        fetch_reactions_for_store(store_id, limit=(15 if changed else 120))
         except Exception as e:
             print(f"idle worker store={store_id} reconnect: {e}")
             stop_event.wait(backoff)
