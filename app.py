@@ -950,6 +950,28 @@ class ChatRead(db.Model):
     __table_args__ = (db.UniqueConstraint('channel_id', 'user_id', name='uq_chat_read_channel_user'),)
 
 
+class ChatReaction(db.Model):
+    """メッセージへのリアクション（絵文字スタンプ）"""
+    __tablename__ = 'chat_reaction'
+    id         = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(db.Integer, db.ForeignKey('chat_message.id'), index=True)
+    channel_id = db.Column(db.Integer, index=True)
+    user_id    = db.Column(db.Integer)
+    user_name  = db.Column(db.String(120))
+    emoji      = db.Column(db.String(20))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class ChatChannelNote(db.Model):
+    """ルーム（チャンネル）ごとの共有メモ"""
+    __tablename__ = 'chat_channel_note'
+    id          = db.Column(db.Integer, primary_key=True)
+    channel_id  = db.Column(db.Integer, index=True, unique=True)
+    body        = db.Column(db.Text)
+    updated_by  = db.Column(db.String(120))
+    updated_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class MailSetting(db.Model):
     """店舗ごとの反響メール自動取込設定（IMAP）"""
     __tablename__ = 'mail_setting'
@@ -6414,12 +6436,14 @@ def api_chat_messages(cid):
              for r in ChatRead.query.filter_by(channel_id=cid).all()]
     def _read_count(m):
         return sum(1 for (uid_, lr) in reads if uid_ != m.user_id and lr >= m.id)
+    reactions = _reactions_for_channel(cid, u.id)
     return jsonify({'messages': [{
         'id': m.id, 'user_id': m.user_id, 'user_name': m.user_name or '',
         'body': m.body or '', 'mine': m.user_id == u.id,
         'at': _fmt_jst(m.created_at),
         'read_count': _read_count(m),
         'attachments': atts_by.get(m.id, []),
+        'reactions': reactions.get(str(m.id), []),
     } for m in msgs]})
 
 
@@ -6437,6 +6461,95 @@ def api_chat_reads(cid):
     out = {}
     for m in my_msgs:
         out[str(m.id)] = sum(1 for (uid_, lr) in reads if uid_ != u.id and lr >= m.id)
+    return jsonify(out)
+
+
+def _reactions_for_channel(cid, me_id):
+    """チャンネルのリアクションを {message_id: [{e, n, mine, names}]} で返す"""
+    out = {}
+    for r in ChatReaction.query.filter_by(channel_id=cid).order_by(ChatReaction.id.asc()).all():
+        slot = out.setdefault(str(r.message_id), {})
+        item = slot.setdefault(r.emoji, {'e': r.emoji, 'n': 0, 'mine': False, 'names': []})
+        item['n'] += 1
+        if r.user_id == me_id:
+            item['mine'] = True
+        if r.user_name and len(item['names']) < 10:
+            item['names'].append(r.user_name)
+    return {mid: list(slot.values()) for mid, slot in out.items()}
+
+
+@app.route("/api/chat/channels/<int:cid>/reactions", methods=["GET"])
+@login_required
+def api_chat_reactions(cid):
+    u = _chat_user()
+    c = ChatChannel.query.get_or_404(cid)
+    if not _can_access_channel(c, u):
+        return jsonify({})
+    return jsonify(_reactions_for_channel(cid, u.id))
+
+
+@app.route("/api/chat/messages/<int:mid>/react", methods=["POST"])
+@login_required
+def api_chat_react(mid):
+    """リアクションのトグル（同じ絵文字を2回押すと外れる）"""
+    u = _chat_user()
+    m = ChatMessage.query.get_or_404(mid)
+    c = ChatChannel.query.get_or_404(m.channel_id)
+    if not _can_access_channel(c, u):
+        return jsonify({'error': '権限がありません'}), 403
+    emoji = ((request.get_json() or {}).get('emoji') or '').strip()[:20]
+    if not emoji:
+        return jsonify({'error': 'emoji required'}), 400
+    ex = ChatReaction.query.filter_by(message_id=mid, user_id=u.id, emoji=emoji).first()
+    if ex:
+        db.session.delete(ex)
+    else:
+        db.session.add(ChatReaction(message_id=mid, channel_id=m.channel_id,
+                                    user_id=u.id, user_name=u.username or '', emoji=emoji))
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route("/api/chat/channels/<int:cid>/note", methods=["GET", "POST"])
+@login_required
+def api_chat_channel_note(cid):
+    """ルームごとの共有メモ"""
+    u = _chat_user()
+    c = ChatChannel.query.get_or_404(cid)
+    if not _can_access_channel(c, u):
+        return jsonify({'error': '権限がありません'}), 403
+    note = ChatChannelNote.query.filter_by(channel_id=cid).first()
+    if request.method == 'GET':
+        return jsonify({'body': note.body if note else '',
+                        'updated_by': note.updated_by if note else '',
+                        'updated_at': _fmt_jst(note.updated_at) if note and note.updated_at else ''})
+    body = (request.get_json() or {}).get('body') or ''
+    if not note:
+        note = ChatChannelNote(channel_id=cid)
+        db.session.add(note)
+    note.body = body[:20000]
+    note.updated_by = u.username or ''
+    note.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route("/api/chat/channels/<int:cid>/images", methods=["GET"])
+@login_required
+def api_chat_channel_images(cid):
+    """ルームのアルバム（画像添付の一覧・新しい順）"""
+    u = _chat_user()
+    c = ChatChannel.query.get_or_404(cid)
+    if not _can_access_channel(c, u):
+        return jsonify([])
+    rows = (ChatAttachment.query.filter_by(channel_id=cid)
+            .order_by(ChatAttachment.id.desc()).limit(300).all())
+    out = []
+    for a in rows:
+        fn = (a.filename or '').lower()
+        if (a.content_type or '').startswith('image/') or fn.endswith(_IMG_EXTS):
+            out.append({'id': a.id, 'filename': a.filename or '',
+                        'at': _fmt_jst(a.created_at)})
     return jsonify(out)
 
 

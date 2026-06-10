@@ -69,6 +69,27 @@
   .gm-overlay.active { display:flex; }
   .gm-box { background:#fff; border-radius:12px; width:440px; max-width:95vw; max-height:84vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.2); }
   .gm-mem { display:flex; align-items:center; gap:8px; padding:7px 4px; border-bottom:1px solid #f3f4f6; font-size:13px; }
+  /* リアクション */
+  .cm-reacts { display:flex; flex-wrap:wrap; gap:4px; margin:3px 4px 0; }
+  .react-chip { display:inline-flex; align-items:center; gap:3px; border:1px solid #e2e8f0; background:#fff; border-radius:999px; padding:1px 8px; font-size:12px; cursor:pointer; color:#475569; }
+  .react-chip.mine { border-color:#0D9488; background:#F0FDFA; color:#0F766E; font-weight:700; }
+  .react-add { border:none; background:transparent; color:#cbd5e1; font-size:14px; cursor:pointer; padding:0 4px; border-radius:6px; visibility:hidden; }
+  .cm-row:hover .react-add { visibility:visible; }
+  .react-picker { position:fixed; z-index:3500; background:#fff; border:1px solid #e5e7eb; border-radius:12px; box-shadow:0 10px 36px rgba(0,0,0,.18); padding:6px; display:flex; gap:2px; }
+  .react-picker button { border:none; background:none; font-size:20px; cursor:pointer; padding:4px 6px; border-radius:8px; }
+  .react-picker button:hover { background:#f1f5f9; }
+  /* メンション */
+  .mention { color:#0F766E; background:#CCFBF1; border-radius:5px; padding:0 4px; font-weight:700; }
+  .cm-row.mine .mention { color:#fff; background:rgba(255,255,255,0.25); }
+  .mention-pop { position:fixed; z-index:3500; background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 10px 36px rgba(0,0,0,.18); max-height:200px; overflow-y:auto; min-width:160px; }
+  .mention-pop div { padding:8px 14px; font-size:13px; cursor:pointer; }
+  .mention-pop div:hover, .mention-pop div.sel { background:#F0FDFA; color:#0F766E; }
+  /* ヘッダのツールボタン */
+  .h-tool { border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:7px; padding:5px 10px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .h-tool:hover { background:#F0FDFA; border-color:#5EEAD4; }
+  /* アルバム */
+  .album-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:8px; }
+  .album-grid img { width:100%; height:100px; object-fit:cover; border-radius:8px; cursor:pointer; border:1px solid #e5e7eb; }
   @media (max-width: 760px) { .ch-side { width:150px; } .cm-row { max-width:86%; } }
 </style>
 {% endblock %}
@@ -102,18 +123,21 @@
   <div class="ch-main">
     <div class="ch-main-head" id="ch-head" style="display:none;">
       <div class="h-ico" id="h-ico">#</div>
-      <div style="min-width:0;">
+      <div style="min-width:0;flex:1;">
         <div class="h-nm" id="h-nm">　</div>
         <div class="h-sub" id="h-sub"></div>
       </div>
+      <button class="h-tool" onclick="openNote()" title="このルームの共有メモ">📝 メモ</button>
+      <button class="h-tool" onclick="openAlbum()" title="このルームで送られた画像一覧">🖼 アルバム</button>
+      <button class="h-tool" id="notif-btn" style="display:none;" onclick="enableNotify()" title="新着メッセージをPCに通知します">🔔 通知ON</button>
     </div>
     <div class="ch-body" id="ch-body"><div class="ch-empty">左のチャンネルを選んでください</div></div>
     <div class="ch-compose" id="ch-compose" style="display:none;">
       <div class="ch-att-list" id="ch-att-list"></div>
       <div class="ch-input-bar">
-        <button class="ch-attach-btn" id="ch-attach-btn" onclick="document.getElementById('ch-file').click()" title="画像・PDFを添付">📎</button>
+        <button class="ch-attach-btn" id="ch-attach-btn" onclick="attachClick()" title="画像・PDFを添付">📎</button>
         <input type="file" id="ch-file" multiple accept="image/*,application/pdf,.pdf" style="display:none" onchange="onChatFiles(this)">
-        <textarea id="ch-input" class="ch-input" rows="1" placeholder="メッセージを入力…（Shift+Enterで送信）" oninput="cgrow(this)"></textarea>
+        <textarea id="ch-input" class="ch-input" rows="1" placeholder="メッセージを入力…（Shift+Enterで送信 / @でメンション）" oninput="onChatInput(this)"></textarea>
         <button class="ch-send" id="ch-send" onclick="sendChat()" title="送信">➤</button>
       </div>
       <div class="pro-note" id="pro-note"></div>
@@ -149,6 +173,35 @@
       <button onclick="closeMembers()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
     </div>
     <div id="members-list" style="padding:10px 20px 16px;max-height:360px;overflow-y:auto;"></div>
+  </div>
+</div>
+
+<!-- ルームメモ モーダル -->
+<div class="gm-overlay" id="note-modal">
+  <div class="gm-box" style="width:520px;">
+    <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="margin:0;font-size:15px;font-weight:700;">📝 ルームメモ <span id="note-room" style="font-size:12px;color:#94a3b8;font-weight:600;"></span></h3>
+      <button onclick="closeNote()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+    <div style="padding:14px 20px;">
+      <textarea id="note-body" placeholder="このルームの共有メモ（議事録・リンク・ルールなど）" style="width:100%;min-height:220px;border:1px solid #d1d5db;border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;box-sizing:border-box;resize:vertical;"></textarea>
+      <div id="note-meta" style="font-size:11px;color:#94a3b8;margin-top:4px;"></div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #e5e7eb;text-align:right;">
+      <button onclick="closeNote()" style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer;margin-right:6px;">閉じる</button>
+      <button onclick="saveNote()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- アルバム モーダル -->
+<div class="gm-overlay" id="album-modal">
+  <div class="gm-box" style="width:640px;">
+    <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="margin:0;font-size:15px;font-weight:700;">🖼 アルバム <span id="album-room" style="font-size:12px;color:#94a3b8;font-weight:600;"></span></h3>
+      <button onclick="closeAlbum()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#9ca3af;">✕</button>
+    </div>
+    <div id="album-grid" class="album-grid" style="padding:14px 20px 20px;max-height:60vh;overflow-y:auto;"></div>
   </div>
 </div>
 {% endblock %}
@@ -260,6 +313,10 @@ async function refreshUnread(){
     renderChannelList();
     // サイドバーのバッジも更新（mgmt_base.html が用意）
     if(window.updateChatNavBadge) window.updateChatNavBadge(d.total||0);
+    // 未読が増えたらPC通知（初回は基準値の記録のみ）
+    const total = d.total||0;
+    if(_lastUnreadTotal !== null && total > _lastUnreadTotal) notifyNew(total);
+    _lastUnreadTotal = total;
   }catch(_){}
 }
 
@@ -281,14 +338,12 @@ function selectChannel(cid){
   document.getElementById('h-nm').textContent = c.name;
   document.getElementById('h-sub').textContent = KIND_LABEL[c.kind]||'';
   document.getElementById('ch-body').innerHTML = '<div class="ch-empty">読み込み中…</div>';
-  // 添付ボタン：Proのみ
-  const ab = document.getElementById('ch-attach-btn');
-  ab.disabled = !CH.is_pro;
+  // 添付ボタン：Pro以外は押した時に案内（disabledだと携帯で無反応に見えるため）
   document.getElementById('pro-note').textContent = CH.is_pro ? '' : '※ 画像・PDFの添付はチャットProプランの機能です';
   loadMessages(false);
   markChannelRead(cid);
   if(_pollTimer) clearInterval(_pollTimer);
-  _pollTimer = setInterval(()=>{ if(_curCh){ loadMessages(true); refreshReadCounts(); } }, 5000);
+  _pollTimer = setInterval(()=>{ if(_curCh){ loadMessages(true); refreshReadCounts(); refreshReactions(); } }, 5000);
 }
 
 // 既読人数を更新（自分の投稿のみ・ポーリングで反映）
@@ -326,7 +381,7 @@ async function loadMessages(incremental){
         : `<a class="cm-file" href="/api/chat/attachments/${a.id}" target="_blank" rel="noopener">📄 ${escH(a.filename)}</a>`).join('');
       const attHtml = atts ? `<div class="cm-att">${atts}</div>` : '';
       const nameHtml = m.mine ? '' : `<div class="cm-name">${escH(m.user_name)}</div>`;
-      const bodyHtml = m.body ? escH(m.body) : '';
+      const bodyHtml = m.body ? highlightMentions(escH(m.body)) : '';
       const time = escH((m.at||'').slice(11,16));
       let metaHtml;
       if(m.mine){
@@ -337,8 +392,11 @@ async function loadMessages(incremental){
       } else {
         metaHtml = `<div class="cm-time">${time}</div>`;
       }
+      const reactsHtml = `<div style="display:flex;align-items:center;gap:2px;${m.mine?'flex-direction:row-reverse;':''}">`
+        + `<div class="cm-reacts" id="rx-${m.id}">${reactChips(m.id, m.reactions||[])}</div>`
+        + `<button class="react-add" title="リアクション" onclick="openReactPicker(event,${m.id})">☺+</button></div>`;
       body.insertAdjacentHTML('beforeend',
-        `<div class="cm-row ${cls}">${nameHtml}<div class="cm-bubble">${bodyHtml}${attHtml}</div>${metaHtml}</div>`);
+        `<div class="cm-row ${cls}">${nameHtml}<div class="cm-bubble">${bodyHtml}${attHtml}</div>${reactsHtml}${metaHtml}</div>`);
       _lastId = Math.max(_lastId, m.id);
     });
     body.setAttribute('data-lastdate', lastDate);
@@ -349,9 +407,30 @@ async function loadMessages(incremental){
 }
 
 // 添付
+function attachClick(){
+  if(!CH.is_pro){ alert('画像・PDFの添付はチャットProプランの機能です'); return; }
+  document.getElementById('ch-file').click();
+}
 function onChatFiles(input){
   acceptChatFiles(input.files);
   input.value='';
+}
+// 画像の貼り付け（コピー＆ペースト／携帯の共有から）でも添付できるように
+function setupPasteAttach(){
+  const inp = document.getElementById('ch-input');
+  if(!inp) return;
+  inp.addEventListener('paste', e=>{
+    const items = e.clipboardData && e.clipboardData.items;
+    if(!items) return;
+    const files = [];
+    for(const it of items){
+      if(it.kind==='file'){
+        const f = it.getAsFile();
+        if(f && /^image\//.test(f.type)) files.push(f);
+      }
+    }
+    if(files.length){ e.preventDefault(); acceptChatFiles(files); }
+  });
 }
 function acceptChatFiles(files){
   if(!_curCh) return;
@@ -417,6 +496,136 @@ document.addEventListener('keydown', e=>{
   }
 });
 
+/* ===== リアクション（スタンプ） ===== */
+const REACT_EMOJIS = ['👍','❤️','😂','🙏','😮','🎉'];
+function reactChips(mid, list){
+  return (list||[]).map(r=>{
+    const names = (r.names||[]).join('、');
+    return `<span class="react-chip ${r.mine?'mine':''}" title="${escH(names)}" onclick="toggleReact(${mid},'${r.e}')">${r.e} ${r.n}</span>`;
+  }).join('');
+}
+function closeReactPicker(){ const p=document.getElementById('react-picker'); if(p) p.remove(); }
+function openReactPicker(ev, mid){
+  closeReactPicker();
+  const p=document.createElement('div');
+  p.id='react-picker'; p.className='react-picker';
+  p.innerHTML = REACT_EMOJIS.map(e=>`<button onclick="toggleReact(${mid},'${e}');closeReactPicker();">${e}</button>`).join('');
+  document.body.appendChild(p);
+  const r=ev.target.getBoundingClientRect();
+  p.style.left=Math.min(r.left, window.innerWidth-p.offsetWidth-10)+'px';
+  p.style.top=Math.max(8, r.top-44)+'px';
+  setTimeout(()=>document.addEventListener('click', closeReactPicker, {once:true}),0);
+}
+async function toggleReact(mid, emoji){
+  try{
+    await fetch(`/api/chat/messages/${mid}/react`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({emoji})});
+    refreshReactions();
+  }catch(_){}
+}
+async function refreshReactions(){
+  if(!_curCh) return;
+  try{
+    const d = await fetch(`/api/chat/channels/${_curCh}/reactions`).then(r=>r.json());
+    document.querySelectorAll('[id^="rx-"]').forEach(el=>{
+      const mid = el.id.slice(3);
+      el.innerHTML = reactChips(mid, d[mid]||[]);
+    });
+  }catch(_){}
+}
+
+/* ===== メンション ===== */
+let _allMembers = [];   // [{id,name}] 自分以外
+function highlightMentions(escapedBody){
+  let html = escapedBody;
+  const names = _allMembers.map(m=>m.name).concat(CH.me && CH.me.name ? [CH.me.name] : []);
+  names.sort((a,b)=>b.length-a.length).forEach(n=>{
+    if(!n) return;
+    const escName = escH(n).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    html = html.replace(new RegExp('@'+escName,'g'), `<span class="mention">@${escH(n)}</span>`);
+  });
+  return html;
+}
+function closeMentionPop(){ const p=document.getElementById('mention-pop'); if(p) p.remove(); }
+function showMentionPop(query){
+  closeMentionPop();
+  const cand = _allMembers.filter(m=>!query || m.name.toLowerCase().includes(query.toLowerCase())).slice(0,8);
+  if(!cand.length) return;
+  const inp = document.getElementById('ch-input');
+  const p = document.createElement('div');
+  p.id='mention-pop'; p.className='mention-pop';
+  p.innerHTML = cand.map(m=>`<div onclick="pickMention('${escH(m.name)}')">@ ${escH(m.name)}</div>`).join('');
+  document.body.appendChild(p);
+  const r = inp.getBoundingClientRect();
+  p.style.left = r.left+'px';
+  p.style.top = Math.max(8, r.top - p.offsetHeight - 6)+'px';
+}
+function pickMention(name){
+  const inp = document.getElementById('ch-input');
+  inp.value = inp.value.replace(/@([^\s@]*)$/, '@'+name+' ');
+  closeMentionPop(); inp.focus();
+}
+function onChatInput(el){
+  cgrow(el);
+  const upToCursor = el.value.slice(0, el.selectionStart==null?el.value.length:el.selectionStart);
+  const m = upToCursor.match(/@([^\s@]*)$/);
+  if(m) showMentionPop(m[1]); else closeMentionPop();
+}
+
+/* ===== ルームメモ・アルバム ===== */
+function chName(){ const c=CH.channels.find(x=>x.id===_curCh); return c?c.name:''; }
+async function openNote(){
+  if(!_curCh) return;
+  document.getElementById('note-room').textContent = '— '+chName();
+  try{
+    const d = await fetch(`/api/chat/channels/${_curCh}/note`).then(r=>r.json());
+    document.getElementById('note-body').value = d.body||'';
+    document.getElementById('note-meta').textContent = d.updated_at ? `最終更新：${d.updated_at}（${d.updated_by}）` : '';
+  }catch(_){}
+  document.getElementById('note-modal').classList.add('active');
+}
+function closeNote(){ document.getElementById('note-modal').classList.remove('active'); }
+async function saveNote(){
+  try{
+    const r = await fetch(`/api/chat/channels/${_curCh}/note`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:document.getElementById('note-body').value})});
+    if(!r.ok) throw new Error();
+    closeNote();
+  }catch(_){ alert('保存に失敗しました'); }
+}
+async function openAlbum(){
+  if(!_curCh) return;
+  document.getElementById('album-room').textContent = '— '+chName();
+  const grid = document.getElementById('album-grid');
+  grid.innerHTML = '<p style="color:#94a3b8;font-size:13px;">読み込み中…</p>';
+  document.getElementById('album-modal').classList.add('active');
+  try{
+    const list = await fetch(`/api/chat/channels/${_curCh}/images`).then(r=>r.json());
+    grid.innerHTML = list.length
+      ? list.map(a=>`<img src="/api/chat/attachments/${a.id}" alt="${escH(a.filename)}" title="${escH(a.filename)} (${escH(a.at)})" onclick="window.open('/api/chat/attachments/${a.id}','_blank')">`).join('')
+      : '<p style="color:#94a3b8;font-size:13px;">このルームにはまだ画像がありません。</p>';
+  }catch(_){ grid.innerHTML='<p style="color:#ef4444;font-size:13px;">読み込みに失敗しました。</p>'; }
+}
+function closeAlbum(){ document.getElementById('album-modal').classList.remove('active'); }
+
+/* ===== PC通知（ブラウザ通知） ===== */
+let _lastUnreadTotal = null;
+function updateNotifBtn(){
+  const b=document.getElementById('notif-btn'); if(!b) return;
+  b.style.display = ('Notification' in window && Notification.permission==='default') ? '' : 'none';
+}
+async function enableNotify(){
+  if(!('Notification' in window)){ alert('このブラウザは通知に対応していません'); return; }
+  await Notification.requestPermission();
+  updateNotifBtn();
+  if(Notification.permission==='granted') new Notification('ミエルーム チャット', {body:'通知をオンにしました🔔'});
+}
+function notifyNew(total){
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  try{
+    const n = new Notification('ミエルーム チャット', {body:`新着メッセージがあります（未読 ${total}件）`, tag:'mieroom-chat'});
+    n.onclick = ()=>{ window.focus(); n.close(); };
+  }catch(_){}
+}
+
 // グループ作成
 async function openGroupModal(){
   document.getElementById('gm-name').value='';
@@ -447,6 +656,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if(_unreadTimer) clearInterval(_unreadTimer);
   _unreadTimer = setInterval(refreshUnread, 15000);
   setupChatDnD();
+  setupPasteAttach();
+  updateNotifBtn();
+  fetch('/api/chat/members').then(r=>r.json()).then(l=>{ _allMembers = l||[]; }).catch(()=>{});
 });
 </script>
 {% endblock %}
