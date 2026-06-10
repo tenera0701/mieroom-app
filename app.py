@@ -1020,22 +1020,46 @@ class VisitIntake(db.Model):
     budget        = db.Column(db.String(80))     # 初期費用予算
     conditions    = db.Column(db.Text)           # こだわり条件・その他希望
     notes         = db.Column(db.Text)           # 備考
+    answers_json  = db.Column(db.Text)           # 全回答（カスタム項目含む）JSON [{label, value}]
     handled       = db.Column(db.Boolean, default=False)   # 接客管理表へ反映済み
     service_record_id = db.Column(db.Integer, nullable=True)
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def answer_pairs(self):
+        """[{label, value}] を返す（旧データはカラムから復元）"""
+        if self.answers_json:
+            try:
+                pairs = json.loads(self.answers_json)
+                if isinstance(pairs, list):
+                    return [p for p in pairs if isinstance(p, dict) and (p.get('value') or '').strip()]
+            except Exception:
+                pass
+        legacy = [('お名前', self.customer_name), ('フリガナ', self.furigana),
+                  ('電話番号', self.phone), ('メール', self.email),
+                  ('希望エリア', self.desired_area), ('希望賃料', self.desired_rent),
+                  ('希望間取り', self.desired_layout), ('入居希望時期', self.move_in),
+                  ('入居人数', self.occupants), ('初期費用予算', self.budget),
+                  ('こだわり条件', self.conditions), ('備考', self.notes)]
+        return [{'label': l, 'value': v} for l, v in legacy if (v or '').strip()]
 
     def to_dict(self):
         return {
             'id': self.id, 'store_id': self.store_id,
             'customer_name': self.customer_name or '', 'furigana': self.furigana or '',
             'phone': self.phone or '', 'email': self.email or '',
-            'desired_area': self.desired_area or '', 'desired_rent': self.desired_rent or '',
-            'desired_layout': self.desired_layout or '', 'move_in': self.move_in or '',
-            'occupants': self.occupants or '', 'budget': self.budget or '',
-            'conditions': self.conditions or '', 'notes': self.notes or '',
+            'answers': self.answer_pairs(),
             'handled': bool(self.handled),
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
         }
+
+
+class VisitFormConfig(db.Model):
+    """来店アンケートの項目定義（店舗ごとにカスタム可能）。fields はJSON配列。"""
+    __tablename__ = 'visit_form_config'
+    id       = db.Column(db.Integer, primary_key=True)
+    store_id = db.Column(db.Integer, index=True, unique=True)
+    fields   = db.Column(db.Text)   # JSON: [{key,label,type,required,enabled,options,checks,other,placeholder}]
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class DropdownOption(db.Model):
@@ -1631,6 +1655,16 @@ def migrate_db():
     except Exception as e:
         print(f"  Skip mail_message.opened_at: {e}")
 
+    # visit_intake の answers_json カラムを追加（カスタムアンケート回答）
+    try:
+        cursor.execute("PRAGMA table_info(visit_intake)")
+        vicols = {r[1] for r in cursor.fetchall()}
+        if vicols and 'answers_json' not in vicols:
+            cursor.execute("ALTER TABLE visit_intake ADD COLUMN answers_json TEXT")
+            print("  Added column visit_intake.answers_json")
+    except Exception as e:
+        print(f"  Skip visit_intake.answers_json: {e}")
+
     # mail_setting の custom_keywords カラムを追加
     try:
         cursor.execute("PRAGMA table_info(mail_setting)")
@@ -1790,6 +1824,7 @@ def migrate_postgres():
         ("chat_channel",             "pinned",          "BOOLEAN DEFAULT FALSE"),
         ("chat_channel",             "sort_order",      "INTEGER DEFAULT 0"),
         ("mail_message",             "opened_at",       "TIMESTAMP"),
+        ("visit_intake",             "answers_json",    "TEXT"),
         ("mail_setting",             "custom_keywords", "TEXT"),
         ("mail_setting",             "import_after",    "TIMESTAMP"),
         ("mail_setting",             "oauth_refresh_token", "TEXT"),
@@ -6395,11 +6430,64 @@ def customer_service():
 
 
 # ─── 来店管理（QR受付ヒヤリング） ─────────────────────────────────────────
+
+# 来店アンケートのデフォルト項目（店舗ごとにカスタム可能）
+DEFAULT_VISIT_FORM_FIELDS = [
+    {'key': 'customer_name', 'label': 'お名前', 'type': 'text', 'required': True, 'enabled': True, 'placeholder': '例：山田 太郎'},
+    {'key': 'furigana', 'label': 'フリガナ', 'type': 'text', 'enabled': True, 'placeholder': '例：ヤマダ タロウ'},
+    {'key': 'address', 'label': '住所', 'type': 'text', 'enabled': True, 'placeholder': '例：〇〇市〇〇区1-2-3'},
+    {'key': 'age', 'label': '年齢', 'type': 'text', 'enabled': True, 'placeholder': '例：25歳'},
+    {'key': 'phone', 'label': '電話番号', 'type': 'tel', 'enabled': True, 'placeholder': '例：090-1234-5678'},
+    {'key': 'workplace', 'label': '勤務先', 'type': 'text', 'enabled': True, 'placeholder': '例：株式会社〇〇'},
+    {'key': 'desired_area', 'label': '希望エリア', 'type': 'text', 'enabled': True, 'placeholder': '例：〇〇駅周辺 / 〇〇区'},
+    {'key': 'desired_rent', 'label': '希望賃料', 'type': 'text_checks', 'enabled': True,
+     'placeholder': '例：8万円まで', 'checks': ['共益費込', '駐車場料込']},
+    {'key': 'desired_layout', 'label': '希望間取り', 'type': 'select', 'enabled': True,
+     'options': ['1R', '1K', '1DK', '1LDK', '2K', '2DK', '2LDK', '3DK', '3LDK', '4LDK以上', 'こだわらない']},
+    {'key': 'occupants', 'label': '入居人数', 'type': 'text', 'enabled': True, 'placeholder': '例：1人 / 2人'},
+    {'key': 'move_in', 'label': '入居希望日', 'type': 'text', 'enabled': True, 'placeholder': '例：4月上旬 / なるべく早く'},
+    {'key': 'move_reason', 'label': 'お引越し理由', 'type': 'checks', 'enabled': True, 'other': True,
+     'checks': ['入学', '入社', '転職', '転勤', '同棲', '結婚', '独立', '住替', 'ルームシェア', '生活保護']},
+    {'key': 'conditions', 'label': 'こだわり条件・その他希望', 'type': 'checks_textarea', 'enabled': True,
+     'checks': ['ペット飼育（犬）', 'ペット飼育（猫）', 'ペット飼育（その他）', '駐車場利用'],
+     'placeholder': '例：2階以上、宅配ボックス、独立洗面台 など'},
+]
+
+
+def _visit_form_fields(store_id):
+    """店舗のアンケート項目定義を返す（未設定ならデフォルト）"""
+    cfg = VisitFormConfig.query.filter_by(store_id=store_id).first()
+    if cfg and cfg.fields:
+        try:
+            fields = json.loads(cfg.fields)
+            if isinstance(fields, list) and fields:
+                return fields
+        except Exception:
+            pass
+    return DEFAULT_VISIT_FORM_FIELDS
+
+
+def _visit_to_service(v, staff_id=None):
+    """来店ヒヤリングを接客管理表へ反映（お名前以外はメモへ）"""
+    pairs = v.answer_pairs()
+    memo = '\n'.join(f"{p['label']}：{p['value']}" for p in pairs
+                     if p.get('label') not in ('お名前',))
+    rec = CustomerServiceRecord(
+        store_id=v.store_id, service_date=date.today(),
+        staff_id=staff_id, customer_name=v.customer_name or '',
+        service_type='来店', visit_count=1, status='追客中', memo=memo)
+    db.session.add(rec)
+    db.session.flush()
+    v.handled = True
+    v.service_record_id = rec.id
+    return rec
+
+
 @app.route("/store-visits")
 @login_required
 @block_super_admin
 def store_visits_page():
-    """来店管理ページ（QR受付の一覧・QR表示・接客管理表への反映）"""
+    """来店管理ページ（QR受付の一覧・QR表示・アンケート編集）"""
     stores = get_allowed_stores(ignore_active=True)
     active_ids = get_allowed_store_ids()
     store_id = active_ids[0] if active_ids else None
@@ -6415,28 +6503,116 @@ def visit_form_page(store_id):
     store = Store.query.get(store_id)
     if not store:
         return "店舗が見つかりません", 404
-    return render_template("visit_form.html", store_id=store_id, store_name=store.name or '')
+    fields = _visit_form_fields(store_id)
+    return render_template("visit_form.html", store_id=store_id,
+                           store_name=store.name or '',
+                           fields_json=json.dumps(fields, ensure_ascii=False))
+
+
+@app.route("/api/public/company-logo/<int:store_id>")
+def api_public_company_logo(store_id):
+    """お客様フォーム・QR用の会社ロゴ（公開・ロゴ画像のみ）"""
+    cp = CompanyProfile.query.filter_by(store_id=store_id).first()
+    if not cp or not cp.logo_data:
+        return "", 404
+    from flask import Response as _Resp
+    return _Resp(cp.logo_data, mimetype=cp.logo_type or 'image/png')
+
+
+@app.route("/api/visit-form-config", methods=["GET"])
+@login_required
+def api_visit_form_config_get():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    return jsonify({'fields': _visit_form_fields(sid) if sid else DEFAULT_VISIT_FORM_FIELDS,
+                    'defaults': DEFAULT_VISIT_FORM_FIELDS})
+
+
+@app.route("/api/visit-form-config", methods=["POST"])
+@login_required
+def api_visit_form_config_save():
+    allowed = get_allowed_store_ids()
+    sid = allowed[0] if allowed else None
+    if not sid:
+        return jsonify({'error': 'unauthorized'}), 403
+    d = request.get_json() or {}
+    fields = d.get('fields')
+    if not isinstance(fields, list) or not fields:
+        return jsonify({'error': '項目がありません'}), 400
+    # お名前（customer_name）は必須項目として常に含める
+    if not any(f.get('key') == 'customer_name' and f.get('enabled', True) for f in fields):
+        return jsonify({'error': '「お名前」の項目は必須です（非表示にできません）'}), 400
+    cfg = VisitFormConfig.query.filter_by(store_id=sid).first()
+    if not cfg:
+        cfg = VisitFormConfig(store_id=sid)
+        db.session.add(cfg)
+    cfg.fields = json.dumps(fields, ensure_ascii=False)
+    db.session.commit()
+    return jsonify({'status': 'ok'})
 
 
 @app.route("/api/visit/<int:store_id>", methods=["POST"])
 def api_visit_submit(store_id):
-    """お客様フォームの送信（ログイン不要）。VisitIntake を作成。"""
+    """お客様フォームの送信（ログイン不要）。VisitIntake を作成し、接客管理表へ自動反映。"""
     store = Store.query.get(store_id)
     if not store:
         return jsonify({'error': '店舗が見つかりません'}), 404
-    d = request.get_json(silent=True) or request.form
-    name = (d.get('customer_name') or '').strip()
-    if not name:
+    d = request.get_json(silent=True) or {}
+    answers = d.get('answers')
+    v = VisitIntake(store_id=store_id)
+
+    if isinstance(answers, list):
+        # 新形式：[{key,label,value}] — カスタム項目もそのまま保存
+        clean = []
+        for a in answers[:60]:
+            if not isinstance(a, dict):
+                continue
+            label = str(a.get('label') or '')[:120].strip()
+            value = str(a.get('value') or '')[:1000].strip()
+            key = str(a.get('key') or '')[:60]
+            if label and value:
+                clean.append({'key': key, 'label': label, 'value': value})
+            if key == 'customer_name':
+                v.customer_name = value[:100]
+            elif key == 'furigana':
+                v.furigana = value[:100]
+            elif key == 'phone':
+                v.phone = value[:40]
+            elif key == 'desired_area':
+                v.desired_area = value[:200]
+            elif key == 'desired_rent':
+                v.desired_rent = value[:80]
+            elif key == 'desired_layout':
+                v.desired_layout = value[:80]
+            elif key == 'move_in':
+                v.move_in = value[:80]
+            elif key == 'occupants':
+                v.occupants = value[:80]
+        v.answers_json = json.dumps(clean, ensure_ascii=False)
+    else:
+        # 旧形式（フォームの古いキャッシュ対策）
+        def g(k): return (d.get(k) or '').strip()[:200]
+        v.customer_name = (d.get('customer_name') or '').strip()[:100]
+        v.furigana = g('furigana')[:100]
+        v.phone = g('phone')[:40]
+        v.email = g('email')
+        v.desired_area = g('desired_area')
+        v.desired_rent = g('desired_rent')[:80]
+        v.desired_layout = g('desired_layout')[:80]
+        v.move_in = g('move_in')[:80]
+        v.occupants = g('occupants')[:80]
+        v.budget = g('budget')[:80]
+        v.conditions = (d.get('conditions') or '').strip()
+
+    if not (v.customer_name or '').strip():
         return jsonify({'error': 'お名前を入力してください'}), 400
-    def g(k): return (d.get(k) or '').strip()[:200]
-    v = VisitIntake(
-        store_id=store_id, customer_name=name[:100], furigana=g('furigana')[:100],
-        phone=g('phone')[:40], email=g('email'),
-        desired_area=g('desired_area'), desired_rent=g('desired_rent')[:80],
-        desired_layout=g('desired_layout')[:80], move_in=g('move_in')[:80],
-        occupants=g('occupants')[:80], budget=g('budget')[:80],
-        conditions=(d.get('conditions') or '').strip(), notes=(d.get('notes') or '').strip())
     db.session.add(v)
+    db.session.flush()
+    # 接客管理表へ自動反映（担当は未設定＝後から店舗側で割当）
+    try:
+        _visit_to_service(v, staff_id=None)
+    except Exception as e:
+        print(f"visit auto-reflect error: {e}")
     db.session.commit()
     return jsonify({'status': 'ok'})
 
@@ -6466,33 +6642,14 @@ def api_visits_delete(vid):
 @app.route("/api/visits/<int:vid>/to-service", methods=["POST"])
 @login_required
 def api_visits_to_service(vid):
-    """来店ヒヤリングを接客管理表（CustomerServiceRecord）へ反映する"""
+    """来店ヒヤリングを接客管理表へ手動反映（自動反映前の旧データ用）"""
     allowed = get_allowed_store_ids()
     v = VisitIntake.query.get_or_404(vid)
     if v.store_id not in allowed:
         return jsonify({'error': '権限がありません'}), 403
     cur_user = AppUser.query.get(session.get('app_user_id'))
     cur_staff_id = resolve_cur_staff_id(cur_user)
-    memo_parts = []
-    if v.desired_area:   memo_parts.append(f'希望エリア：{v.desired_area}')
-    if v.desired_rent:   memo_parts.append(f'希望賃料：{v.desired_rent}')
-    if v.desired_layout: memo_parts.append(f'希望間取り：{v.desired_layout}')
-    if v.move_in:        memo_parts.append(f'入居時期：{v.move_in}')
-    if v.occupants:      memo_parts.append(f'入居人数：{v.occupants}')
-    if v.budget:         memo_parts.append(f'初期費用予算：{v.budget}')
-    if v.phone:          memo_parts.append(f'TEL：{v.phone}')
-    if v.email:          memo_parts.append(f'Mail：{v.email}')
-    if v.conditions:     memo_parts.append(f'こだわり：{v.conditions}')
-    if v.notes:          memo_parts.append(f'備考：{v.notes}')
-    rec = CustomerServiceRecord(
-        store_id=v.store_id, service_date=date.today(),
-        staff_id=cur_staff_id, customer_name=v.customer_name or '',
-        service_type='来店', visit_count=1, status='追客中',
-        memo='\n'.join(memo_parts))
-    db.session.add(rec)
-    db.session.flush()
-    v.handled = True
-    v.service_record_id = rec.id
+    rec = _visit_to_service(v, staff_id=cur_staff_id)
     db.session.commit()
     return jsonify({'status': 'ok', 'service_record_id': rec.id})
 
