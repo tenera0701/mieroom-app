@@ -187,7 +187,7 @@ async function loadVisits(){
         <td><div style="font-weight:700;">${esc(r.customer_name)||'―'}</div><div style="font-size:11px;color:#9ca3af;">${esc(r.furigana)}</div></td>
         <td style="font-size:12px;white-space:nowrap;">${r.phone?('📞 '+esc(r.phone)):'―'}</td>
         <td><div class="cond">${esc(condText(r))||'―'}</div></td>
-        <td>${r.handled?'<span class="badge-done">接客表 反映済</span>':'<span class="badge-new">未反映</span>'}</td>
+        <td>${r.handled?'<span class="badge-done">接客表 反映済</span>':'<span class="badge-new">未反映</span>'}${r.matched?`<div style="font-size:11px;color:#0F766E;margin-top:3px;">📎 反響と一致<br>（${esc(r.matched)}）</div>`:''}</td>
         <td style="white-space:nowrap;">
           ${r.handled?'':`<button class="btn primary sm" onclick="toService(${r.id})">接客表へ反映</button>`}
           <button class="btn danger sm" onclick="delVisit(${r.id})">削除</button>

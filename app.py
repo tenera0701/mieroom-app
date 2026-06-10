@@ -1023,6 +1023,7 @@ class VisitIntake(db.Model):
     answers_json  = db.Column(db.Text)           # 全回答（カスタム項目含む）JSON [{label, value}]
     handled       = db.Column(db.Boolean, default=False)   # 接客管理表へ反映済み
     service_record_id = db.Column(db.Integer, nullable=True)
+    matched_echo_id = db.Column(db.Integer, nullable=True)  # 一致した反響（EchoRecord）のid
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
 
     def answer_pairs(self):
@@ -1043,12 +1044,18 @@ class VisitIntake(db.Model):
         return [{'label': l, 'value': v} for l, v in legacy if (v or '').strip()]
 
     def to_dict(self):
+        matched = ''
+        if self.matched_echo_id:
+            er = EchoRecord.query.get(self.matched_echo_id)
+            if er:
+                matched = f"{er.media or '反響'}・{er.list_name or ''}"
         return {
             'id': self.id, 'store_id': self.store_id,
             'customer_name': self.customer_name or '', 'furigana': self.furigana or '',
             'phone': self.phone or '', 'email': self.email or '',
             'answers': self.answer_pairs(),
             'handled': bool(self.handled),
+            'matched': matched,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
         }
 
@@ -1655,15 +1662,18 @@ def migrate_db():
     except Exception as e:
         print(f"  Skip mail_message.opened_at: {e}")
 
-    # visit_intake の answers_json カラムを追加（カスタムアンケート回答）
+    # visit_intake の answers_json / matched_echo_id カラムを追加（カスタムアンケート回答・反響紐付け）
     try:
         cursor.execute("PRAGMA table_info(visit_intake)")
         vicols = {r[1] for r in cursor.fetchall()}
         if vicols and 'answers_json' not in vicols:
             cursor.execute("ALTER TABLE visit_intake ADD COLUMN answers_json TEXT")
             print("  Added column visit_intake.answers_json")
+        if vicols and 'matched_echo_id' not in vicols:
+            cursor.execute("ALTER TABLE visit_intake ADD COLUMN matched_echo_id INTEGER")
+            print("  Added column visit_intake.matched_echo_id")
     except Exception as e:
-        print(f"  Skip visit_intake.answers_json: {e}")
+        print(f"  Skip visit_intake columns: {e}")
 
     # mail_setting の custom_keywords カラムを追加
     try:
@@ -1825,6 +1835,7 @@ def migrate_postgres():
         ("chat_channel",             "sort_order",      "INTEGER DEFAULT 0"),
         ("mail_message",             "opened_at",       "TIMESTAMP"),
         ("visit_intake",             "answers_json",    "TEXT"),
+        ("visit_intake",             "matched_echo_id", "INTEGER"),
         ("mail_setting",             "custom_keywords", "TEXT"),
         ("mail_setting",             "import_after",    "TIMESTAMP"),
         ("mail_setting",             "oauth_refresh_token", "TEXT"),
@@ -6438,6 +6449,7 @@ DEFAULT_VISIT_FORM_FIELDS = [
     {'key': 'address', 'label': '住所', 'type': 'text', 'enabled': True, 'placeholder': '例：〇〇市〇〇区1-2-3'},
     {'key': 'age', 'label': '年齢', 'type': 'text', 'enabled': True, 'placeholder': '例：25歳'},
     {'key': 'phone', 'label': '電話番号', 'type': 'tel', 'enabled': True, 'placeholder': '例：090-1234-5678'},
+    {'key': 'email', 'label': 'メールアドレス', 'type': 'email', 'enabled': True, 'placeholder': '例：taro@example.com'},
     {'key': 'workplace', 'label': '勤務先', 'type': 'text', 'enabled': True, 'placeholder': '例：株式会社〇〇'},
     {'key': 'desired_area', 'label': '希望エリア', 'type': 'text', 'enabled': True, 'placeholder': '例：〇〇駅周辺 / 〇〇区'},
     {'key': 'desired_rent', 'label': '希望賃料', 'type': 'text_checks', 'enabled': True,
@@ -6467,14 +6479,59 @@ def _visit_form_fields(store_id):
     return DEFAULT_VISIT_FORM_FIELDS
 
 
+def _match_echo_record(store_id, phone, email, name):
+    """来店アンケートと一致する反響（EchoRecord）を探す。
+    精度の高い順：①メールアドレス一致 → ②電話番号一致（メモ内） → ③氏名の完全一致"""
+    # ① メールアドレス（反響の customer_email と一致）
+    em = (email or '').strip().lower()
+    if em:
+        rec = (EchoRecord.query
+               .filter(EchoRecord.store_id == store_id,
+                       db.func.lower(EchoRecord.customer_email) == em)
+               .order_by(EchoRecord.id.desc()).first())
+        if rec:
+            return rec
+    # 候補（直近500件）を1回だけ取得して②③で使う
+    cands = (EchoRecord.query.filter_by(store_id=store_id)
+             .order_by(EchoRecord.id.desc()).limit(500).all())
+    # ② 電話番号（数字だけにして比較。反響はメモ内に書かれていることが多い）
+    digits = re.sub(r'\D', '', phone or '')
+    if len(digits) >= 10:
+        for r in cands:
+            if digits in re.sub(r'\D', '', r.memo or ''):
+                return r
+    # ③ 氏名（スペースを除いた完全一致のみ＝同姓同名の誤爆を最小化）
+    norm = re.sub(r'[\s　]', '', name or '')
+    if len(norm) >= 3:
+        for r in cands:
+            if re.sub(r'[\s　]', '', r.list_name or '') == norm:
+                return r
+    return None
+
+
 def _visit_to_service(v, staff_id=None):
-    """来店ヒヤリングを接客管理表へ反映（お名前以外はメモへ）"""
+    """来店ヒヤリングを接客管理表へ反映（お名前以外はメモへ）。反響と一致したら自動で紐付け。"""
     pairs = v.answer_pairs()
     memo = '\n'.join(f"{p['label']}：{p['value']}" for p in pairs
                      if p.get('key') != 'customer_name' and p.get('label') != 'お名前')
+    echo_media = ''
+    # 反響との自動紐付け（メール→電話→氏名）
+    try:
+        m = _match_echo_record(v.store_id, v.phone, v.email, v.customer_name)
+        if m:
+            v.matched_echo_id = m.id
+            echo_media = m.media or ''
+            stamp = f'{date.today().month}/{date.today().day}'
+            note = f'【来店】{stamp} QRアンケート回答あり'
+            if note not in (m.memo or ''):
+                m.memo = ((m.memo or '') + '\n' + note).strip()
+            memo = f'反響：{m.media or "―"}（{m.echo_date.strftime("%Y-%m-%d") if m.echo_date else "―"}）と一致\n' + memo
+    except Exception as e:
+        print(f"visit echo-match error: {e}")
     rec = CustomerServiceRecord(
         store_id=v.store_id, service_date=date.today(),
         staff_id=staff_id, customer_name=v.customer_name or '',
+        echo_media=echo_media,
         service_type='来店', visit_count=1, status='追客中', memo=memo)
     db.session.add(rec)
     db.session.flush()
@@ -6578,6 +6635,8 @@ def api_visit_submit(store_id):
                 v.furigana = value[:100]
             elif key == 'phone':
                 v.phone = value[:40]
+            elif key == 'email':
+                v.email = value[:200]
             elif key == 'desired_area':
                 v.desired_area = value[:200]
             elif key == 'desired_rent':
