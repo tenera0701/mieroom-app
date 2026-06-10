@@ -4364,6 +4364,27 @@ def _gmail_api_send(refresh_token, raw_message_bytes):
         return _json.loads(resp.read().decode('utf-8'))
 
 
+def _gmail_watch(ms):
+    """Gmail Pub/Sub Push の監視を登録／更新（メール到着の瞬間に通知が届くようになる）。
+    監視は約7日で失効するため、起動時＋12時間ごとに呼び直す。"""
+    topic = os.getenv('GMAIL_PUBSUB_TOPIC', '')
+    if not topic or not ms.oauth_refresh_token:
+        return False
+    import urllib.request, json as _json
+    token = _google_access_token(ms.oauth_refresh_token)
+    body = _json.dumps({'topicName': topic, 'labelIds': ['INBOX'],
+                        'labelFilterBehavior': 'INCLUDE'}).encode()
+    req = urllib.request.Request('https://gmail.googleapis.com/gmail/v1/users/me/watch',
+                                 data=body,
+                                 headers={'Authorization': 'Bearer ' + token,
+                                          'Content-Type': 'application/json'},
+                                 method='POST')
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        d = _json.loads(resp.read().decode('utf-8'))
+    print(f"gmail watch ok store={ms.store_id} expiration={d.get('expiration')}")
+    return True
+
+
 def _open_imap_raw(host, imap_user, imap_pass, oauth_refresh_token=None, oauth_email=None):
     """認証済みIMAP接続を返す（OAuth(XOAUTH2)優先・無ければapp-password）"""
     M = _IMAP4SSLIPv4(host or 'imap.gmail.com')
@@ -5116,6 +5137,15 @@ def _mail_sync_loop():
                                 fetch_reactions_for_store(ms.store_id)
                             except Exception:
                                 pass
+            # Gmail Push（Pub/Sub）の監視を起動直後＋約12時間ごとに更新（約7日で失効するため）
+            if os.getenv('GMAIL_PUBSUB_TOPIC') and (cnt == 1 or cnt % 1440 == 0):
+                with app.app_context():
+                    for ms in MailSetting.query.filter_by(enabled=True).all():
+                        if ms.oauth_refresh_token:
+                            try:
+                                _gmail_watch(ms)
+                            except Exception as e:
+                                print(f"gmail watch error store={ms.store_id}: {e}")
         except Exception as e:
             print(f"mail sync loop error: {e}")
         time.sleep(30)
@@ -5143,6 +5173,39 @@ def request_mail_sync():
     """設定保存時などに即時で有効店舗のワーカーを同期（リーダーのみ実行）。"""
     if _IS_LEADER:
         threading.Thread(target=idle_manager.sync, daemon=True).start()
+
+
+@app.route("/api/gmail-push", methods=["POST"])
+def api_gmail_push():
+    """Gmail Pub/Sub Push の受け口。メール到着の瞬間にGoogleがここへ通知してくる。
+    通知に含まれるメールアドレスから店舗を特定し、即フェッチ（取込＋自動返信）。"""
+    push_key = os.getenv('GMAIL_PUSH_KEY', '')
+    if push_key and request.args.get('key') != push_key:
+        return '', 403
+    email_addr = ''
+    try:
+        import base64 as _b64
+        env = request.get_json(silent=True) or {}
+        data = (env.get('message') or {}).get('data') or ''
+        payload = json.loads(_b64.urlsafe_b64decode(data + '===').decode('utf-8'))
+        email_addr = (payload.get('emailAddress') or '').strip().lower()
+    except Exception:
+        pass
+    if not email_addr:
+        return '', 204   # 不正・空通知は黙って受領（Pub/Subの再送ループを防ぐ）
+
+    def _go(addr):
+        with app.app_context():
+            try:
+                for ms in MailSetting.query.filter_by(enabled=True).all():
+                    if (ms.oauth_email or ms.imap_user or '').strip().lower() == addr:
+                        print(f"gmail push: instant fetch store={ms.store_id}")
+                        fetch_reactions_for_store(ms.store_id, limit=15)
+                        break
+            except Exception as e:
+                print(f"gmail push fetch error: {e}")
+    threading.Thread(target=_go, args=(email_addr,), daemon=True).start()
+    return '', 204   # 即時応答（処理はバックグラウンド）
 
 
 # ── 反響メール取込 設定ページ・API ──
