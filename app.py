@@ -133,10 +133,14 @@ def inject_ui_context():
     def _has_floorplan():
         return current_has_option('floorplan')
 
+    def _has_converter():
+        return current_has_option('converter')
+
     return {
         'is_premium': _is_premium(),
         'is_chat_pro': _is_chat_pro(),
         'has_floorplan': _has_floorplan(),
+        'has_converter': _has_converter(),
         'current_role': session.get('app_user_role', ''),
         'sidebar_stores': _sidebar_stores(),
         'user_perms': _current_user_perms(),
@@ -181,6 +185,8 @@ PLAN_OPTION_DEFS = [
      'desc': 'チャットで画像・PDFの添付が可能になり、メッセージを2年間保存（通常はテキストのみ・60日保存）'},
     {'key': 'floorplan', 'name': '間取り作成',
      'desc': '物件の間取り図をツール上で作成・保存・印刷できる「間取り作成」機能を利用できます'},
+    {'key': 'converter', 'name': '物件コンバータ',
+     'desc': '物件を一度入力するだけでSUUMO／HOME\'S／at home等の規定フォーマットへ一斉出力できる「物件コンバータ」機能。AIによる物件コメント自動生成・ポータル別備考・入力チェックを搭載'},
 ]
 
 
@@ -263,6 +269,10 @@ def current_has_option(key):
 
 def current_has_floorplan():
     return current_has_option('floorplan')
+
+
+def current_has_converter():
+    return current_has_option('converter')
 
 
 class Store(db.Model):
@@ -705,6 +715,69 @@ class FloorPlan(db.Model):
     thumb = db.Column(db.Text)  # 一覧用サムネイル（dataURL）
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class Property(db.Model):
+    """物件マスタ（コンバータ用）。1物件＝1レコードで入力し、複数ポータルへ一斉出力する。
+    賃貸(rent)・売買(sale)・事業用(commercial)に対応。金額系は円単位の数値で保持。"""
+    __tablename__ = 'property'
+    id = db.Column(db.Integer, primary_key=True)
+    store_id = db.Column(db.Integer)
+    # 区分・基本
+    deal_type = db.Column(db.String(20), default='rent')    # rent / sale / commercial
+    property_type = db.Column(db.String(40), default='')    # マンション/アパート/戸建/土地/店舗・事務所 等
+    name = db.Column(db.String(200), default='')            # 物件名（建物名）
+    room_no = db.Column(db.String(40), default='')          # 部屋番号
+    status = db.Column(db.String(20), default='draft')      # draft(下書き)/active(公開中)/closed(成約済)
+    # 所在地・交通
+    postal_code = db.Column(db.String(10), default='')
+    pref = db.Column(db.String(20), default='')
+    city = db.Column(db.String(80), default='')
+    address = db.Column(db.String(200), default='')
+    line_name = db.Column(db.String(60), default='')        # 路線
+    station = db.Column(db.String(60), default='')          # 最寄駅
+    walk_min = db.Column(db.Integer)                        # 徒歩(分)
+    bus_min = db.Column(db.Integer)                         # バス(分)
+    # 金額（賃貸）
+    rent = db.Column(db.Integer)                            # 賃料(円)
+    admin_fee = db.Column(db.Integer)                       # 管理費・共益費(円)
+    deposit = db.Column(db.String(40), default='')          # 敷金（◯ヶ月 等の表記可）
+    key_money = db.Column(db.String(40), default='')        # 礼金
+    # 金額（売買）
+    price = db.Column(db.BigInteger)                        # 販売価格(円)
+    # 規模
+    layout = db.Column(db.String(20), default='')           # 間取り 1LDK 等
+    floor_area = db.Column(db.Float)                        # 専有/建物面積(㎡)
+    land_area = db.Column(db.Float)                         # 土地面積(㎡)
+    floor = db.Column(db.String(20), default='')            # 所在階
+    floors_total = db.Column(db.String(20), default='')     # 総階数
+    build_ym = db.Column(db.String(20), default='')         # 築年月（YYYY-MM 等）
+    structure = db.Column(db.String(40), default='')        # 構造（木造/RC 等）
+    direction = db.Column(db.String(20), default='')        # 向き
+    # 取引・現況
+    deal_form = db.Column(db.String(40), default='')        # 取引態様（仲介/専任媒介 等）
+    current_status = db.Column(db.String(40), default='')   # 現況（空室/居住中 等）
+    available_date = db.Column(db.String(40), default='')   # 入居/引渡時期
+    # 詳細・公開用テキスト
+    features = db.Column(db.Text)                           # 設備・特徴（JSON配列）
+    catch_copy = db.Column(db.String(200), default='')      # キャッチコピー
+    comment = db.Column(db.Text)                            # 物件コメント（AI生成可）
+    portal_notes = db.Column(db.Text)                       # ポータル別備考（JSON {portal_key: note}）
+    images = db.Column(db.Text)                             # 画像（JSON配列, dataURL or URL）
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PropertyExport(db.Model):
+    """一斉出力（コンバート）の履歴。"""
+    __tablename__ = 'property_export'
+    id = db.Column(db.Integer, primary_key=True)
+    store_id = db.Column(db.Integer)
+    portals = db.Column(db.Text)        # JSON配列（出力したポータルキー）
+    property_ids = db.Column(db.Text)   # JSON配列（出力した物件ID）
+    count = db.Column(db.Integer, default=0)
+    created_by = db.Column(db.String(80), default='')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class FloorPlanFolder(db.Model):
@@ -4151,6 +4224,428 @@ def api_floorplans_ai_import():
     except Exception:
         pass
     return jsonify(out)
+
+
+# ══════════════════════════════════════════════════════════
+#  物件コンバータ（物件マスタ → 複数ポータル一斉出力）
+# ══════════════════════════════════════════════════════════
+
+# 対応ポータル（出力先）
+CONVERTER_PORTALS = [
+    {'key': 'suumo',   'name': 'SUUMO'},
+    {'key': 'homes',   'name': "LIFULL HOME'S"},
+    {'key': 'athome',  'name': 'at home'},
+    {'key': 'yahoo',   'name': 'Yahoo!不動産'},
+    {'key': 'iiheya',  'name': 'いい部屋ネット'},
+    {'key': 'reins',   'name': 'REINS（指定流通機構）'},
+    {'key': 'atbb',    'name': 'ATBB（業者間流通）'},
+    {'key': 'generic', 'name': '汎用CSV / 自社HP'},
+]
+CONVERTER_PORTAL_KEYS = {p['key'] for p in CONVERTER_PORTALS}
+
+# 物件種別
+PROPERTY_TYPES = ['マンション', 'アパート', '戸建', '土地', '店舗・事務所', '倉庫・工場', '駐車場', 'その他']
+# 取引区分
+DEAL_TYPES = [('rent', '賃貸（居住用）'), ('sale', '売買（居住用）'), ('commercial', '事業用・その他')]
+# 設備・特徴の候補（チェックリスト）
+PROPERTY_FEATURE_OPTIONS = [
+    'バス・トイレ別', '独立洗面台', '追焚き機能', '温水洗浄便座', '室内洗濯機置場',
+    'エアコン', '都市ガス', 'システムキッチン', 'IHコンロ', 'ガスコンロ', '2口以上コンロ',
+    'オートロック', 'TVモニタ付インターホン', '宅配ボックス', '防犯カメラ',
+    'フローリング', '室内物干し', 'バルコニー', '南向き', '角部屋', '最上階',
+    'エレベーター', '駐車場あり', 'バイク置場', '駐輪場',
+    'ペット相談', '楽器相談', '2人入居可', 'ルームシェア可', '事務所利用可',
+    '敷金礼金なし', 'インターネット無料', 'BS・CS', '光ファイバー',
+    'リフォーム済', 'リノベーション', '新築', 'デザイナーズ', '高速インターネット',
+]
+
+
+def _prop_status_label(s):
+    return {'draft': '下書き', 'active': '公開中', 'closed': '成約済'}.get(s, s or '下書き')
+
+
+def _prop_deal_label(d):
+    return dict(DEAL_TYPES).get(d, d or '')
+
+
+def _validate_property(p):
+    """掲載前チェック。不備・注意項目のメッセージリストを返す（おとり広告対策の基本チェックを含む）。"""
+    issues = []
+    if not (p.name or '').strip():
+        issues.append('物件名が未入力です')
+    if not (p.pref or p.city or p.address):
+        issues.append('所在地が未入力です')
+    if p.deal_type == 'sale':
+        if not p.price:
+            issues.append('販売価格が未入力です')
+    else:
+        if not p.rent:
+            issues.append('賃料が未入力です')
+    if not (p.layout or '').strip() and p.property_type != '土地':
+        issues.append('間取りが未入力です')
+    if not p.floor_area and not p.land_area:
+        issues.append('面積（専有/土地）が未入力です')
+    if not (p.deal_form or '').strip():
+        issues.append('取引態様が未入力です（おとり広告防止のため必須）')
+    try:
+        imgs = json.loads(p.images or '[]')
+    except Exception:
+        imgs = []
+    if not imgs:
+        issues.append('物件画像が未登録です（ポータルでの反響に大きく影響します）')
+    return issues
+
+
+def _property_to_dict(p, light=False):
+    try:
+        imgs = json.loads(p.images or '[]')
+    except Exception:
+        imgs = []
+    try:
+        feats = json.loads(p.features or '[]')
+    except Exception:
+        feats = []
+    try:
+        pnotes = json.loads(p.portal_notes or '{}')
+    except Exception:
+        pnotes = {}
+    base = {
+        'id': p.id, 'deal_type': p.deal_type, 'deal_label': _prop_deal_label(p.deal_type),
+        'property_type': p.property_type, 'name': p.name, 'room_no': p.room_no,
+        'status': p.status, 'status_label': _prop_status_label(p.status),
+        'pref': p.pref, 'city': p.city, 'address': p.address,
+        'line_name': p.line_name, 'station': p.station, 'walk_min': p.walk_min, 'bus_min': p.bus_min,
+        'rent': p.rent, 'admin_fee': p.admin_fee, 'deposit': p.deposit, 'key_money': p.key_money,
+        'price': p.price, 'layout': p.layout, 'floor_area': p.floor_area, 'land_area': p.land_area,
+        'floor': p.floor, 'floors_total': p.floors_total, 'build_ym': p.build_ym,
+        'structure': p.structure, 'direction': p.direction, 'postal_code': p.postal_code,
+        'deal_form': p.deal_form, 'current_status': p.current_status, 'available_date': p.available_date,
+        'features': feats, 'catch_copy': p.catch_copy, 'comment': p.comment or '',
+        'portal_notes': pnotes, 'image_count': len(imgs),
+        'updated_at': p.updated_at.strftime('%Y-%m-%d %H:%M') if p.updated_at else '',
+        'issues': _validate_property(p),
+    }
+    if not light:
+        base['images'] = imgs
+    return base
+
+
+# ── ページ ──
+@app.route("/converter")
+@login_required
+@block_super_admin
+def converter_page():
+    """物件コンバータ（オプション契約が必要）"""
+    if not current_has_converter():
+        return redirect(url_for('customer_management'))
+    return render_template("converter.html",
+                           portals=CONVERTER_PORTALS, property_types=PROPERTY_TYPES,
+                           deal_types=DEAL_TYPES, feature_options=PROPERTY_FEATURE_OPTIONS)
+
+
+def _converter_store_id():
+    allowed = get_allowed_store_ids()
+    return allowed[0] if allowed else None
+
+
+def _get_owned_property(pid):
+    allowed = get_allowed_store_ids()
+    p = Property.query.get(pid)
+    if not p or (allowed and p.store_id not in allowed):
+        return None
+    return p
+
+
+# ── 物件CRUD ──
+@app.route("/api/properties", methods=["GET"])
+@login_required
+def api_properties_list():
+    if not current_has_converter():
+        return jsonify({'error': '物件コンバータはオプションプランです'}), 403
+    allowed = get_allowed_store_ids()
+    q = Property.query
+    if allowed:
+        q = q.filter(Property.store_id.in_(allowed))
+    dt = request.args.get('deal_type')
+    if dt:
+        q = q.filter(Property.deal_type == dt)
+    st = request.args.get('status')
+    if st:
+        q = q.filter(Property.status == st)
+    items = q.order_by(Property.updated_at.desc()).all()
+    return jsonify([_property_to_dict(p, light=True) for p in items])
+
+
+@app.route("/api/properties/<int:pid>", methods=["GET"])
+@login_required
+def api_property_get(pid):
+    if not current_has_converter():
+        return jsonify({'error': '物件コンバータはオプションプランです'}), 403
+    p = _get_owned_property(pid)
+    if not p:
+        return jsonify({'error': '物件が見つかりません'}), 404
+    return jsonify(_property_to_dict(p))
+
+
+_PROP_STR_FIELDS = ['deal_type', 'property_type', 'name', 'room_no', 'status', 'postal_code',
+                    'pref', 'city', 'address', 'line_name', 'station', 'deposit', 'key_money',
+                    'layout', 'floor', 'floors_total', 'build_ym', 'structure', 'direction',
+                    'deal_form', 'current_status', 'available_date', 'catch_copy']
+_PROP_INT_FIELDS = ['walk_min', 'bus_min', 'rent', 'admin_fee', 'price']
+_PROP_FLOAT_FIELDS = ['floor_area', 'land_area']
+
+
+def _apply_property_payload(p, data):
+    for f in _PROP_STR_FIELDS:
+        if f in data:
+            setattr(p, f, (str(data.get(f)) if data.get(f) is not None else '')[:200])
+    for f in _PROP_INT_FIELDS:
+        if f in data:
+            v = data.get(f)
+            try:
+                setattr(p, f, int(v) if v not in (None, '', 'null') else None)
+            except (ValueError, TypeError):
+                setattr(p, f, None)
+    for f in _PROP_FLOAT_FIELDS:
+        if f in data:
+            v = data.get(f)
+            try:
+                setattr(p, f, float(v) if v not in (None, '', 'null') else None)
+            except (ValueError, TypeError):
+                setattr(p, f, None)
+    if 'comment' in data:
+        p.comment = (data.get('comment') or '')[:5000]
+    if 'features' in data:
+        feats = data.get('features') or []
+        if isinstance(feats, list):
+            p.features = json.dumps([str(x)[:40] for x in feats[:80]], ensure_ascii=False)
+    if 'portal_notes' in data:
+        pn = data.get('portal_notes') or {}
+        if isinstance(pn, dict):
+            clean = {k: str(v)[:1000] for k, v in pn.items() if k in CONVERTER_PORTAL_KEYS}
+            p.portal_notes = json.dumps(clean, ensure_ascii=False)
+    if 'images' in data:
+        imgs = data.get('images') or []
+        if isinstance(imgs, list):
+            p.images = json.dumps([str(x) for x in imgs[:50]], ensure_ascii=False)
+    if not (p.deal_type in dict(DEAL_TYPES)):
+        p.deal_type = 'rent'
+    if p.status not in ('draft', 'active', 'closed'):
+        p.status = 'draft'
+
+
+@app.route("/api/properties", methods=["POST"])
+@login_required
+def api_property_create():
+    if not current_has_converter():
+        return jsonify({'error': '物件コンバータはオプションプランです'}), 403
+    data = request.get_json(silent=True) or {}
+    p = Property(store_id=_converter_store_id())
+    _apply_property_payload(p, data)
+    db.session.add(p)
+    db.session.commit()
+    return jsonify(_property_to_dict(p))
+
+
+@app.route("/api/properties/<int:pid>", methods=["PUT"])
+@login_required
+def api_property_update(pid):
+    if not current_has_converter():
+        return jsonify({'error': '物件コンバータはオプションプランです'}), 403
+    p = _get_owned_property(pid)
+    if not p:
+        return jsonify({'error': '物件が見つかりません'}), 404
+    _apply_property_payload(p, request.get_json(silent=True) or {})
+    db.session.commit()
+    return jsonify(_property_to_dict(p))
+
+
+@app.route("/api/properties/<int:pid>", methods=["DELETE"])
+@login_required
+def api_property_delete(pid):
+    if not current_has_converter():
+        return jsonify({'error': '物件コンバータはオプションプランです'}), 403
+    p = _get_owned_property(pid)
+    if not p:
+        return jsonify({'error': '物件が見つかりません'}), 404
+    db.session.delete(p)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+# ── AIによる物件コメント自動生成 ──
+@app.route("/api/properties/<int:pid>/ai-comment", methods=["POST"])
+@login_required
+def api_property_ai_comment(pid):
+    if not current_has_converter():
+        return jsonify({'error': '物件コンバータはオプションプランです'}), 403
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return jsonify({'error': 'AI生成が未設定です（管理者にお問い合わせください）'}), 503
+    p = _get_owned_property(pid)
+    if not p:
+        return jsonify({'error': '物件が見つかりません'}), 404
+    try:
+        feats = json.loads(p.features or '[]')
+    except Exception:
+        feats = []
+    info = {
+        '取引': _prop_deal_label(p.deal_type), '種別': p.property_type, '物件名': p.name,
+        '所在地': f"{p.pref}{p.city}{p.address}", '最寄': f"{p.line_name} {p.station} 徒歩{p.walk_min or '-'}分",
+        '間取り': p.layout, '専有面積': p.floor_area, '土地面積': p.land_area,
+        '築年月': p.build_ym, '構造': p.structure, '所在階': p.floor, '向き': p.direction,
+        '賃料': p.rent, '管理費': p.admin_fee, '販売価格': p.price,
+        '設備・特徴': feats,
+    }
+    prompt = (
+        "あなたは不動産ポータルサイト（SUUMO/HOME'S/at home等）の物件紹介文を作成するプロのコピーライターです。\n"
+        "以下の物件情報をもとに、反響が取れる魅力的な物件コメントを作成してください。\n\n"
+        f"物件情報:\n{json.dumps(info, ensure_ascii=False, indent=2)}\n\n"
+        "ルール:\n"
+        "1. 事実に基づき、誇大表現・断定的な優良誤認表現（絶対・日本一・完全 等）は使わない（宅建業法・公正競争規約に準拠）。\n"
+        "2. 設備や立地の強みを具体的に訴求する。情報に無い設備を創作しない。\n"
+        "3. 返答は次のJSONのみ（説明やマークダウンは付けない）:\n"
+        '{ "catch_copy": "<20〜30字程度のキャッチコピー>", "comment": "<150〜300字程度の物件コメント（改行可）>" }'
+    )
+    try:
+        msg = anthropic_client.messages.create(
+            model="claude-sonnet-4-6", max_tokens=1500,
+            messages=[{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+        )
+        text = "".join(getattr(b, 'text', '') for b in msg.content).strip()
+    except Exception as e:
+        return jsonify({'error': f'AI生成に失敗しました: {e}'}), 502
+    out = {'catch_copy': '', 'comment': ''}
+    try:
+        s, e = text.find('{'), text.rfind('}')
+        parsed = json.loads(text[s:e + 1]) if (s >= 0 and e > s) else {}
+        out['catch_copy'] = str(parsed.get('catch_copy') or '')[:200]
+        out['comment'] = str(parsed.get('comment') or '')[:5000]
+    except Exception:
+        out['comment'] = text[:5000]
+    return jsonify(out)
+
+
+# ── 一斉出力（コンバート）：選択物件×選択ポータルのCSVをZIPで返す ──
+def _build_property_row(p):
+    """1物件 → 出力用の項目辞書（順序付き）。全ポータル共通の基本項目。"""
+    def yen(v):
+        return str(int(v)) if v not in (None, '') else ''
+    try:
+        feats = json.loads(p.features or '[]')
+    except Exception:
+        feats = []
+    return [
+        ('取引区分', _prop_deal_label(p.deal_type)),
+        ('物件種別', p.property_type or ''),
+        ('物件名', p.name or ''),
+        ('部屋番号', p.room_no or ''),
+        ('郵便番号', p.postal_code or ''),
+        ('都道府県', p.pref or ''),
+        ('市区町村', p.city or ''),
+        ('番地・建物', p.address or ''),
+        ('路線', p.line_name or ''),
+        ('最寄駅', p.station or ''),
+        ('駅徒歩(分)', str(p.walk_min) if p.walk_min is not None else ''),
+        ('バス(分)', str(p.bus_min) if p.bus_min is not None else ''),
+        ('賃料(円)', yen(p.rent)),
+        ('管理費・共益費(円)', yen(p.admin_fee)),
+        ('敷金', p.deposit or ''),
+        ('礼金', p.key_money or ''),
+        ('販売価格(円)', yen(p.price)),
+        ('間取り', p.layout or ''),
+        ('専有/建物面積(㎡)', str(p.floor_area) if p.floor_area is not None else ''),
+        ('土地面積(㎡)', str(p.land_area) if p.land_area is not None else ''),
+        ('所在階', p.floor or ''),
+        ('総階数', p.floors_total or ''),
+        ('築年月', p.build_ym or ''),
+        ('構造', p.structure or ''),
+        ('向き', p.direction or ''),
+        ('取引態様', p.deal_form or ''),
+        ('現況', p.current_status or ''),
+        ('入居/引渡時期', p.available_date or ''),
+        ('設備・特徴', '／'.join(feats)),
+        ('キャッチコピー', p.catch_copy or ''),
+        ('物件コメント', (p.comment or '').replace('\r', ' ').replace('\n', ' ')),
+        ('画像枚数', str(_property_to_dict(p, light=True)['image_count'])),
+    ]
+
+
+@app.route("/api/properties/export", methods=["POST"])
+@login_required
+def api_properties_export():
+    if not current_has_converter():
+        return jsonify({'error': '物件コンバータはオプションプランです'}), 403
+    import csv as _csv
+    import io as _io
+    import zipfile as _zipfile
+    data = request.get_json(silent=True) or {}
+    pids = data.get('property_ids') or []
+    portals = [k for k in (data.get('portals') or []) if k in CONVERTER_PORTAL_KEYS]
+    if not pids:
+        return jsonify({'error': '出力する物件を選択してください'}), 400
+    if not portals:
+        return jsonify({'error': '出力先ポータルを選択してください'}), 400
+    allowed = get_allowed_store_ids()
+    q = Property.query.filter(Property.id.in_(pids))
+    if allowed:
+        q = q.filter(Property.store_id.in_(allowed))
+    props = q.all()
+    if not props:
+        return jsonify({'error': '対象物件が見つかりません'}), 404
+
+    portal_name = {p['key']: p['name'] for p in CONVERTER_PORTALS}
+    buf = _io.BytesIO()
+    with _zipfile.ZipFile(buf, 'w', _zipfile.ZIP_DEFLATED) as zf:
+        for pk in portals:
+            rows = [_build_property_row(p) for p in props]
+            headers = [h for h, _ in rows[0]]
+            # ポータル別備考を末尾に追加
+            headers = headers + ['ポータル別備考']
+            sio = _io.StringIO()
+            w = _csv.writer(sio)
+            w.writerow(headers)
+            for p, row in zip(props, rows):
+                try:
+                    pn = json.loads(p.portal_notes or '{}')
+                except Exception:
+                    pn = {}
+                vals = [v for _, v in row] + [pn.get(pk, '')]
+                w.writerow(vals)
+            # 日本のポータルはShift-JIS(cp932)が主流。読めない文字は近似に置換。
+            csv_bytes = sio.getvalue().encode('cp932', errors='replace')
+            zf.writestr(f"{pk}_{portal_name[pk]}.csv", csv_bytes)
+        # 案内テキスト
+        readme = (
+            "■ 物件コンバータ 一斉出力ファイル\n\n"
+            f"出力物件数: {len(props)} 件\n"
+            f"出力ポータル: {', '.join(portal_name[k] for k in portals)}\n\n"
+            "各CSVは選択した物件を Shift-JIS(CP932) で出力したものです。\n"
+            "各ポータルの管理画面（入稿システム）からCSV取込でご利用ください。\n"
+            "※ 実際の自動連動には各ポータルとの掲載契約・規定フォーマット(仕様)が必要です。\n"
+            "  本ファイルは現時点では汎用フォーマットでの出力です。\n"
+            "※ 物件画像はCSVには含まれません（枚数のみ記載）。画像は各ポータルへ別途アップロードしてください。\n"
+        )
+        zf.writestr("はじめにお読みください.txt", readme.encode('cp932', errors='replace'))
+
+    # 履歴を記録
+    try:
+        db.session.add(PropertyExport(
+            store_id=_converter_store_id(),
+            portals=json.dumps(portals, ensure_ascii=False),
+            property_ids=json.dumps([p.id for p in props]),
+            count=len(props),
+            created_by=session.get('app_username', ''),
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+    buf.seek(0)
+    resp = make_response(buf.read())
+    resp.headers['Content-Type'] = 'application/zip'
+    fname = f"converter_export_{datetime.now().strftime('%Y%m%d_%H%M')}.zip"
+    resp.headers['Content-Disposition'] = f'attachment; filename="{fname}"'
+    return resp
 
 
 # ── 反響メール自動取込（IMAP） ─────────────────────────────

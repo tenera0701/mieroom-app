@@ -411,6 +411,17 @@
         </a>
         {% endif %}
 
+        {% if has_converter %}
+        <a href="/converter"
+           class="nav-item {% if request.path == '/converter' %}active{% endif %}">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 6a2 2 0 012-2h12a2 2 0 012 2v2H4V6zM4 10h16v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8zm4 3h3m-3 3h6"/>
+          </svg>
+          <span class="nav-label">物件コンバータ</span>
+        </a>
+        {% endif %}
+
         {# ── 事務作業グループ（クリックで開閉） ── #}
         {% set in_clerical = request.path in ['/contract-customers', '/daily-report', '/floorplan', '/image-editor', '/leave-management', '/accounting'] %}
         <a href="#" id="clerical-toggle" class="nav-item" onclick="toggleClerical(event)">

@@ -1,0 +1,591 @@
+{% extends 'mgmt_base.html' %}
+{% block title %}物件コンバータ | ミエルーム管理ツール{% endblock %}
+{% block breadcrumb %}物件コンバータ{% endblock %}
+
+{% block extra_head %}
+<style>
+  :root { --primary:#0D9488; --primary-dark:#0F766E; }
+  .cv-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .cv-title { font-size:20px; font-weight:800; color:#111827; margin:0; }
+  .cv-sub { font-size:12px; color:#6b7280; margin:2px 0 0; }
+  .btn { display:inline-flex; align-items:center; gap:6px; border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:8px; padding:8px 14px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn:hover { background:#F0FDFA; border-color:#5EEAD4; }
+  .btn.primary { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .btn.primary:hover { background:var(--primary-dark); }
+  .btn.amber { background:#F59E0B; color:#fff; border-color:#F59E0B; }
+  .btn.amber:hover { filter:brightness(.95); }
+  .btn.ghost-danger { color:#ef4444; border-color:#fca5a5; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:10px 12px; margin-bottom:12px; }
+  .inp { border:1px solid #d1d5db; border-radius:8px; padding:8px 10px; font-size:13px; color:#374151; background:#fff; }
+  .inp:focus { outline:none; border-color:#5EEAD4; box-shadow:0 0 0 3px #CCFBF1; }
+  .card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; }
+  table.cv { width:100%; border-collapse:collapse; }
+  table.cv th { background:#F0FDFA; color:#0F766E; font-size:12px; font-weight:800; padding:10px 8px; border-bottom:1px solid #CCFBF1; white-space:nowrap; }
+  table.cv td { font-size:13px; padding:9px 8px; border-bottom:1px solid #f1f5f9; color:#374151; }
+  table.cv tbody tr:hover { background:#F8FFFE; }
+  .pill { display:inline-block; border-radius:9999px; padding:2px 9px; font-size:11px; font-weight:700; }
+  .pill.draft { background:#f3f4f6; color:#6b7280; }
+  .pill.active { background:#CCFBF1; color:#0F766E; }
+  .pill.closed { background:#fee2e2; color:#b91c1c; }
+  .pill.deal-rent { background:#dbeafe; color:#1d4ed8; }
+  .pill.deal-sale { background:#fae8ff; color:#a21caf; }
+  .pill.deal-commercial { background:#fef9c3; color:#92400e; }
+  .issue-badge { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; border-radius:9999px; padding:1px 8px; font-size:11px; font-weight:700; cursor:help; }
+  .ok-badge { color:#0F766E; font-size:11px; font-weight:700; }
+  .empty { text-align:center; color:#9ca3af; padding:48px 16px; font-size:14px; }
+  .link { color:var(--primary-dark); font-weight:700; cursor:pointer; text-decoration:none; }
+  .link:hover { text-decoration:underline; }
+  .icon-btn { border:none; background:none; cursor:pointer; padding:4px; border-radius:6px; color:#6b7280; }
+  .icon-btn:hover { background:#f3f4f6; color:#111827; }
+
+  /* ドロワー */
+  .overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:2000; }
+  .overlay.show { display:block; }
+  .drawer { position:fixed; top:0; right:0; height:100vh; height:100dvh; width:760px; max-width:96vw; background:#F8FAFC; z-index:2001; box-shadow:-8px 0 30px rgba(0,0,0,.2); transform:translateX(100%); transition:transform .25s ease; display:flex; flex-direction:column; }
+  .drawer.show { transform:translateX(0); }
+  .drawer-head { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:#fff; border-bottom:1px solid #e5e7eb; }
+  .drawer-head h2 { margin:0; font-size:16px; font-weight:800; color:#0F766E; }
+  .drawer-body { flex:1; overflow-y:auto; padding:16px 18px; }
+  .drawer-foot { padding:12px 18px; background:#fff; border-top:1px solid #e5e7eb; display:flex; gap:10px; justify-content:flex-end; align-items:center; }
+  .sec { background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:14px; margin-bottom:12px; }
+  .sec h3 { margin:0 0 10px; font-size:13px; font-weight:800; color:#0F766E; display:flex; align-items:center; gap:6px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+  @media(max-width:560px){ .grid2,.grid3{ grid-template-columns:1fr; } }
+  .fld label { display:block; font-size:11px; font-weight:700; color:#6b7280; margin-bottom:3px; }
+  .fld .inp, .fld select, .fld textarea { width:100%; box-sizing:border-box; }
+  .fld textarea { border:1px solid #d1d5db; border-radius:8px; padding:8px 10px; font-size:13px; font-family:inherit; resize:vertical; }
+  .feat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+  @media(max-width:560px){ .feat-grid{ grid-template-columns:1fr 1fr; } }
+  .feat { display:flex; align-items:center; gap:5px; font-size:12px; color:#374151; border:1px solid #e5e7eb; border-radius:7px; padding:5px 7px; cursor:pointer; }
+  .feat input { accent-color:var(--primary); }
+  .feat.on { background:#F0FDFA; border-color:#5EEAD4; color:#0F766E; font-weight:600; }
+  .dropzone { border:2px dashed #cbd5e1; border-radius:10px; padding:18px; text-align:center; color:#94a3b8; font-size:13px; cursor:pointer; background:#fff; }
+  .dropzone.drag { border-color:var(--primary); background:#F0FDFA; color:#0F766E; }
+  .thumbs { display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:8px; margin-top:10px; }
+  .thumb { position:relative; border:1px solid #e5e7eb; border-radius:8px; overflow:hidden; aspect-ratio:4/3; background:#f1f5f9; }
+  .thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .thumb .del { position:absolute; top:3px; right:3px; background:rgba(0,0,0,.55); color:#fff; border:none; border-radius:6px; width:22px; height:22px; cursor:pointer; font-size:13px; line-height:1; }
+  .thumb .idx { position:absolute; bottom:3px; left:3px; background:rgba(13,148,136,.85); color:#fff; border-radius:5px; font-size:10px; padding:1px 5px; font-weight:700; }
+  .pnote-row { margin-bottom:8px; }
+  .pnote-row label { font-size:11px; font-weight:700; color:#0F766E; }
+  .alert { padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
+  .alert.show { display:block; }
+  .alert.err { background:#fee2e2; color:#b91c1c; }
+  .alert.ok { background:#CCFBF1; color:#0F766E; }
+  .modal { display:none; position:fixed; inset:0; z-index:2100; align-items:center; justify-content:center; background:rgba(0,0,0,.45); padding:16px; }
+  .modal.show { display:flex; }
+  .modal-card { background:#fff; border-radius:14px; width:520px; max-width:96vw; max-height:90vh; overflow:auto; box-shadow:0 24px 70px rgba(0,0,0,.3); }
+  .modal-card .mh { padding:14px 18px; border-bottom:1px solid #e5e7eb; font-size:16px; font-weight:800; color:#0F766E; }
+  .modal-card .mb { padding:16px 18px; }
+  .modal-card .mf { padding:12px 18px; border-top:1px solid #e5e7eb; display:flex; gap:10px; justify-content:flex-end; }
+  .portal-opt { display:flex; align-items:center; gap:8px; padding:9px 11px; border:1px solid #e5e7eb; border-radius:9px; margin-bottom:7px; cursor:pointer; font-size:13px; color:#374151; }
+  .portal-opt.on { background:#F0FDFA; border-color:#5EEAD4; color:#0F766E; font-weight:700; }
+  .portal-opt input { accent-color:var(--primary); width:16px; height:16px; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid #fff; border-top-color:transparent; border-radius:50%; animation:sp .7s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cv-head">
+  <div>
+    <h1 class="cv-title">🏠 物件コンバータ</h1>
+    <p class="cv-sub">物件を1回入力 → SUUMO・HOME'S・at home 等の規定フォーマットへ一斉出力。AIコメント自動生成・ポータル別備考・掲載前チェック付き。</p>
+  </div>
+  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    <button class="btn amber" id="export-btn" onclick="openExport()" disabled>📤 選択した物件を一斉出力 (<span id="sel-count">0</span>)</button>
+    <button class="btn primary" onclick="openNew()">＋ 新規物件</button>
+  </div>
+</div>
+
+<div class="toolbar">
+  <input type="text" class="inp" id="q" placeholder="🔍 物件名・住所・駅で検索" oninput="renderList()" style="min-width:240px; flex:1;">
+  <select class="inp" id="f-deal" onchange="loadProps()">
+    <option value="">全取引区分</option>
+    {% for k,l in deal_types %}<option value="{{k}}">{{l}}</option>{% endfor %}
+  </select>
+  <select class="inp" id="f-status" onchange="loadProps()">
+    <option value="">全ステータス</option>
+    <option value="draft">下書き</option>
+    <option value="active">公開中</option>
+    <option value="closed">成約済</option>
+  </select>
+</div>
+
+<div class="card">
+  <table class="cv">
+    <thead>
+      <tr>
+        <th style="width:38px;"><input type="checkbox" id="chk-all" onchange="toggleAll(this)"></th>
+        <th>取引</th><th style="text-align:left!important;">物件名 / 所在地</th>
+        <th>種別</th><th>間取り</th><th>価格</th><th>状態</th><th>チェック</th><th>更新</th><th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div id="empty" class="empty" style="display:none;">物件がまだありません。「＋ 新規物件」から登録してください。</div>
+</div>
+
+<!-- ───────── 物件入力ドロワー ───────── -->
+<div class="overlay" id="ov" onclick="closeDrawer()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-head">
+    <h2 id="dh-title">新規物件</h2>
+    <button class="icon-btn" onclick="closeDrawer()" style="font-size:22px;">✕</button>
+  </div>
+  <div class="drawer-body">
+    <div class="alert" id="d-alert"></div>
+    <input type="hidden" id="f-id">
+
+    <div class="sec">
+      <h3>基本情報</h3>
+      <div class="grid3">
+        <div class="fld"><label>取引区分</label>
+          <select class="inp" id="f_deal_type" onchange="onDealChange()">
+            {% for k,l in deal_types %}<option value="{{k}}">{{l}}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="fld"><label>物件種別</label>
+          <select class="inp" id="f_property_type">
+            {% for t in property_types %}<option value="{{t}}">{{t}}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="fld"><label>ステータス</label>
+          <select class="inp" id="f_status">
+            <option value="draft">下書き</option><option value="active">公開中</option><option value="closed">成約済</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid2" style="margin-top:10px;">
+        <div class="fld"><label>物件名（建物名）</label><input class="inp" id="f_name" placeholder="例）ミエルームレジデンス"></div>
+        <div class="fld"><label>部屋番号</label><input class="inp" id="f_room_no" placeholder="例）301"></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>所在地・交通</h3>
+      <div class="grid3">
+        <div class="fld"><label>郵便番号</label><input class="inp" id="f_postal_code" placeholder="000-0000"></div>
+        <div class="fld"><label>都道府県</label><input class="inp" id="f_pref" placeholder="神奈川県"></div>
+        <div class="fld"><label>市区町村</label><input class="inp" id="f_city" placeholder="川崎市麻生区"></div>
+      </div>
+      <div class="fld" style="margin-top:10px;"><label>番地・建物</label><input class="inp" id="f_address" placeholder="百合丘1-2-3"></div>
+      <div class="grid3" style="margin-top:10px;">
+        <div class="fld"><label>路線</label><input class="inp" id="f_line_name" placeholder="小田急小田原線"></div>
+        <div class="fld"><label>最寄駅</label><input class="inp" id="f_station" placeholder="百合ヶ丘"></div>
+        <div class="fld"><label>駅徒歩(分)</label><input class="inp" id="f_walk_min" type="number" min="0"></div>
+      </div>
+    </div>
+
+    <div class="sec" id="sec-rent">
+      <h3>賃料・条件（賃貸）</h3>
+      <div class="grid2">
+        <div class="fld"><label>賃料（円/月）</label><input class="inp" id="f_rent" type="number" min="0" placeholder="78000"></div>
+        <div class="fld"><label>管理費・共益費（円/月）</label><input class="inp" id="f_admin_fee" type="number" min="0" placeholder="5000"></div>
+        <div class="fld"><label>敷金</label><input class="inp" id="f_deposit" placeholder="1ヶ月 / なし"></div>
+        <div class="fld"><label>礼金</label><input class="inp" id="f_key_money" placeholder="1ヶ月 / なし"></div>
+      </div>
+    </div>
+
+    <div class="sec" id="sec-sale" style="display:none;">
+      <h3>価格（売買）</h3>
+      <div class="grid2">
+        <div class="fld"><label>販売価格（円）</label><input class="inp" id="f_price" type="number" min="0" placeholder="34800000"></div>
+        <div class="fld"><label>土地面積（㎡）</label><input class="inp" id="f_land_area" type="number" step="0.01" min="0"></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>規模・構造</h3>
+      <div class="grid3">
+        <div class="fld"><label>間取り</label><input class="inp" id="f_layout" placeholder="1LDK"></div>
+        <div class="fld"><label>専有/建物面積（㎡）</label><input class="inp" id="f_floor_area" type="number" step="0.01" min="0"></div>
+        <div class="fld"><label>向き</label><input class="inp" id="f_direction" placeholder="南"></div>
+      </div>
+      <div class="grid3" style="margin-top:10px;">
+        <div class="fld"><label>所在階</label><input class="inp" id="f_floor" placeholder="3階"></div>
+        <div class="fld"><label>総階数</label><input class="inp" id="f_floors_total" placeholder="5階建"></div>
+        <div class="fld"><label>築年月</label><input class="inp" id="f_build_ym" placeholder="2010-04"></div>
+      </div>
+      <div class="grid3" style="margin-top:10px;">
+        <div class="fld"><label>構造</label><input class="inp" id="f_structure" placeholder="RC / 木造"></div>
+        <div class="fld"><label>取引態様</label>
+          <select class="inp" id="f_deal_form">
+            <option value="">選択</option><option>仲介</option><option>専任媒介</option><option>専属専任媒介</option><option>一般媒介</option><option>代理</option><option>売主</option><option>貸主</option>
+          </select>
+        </div>
+        <div class="fld"><label>現況</label>
+          <select class="inp" id="f_current_status">
+            <option value="">選択</option><option>空室</option><option>居住中</option><option>賃貸中</option><option>建築中</option><option>更地</option>
+          </select>
+        </div>
+      </div>
+      <div class="fld" style="margin-top:10px;"><label>入居/引渡時期</label><input class="inp" id="f_available_date" placeholder="即入居可 / 相談"></div>
+    </div>
+
+    <div class="sec">
+      <h3>設備・特徴</h3>
+      <div class="feat-grid" id="feat-grid"></div>
+    </div>
+
+    <div class="sec">
+      <h3>物件画像 <span style="font-size:11px;color:#9ca3af;font-weight:500;">（最大50枚・ドラッグ&ドロップ可）</span></h3>
+      <div class="dropzone" id="dropzone" onclick="document.getElementById('img-input').click()">
+        画像をここにドロップ、またはクリックして選択
+      </div>
+      <input type="file" id="img-input" accept="image/*" multiple style="display:none;" onchange="onPickImages(this.files)">
+      <div class="thumbs" id="thumbs"></div>
+    </div>
+
+    <div class="sec">
+      <h3>キャッチコピー・物件コメント
+        <button class="btn" style="margin-left:auto;padding:5px 10px;font-size:12px;" id="ai-btn" onclick="genAIComment()">✨ AIで自動生成</button>
+      </h3>
+      <div class="fld" style="margin-bottom:10px;"><label>キャッチコピー</label><input class="inp" id="f_catch_copy" placeholder="駅近・南向き・即入居可"></div>
+      <div class="fld"><label>物件コメント</label><textarea id="f_comment" rows="5" placeholder="物件の魅力をご記入ください（AI自動生成も可）"></textarea></div>
+    </div>
+
+    <div class="sec">
+      <h3>ポータル別備考 <span style="font-size:11px;color:#9ca3af;font-weight:500;">（サイトごとに出し分けたい内容）</span></h3>
+      <div id="pnote-wrap"></div>
+    </div>
+  </div>
+  <div class="drawer-foot">
+    <button class="btn ghost-danger" id="del-btn" onclick="delProp()" style="margin-right:auto; display:none;">削除</button>
+    <button class="btn" onclick="closeDrawer()">キャンセル</button>
+    <button class="btn primary" id="save-btn" onclick="saveProp()">保存</button>
+  </div>
+</div>
+
+<!-- ───────── 一斉出力モーダル ───────── -->
+<div class="modal" id="export-modal">
+  <div class="modal-card">
+    <div class="mh">📤 ポータルへ一斉出力</div>
+    <div class="mb">
+      <div class="alert err" id="ex-alert"></div>
+      <p style="font-size:13px;color:#374151;margin:0 0 12px;">選択中の物件 <b id="ex-count">0</b> 件を、以下のポータル規定フォーマット（CSV）で出力します。出力先を選択してください。</p>
+      <div id="portal-list"></div>
+      <p style="font-size:11px;color:#9ca3af;margin:10px 0 0;line-height:1.6;">
+        ※ ファイルはShift-JIS(CP932)のCSVをZIPでまとめてダウンロードします。各ポータルの入稿システムからCSV取込でご利用ください。<br>
+        ※ 実際の自動連動には各ポータルとの掲載契約・規定仕様が必要です（本機能は汎用フォーマット出力です）。画像は別途アップロードが必要です。
+      </p>
+    </div>
+    <div class="mf">
+      <button class="btn" onclick="closeExport()">キャンセル</button>
+      <button class="btn amber" id="do-export" onclick="doExport()">ダウンロード</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const PORTALS = {{ portals|tojson }};
+  const FEATURES = {{ feature_options|tojson }};
+  let PROPS = [];            // 一覧キャッシュ
+  let SELECTED = new Set();  // 選択中の物件ID
+  let curImages = [];        // 編集中の画像
+  let editingId = null;
+
+  // ── 一覧読み込み ──
+  async function loadProps(){
+    const dt = document.getElementById('f-deal').value;
+    const st = document.getElementById('f-status').value;
+    const qs = new URLSearchParams();
+    if(dt) qs.set('deal_type', dt);
+    if(st) qs.set('status', st);
+    try {
+      PROPS = await fetch('/api/properties?'+qs.toString()).then(r=>r.json());
+      if(!Array.isArray(PROPS)) PROPS = [];
+    } catch(_){ PROPS = []; }
+    // 選択を有効物件だけに整理
+    const ids = new Set(PROPS.map(p=>p.id));
+    SELECTED = new Set([...SELECTED].filter(id=>ids.has(id)));
+    renderList();
+  }
+
+  function fmtPrice(p){
+    if(p.deal_type === 'sale'){
+      if(!p.price) return '—';
+      const man = Math.round(p.price/10000);
+      return (man>=10000 ? (man/10000).toLocaleString()+'億' : man.toLocaleString()+'万円');
+    }
+    if(!p.rent) return '—';
+    return p.rent.toLocaleString()+'円' + (p.admin_fee ? ' +'+p.admin_fee.toLocaleString() : '');
+  }
+
+  function renderList(){
+    const q = (document.getElementById('q').value||'').trim().toLowerCase();
+    const tbody = document.getElementById('rows');
+    const list = PROPS.filter(p=>{
+      if(!q) return true;
+      const hay = [p.name,p.pref,p.city,p.address,p.station,p.line_name].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+    tbody.innerHTML = '';
+    document.getElementById('empty').style.display = list.length ? 'none' : 'block';
+    list.forEach(p=>{
+      const tr = document.createElement('tr');
+      const issues = p.issues || [];
+      const chk = SELECTED.has(p.id) ? 'checked' : '';
+      tr.innerHTML = `
+        <td><input type="checkbox" ${chk} onchange="toggleSel(${p.id}, this.checked)"></td>
+        <td><span class="pill deal-${p.deal_type}">${p.deal_label}</span></td>
+        <td style="text-align:left!important;">
+          <a class="link" onclick="openEdit(${p.id})">${esc(p.name)||'（無題）'} ${p.room_no?(' <span style="color:#9ca3af;font-weight:500;">'+esc(p.room_no)+'</span>'):''}</a>
+          <div style="font-size:11px;color:#9ca3af;">${esc(p.pref+p.city+p.address)||'—'}${p.station?(' / '+esc(p.station)+'駅'):''}</div>
+        </td>
+        <td>${esc(p.property_type)||'—'}</td>
+        <td>${esc(p.layout)||'—'}</td>
+        <td style="white-space:nowrap;">${fmtPrice(p)}</td>
+        <td><span class="pill ${p.status}">${p.status_label}</span></td>
+        <td>${issues.length ? `<span class="issue-badge" title="${esc(issues.join(' / '))}">要確認 ${issues.length}</span>` : '<span class="ok-badge">✓ OK</span>'}</td>
+        <td style="font-size:11px;color:#9ca3af;white-space:nowrap;">${p.updated_at}</td>
+        <td style="white-space:nowrap;">
+          <button class="icon-btn" title="編集" onclick="openEdit(${p.id})">✏️</button>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+    updateSelUI();
+  }
+
+  function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  // ── 選択 ──
+  function toggleSel(id, on){ if(on) SELECTED.add(id); else SELECTED.delete(id); updateSelUI(); }
+  function toggleAll(cb){
+    const q = (document.getElementById('q').value||'').trim().toLowerCase();
+    const list = PROPS.filter(p=>{ if(!q) return true; const hay=[p.name,p.pref,p.city,p.address,p.station].join(' ').toLowerCase(); return hay.includes(q);});
+    list.forEach(p=>{ if(cb.checked) SELECTED.add(p.id); else SELECTED.delete(p.id); });
+    renderList();
+  }
+  function updateSelUI(){
+    document.getElementById('sel-count').textContent = SELECTED.size;
+    document.getElementById('export-btn').disabled = SELECTED.size === 0;
+  }
+
+  // ── 取引区分でフォーム切替 ──
+  function onDealChange(){
+    const d = document.getElementById('f_deal_type').value;
+    document.getElementById('sec-rent').style.display = (d==='sale') ? 'none' : 'block';
+    document.getElementById('sec-sale').style.display = (d==='sale') ? 'block' : 'none';
+  }
+
+  // ── 設備チェックリスト描画 ──
+  function buildFeatureGrid(selected){
+    const sel = new Set(selected||[]);
+    const wrap = document.getElementById('feat-grid');
+    wrap.innerHTML = '';
+    FEATURES.forEach(f=>{
+      const lab = document.createElement('label');
+      lab.className = 'feat' + (sel.has(f)?' on':'');
+      lab.innerHTML = `<input type="checkbox" value="${esc(f)}" ${sel.has(f)?'checked':''} onchange="this.parentNode.classList.toggle('on', this.checked)"><span>${esc(f)}</span>`;
+      wrap.appendChild(lab);
+    });
+  }
+  function getFeatures(){
+    return [...document.querySelectorAll('#feat-grid input:checked')].map(i=>i.value);
+  }
+
+  // ── ポータル別備考描画 ──
+  function buildPortalNotes(notes){
+    notes = notes||{};
+    const wrap = document.getElementById('pnote-wrap');
+    wrap.innerHTML = '';
+    PORTALS.filter(p=>p.key!=='generic').forEach(p=>{
+      const div = document.createElement('div');
+      div.className = 'pnote-row';
+      div.innerHTML = `<label>${esc(p.name)}</label><input class="inp" style="width:100%;box-sizing:border-box;margin-top:3px;" data-portal="${p.key}" value="${esc(notes[p.key]||'')}" placeholder="このサイト専用の備考（任意）">`;
+      wrap.appendChild(div);
+    });
+  }
+  function getPortalNotes(){
+    const out = {};
+    document.querySelectorAll('#pnote-wrap input[data-portal]').forEach(i=>{ if(i.value.trim()) out[i.dataset.portal] = i.value.trim(); });
+    return out;
+  }
+
+  // ── 画像 ──
+  const dz = document.getElementById('dropzone');
+  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev, e=>{e.preventDefault();e.stopPropagation();dz.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev, e=>{e.preventDefault();e.stopPropagation();dz.classList.remove('drag');}));
+  dz.addEventListener('drop', e=>{ onPickImages(e.dataTransfer.files); });
+
+  function onPickImages(files){
+    const arr = [...files].filter(f=>f.type.startsWith('image/'));
+    let remain = 50 - curImages.length;
+    arr.slice(0, Math.max(0,remain)).forEach(f=>{
+      const rd = new FileReader();
+      rd.onload = ()=>{ curImages.push(rd.result); renderThumbs(); };
+      rd.readAsDataURL(f);
+    });
+  }
+  function renderThumbs(){
+    const w = document.getElementById('thumbs');
+    w.innerHTML = '';
+    curImages.forEach((src,i)=>{
+      const d = document.createElement('div');
+      d.className = 'thumb';
+      d.innerHTML = `<img src="${src}"><button class="del" onclick="rmImg(${i})">✕</button><span class="idx">${i+1}</span>`;
+      w.appendChild(d);
+    });
+  }
+  function rmImg(i){ curImages.splice(i,1); renderThumbs(); }
+
+  // ── ドロワー開閉 ──
+  function openDrawer(){ document.getElementById('ov').classList.add('show'); document.getElementById('drawer').classList.add('show'); }
+  function closeDrawer(){ document.getElementById('ov').classList.remove('show'); document.getElementById('drawer').classList.remove('show'); }
+  function showAlert(msg, ok){ const a=document.getElementById('d-alert'); a.textContent=msg; a.className='alert show '+(ok?'ok':'err'); setTimeout(()=>a.classList.remove('show'), ok?2500:5000); }
+
+  const STR_FIELDS = ['property_type','name','room_no','status','postal_code','pref','city','address','line_name','station','deposit','key_money','layout','floor','floors_total','build_ym','structure','direction','deal_form','current_status','available_date','catch_copy'];
+  const NUM_FIELDS = ['walk_min','rent','admin_fee','price','floor_area','land_area'];
+
+  function openNew(){
+    editingId = null; curImages = [];
+    document.getElementById('dh-title').textContent = '新規物件';
+    document.getElementById('del-btn').style.display = 'none';
+    document.getElementById('f-id').value = '';
+    document.getElementById('f_deal_type').value = 'rent';
+    STR_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) el.value=''; });
+    NUM_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) el.value=''; });
+    document.getElementById('f_property_type').value = 'マンション';
+    document.getElementById('f_status').value = 'draft';
+    document.getElementById('f_comment').value = '';
+    buildFeatureGrid([]); buildPortalNotes({}); renderThumbs(); onDealChange();
+    openDrawer();
+  }
+
+  async function openEdit(id){
+    let p;
+    try { p = await fetch('/api/properties/'+id).then(r=>r.json()); } catch(_){ return; }
+    if(!p || p.error){ alert('物件の取得に失敗しました'); return; }
+    editingId = id; curImages = p.images || [];
+    document.getElementById('dh-title').textContent = '物件を編集';
+    document.getElementById('del-btn').style.display = 'inline-flex';
+    document.getElementById('f-id').value = id;
+    document.getElementById('f_deal_type').value = p.deal_type || 'rent';
+    STR_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) el.value = (p[f]==null?'':p[f]); });
+    NUM_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) el.value = (p[f]==null?'':p[f]); });
+    document.getElementById('f_comment').value = p.comment || '';
+    buildFeatureGrid(p.features||[]); buildPortalNotes(p.portal_notes||{}); renderThumbs(); onDealChange();
+    openDrawer();
+  }
+
+  function collect(){
+    const o = { deal_type: document.getElementById('f_deal_type').value };
+    STR_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) o[f]=el.value.trim(); });
+    NUM_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) o[f]= el.value===''?null:el.value; });
+    o.comment = document.getElementById('f_comment').value;
+    o.features = getFeatures();
+    o.portal_notes = getPortalNotes();
+    o.images = curImages;
+    return o;
+  }
+
+  async function saveProp(){
+    const btn = document.getElementById('save-btn');
+    btn.disabled = true;
+    const body = collect();
+    if(!body.name){ showAlert('物件名を入力してください'); btn.disabled=false; return; }
+    try {
+      const url = editingId ? '/api/properties/'+editingId : '/api/properties';
+      const method = editingId ? 'PUT' : 'POST';
+      const r = await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+      const d = await r.json();
+      if(!r.ok){ showAlert(d.error||'保存に失敗しました'); btn.disabled=false; return; }
+      showAlert('保存しました', true);
+      await loadProps();
+      setTimeout(closeDrawer, 600);
+    } catch(e){ showAlert('保存に失敗しました: '+e); }
+    btn.disabled = false;
+  }
+
+  async function delProp(){
+    if(!editingId) return;
+    if(!confirm('この物件を削除します。よろしいですか？')) return;
+    try {
+      const r = await fetch('/api/properties/'+editingId, {method:'DELETE'});
+      if(r.ok){ SELECTED.delete(editingId); await loadProps(); closeDrawer(); }
+      else { showAlert('削除に失敗しました'); }
+    } catch(e){ showAlert('削除に失敗しました'); }
+  }
+
+  // ── AIコメント生成（先に保存してから生成） ──
+  async function genAIComment(){
+    const btn = document.getElementById('ai-btn');
+    btn.disabled = true; const orig = btn.innerHTML; btn.innerHTML = '<span class="spin"></span> 生成中…';
+    try {
+      // 未保存なら先に保存
+      if(!editingId){
+        const body = collect();
+        if(!body.name){ showAlert('AI生成の前に物件名を入力してください'); btn.disabled=false; btn.innerHTML=orig; return; }
+        const r = await fetch('/api/properties', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+        const d = await r.json();
+        if(!r.ok){ showAlert(d.error||'保存に失敗しました'); btn.disabled=false; btn.innerHTML=orig; return; }
+        editingId = d.id;
+        document.getElementById('f-id').value = d.id;
+        document.getElementById('dh-title').textContent = '物件を編集';
+        document.getElementById('del-btn').style.display = 'inline-flex';
+      } else {
+        // 最新の入力で更新してから生成
+        await fetch('/api/properties/'+editingId, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(collect())});
+      }
+      const r2 = await fetch('/api/properties/'+editingId+'/ai-comment', {method:'POST'});
+      const d2 = await r2.json();
+      if(!r2.ok){ showAlert(d2.error||'AI生成に失敗しました'); }
+      else {
+        if(d2.catch_copy) document.getElementById('f_catch_copy').value = d2.catch_copy;
+        if(d2.comment) document.getElementById('f_comment').value = d2.comment;
+        showAlert('AIコメントを生成しました', true);
+      }
+    } catch(e){ showAlert('AI生成に失敗しました: '+e); }
+    btn.disabled = false; btn.innerHTML = orig;
+  }
+
+  // ── 一斉出力 ──
+  function openExport(){
+    if(SELECTED.size===0) return;
+    document.getElementById('ex-count').textContent = SELECTED.size;
+    const wrap = document.getElementById('portal-list');
+    wrap.innerHTML = '';
+    PORTALS.forEach(p=>{
+      const lab = document.createElement('label');
+      lab.className = 'portal-opt';
+      const def = ['suumo','homes','athome'].includes(p.key) ? 'checked' : '';
+      lab.innerHTML = `<input type="checkbox" value="${p.key}" ${def} onchange="this.parentNode.classList.toggle('on',this.checked)"><span>${esc(p.name)}</span>`;
+      if(def) lab.classList.add('on');
+      wrap.appendChild(lab);
+    });
+    document.getElementById('ex-alert').classList.remove('show');
+    document.getElementById('export-modal').classList.add('show');
+  }
+  function closeExport(){ document.getElementById('export-modal').classList.remove('show'); }
+
+  async function doExport(){
+    const portals = [...document.querySelectorAll('#portal-list input:checked')].map(i=>i.value);
+    const exAlert = document.getElementById('ex-alert');
+    if(portals.length===0){ exAlert.textContent='出力先ポータルを選択してください'; exAlert.classList.add('show'); return; }
+    const btn = document.getElementById('do-export');
+    btn.disabled = true; const orig = btn.innerHTML; btn.innerHTML = '<span class="spin"></span> 出力中…';
+    try {
+      const r = await fetch('/api/properties/export', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ property_ids:[...SELECTED], portals })
+      });
+      if(!r.ok){ const d=await r.json().catch(()=>({})); exAlert.textContent=d.error||'出力に失敗しました'; exAlert.classList.add('show'); btn.disabled=false; btn.innerHTML=orig; return; }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const ts = new Date().toISOString().slice(0,16).replace(/[-T:]/g,'');
+      a.href = url; a.download = 'converter_export_'+ts+'.zip';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      closeExport();
+    } catch(e){ exAlert.textContent='出力に失敗しました: '+e; exAlert.classList.add('show'); }
+    btn.disabled = false; btn.innerHTML = orig;
+  }
+
+  // 初期化
+  loadProps();
+</script>
+{% endblock %}
