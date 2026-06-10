@@ -35,6 +35,11 @@
   .followup-empty { color:#e5e7eb; font-size:11px; }
   /* 未返信（お客様から返信あり・こちら未返信）の行を赤い左ラインで即可視化 */
   tbody tr.row-unreplied td:first-child { box-shadow: inset 4px 0 0 #dc2626; }
+  /* 自動取込の新着バッジ（何かアクションすると消える） */
+  .new-badge { display:inline-block; background:#2563eb; color:#fff; font-size:9px; font-weight:800;
+               border-radius:8px; padding:1px 7px; margin-right:5px; vertical-align:middle;
+               animation: newPulse 1.6s ease-in-out infinite; }
+  @keyframes newPulse { 0%,100% { opacity:1; } 50% { opacity:0.55; } }
   /* 追客列の表示制御 */
   .followup-extra { display:none; }
   .followup-extra.visible { display:table-cell; }
@@ -651,7 +656,7 @@ async function patchRecordFields(id, payload) {
     });
     if (!res.ok) throw new Error();
     const rec = records.find(r => r.id === id);
-    if (rec) Object.assign(rec, payload);
+    if (rec) { Object.assign(rec, payload); rec.is_new = false; }
     updateSummary();
   } catch(e) { showAlert('保存に失敗しました', 'error'); loadRecords(); }
 }
@@ -674,6 +679,7 @@ async function patchRecord(id, field, value) {
     const rec = records.find(r => r.id === id);
     if (rec) {
       rec[field] = value;
+      rec.is_new = false;   // 編集＝アクション済みなのでNEWバッジを消す（サーバー側も消える）
       // 担当を変えたら表示名も即更新（再描画で「―」に戻らないように）
       if (field === 'staff_id') {
         const opt = STAFF_OPTIONS.find(([v]) => String(v) === String(value));
@@ -828,9 +834,10 @@ function renderTable() {
     const statusChip = r.status
       ? `<span style="display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;background:${statusColor||'#e5e7eb'};border:1px solid rgba(0,0,0,0.08);color:#1f2937;white-space:nowrap;">${escHtml(r.status)}</span>`
       : '<span style="color:#cbd5e1;font-size:11px;">― 未設定 ―</span>';
+    const newBadge = r.is_new ? '<span class="new-badge">NEW</span>' : '';
     return `
     <tr class="${rowCls}" style="${rowStyle}" data-needsreply="${r.needs_reply ? 1 : 0}">
-      <td style="cursor:pointer;" onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${escHtml(r.staff_name || '―')}</td>
+      <td style="cursor:pointer;white-space:nowrap;" onclick="editCell(this,${r.id},'staff_id','select','${r.staff_id||''}',STAFF_OPTIONS)">${newBadge}${escHtml(r.staff_name || '―')}</td>
       <td style="cursor:pointer;" onclick="editCell(this,${r.id},'echo_date','date','${r.echo_date||''}')">${r.echo_date ? fmtMD(r.echo_date) : '―'}</td>
       <td style="cursor:pointer;text-align:center;" title="クリックで状況を変更" onclick="editCell(this,${r.id},'status','select','${escJs(r.status)}',ECHO_STATUS_PAIRS)">${statusChip}</td>
       <td class="left" style="max-width:100px;cursor:pointer;" title="${escHtml(r.list_name)}" onclick="editCell(this,${r.id},'list_name','text','${escJs(r.list_name)}')">${escHtml(r.list_name) || '―'}</td>
@@ -1069,6 +1076,13 @@ function openMail(id){
   _mailEchoId = id; _mailCount = -1; _mailSig = '';
   _pendingFiles = []; renderAttachList();
   closeTemplatePicker();
+  // メールを開いたら「NEW」バッジを消す
+  const _rec = records.find(r => r.id === id);
+  if (_rec && _rec.is_new) {
+    _rec.is_new = false;
+    fetch(`/api/echo-records/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({is_new:false})}).catch(()=>{});
+    renderTable();
+  }
   document.getElementById('mail-subject').value = '';
   const body = document.getElementById('mail-body'); body.value=''; body.style.height='auto';
   document.getElementById('chat-sub').textContent = '';

@@ -809,6 +809,7 @@ class EchoRecord(db.Model):
     has_unread_reply = db.Column(db.Boolean, default=False)   # 未読の返信あり
     has_phone_number = db.Column(db.Boolean, default=False)   # 電話番号の有無（〇/×）
     reply_dismissed  = db.Column(db.Boolean, default=False)   # 未返信アラートを「返信不要」として消したか
+    is_new           = db.Column(db.Boolean, default=False)   # 自動取込の新着（何かアクションすると消える）
     status        = db.Column(db.String(40), nullable=True)   # 状況タグ（追客中/申込/終了 など）
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -1645,6 +1646,12 @@ def migrate_db():
             print("  Added column echo_record.reply_dismissed")
         except Exception as e:
             print(f"  Skip echo_record.reply_dismissed: {e}")
+    if 'is_new' not in er_cols:
+        try:
+            cursor.execute("ALTER TABLE echo_record ADD COLUMN is_new BOOLEAN DEFAULT 0")
+            print("  Added column echo_record.is_new")
+        except Exception as e:
+            print(f"  Skip echo_record.is_new: {e}")
     if 'status' not in er_cols:
         try:
             cursor.execute("ALTER TABLE echo_record ADD COLUMN status VARCHAR(40)")
@@ -1828,6 +1835,7 @@ def migrate_postgres():
         ("echo_record",              "has_unread_reply", "BOOLEAN DEFAULT FALSE"),
         ("echo_record",              "has_phone_number", "BOOLEAN DEFAULT FALSE"),
         ("echo_record",              "reply_dismissed",  "BOOLEAN DEFAULT FALSE"),
+        ("echo_record",              "is_new",           "BOOLEAN DEFAULT FALSE"),
         ("echo_record",              "status",          "VARCHAR(40)"),
         ("echo_record",              "followup_phone",  "VARCHAR(60) DEFAULT ''"),
         ("tenant_option",            "store_id",        "INTEGER"),
@@ -4552,6 +4560,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
             target = _find_merge_target(store_id, parsed['name'], parsed.get('email'))
             if target:
                 _merge_into_echo(target, parsed)
+                target.is_new = True   # 追加反響も「新着」として知らせる
                 if not ext_known:
                     db.session.add(ProcessedReaction(store_id=store_id, external_id=ext))
                 if mid_key:
@@ -4571,6 +4580,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                 has_phone_number=bool(parsed.get('has_phone')),  # 電話番号の有無
                 external_id=ext,
                 customer_email=parsed.get('email') or None,
+                is_new=True,   # 新着バッジ（何かアクションすると消える）
             ))
             if not ext_known:
                 db.session.add(ProcessedReaction(store_id=store_id, external_id=ext))
@@ -6384,6 +6394,7 @@ def api_echo_records_list():
         'has_unread_reply': bool(r.has_unread_reply),
         'needs_reply': last_dir.get(r.id) == 'in' and not r.reply_dismissed,
         'reply_dismissed': bool(r.reply_dismissed),
+        'is_new': bool(r.is_new),
         'has_phone_number': bool(r.has_phone_number),
         'status': r.status or '',
     } for r in records])
@@ -6468,6 +6479,7 @@ def api_echo_records_update(rid):
         r.status = (data.get('status') or '') or None
     if 'memo' in data:
         r.memo = data.get('memo')
+    r.is_new = False   # 何かアクション（編集・メール開封など）したら「新着」バッジを消す
     db.session.commit()
     return jsonify({'status': 'ok'})
 
