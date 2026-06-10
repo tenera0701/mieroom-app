@@ -493,7 +493,7 @@ function renderFolders(){
   document.getElementById('lib-top').innerHTML =
     `<button class="big-btn primary" onclick="openNew()">＋ 新規作成</button>
      <button class="big-btn" onclick="createFolder()">＋ フォルダ作成</button>
-     <button class="big-btn" onclick="openRoomSettings()" title="部屋タイプの見た目や、新規作成時の既定（背景色・格子色）を設定">⚙ 設定</button>`;
+     <button class="big-btn" onclick="openRoomSettings()" title="部屋タイプの見た目や、新規作成時の既定（背景色・格子色）を設定">⚙ デフォルト設定</button>`;
   let html = '';
   libFolders.forEach(f => {
     const cnt = plansIn(f.id).length, cov = coverOf(f.id);

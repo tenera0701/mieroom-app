@@ -85,7 +85,8 @@
   /* 週・日表示（時間グリッド） */
   .tg-wrap { overflow-x:auto; }
   .tg { display:grid; min-width:560px; }
-  .tg .tg-headcell { border-bottom:1px solid #e5e7eb; text-align:center; font-size:12px; font-weight:700; color:#374151; padding:7px 2px; }
+  .tg .tg-headcell { border-bottom:1px solid #e5e7eb; text-align:center; font-size:12px; font-weight:700; color:#374151; padding:7px 2px; position:sticky; top:0; background:#fff; z-index:5; }
+  .tg .tg-corner { position:sticky; top:0; left:0; background:#fff; z-index:6; }
   .tg .tg-headcell .dn { font-size:16px; }
   .tg .tg-headcell.today .dn { background:var(--primary); color:#fff; border-radius:50%; display:inline-flex; width:26px; height:26px; align-items:center; justify-content:center; }
   .tg .tg-headcell.sun { color:#dc2626; } .tg .tg-headcell.sat { color:#2563eb; }
@@ -453,7 +454,7 @@ function renderTimeGrid(){
 
   const tg=document.getElementById('tg');
   tg.style.gridTemplateColumns = `52px repeat(${days.length}, 1fr)`;
-  let html = '<div></div>';   // 左上の空き
+  let html = '<div class="tg-corner"></div>';   // 左上の空き（スクロールしても固定）
   days.forEach(d=>{
     const isT = fmt(d)===todayS();
     const cls = d.getDay()===0?'sun':(d.getDay()===6?'sat':'');
