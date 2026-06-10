@@ -50,6 +50,20 @@
     <div class="sg-stat"><div class="n" id="st-new" style="color:#b91c1c;">{{ new_cnt }}</div><div class="l">未対応</div></div>
   </div>
 
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:240px;border:1px solid #d1d5db;border-radius:9px;padding:8px 12px;background:#fff;">
+      <svg style="width:17px;height:17px;flex:none;" fill="none" stroke="#0D9488" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+      <input id="sg-search" type="text" placeholder="店舗名・送信者・内容・種類で検索" oninput="renderList()" autocomplete="off" style="flex:1;border:none;outline:none;font-size:13px;background:transparent;">
+      <button onclick="document.getElementById('sg-search').value='';renderList();" style="background:none;border:none;cursor:pointer;color:#9ca3af;font-size:15px;">✕</button>
+    </div>
+    <select id="sg-filter-status" onchange="renderList()" style="border:1px solid #d1d5db;border-radius:9px;padding:8px 12px;font-size:13px;background:#fff;">
+      <option value="">すべての状況</option>
+      <option value="未対応">未対応</option>
+      <option value="受理">受理</option>
+      <option value="対応済み">対応済み</option>
+    </select>
+  </div>
+
   <div id="sg-list"><p style="color:#9ca3af;font-size:13px;">読み込み中…</p></div>
 </div>
 {% endblock %}
@@ -57,17 +71,28 @@
 {% block extra_scripts %}
 <script>
 const STATUSES = ['未対応','受理','対応済み'];
+let ITEMS = [];
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function showAlert(msg){ const el=document.getElementById('alert-msg'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2500); }
 
 async function loadSuggestions(){
-  const box=document.getElementById('sg-list');
   try{
-    const items=await fetch('/api/admin/suggestions').then(r=>r.json());
-    document.getElementById('st-total').textContent=items.length;
-    document.getElementById('st-new').textContent=items.filter(s=>(s.status||'未対応')==='未対応').length;
-    if(!items.length){ box.innerHTML='<p style="color:#9ca3af;font-size:13px;">まだ改善提案は届いていません。</p>'; return; }
-    box.innerHTML=items.map(s=>{
+    ITEMS=await fetch('/api/admin/suggestions').then(r=>r.json());
+    document.getElementById('st-total').textContent=ITEMS.length;
+    document.getElementById('st-new').textContent=ITEMS.filter(s=>(s.status||'未対応')==='未対応').length;
+    renderList();
+  }catch(_){ document.getElementById('sg-list').innerHTML='<p style="color:#ef4444;font-size:13px;">読み込みに失敗しました。</p>'; }
+}
+function renderList(){
+  const box=document.getElementById('sg-list');
+  const q=(document.getElementById('sg-search').value||'').trim().toLowerCase();
+  const fStatus=document.getElementById('sg-filter-status').value;
+  let items=ITEMS;
+  if(fStatus) items=items.filter(s=>(s.status||'未対応')===fStatus);
+  if(q) items=items.filter(s=>[s.company,s.username,s.body,s.category,s.status].map(x=>String(x||'').toLowerCase()).some(t=>t.includes(q)));
+  if(!ITEMS.length){ box.innerHTML='<p style="color:#9ca3af;font-size:13px;">まだ改善提案は届いていません。</p>'; return; }
+  if(!items.length){ box.innerHTML='<p style="color:#9ca3af;font-size:13px;">条件に一致する改善提案はありません。</p>'; return; }
+  box.innerHTML=items.map(s=>{
       const st=s.status||'未対応';
       const opts=STATUSES.map(o=>`<option value="${o}" ${o===st?'selected':''}>${o}</option>`).join('');
       return `<div class="sg-card ${st==='未対応'?'new':''}">
@@ -86,8 +111,7 @@ async function loadSuggestions(){
           <button class="btn danger" onclick="delSuggestion(${s.id})">削除</button>
         </div>
       </div>`;
-    }).join('');
-  }catch(_){ box.innerHTML='<p style="color:#ef4444;font-size:13px;">読み込みに失敗しました。</p>'; }
+  }).join('');
 }
 async function updateStatus(id, status){
   try{ await fetch(`/api/admin/suggestions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})}); showAlert('対応状況を更新しました。'); loadSuggestions(); }
