@@ -4445,6 +4445,11 @@ def _merge_into_echo(target, parsed):
         target.has_phone_number = True
 
 
+# スキャン済みメールのMessage-IDキャッシュ（store_id -> set）。
+# 毎回のフェッチで全メール本文を再ダウンロードせず、新着だけをフル取得して高速化する。
+_SCANNED_MSG_IDS = {}
+
+
 def fetch_reactions_for_store(store_id, limit=120, since_days=30):
     """指定店舗のGmailから反響メールを取得し EchoRecord へ登録"""
     ms = MailSetting.query.filter_by(store_id=store_id).first()
@@ -4477,7 +4482,27 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
         typ, data = M.search(None, f'(SINCE "{since_str}")')
         ids = data[0].split() if (data and data[0]) else []
         ids = ids[-limit:]
+        # スキャン済みメールはヘッダ（Message-ID）だけ見てスキップ。
+        # 本文の再ダウンロードを避けることで、新着があっても数秒で取り込める。
+        seen = _SCANNED_MSG_IDS.setdefault(store_id, set())
+        if len(seen) > 8000:
+            seen.clear()   # 念のための上限（重複取込はDB側でも防止される）
+        hdr_map = {}
+        if ids:
+            try:
+                typ, hd = M.fetch(b','.join(ids), '(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])')
+                for part in hd or []:
+                    if isinstance(part, tuple) and len(part) >= 2:
+                        mnum = re.match(rb'(\d+)', part[0] or b'')
+                        mmid = re.search(rb'Message-ID:\s*(<[^>]+>)', part[1] or b'', re.I)
+                        if mnum and mmid:
+                            hdr_map[mnum.group(1)] = mmid.group(1).decode('ascii', 'ignore')
+            except Exception:
+                hdr_map = {}
         for num in reversed(ids):
+            mid = hdr_map.get(num, '')
+            if mid and mid in seen:
+                continue
             try:
                 typ, md = M.fetch(num, '(BODY.PEEK[])')
                 if not md or not md[0]:
@@ -4485,6 +4510,8 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
                 msg = emaillib.message_from_bytes(md[0][1])
             except Exception:
                 continue
+            if mid:
+                seen.add(mid)   # フル取得できた時点でスキャン済みに
             scanned += 1
             # 取込開始日時より前のメールは無視（過去の反響を拾わない）
             mdt = _msg_datetime(msg)
@@ -4565,8 +4592,11 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
         mtxt = f" / {merged}件まとめ" if merged else ""
         ms.last_result = f"取得OK：{imported}件追加{mtxt} / {scanned}件確認（{_fmt_jst(datetime.utcnow(), '%m/%d %H:%M')}）"
         db.session.commit()
+        if imported or merged:
+            print(f"mail fetch store={store_id}: +{imported} merged={merged} scanned={scanned}")
         return {'ok': True, 'imported': imported, 'merged': merged, 'scanned': scanned}
     except imaplib.IMAP4.error as e:
+        _SCANNED_MSG_IDS.pop(store_id, None)   # エラー時はキャッシュを捨てて次回フルスキャン（取りこぼし防止）
         db.session.rollback()
         try:
             ms.last_result = f"ログイン失敗：{e}"
@@ -4575,6 +4605,7 @@ def fetch_reactions_for_store(store_id, limit=120, since_days=30):
             db.session.rollback()
         return {'ok': False, 'error': f'ログインに失敗しました（メールアドレス／アプリパスワードをご確認ください）', 'imported': imported, 'scanned': scanned}
     except Exception as e:
+        _SCANNED_MSG_IDS.pop(store_id, None)   # エラー時はキャッシュを捨てて次回フルスキャン（取りこぼし防止）
         db.session.rollback()
         try:
             ms.last_result = f"エラー：{e}"
@@ -4952,7 +4983,10 @@ def _idle_worker(store_id, stop_event):
             has_idle = b'IDLE' in (M.capabilities or ())
             while not stop_event.is_set():
                 if has_idle:
-                    _imap_idle_wait(M, 1500, stop_event)   # 最大25分でIDLE更新
+                    # 最大4分でIDLEを張り直す（通知が来ない「死に接続」になっても素早く復帰）
+                    got = _imap_idle_wait(M, 240, stop_event)
+                    if got:
+                        print(f"IDLE: new mail signal store={store_id}")
                 else:
                     stop_event.wait(60)                    # IDLE非対応→60秒間隔
                 if stop_event.is_set():
@@ -5016,7 +5050,7 @@ def _mail_sync_loop():
         try:
             idle_manager.sync()
             cnt += 1
-            if cnt % 20 == 0:   # 約10分ごとに保険フェッチ（IDLE取りこぼし対策）
+            if cnt % 6 == 0:   # 約3分ごとに保険フェッチ（IDLE取りこぼし対策。スキャン済みスキップで軽量）
                 with app.app_context():
                     for ms in MailSetting.query.filter_by(enabled=True).all():
                         if (ms.imap_user and ms.imap_pass) or ms.oauth_refresh_token:
