@@ -134,7 +134,6 @@
         <h1 class="fp-title">間取り作成</h1>
         <p class="fp-sub">物件名・部屋タイプ別にフォルダで管理できます。新規作成、または保存済みを開いてください。</p>
       </div>
-      <button class="big-btn" onclick="openRoomSettings()" title="部屋タイプの見た目や、新規作成時の既定（背景色・格子色）を設定">⚙ 設定</button>
     </div>
 
     <div id="lib-top"></div>
@@ -493,7 +492,8 @@ function renderFolders(){
   curView = 'folders';
   document.getElementById('lib-top').innerHTML =
     `<button class="big-btn primary" onclick="openNew()">＋ 新規作成</button>
-     <button class="big-btn" onclick="createFolder()">＋ フォルダ作成</button>`;
+     <button class="big-btn" onclick="createFolder()">＋ フォルダ作成</button>
+     <button class="big-btn" onclick="openRoomSettings()" title="部屋タイプの見た目や、新規作成時の既定（背景色・格子色）を設定">⚙ 設定</button>`;
   let html = '';
   libFolders.forEach(f => {
     const cnt = plansIn(f.id).length, cov = coverOf(f.id);

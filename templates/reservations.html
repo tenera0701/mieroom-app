@@ -20,10 +20,16 @@
   .view-switch button.on { background:var(--primary); color:#fff; }
   .panel { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; }
 
+  /* ── 画面いっぱいに広げる（PC幅に応じて伸縮・縦も画面ぴったり） ── */
+  .rv-page { width:100%; display:flex; flex-direction:column; height:calc(100vh - 137px); }
   /* ── 2カラムレイアウト（左サイドバー＋カレンダー本体） ── */
-  .rv-layout { display:flex; gap:16px; align-items:flex-start; }
-  .rv-side { width:236px; flex:none; }
-  .rv-main { flex:1; min-width:0; }
+  .rv-layout { display:flex; gap:16px; align-items:stretch; flex:1; min-height:0; }
+  .rv-side { width:236px; flex:none; overflow-y:auto; }
+  .rv-main { flex:1; min-width:0; display:flex; flex-direction:column; }
+  .rv-main .panel { flex:1; display:flex; flex-direction:column; min-height:0; }
+  #view-month { flex:1; min-height:0; display:flex; flex-direction:column; }
+  #view-month table.cal { flex:1; height:100%; }
+  #view-time { flex:1; min-height:0; overflow:auto; }
   /* 作成ボタン（Googleカレンダー風） */
   .create-btn { display:inline-flex; align-items:center; gap:9px; border:1px solid #e5e7eb; background:#fff; color:#1f2937; border-radius:28px; padding:13px 22px 13px 16px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.13); margin-bottom:16px; }
   .create-btn:hover { box-shadow:0 2px 8px rgba(0,0,0,.18); background:#F8FFFE; }
@@ -53,8 +59,13 @@
   .staff-box { width:16px; height:16px; border-radius:5px; flex:none; border:2px solid; display:flex; align-items:center; justify-content:center; }
   .staff-box svg { width:11px; height:11px; color:#fff; display:none; }
   .staff-item.on .staff-box svg { display:block; }
-  .staff-name { font-size:13px; color:#374151; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .staff-name { font-size:13px; color:#374151; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
   .staff-item.off .staff-name { color:#9ca3af; }
+  .staff-del { border:none; background:transparent; color:#cbd5e1; cursor:pointer; font-size:13px; padding:0 2px; opacity:0; flex:none; }
+  .staff-item:hover .staff-del { opacity:1; }
+  .staff-del:hover { color:#ef4444; }
+  .staff-add { display:flex; align-items:center; gap:6px; width:100%; margin-top:8px; border:1px dashed #cbd5e1; background:#fff; color:#0F766E; border-radius:8px; padding:7px 10px; font-size:12px; font-weight:700; cursor:pointer; }
+  .staff-add:hover { background:#F0FDFA; border-color:#5EEAD4; }
 
   /* 月表示 */
   table.cal { width:100%; border-collapse:collapse; table-layout:fixed; }
@@ -62,7 +73,8 @@
   .cal th.sun { color:#dc2626; } .cal th.sat { color:#2563eb; }
   .cal td { height:104px; vertical-align:top; border:1px solid #f1f5f9; padding:3px 4px; cursor:pointer; }
   .cal td:hover { background:#F8FFFE; }
-  .cal td.other { background:#fafafa; cursor:default; }
+  .cal td.other-month { background:#fcfcfd; }
+  .cal td.other-month .dnum { color:#cbd5e1; }
   .cal td.today .dnum { background:var(--primary); color:#fff; border-radius:50%; }
   .dnum { font-size:12px; font-weight:700; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; }
   td.sun-col .dnum { color:#dc2626; } td.sat-col .dnum { color:#2563eb; }
@@ -103,17 +115,20 @@
   .st-キャンセル { background:#fee2e2; color:#b91c1c; }
   /* 狭い画面ではサイドバーを上に積む */
   @media (max-width:900px){
-    .rv-layout { flex-direction:column; }
-    .rv-side { width:100%; display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; }
+    .rv-page { height:auto; }
+    .rv-layout { flex-direction:column; align-items:stretch; }
+    .rv-side { width:100%; display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; overflow:visible; }
     .rv-side .create-btn { margin-bottom:0; }
     .rv-side .mini { margin-bottom:0; flex:1; min-width:220px; }
     .rv-side .side-sec { flex:1; min-width:200px; }
+    .rv-main .panel { min-height:70vh; }
+    #view-time { max-height:75vh; }
   }
 </style>
 {% endblock %}
 
 {% block content %}
-<div style="max-width:1500px;margin:0 auto;">
+<div class="rv-page">
   <div id="alert-msg" class="alert"></div>
   <div class="rv-head">
     <h1 class="rv-title">📅 カレンダー</h1>
@@ -211,8 +226,9 @@ let miniCur = new Date();      // ミニカレンダーの表示月
 let RES = [];                  // 取得済み予約（表示範囲分）
 let STAFF = [];                // スタッフ一覧
 let HIDDEN = new Set();        // 非表示にするスタッフキー（id または 'none'）
-const HOUR_PX = 48;            // 時間グリッド1時間の高さ
-const DAY_START = 8, DAY_END = 20;   // 時間グリッドの表示範囲（時）
+const STORE_ID = {{ store_id if store_id else 'null' }};
+const HOUR_PX = 44;            // 時間グリッド1時間の高さ
+const DAY_START = 0, DAY_END = 24;   // 時間グリッドの表示範囲（0〜24時）
 
 /* スタッフ色パレット（solid=濃い色 / light=薄い背景色） */
 const PALETTE = [
@@ -260,7 +276,13 @@ async function fetchRange(months){
   }
 }
 function monthsForView(){
-  if(view==='month') return [[cur.getFullYear(), cur.getMonth()+1]];
+  if(view==='month'){
+    // 前月・当月・翌月を取得（カレンダーのはみ出し日にも予約を表示するため）
+    const base=new Date(cur.getFullYear(), cur.getMonth(), 1);
+    const arr=[];
+    for(let d=-1; d<=1; d++){ const x=new Date(base.getFullYear(), base.getMonth()+d, 1); arr.push([x.getFullYear(), x.getMonth()+1]); }
+    return arr;
+  }
   if(view==='week'){
     const s = weekStart(cur), e = new Date(s); e.setDate(e.getDate()+6);
     return [[s.getFullYear(), s.getMonth()+1],[e.getFullYear(), e.getMonth()+1]];
@@ -339,15 +361,38 @@ function renderStaffList(){
   const check='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>';
   const rows = STAFF.map(s=>{
     const c=staffColor(s.id); const on=!HIDDEN.has(staffKey(s.id));
-    return `<div class="staff-item ${on?'on':'off'}" onclick="toggleStaff('${staffKey(s.id)}')">
-      <span class="staff-box" style="border-color:${c.s};background:${on?c.s:'#fff'};">${check}</span>
-      <span class="staff-name">${esc(s.name)}</span></div>`;
+    return `<div class="staff-item ${on?'on':'off'}">
+      <span class="staff-box" style="border-color:${c.s};background:${on?c.s:'#fff'};" onclick="toggleStaff('${staffKey(s.id)}')">${check}</span>
+      <span class="staff-name" onclick="toggleStaff('${staffKey(s.id)}')">${esc(s.name)}</span>
+      <button class="staff-del" title="このスタッフを削除" onclick="event.stopPropagation();removeStaff(${s.id},'${esc(s.name)}')">🗑</button></div>`;
   }).join('');
   const noneOn=!HIDDEN.has('none');
   const noneRow=`<div class="staff-item ${noneOn?'on':'off'}" onclick="toggleStaff('none')">
     <span class="staff-box" style="border-color:${UNASSIGNED.s};background:${noneOn?UNASSIGNED.s:'#fff'};">${check}</span>
     <span class="staff-name">未割り当て</span></div>`;
-  box.innerHTML = rows + noneRow;
+  box.innerHTML = rows + noneRow + `<button class="staff-add" onclick="addStaffPrompt()">＋ スタッフを追加</button>`;
+}
+async function addStaffPrompt(){
+  const name=(prompt('追加するスタッフ名を入力してください')||'').trim();
+  if(!name) return;
+  try{
+    const r=await fetch('/api/staff/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name, store_id:STORE_ID, role:'営業'})});
+    if(!r.ok) throw new Error();
+    await loadStaff();
+    showAlert(`スタッフ「${name}」を追加しました。`);
+  }catch(_){ showAlert('スタッフの追加に失敗しました','error'); }
+}
+async function removeStaff(id, name){
+  if(!confirm(`スタッフ「${name}」をカレンダーから削除しますか？\n（このスタッフが担当の予約は「退職スタッフ」表示になります）`)) return;
+  try{
+    const r=await fetch(`/api/staff/${id}`,{method:'DELETE'});
+    if(!r.ok) throw new Error();
+    HIDDEN.delete(staffKey(id));
+    await loadStaff();
+    if(view==='month') renderMonth(); else renderTimeGrid();
+    renderMini();
+    showAlert(`スタッフ「${name}」を削除しました。`);
+  }catch(_){ showAlert('スタッフの削除に失敗しました','error'); }
 }
 function toggleStaff(key){
   if(HIDDEN.has(key)) HIDDEN.delete(key); else HIDDEN.add(key);
@@ -362,20 +407,20 @@ function staffOptions(selected){
   return html;
 }
 
-/* ── 月表示 ── */
+/* ── 月表示（常に6週ぶん描画。前月末・翌月頭の日付も埋める） ── */
 function renderMonth(){
-  const y=cur.getFullYear(), m=cur.getMonth()+1;
-  const first=new Date(y,m-1,1);
+  const y=cur.getFullYear(), m=cur.getMonth();   // m は0始まり
+  const first=new Date(y,m,1);
   const startDow=first.getDay();
-  const daysIn=new Date(y,m,0).getDate();
   const byDate={};
   visibleRes().forEach(r=>{ (byDate[r.date]=byDate[r.date]||[]).push(r); });
-  let html='', day=1;
-  for(let w=0;w<6 && day<=daysIn;w++){
+  let html='', cell=0;
+  for(let w=0;w<6;w++){
     html+='<tr>';
-    for(let dow=0;dow<7;dow++){
-      if((w===0&&dow<startDow)||day>daysIn){ html+='<td class="other"></td>'; continue; }
-      const ds=`${y}-${pad(m)}-${pad(day)}`;
+    for(let dow=0;dow<7;dow++,cell++){
+      const dd=new Date(y, m, 1 + (cell-startDow));   // 前月・翌月もDateでまたいでOK
+      const ds=fmt(dd);
+      const inMonth = dd.getMonth()===m;
       const items=(byDate[ds]||[]).slice().sort((a,b)=>(a.time_slot||'').localeCompare(b.time_slot||''));
       const chips=items.slice(0,3).map(r=>{
         const c=staffColor(r.staff_id);
@@ -383,9 +428,10 @@ function renderMonth(){
         return `<span class="rv-chip ${cls}" style="background:${c.l};color:${c.s};border-left-color:${c.s};" onclick="event.stopPropagation();openDetail(${r.id})"><span class="ctxt">${esc(r.time_slot)} ${esc(r.customer_name)}</span></span>`;
       }).join('') + (items.length>3?`<span style="font-size:10px;color:#6b7280;">他${items.length-3}件</span>`:'');
       const colCls = dow===0?'sun-col':(dow===6?'sat-col':'');
-      html+=`<td class="${ds===todayS()?'today':''} ${colCls}" onclick="openDay('${ds}')">
-        <span class="dnum">${day}</span>${chips}</td>`;
-      day++;
+      const todayCls = ds===todayS()?'today':'';
+      const otherCls = inMonth?'':'other-month';
+      html+=`<td class="${todayCls} ${colCls} ${otherCls}" onclick="openDay('${ds}')">
+        <span class="dnum">${dd.getDate()}</span>${chips}</td>`;
     }
     html+='</tr>';
   }
@@ -442,6 +488,9 @@ function renderTimeGrid(){
     html+=col;
   });
   tg.innerHTML=html;
+  // 24時間表示は縦に長いので、初期表示は8時付近までスクロール
+  const vt=document.getElementById('view-time');
+  if(vt) vt.scrollTop = Math.max(0, (8-hs)*HOUR_PX - 8);
 }
 function quickAdd(ds, time){
   document.getElementById('add-date').value=ds;

@@ -90,12 +90,39 @@
   /* アルバム */
   .album-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:8px; }
   .album-grid img { width:100%; height:100px; object-fit:cover; border-radius:8px; cursor:pointer; border:1px solid #e5e7eb; }
-  @media (max-width: 760px) { .ch-side { width:150px; } .cm-row { max-width:86%; } }
+  /* 戻るボタン（携帯時のみ表示） */
+  .ch-back { display:none; border:none; background:transparent; color:#0F766E; font-size:26px; line-height:1; cursor:pointer; padding:0 2px 0 0; flex:none; }
+
+  /* ===== 携帯UI（LINE風：一覧⇄会話を全画面で切替） ===== */
+  @media (max-width: 760px) {
+    .chat-page-head { display:none !important; } /* 携帯ではチャット領域を最大化（インライン式に勝つ） */
+    .chat-wrap { position:relative; height:calc(100vh - 108px); min-height:0; gap:0; overflow:hidden; }
+    .ch-side, .ch-main { position:absolute; inset:0; width:100%; border-radius:0; border:none; box-shadow:none; }
+    .ch-side { z-index:1; }
+    .ch-side-head { padding:14px 16px; }
+    .ch-list { padding:6px 8px; }
+    .ch-item { padding:13px 12px; font-size:15px; }   /* 指で押しやすく */
+    .ch-item .ch-ico { font-size:18px; }
+    /* 会話パネルは右からスライドイン */
+    .ch-main { z-index:2; transform:translateX(100%); transition:transform .26s cubic-bezier(.4,0,.2,1); }
+    .chat-wrap.show-chat .ch-main { transform:translateX(0); }
+    .ch-back { display:inline-flex; }
+    .ch-main-head { padding:10px 10px; gap:7px; position:sticky; top:0; }
+    .ch-main-head .h-ico { width:30px; height:30px; font-size:15px; }
+    .ch-main-head .h-nm { font-size:15px; }
+    .ch-main-head .h-sub { display:none; }
+    .h-tool { padding:6px 7px; font-size:11px; }       /* 携帯は小さめに */
+    .cm-row { max-width:82%; }
+    .cm-att img { max-width:62vw; max-height:62vw; }
+    .ch-body { padding:12px 10px; }
+    .ch-compose { padding:8px 10px; padding-bottom:max(8px, env(safe-area-inset-bottom)); }
+    .ch-input { font-size:16px; }                       /* iOSの自動ズーム防止 */
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+<div class="chat-page-head" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
   <div>
     <h1 style="font-size:20px;font-weight:800;color:#111827;margin:0;">社内チャット</h1>
     <p style="font-size:12px;color:#6b7280;margin:3px 0 0;" id="retain-info"></p>
@@ -122,6 +149,7 @@
   <!-- 右：会話 -->
   <div class="ch-main">
     <div class="ch-main-head" id="ch-head" style="display:none;">
+      <button class="ch-back" onclick="backToList()" title="チャンネル一覧へ戻る">‹</button>
       <div class="h-ico" id="h-ico">#</div>
       <div style="min-width:0;flex:1;">
         <div class="h-nm" id="h-nm">　</div>
@@ -229,11 +257,12 @@ async function loadChannels(initial){
     `保存期間：${CH.retention_days>=365 ? Math.round(CH.retention_days/365)+'年' : CH.retention_days+'日'}${CH.is_pro?'（チャットPro）':''}`;
   renderChannelList();
   if(initial){
-    // 全社を初期選択
+    // 全社を初期選択（携帯では会話に切り替えず一覧のまま＝LINE風）
     const first = CH.channels.find(c=>c.kind==='company') || CH.channels[0];
-    if(first) selectChannel(first.id);
+    if(first) selectChannel(first.id, !isMobile());
   }
 }
+function isMobile(){ return window.matchMedia('(max-width:760px)').matches; }
 
 function renderChannelList(){
   const box = document.getElementById('ch-list');
@@ -324,7 +353,7 @@ async function markChannelRead(cid){
   }catch(_){}
 }
 
-function selectChannel(cid){
+function selectChannel(cid, slide){
   _curCh = cid; _lastId = 0; _pendingFiles = []; renderAtt();
   const c = CH.channels.find(x=>x.id===cid);
   renderChannelList();
@@ -340,6 +369,12 @@ function selectChannel(cid){
   markChannelRead(cid);
   if(_pollTimer) clearInterval(_pollTimer);
   _pollTimer = setInterval(()=>{ if(_curCh){ loadMessages(true); refreshReadCounts(); refreshReactions(); } }, 5000);
+  // 携帯：会話パネルを前面にスライド表示（LINE風）。初期自動選択時は抑制
+  if(slide!==false) document.querySelector('.chat-wrap').classList.add('show-chat');
+}
+// 携帯：会話からチャンネル一覧へ戻る
+function backToList(){
+  document.querySelector('.chat-wrap').classList.remove('show-chat');
 }
 
 // 既読人数を更新（自分の投稿のみ・ポーリングで反映）
@@ -537,7 +572,7 @@ function highlightMentions(escapedBody){
   names.sort((a,b)=>b.length-a.length).forEach(n=>{
     if(!n) return;
     const escName = escH(n).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    html = html.replace(new RegExp('@'+escName,'g'), `<span class="mention">@${escH(n)}</span>`);
+    html = html.replace(new RegExp('[@＠]'+escName,'g'), `<span class="mention">@${escH(n)}</span>`);
   });
   return html;
 }
@@ -557,13 +592,15 @@ function showMentionPop(query){
 }
 function pickMention(name){
   const inp = document.getElementById('ch-input');
-  inp.value = inp.value.replace(/@([^\s@]*)$/, '@'+name+' ');
+  // 全角＠・半角@どちらの打ちかけも置き換える
+  inp.value = inp.value.replace(/[@＠]([^\s@＠]*)$/, '@'+name+' ');
   closeMentionPop(); inp.focus();
 }
 function onChatInput(el){
   cgrow(el);
   const upToCursor = el.value.slice(0, el.selectionStart==null?el.value.length:el.selectionStart);
-  const m = upToCursor.match(/@([^\s@]*)$/);
+  // 半角@・全角＠の両方でメンション候補を表示
+  const m = upToCursor.match(/[@＠]([^\s@＠]*)$/);
   if(m) showMentionPop(m[1]); else closeMentionPop();
 }
 
