@@ -13638,6 +13638,14 @@ def admin_seed_demo():
         s.is_active = True
         stores.append(s)
     db.session.commit()
+    # デモ以外の既存店舗（空の初期店舗など）は非表示化し、3店舗構成に統一する
+    keep_names = [d['name'] for d in STORE_DEFS]
+    extra_stores = Store.query.filter(
+        Store.tenant_id == tid, Store.is_active == True,
+        ~Store.name.in_(keep_names)).all()
+    for es in extra_stores:
+        es.is_active = False
+    db.session.commit()
     for s in stores:
         init_default_media_types(s.id)
 
