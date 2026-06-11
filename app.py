@@ -2929,6 +2929,79 @@ def contract_document_edit(rid):
                            property_name=rec.property_name or '')
 
 
+@app.route("/contract-customers/<int:rid>/doc-edit/<int:tpl_id>")
+@login_required
+@block_super_admin
+def contract_doc_cell_edit(rid, tpl_id):
+    """帳票をツール上でセル直接編集する画面（Excelレイアウト再現＋contenteditable）"""
+    import base64 as _b64
+    allowed_ids = get_allowed_store_ids()
+    rec = ApplicationRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed_ids:
+        return "権限がありません", 403
+    tid = _doc_tenant_id()
+    r = DocTemplate.query.filter_by(id=tpl_id, tenant_id=tid, is_active=True).first_or_404()
+    saved_vals, ov_all = _contract_saved_doc(rid)
+    values = _doc_resolve_values(r, tid, saved_vals)
+    ov = (ov_all or {}).get(str(tpl_id))
+    overrides = ov if isinstance(ov, dict) else {}
+    try:
+        raw = _b64.standard_b64decode(r.file_b64.encode())
+        filled = _xlsx_fill(raw, values)  # 上書きは編集画面側で表示時に重ねる
+        html = _xlsx_to_print_html(filled, r.name or '契約書類', editable=True,
+                                   overrides=overrides, rid=rid, tpl_id=tpl_id)
+    except Exception as e:
+        return f"編集画面の生成に失敗しました: {e}", 500
+    resp = make_response(html)
+    resp.headers['Content-Type'] = 'text/html; charset=utf-8'
+    return resp
+
+
+@app.route("/api/contract-customers/<int:rid>/doc-overrides/<int:tpl_id>", methods=["POST"])
+@login_required
+def api_contract_doc_overrides(rid, tpl_id):
+    """帳票のセル直接編集の内容を保存（顧客×帳票ごと）"""
+    allowed_ids = get_allowed_store_ids()
+    rec = ApplicationRecord.query.get_or_404(rid)
+    if rec.store_id not in allowed_ids:
+        return jsonify({'error': '権限がありません'}), 403
+    cur_user = AppUser.query.get(session.get('app_user_id'))
+    if cur_user and cur_user.role == 'staff' and rec.staff_id != cur_user.staff_id:
+        return jsonify({'error': '権限がありません'}), 403
+    payload = request.get_json() or {}
+    ov = payload.get('overrides')
+    if not isinstance(ov, dict):
+        return jsonify({'error': '不正なデータです'}), 400
+    clean = {}
+    for k, v in list(ov.items())[:2000]:
+        if isinstance(k, str) and re.fullmatch(r'\d+:\d+:\d+', k):
+            clean[k] = str(v)[:10000]
+    values, ov_all = _contract_saved_doc(rid)
+    ov_all = ov_all if isinstance(ov_all, dict) else {}
+    if clean:
+        ov_all[str(tpl_id)] = clean
+    else:
+        ov_all.pop(str(tpl_id), None)
+    save_data = {'v': 2, 'values': values}
+    if ov_all:
+        save_data['overrides'] = ov_all
+    doc = ContractDocument.query.filter_by(application_id=rid).first()
+    if not doc:
+        doc = ContractDocument(application_id=rid, store_id=rec.store_id)
+        db.session.add(doc)
+    doc.data = json.dumps(save_data, ensure_ascii=False)
+    doc.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'status': 'ok', 'count': len(clean)})
+
+
+@app.route("/api/ai-status")
+@login_required
+def api_ai_status():
+    """AI機能の設定診断（APIキーが設定済みかのみ返す。キー自体は返さない）"""
+    return jsonify({'configured': bool(os.getenv("ANTHROPIC_API_KEY"))})
+
+
 @app.route("/api/contract-customers/<int:rid>/document-data", methods=["GET"])
 @login_required
 def api_contract_document_get(rid):
@@ -2990,6 +3063,11 @@ def api_contract_document_save(rid):
         save_data = payload
     else:
         save_data = {'v': 2, 'values': payload}
+    # セル直接編集（overrides）は別エンドポイント管理のため、既存分を維持する
+    if 'overrides' not in save_data:
+        _vals, _ov = _contract_saved_doc(rid)
+        if _ov:
+            save_data['overrides'] = _ov
     doc = ContractDocument.query.filter_by(application_id=rid).first()
     if not doc:
         doc = ContractDocument(application_id=rid, store_id=rec.store_id)
@@ -3186,9 +3264,10 @@ def _xlsx_extract_tags(xlsx_bytes):
     return tags
 
 
-def _xlsx_fill(xlsx_bytes, values):
+def _xlsx_fill(xlsx_bytes, values, overrides=None):
     """{{タグ}} を values[タグ] で置換した xlsx バイト列を返す。
-    セル全体が単一タグかつ値が数値ならば数値として書き込む（合計式などのため）。"""
+    セル全体が単一タグかつ値が数値ならば数値として書き込む（合計式などのため）。
+    overrides: {"シート番号:行:列": テキスト} のセル単位上書き（ツール上の直接編集）。タグ置換後に適用。"""
     import io
     from openpyxl import load_workbook
     wb = load_workbook(io.BytesIO(xlsx_bytes), data_only=False)
@@ -3215,6 +3294,18 @@ def _xlsx_fill(xlsx_bytes, values):
                         rv = values.get(k, '')
                         return '' if rv is None else str(rv)
                     cell.value = _DOC_TAG_RE.sub(_repl, v)
+    if overrides:
+        for k, txt in overrides.items():
+            try:
+                si, r_, c_ = (int(x) for x in str(k).split(':'))
+                cell = wb.worksheets[si].cell(row=r_, column=c_)
+                sval = str(txt)
+                if sval != '' and re.fullmatch(r'-?\d+(\.\d+)?', sval):
+                    cell.value = float(sval) if '.' in sval else int(sval)
+                else:
+                    cell.value = sval
+            except Exception:
+                continue
     out = io.BytesIO()
     wb.save(out)
     return out.getvalue()
@@ -3259,9 +3350,10 @@ def _xlsx_collect_images(ws):
     return out
 
 
-def _xlsx_to_print_html(xlsx_bytes, title):
+def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=None, tpl_id=None):
     """穴埋め済みxlsxを、ブラウザでそのまま印刷できるHTMLに変換する。
-    結合セル・列幅・行高・罫線・配置・太字・埋め込み画像（電子印鑑）をできる限り再現する。"""
+    結合セル・列幅・行高・罫線・配置・太字・埋め込み画像（電子印鑑）をできる限り再現する。
+    editable=True でセル直接編集モード（contenteditable + 保存/出力ツールバー）になる。"""
     import io as _io
     from openpyxl import load_workbook
     from openpyxl.utils import get_column_letter
@@ -3270,13 +3362,26 @@ def _xlsx_to_print_html(xlsx_bytes, title):
         return (str(s).replace('&', '&amp;').replace('<', '&lt;')
                 .replace('>', '&gt;').replace('\n', '<br>'))
 
+    def _attr(s):
+        return (str(s).replace('&', '&amp;').replace('<', '&lt;')
+                .replace('>', '&gt;').replace('"', '&quot;'))
+
+    overrides = overrides or {}
     wb = load_workbook(_io.BytesIO(xlsx_bytes), data_only=False)
     sheets_html = []
-    for ws in wb.worksheets:
+    for si, ws in enumerate(wb.worksheets):
         if ws.sheet_state != 'visible':
             continue
         max_row = min(ws.max_row or 1, 500)
         max_col = min(ws.max_column or 1, 60)
+        imgs = _xlsx_collect_images(ws)
+        for g in imgs:
+            # 画像（電子印鑑）がデータ範囲外にある場合も描画されるよう範囲を広げる
+            max_row = min(max(max_row, g['r'] + 1), 500)
+            max_col = min(max(max_col, g['c'] + 1), 60)
+            if g['to']:
+                max_row = min(max(max_row, g['to'][2]), 500)
+                max_col = min(max(max_col, g['to'][0]), 60)
         merged, skip = {}, set()
         for rng in ws.merged_cells.ranges:
             merged[(rng.min_row, rng.min_col)] = (rng.max_row - rng.min_row + 1,
@@ -3337,12 +3442,20 @@ def _xlsx_to_print_html(xlsx_bytes, title):
                 except Exception:
                     pass
                 v = cell.value
-                tds.append(f'<td{attrs} style="{";".join(st)}">{_esc(v) if v is not None else ""}</td>')
+                if editable:
+                    k = f'{si}:{rr}:{cc}'
+                    base = '' if v is None else str(v)
+                    disp = overrides.get(k, base)
+                    attrs += (f' contenteditable="true" data-k="{k}"'
+                              f' data-orig="{_attr(base)}"')
+                    tds.append(f'<td{attrs} style="{";".join(st)}">{_esc(disp) if disp != "" else ""}</td>')
+                else:
+                    tds.append(f'<td{attrs} style="{";".join(st)}">{_esc(v) if v is not None else ""}</td>')
             rows.append(f'<tr style="height:{round(h * 1.33)}px">{"".join(tds)}</tr>')
 
         # 埋め込み画像（電子印鑑など）をテーブル上に絶対配置で重ねる
         img_html = ''
-        for g in _xlsx_collect_images(ws):
+        for g in imgs:
             if g['c'] >= max_col or g['r'] >= max_row:
                 continue
             left = sum(col_px[0:g['c']]) + g['coloff']
@@ -3367,22 +3480,101 @@ def _xlsx_to_print_html(xlsx_bytes, title):
             sheets_html.append(table_html)
 
     body = '<div class="pagebreak"></div>'.join(sheets_html) or '<p>シートがありません</p>'
+    css = ('<style>'
+           "body{font-family:'Yu Gothic','Meiryo',sans-serif;margin:8mm;}"
+           'table.sheet{border-collapse:collapse;table-layout:fixed;margin-bottom:16px;}'
+           'td{font-size:12px;padding:1px 3px;overflow:hidden;word-break:break-all;white-space:pre-wrap;}'
+           '.pagebreak{page-break-after:always;}'
+           '.toolbar{position:fixed;top:8px;right:8px;z-index:10;display:flex;gap:8px;align-items:center;}'
+           '.tb-btn{padding:9px 16px;font-size:13px;font-weight:bold;border:none;border-radius:8px;'
+           'cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);}'
+           '@page{size:auto;margin:0;}'  # 印刷時のブラウザ既定ヘッダー(データ名/URL/日付)を消す
+           '@media print{.toolbar,.edit-hint{display:none;}body{margin:0;padding:6mm;}'
+           'td[contenteditable]{outline:none!important;}}'
+           + ('td[contenteditable]{cursor:text;}'
+              'td[contenteditable]:hover{background:#F0FDFA;}'
+              'td[contenteditable]:focus{outline:2px solid #0D9488;outline-offset:-2px;background:#F0FDFA;}'
+              'td[contenteditable].changed{background:#FEF9C3;}'
+              '.edit-hint{position:fixed;top:8px;left:8px;z-index:10;background:#0F766E;color:#fff;'
+              'font-size:12px;font-weight:bold;border-radius:8px;padding:8px 14px;box-shadow:0 2px 8px rgba(0,0,0,.2);}'
+              '#save-status{font-size:12px;font-weight:bold;color:#0F766E;background:#CCFBF1;'
+              'border-radius:6px;padding:6px 10px;display:none;}' if editable else '')
+           + '</style>')
+    if not editable:
+        toolbar = ('<div class="toolbar"><button onclick="window.print()" class="tb-btn" '
+                   'style="background:#0D9488;color:#fff;">🖨 印刷する</button></div>')
+        script = '<script>window.addEventListener("load",()=>setTimeout(()=>window.print(),500));</script>'
+    else:
+        toolbar = (
+            '<div class="edit-hint">✏️ セルをクリックして直接編集できます（編集セルは黄色表示）。保存すると印刷・PDF・Excelすべてに反映されます。</div>'
+            '<div class="toolbar">'
+            '<span id="save-status"></span>'
+            '<button onclick="saveEdits()" class="tb-btn" style="background:#0D9488;color:#fff;">💾 保存</button>'
+            '<button onclick="outDoc(\'print\')" class="tb-btn" style="background:#fff;color:#374151;border:1px solid #d1d5db;">🖨 印刷</button>'
+            '<button onclick="outDoc(\'pdf\')" class="tb-btn" style="background:#fff;color:#374151;border:1px solid #d1d5db;">📄 PDF</button>'
+            '<button onclick="outDoc(\'excel\')" class="tb-btn" style="background:#fff;color:#374151;border:1px solid #d1d5db;">⬇ Excel</button>'
+            '</div>')
+        script = (
+            '<script>\n'
+            f'const RID={int(rid)},TPL={int(tpl_id)};\n'
+            f'const TITLE={json.dumps(str(title), ensure_ascii=False)};\n'
+            'let DIRTY=false;\n'
+            'function norm(s){return String(s==null?"":s).replace(/\\u00a0/g," ").replace(/\\r/g,"").replace(/\\n+$/,"");}\n'
+            'function collectOverrides(){const o={};document.querySelectorAll("td[data-k]").forEach(td=>{'
+            'const cur=norm(td.innerText),orig=norm(td.dataset.orig||"");'
+            'if(cur!==orig)o[td.dataset.k]=cur;});return o;}\n'
+            'function markChanged(td){const cur=norm(td.innerText),orig=norm(td.dataset.orig||"");'
+            'td.classList.toggle("changed",cur!==orig);}\n'
+            'document.addEventListener("input",ev=>{const td=ev.target.closest&&ev.target.closest("td[data-k]");'
+            'if(td){DIRTY=true;markChanged(td);}});\n'
+            'document.addEventListener("DOMContentLoaded",()=>{document.querySelectorAll("td[data-k]").forEach(markChanged);});\n'
+            'function setStatus(msg,ok=true){const el=document.getElementById("save-status");'
+            'el.textContent=msg;el.style.display="inline-block";'
+            'el.style.background=ok?"#CCFBF1":"#FEE2E2";el.style.color=ok?"#0F766E":"#B91C1C";'
+            'if(ok)setTimeout(()=>{el.style.display="none";},4000);}\n'
+            'async function saveEdits(silent){\n'
+            '  try{\n'
+            f'    const r=await fetch(`/api/contract-customers/${{RID}}/doc-overrides/${{TPL}}`,'
+            '{method:"POST",headers:{"Content-Type":"application/json"},'
+            'body:JSON.stringify({overrides:collectOverrides()})});\n'
+            '    if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.error||"保存に失敗しました");}\n'
+            '    DIRTY=false; if(!silent)setStatus("保存しました");\n'
+            '    return true;\n'
+            '  }catch(e){setStatus(e.message,false);return false;}\n'
+            '}\n'
+            'async function outDoc(kind){\n'
+            '  const ok=await saveEdits(true); if(!ok)return;\n'
+            '  setStatus(kind==="print"?"印刷ビューを生成中…":(kind==="pdf"?"PDFを生成中…":"Excelを生成中…"));\n'
+            '  const body=JSON.stringify({application_id:RID});\n'
+            '  try{\n'
+            '    if(kind==="print"){\n'
+            f'      const r=await fetch(`/api/doc-templates/${{TPL}}/print-view`,'
+            '{method:"POST",headers:{"Content-Type":"application/json"},body});\n'
+            '      if(!r.ok)throw new Error("生成に失敗しました");\n'
+            '      const h=await r.text();const w=window.open("","_blank");\n'
+            '      if(!w)throw new Error("ポップアップがブロックされました");\n'
+            '      w.document.open();w.document.write(h);w.document.close();setStatus("印刷ビューを開きました");\n'
+            '    }else{\n'
+            '      const ep=kind==="pdf"?"pdf":"render";\n'
+            f'      const r=await fetch(`/api/doc-templates/${{TPL}}/`+ep,'
+            '{method:"POST",headers:{"Content-Type":"application/json"},body});\n'
+            '      if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.error||"出力に失敗しました");}\n'
+            '      const blob=await r.blob();const url=URL.createObjectURL(blob);\n'
+            '      const a=document.createElement("a");a.href=url;\n'
+            '      a.download=TITLE+(kind==="pdf"?".pdf":".xlsx");\n'
+            '      document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);\n'
+            '      setStatus("ダウンロードしました");\n'
+            '    }\n'
+            '  }catch(e){setStatus(e.message,false);}\n'
+            '}\n'
+            'window.addEventListener("beforeunload",ev=>{if(DIRTY){ev.preventDefault();ev.returnValue="";}});\n'
+            '</script>')
     return ('<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">'
             f'<title>{_esc(title)}</title>'
-            '<style>'
-            "body{font-family:'Yu Gothic','Meiryo',sans-serif;margin:8mm;}"
-            'table.sheet{border-collapse:collapse;table-layout:fixed;margin-bottom:16px;}'
-            'td{font-size:12px;padding:1px 3px;overflow:hidden;word-break:break-all;white-space:pre-wrap;}'
-            '.pagebreak{page-break-after:always;}'
-            '.toolbar{position:fixed;top:8px;right:8px;z-index:10;}'
-            '@page{size:auto;margin:0;}'  # 印刷時のブラウザ既定ヘッダー(データ名/URL/日付)を消す
-            '@media print{.toolbar{display:none;}body{margin:0;padding:6mm;}}'
-            '</style></head><body>'
-            '<div class="toolbar"><button onclick="window.print()" '
-            'style="padding:9px 20px;font-size:14px;font-weight:bold;background:#0D9488;color:#fff;'
-            'border:none;border-radius:8px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);">🖨 印刷する</button></div>'
+            f'{css}</head><body>'
+            f'{toolbar}'
             f'{body}'
-            '<script>window.addEventListener("load",()=>setTimeout(()=>window.print(),500));</script>'
+            f'{script}'
             '</body></html>')
 
 
@@ -3442,6 +3634,14 @@ def _xlsx_to_pdf(xlsx_bytes, title):
             continue
         max_row = min(ws.max_row or 1, 500)
         max_col = min(ws.max_column or 1, 60)
+        imgs = _xlsx_collect_images(ws) if use_images else []
+        for g in imgs:
+            # 画像（電子印鑑）がデータ範囲外にある場合も入るよう範囲を広げる
+            max_row = min(max(max_row, g['r'] + 1), 500)
+            max_col = min(max(max_col, g['c'] + 1), 60)
+            if g['to']:
+                max_row = min(max(max_row, g['to'][2]), 500)
+                max_col = min(max(max_col, g['to'][0]), 60)
         merged, skip = {}, set()
         for rng in ws.merged_cells.ranges:
             merged[(rng.min_row, rng.min_col)] = (rng.max_row, rng.max_col)
@@ -3503,7 +3703,7 @@ def _xlsx_to_pdf(xlsx_bytes, title):
                 styles.append(('SPAN', (c0 - 1, r0 - 1),
                                (min(c1, max_col) - 1, min(r1, max_row) - 1)))
 
-        for g in (_xlsx_collect_images(ws) if use_images else []):
+        for g in imgs:
             r0, c0 = g['r'] + 1, g['c'] + 1
             if r0 > max_row or c0 > max_col:
                 continue
@@ -3604,6 +3804,66 @@ def _doc_company_data(tenant_id):
     merged = dict(_doc_company_manual(tenant_id))
     merged.update(_company_profile_doc_dict())
     return merged
+
+
+def _doc_resolve_values(r, tid, case_values):
+    """テンプレートのmappingに従い、会社情報＋案件値から差し込み値を解決する"""
+    try:
+        mapping = json.loads(r.mapping) if r.mapping else {}
+    except Exception:
+        mapping = {}
+    company = _doc_company_data(tid)
+    values = {}
+    for tag, m in mapping.items():
+        m = m or {}
+        if m.get('scope') == 'company':
+            values[tag] = company.get(m.get('company_key') or tag, '')
+        else:
+            values[tag] = case_values.get(tag, '')
+    for k, v in case_values.items():
+        values.setdefault(k, v)
+    return values
+
+
+def _contract_saved_doc(rid):
+    """契約書類の保存済みデータを返す: (案件値dict, セル上書きdict{tpl_id(str): {k: text}})"""
+    doc = ContractDocument.query.filter_by(application_id=rid).first()
+    values, overrides = {}, {}
+    if doc and doc.data:
+        try:
+            saved = json.loads(doc.data)
+            if isinstance(saved, dict):
+                if saved.get('v') == 2:
+                    values = saved.get('values') or {}
+                    ov = saved.get('overrides')
+                    overrides = ov if isinstance(ov, dict) else {}
+                elif isinstance(saved.get('values'), dict):
+                    values = saved['values']
+                else:
+                    values = saved
+        except Exception:
+            pass
+    return values, overrides
+
+
+def _doc_output_context(tpl_id, payload):
+    """帳票出力エンドポイント共通の前処理。
+    payloadのapplication_idがあれば保存済みの値とセル上書きを読み込み、POSTされた値を優先で重ねる。
+    返り値: (case_values, overrides|None)"""
+    case_values = payload.get('values') or {}
+    overrides = None
+    app_id = payload.get('application_id')
+    if app_id:
+        try:
+            rec = ApplicationRecord.query.get(int(app_id))
+        except Exception:
+            rec = None
+        if rec and rec.store_id in get_allowed_store_ids():
+            saved_vals, ov_all = _contract_saved_doc(rec.id)
+            case_values = {**saved_vals, **case_values}
+            ov = (ov_all or {}).get(str(tpl_id))
+            overrides = ov if isinstance(ov, dict) and ov else None
+    return case_values, overrides
 
 
 def _doc_default_mapping(tags, company_keys):
@@ -3915,28 +4175,13 @@ def api_doc_template_render(tpl_id):
     from urllib.parse import quote as _urlquote
     tid = _doc_tenant_id()
     r = DocTemplate.query.filter_by(id=tpl_id, tenant_id=tid, is_active=True).first_or_404()
-    try:
-        mapping = json.loads(r.mapping) if r.mapping else {}
-    except Exception:
-        mapping = {}
     payload = request.get_json() or {}
-    case_values = payload.get('values') or {}
-    company = _doc_company_data(tid)
-
-    values = {}
-    for tag, m in mapping.items():
-        m = m or {}
-        if m.get('scope') == 'company':
-            values[tag] = company.get(m.get('company_key') or tag, '')
-        else:
-            values[tag] = case_values.get(tag, '')
-    # mappingに無いタグも case_values から補完
-    for k, v in case_values.items():
-        values.setdefault(k, v)
+    case_values, overrides = _doc_output_context(tpl_id, payload)
+    values = _doc_resolve_values(r, tid, case_values)
 
     try:
         raw = _b64.standard_b64decode(r.file_b64.encode())
-        filled = _xlsx_fill(raw, values)
+        filled = _xlsx_fill(raw, values, overrides)
     except Exception as e:
         return jsonify({'error': f'出力に失敗しました: {e}'}), 500
 
@@ -3957,25 +4202,12 @@ def api_doc_template_print_view(tpl_id):
     import base64 as _b64
     tid = _doc_tenant_id()
     r = DocTemplate.query.filter_by(id=tpl_id, tenant_id=tid, is_active=True).first_or_404()
-    try:
-        mapping = json.loads(r.mapping) if r.mapping else {}
-    except Exception:
-        mapping = {}
     payload = request.get_json() or {}
-    case_values = payload.get('values') or {}
-    company = _doc_company_data(tid)
-    values = {}
-    for tag, m in mapping.items():
-        m = m or {}
-        if m.get('scope') == 'company':
-            values[tag] = company.get(m.get('company_key') or tag, '')
-        else:
-            values[tag] = case_values.get(tag, '')
-    for k, v in case_values.items():
-        values.setdefault(k, v)
+    case_values, overrides = _doc_output_context(tpl_id, payload)
+    values = _doc_resolve_values(r, tid, case_values)
     try:
         raw = _b64.standard_b64decode(r.file_b64.encode())
-        filled = _xlsx_fill(raw, values)
+        filled = _xlsx_fill(raw, values, overrides)
         html = _xlsx_to_print_html(filled, r.name or '契約書類')
     except Exception as e:
         return jsonify({'error': f'印刷ビューの生成に失敗しました: {e}'}), 500
@@ -3993,25 +4225,12 @@ def api_doc_template_pdf(tpl_id):
     from urllib.parse import quote as _urlquote
     tid = _doc_tenant_id()
     r = DocTemplate.query.filter_by(id=tpl_id, tenant_id=tid, is_active=True).first_or_404()
-    try:
-        mapping = json.loads(r.mapping) if r.mapping else {}
-    except Exception:
-        mapping = {}
     payload = request.get_json() or {}
-    case_values = payload.get('values') or {}
-    company = _doc_company_data(tid)
-    values = {}
-    for tag, m in mapping.items():
-        m = m or {}
-        if m.get('scope') == 'company':
-            values[tag] = company.get(m.get('company_key') or tag, '')
-        else:
-            values[tag] = case_values.get(tag, '')
-    for k, v in case_values.items():
-        values.setdefault(k, v)
+    case_values, overrides = _doc_output_context(tpl_id, payload)
+    values = _doc_resolve_values(r, tid, case_values)
     try:
         raw = _b64.standard_b64decode(r.file_b64.encode())
-        filled = _xlsx_fill(raw, values)
+        filled = _xlsx_fill(raw, values, overrides)
         pdf = _xlsx_to_pdf(filled, r.name or '契約書類')
     except Exception as e:
         return jsonify({'error': f'PDF出力に失敗しました: {e}'}), 500

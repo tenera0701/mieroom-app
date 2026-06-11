@@ -191,6 +191,7 @@ function renderDownloadList(){
     return `<div class="tpl-dl-row">
       <div class="tpl-dl-name">${esc(t.name)}</div>
       <div class="tpl-dl-tags">${badges||'<span style="font-size:11px;color:#9ca3af;">タグなし</span>'}</div>
+      <button class="btn btn-purple" onclick="editTpl(${t.id})" title="ツール上で帳票のセルを直接編集（編集内容は保存され、印刷・PDF・Excelに反映）">✏️ 編集</button>
       <button class="btn btn-light" onclick="printTpl(${t.id},'${esc(t.name)}')" title="ツール上でそのまま印刷（Excel不要）">🖨 印刷</button>
       <button class="btn btn-light" onclick="downloadPdf(${t.id},'${esc(t.name)}')" title="PDFをダウンロード（Excel不要）">📄 PDF</button>
       <button class="btn btn-save btn-sm" onclick="downloadTpl(${t.id},'${esc(t.name)}')">⬇ Excel</button>
@@ -297,12 +298,25 @@ async function saveAll(){
   }catch(_){ showAlert('保存に失敗しました。','error'); }
 }
 
+async function editTpl(tplId){
+  // 編集画面は保存済みの値を読むため、先に現在の入力値を保存してから開く
+  const values=collectValues();
+  try{
+    await fetch(`/api/contract-customers/${RID}/document-data`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({v:2,values})
+    });
+    VALUES=values;
+  }catch(_){}
+  window.open(`/contract-customers/${RID}/doc-edit/${tplId}`,'_blank');
+}
+
 async function printTpl(tplId, tplName){
   const values=collectValues();
   showAlert('印刷ビューを生成中…','info');
   try{
     const r=await fetch(`/api/doc-templates/${tplId}/print-view`,{
-      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values})
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values,application_id:RID})
     });
     if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.error||'生成に失敗しました'); }
     const html=await r.text();
@@ -318,7 +332,7 @@ async function downloadPdf(tplId, tplName){
   showAlert('PDFを生成中…','info');
   try{
     const r=await fetch(`/api/doc-templates/${tplId}/pdf`,{
-      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values})
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values,application_id:RID})
     });
     if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.error||'PDF出力失敗'); }
     const blob=await r.blob();
@@ -335,7 +349,7 @@ async function downloadTpl(tplId, tplName){
   showAlert('Excelを生成中…','info');
   try{
     const r=await fetch(`/api/doc-templates/${tplId}/render`,{
-      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values})
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values,application_id:RID})
     });
     if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.error||'出力失敗'); }
     const blob=await r.blob();
