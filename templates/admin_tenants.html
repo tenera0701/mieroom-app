@@ -390,6 +390,15 @@
           class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
         <p class="text-xs text-gray-400 mt-1">「🔓 解除」ボタンで有効化すると自動で今日の日付がセットされます</p>
       </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">AI利用上限（月間回数）</label>
+        <input id="e-ai-limit" type="number" min="-1" step="1"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500">
+        <p class="text-xs text-gray-400 mt-1">
+          空欄＝既定値 / <strong>0</strong>＝AI機能停止 / <strong>-1</strong>＝無制限。
+          今月の利用：<span id="e-ai-used" class="font-bold text-gray-600">—</span>
+        </p>
+      </div>
       <div class="flex items-center gap-2">
         <input id="e-active" type="checkbox" class="w-4 h-4 accent-teal-600">
         <label class="text-sm text-gray-700">有効</label>
@@ -545,6 +554,7 @@ function renderSection(listId, filtered, label) {
               <span>オーナー：<strong class="text-gray-700">${escHtml(t.owner_username || '未設定')}</strong>${t.owner_email ? ` (${escHtml(t.owner_email)})` : ''}</span>
               <span>登録日：<strong class="text-gray-700">${t.created_at || '—'}</strong></span>
               <span>契約開始日：<strong class="${t.contract_start_date ? 'text-teal-700' : 'text-gray-400'}">${t.contract_start_date || '未設定'}</strong></span>
+              <span>${aiUsageLabel(t)}</span>
               ${t.trial_ends_at ? `<span>${trialEndLabel(t)}</span>` : ''}
             </div>
           </div>
@@ -571,6 +581,21 @@ function toggleClientSection(key) {
 
 function escHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// AI利用上限の表示ラベル
+function aiLimitValue(t) {
+  // 実効上限値（null=既定値）。-1は無制限
+  return (t.ai_monthly_limit === null || t.ai_monthly_limit === undefined)
+    ? t.ai_default_limit : t.ai_monthly_limit;
+}
+function aiUsageLabel(t) {
+  const used = t.ai_used_this_month || 0;
+  const lim = aiLimitValue(t);
+  if (lim < 0) return `AI利用（今月）：<strong class="text-gray-700">${used}回 / 無制限</strong>`;
+  const over = used >= lim;
+  const isDefault = (t.ai_monthly_limit === null || t.ai_monthly_limit === undefined);
+  return `AI利用（今月）：<strong class="${over ? 'text-red-600' : 'text-gray-700'}">${used} / ${lim}回</strong>${isDefault ? '<span class="text-gray-400">（既定）</span>' : ''}${lim === 0 ? '<span class="text-red-500 font-bold">（停止中）</span>' : ''}`;
 }
 
 // 新規作成
@@ -686,6 +711,10 @@ function openEditModal(tid) {
   document.getElementById('e-plan').value = (t.plan === 'premium' ? 'premium' : 'standard');
   _eOpts = (t.options || []).slice(); renderOptList('e');
   document.getElementById('e-contract-start').value = t.contract_start_date || '';
+  const aiInput = document.getElementById('e-ai-limit');
+  aiInput.value = (t.ai_monthly_limit === null || t.ai_monthly_limit === undefined) ? '' : t.ai_monthly_limit;
+  aiInput.placeholder = `空欄＝既定（${t.ai_default_limit}回）`;
+  document.getElementById('e-ai-used').textContent = `${t.ai_used_this_month || 0}回`;
   document.getElementById('e-active').checked = t.is_active;
   document.getElementById('e-error').classList.add('hidden');
   // オーナーフィールドをクリア
@@ -799,12 +828,14 @@ async function updateTenant() {
   const errEl = document.getElementById('e-error');
   errEl.classList.add('hidden');
   const tid = document.getElementById('e-id').value;
+  const aiLimitRaw = document.getElementById('e-ai-limit').value.trim();
   const body = {
     name: document.getElementById('e-name').value.trim(),
     plan: document.getElementById('e-plan').value,
     options: _eOpts.slice(),
     is_active: document.getElementById('e-active').checked,
     contract_start_date: document.getElementById('e-contract-start').value || null,
+    ai_monthly_limit: aiLimitRaw === '' ? null : parseInt(aiLimitRaw, 10),
   };
   if (!body.name) { errEl.textContent = '会社名を入力してください'; errEl.classList.remove('hidden'); return; }
   const res = await fetch(`/api/tenants/${tid}`, {

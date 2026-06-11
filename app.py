@@ -164,6 +164,8 @@ class Tenant(db.Model):
     trial_ends_at = db.Column(db.DateTime, nullable=True)  # トライアル終了日時
     subscription_status = db.Column(db.String(20), default='trial')  # trial / active / locked / cancelled
     contract_start_date = db.Column(db.Date, nullable=True)  # 契約開始日
+    # AI（従量課金API）の月間利用上限。NULL=既定値 / -1=無制限 / 0=停止
+    ai_monthly_limit = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
@@ -188,6 +190,90 @@ PLAN_OPTION_DEFS = [
     {'key': 'converter', 'name': '物件コンバータ',
      'desc': '物件を一度入力するだけでSUUMO／HOME\'S／at home等の規定フォーマットへ一斉出力できる「物件コンバータ」機能。AIによる物件コメント自動生成・ポータル別備考・入力チェックを搭載'},
 ]
+
+
+# ── AI利用制限（従量課金API） ──────────────────────────────
+AI_DEFAULT_MONTHLY_LIMIT = 100   # 既定の月間AI利用回数（テナント毎に管理画面から上書き可）
+
+# AI APIを使う機能の一覧（key は AiUsage.feature に保存）
+AI_FEATURE_DEFS = [
+    {'key': 'contract_extract',     'name': '契約書AI読み取り'},
+    {'key': 'doc_extract',          'name': '書類タグAI抽出'},
+    {'key': 'doc_extract_combined', 'name': '書類一括AI抽出'},
+    {'key': 'floorplan_import',     'name': '間取り図AI取込'},
+    {'key': 'property_comment',     'name': '物件コメントAI生成'},
+    {'key': 'hq_summary',           'name': '本部AIサマリー'},
+]
+
+
+class AiUsage(db.Model):
+    """AI（従量課金API）の月次利用カウンタ（テナント×機能×年月）"""
+    __tablename__ = 'ai_usage'
+    id = db.Column(db.Integer, primary_key=True)
+    tenant_id = db.Column(db.Integer, db.ForeignKey('tenant.id'), nullable=False)
+    year = db.Column(db.Integer, nullable=False)
+    month = db.Column(db.Integer, nullable=False)
+    feature = db.Column(db.String(40), nullable=False)
+    count = db.Column(db.Integer, default=0)
+
+
+def _ai_tenant_id():
+    uid = session.get('app_user_id')
+    u = AppUser.query.get(uid) if uid else None
+    return u.tenant_id if u else None
+
+
+def ai_monthly_used(tenant_id, year=None, month=None):
+    """テナントの当月（または指定年月）のAI利用回数合計"""
+    today = date.today()
+    y, m = year or today.year, month or today.month
+    rows = AiUsage.query.filter_by(tenant_id=tenant_id, year=y, month=m).all()
+    return sum(r.count or 0 for r in rows)
+
+
+def ai_monthly_limit_for(tenant):
+    """テナントの月間AI利用上限（NULL=既定値、負値=無制限）"""
+    if tenant is None or tenant.ai_monthly_limit is None:
+        return AI_DEFAULT_MONTHLY_LIMIT
+    return tenant.ai_monthly_limit
+
+
+def check_ai_limit():
+    """AI利用上限チェック。上限超過なら (jsonエラー, 429) を返し、利用可なら None。
+    super_admin（テナント無し）は制限対象外。"""
+    tid = _ai_tenant_id()
+    if not tid:
+        return None
+    limit = ai_monthly_limit_for(Tenant.query.get(tid))
+    if limit < 0:
+        return None
+    used = ai_monthly_used(tid)
+    if used >= limit:
+        return jsonify({
+            'error': f'AI機能の今月の利用上限（{limit}回）に達しました。上限の変更は運営までお問い合わせください。',
+            'ai_used': used, 'ai_limit': limit,
+        }), 429
+    return None
+
+
+def count_ai_usage(feature):
+    """AI API呼び出し成功時に月次カウンタを+1（失敗してもメイン処理は妨げない）"""
+    try:
+        tid = _ai_tenant_id()
+        if not tid:
+            return
+        today = date.today()
+        row = AiUsage.query.filter_by(tenant_id=tid, year=today.year,
+                                      month=today.month, feature=feature).first()
+        if not row:
+            row = AiUsage(tenant_id=tid, year=today.year, month=today.month,
+                          feature=feature, count=0)
+            db.session.add(row)
+        row.count = (row.count or 0) + 1
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"count_ai_usage error: {e}")
 
 
 def _tenant_active_stores(tenant_id):
@@ -1716,6 +1802,7 @@ def migrate_db():
             ('trial_ends_at', 'TIMESTAMP'),
             ('subscription_status', "VARCHAR(20) DEFAULT 'trial'"),
             ('contract_start_date', 'DATE'),
+            ('ai_monthly_limit', 'INTEGER'),
         ]),
     ]:
         cursor.execute(f"PRAGMA table_info({tbl})")
@@ -2099,6 +2186,7 @@ def migrate_postgres():
         ("tenant", "trial_ends_at",        "TIMESTAMP"),
         ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
         ("tenant", "contract_start_date",     "DATE"),
+        ("tenant", "ai_monthly_limit",        "INTEGER"),
         ("store",  "created_at",             "TIMESTAMP"),
         ("store",  "is_locked",              "BOOLEAN DEFAULT FALSE"),
         ("store",  "contract_start_date",    "DATE"),
@@ -2968,6 +3056,9 @@ def api_contract_extract_document(rid):
     rec = ApplicationRecord.query.get_or_404(rid)
     if rec.store_id not in allowed_ids:
         return jsonify({'error': '権限がありません'}), 403
+    _lim = check_ai_limit()
+    if _lim:
+        return _lim
 
     f = request.files.get('file')
     if not f or not f.filename:
@@ -3027,6 +3118,7 @@ def api_contract_extract_document(rid):
             messages=[{"role": "user", "content": [doc_block, {"type": "text", "text": prompt}]}],
         )
         text = "".join(getattr(b, 'text', '') for b in msg.content).strip()
+        count_ai_usage('contract_extract')
     except Exception as e:
         return jsonify({'error': f'AI読み取りに失敗しました: {e}'}), 502
 
@@ -3462,6 +3554,9 @@ def doc_generate_page(tpl_id):
 def api_doc_template_extract(tpl_id):
     """添付資料（契約書/顧客/物件のPDF・画像）から案件タグの値をAIで抽出"""
     import base64 as _b64
+    _lim = check_ai_limit()
+    if _lim:
+        return _lim
     tid = _doc_tenant_id()
     r = DocTemplate.query.filter_by(id=tpl_id, tenant_id=tid, is_active=True).first_or_404()
     try:
@@ -3549,6 +3644,7 @@ def api_doc_template_extract(tpl_id):
             messages=[{"role": "user", "content": content}],
         )
         text = "".join(getattr(b, 'text', '') for b in msg.content).strip()
+        count_ai_usage('doc_extract')
     except Exception as e:
         return jsonify({'error': f'AI読み取りに失敗しました: {e}'}), 502
 
@@ -3714,6 +3810,9 @@ def api_doc_extract_combined():
 
 def _api_doc_extract_combined_impl():
     import base64 as _b64
+    _lim = check_ai_limit()
+    if _lim:
+        return _lim
     tid = _doc_tenant_id()
     templates = DocTemplate.query.filter_by(tenant_id=tid, is_active=True).all()
     all_case_tags = {}
@@ -3812,6 +3911,7 @@ def _api_doc_extract_combined_impl():
             messages=[{"role": "user", "content": content}],
         )
         text = "".join(getattr(b, 'text', '') for b in msg.content).strip()
+        count_ai_usage('doc_extract_combined')
     except Exception as e:
         return jsonify({'error': f'AI読み取りに失敗しました: {e}'}), 502
 
@@ -4163,6 +4263,9 @@ def api_floorplans_ai_import():
         return jsonify({'error': '間取り作成はオプションプランです'}), 403
     if not os.getenv("ANTHROPIC_API_KEY"):
         return jsonify({'error': 'AI取込が未設定です（管理者にお問い合わせください）'}), 503
+    _lim = check_ai_limit()
+    if _lim:
+        return _lim
     data = request.get_json(silent=True) or {}
     img = (data.get('image') or '').strip()
     mime = data.get('mime') or 'image/png'
@@ -4203,6 +4306,7 @@ def api_floorplans_ai_import():
             messages=[{"role": "user", "content": [doc_block, {"type": "text", "text": prompt}]}],
         )
         text = "".join(getattr(b, 'text', '') for b in msg.content).strip()
+        count_ai_usage('floorplan_import')
     except Exception as e:
         return jsonify({'error': f'AI解析に失敗しました: {e}'}), 502
 
@@ -4495,6 +4599,9 @@ def api_property_ai_comment(pid):
         return jsonify({'error': '物件コンバータはオプションプランです'}), 403
     if not os.getenv("ANTHROPIC_API_KEY"):
         return jsonify({'error': 'AI生成が未設定です（管理者にお問い合わせください）'}), 503
+    _lim = check_ai_limit()
+    if _lim:
+        return _lim
     p = _get_owned_property(pid)
     if not p:
         return jsonify({'error': '物件が見つかりません'}), 404
@@ -4526,6 +4633,7 @@ def api_property_ai_comment(pid):
             messages=[{"role": "user", "content": [{"type": "text", "text": prompt}]}],
         )
         text = "".join(getattr(b, 'text', '') for b in msg.content).strip()
+        count_ai_usage('property_comment')
     except Exception as e:
         return jsonify({'error': f'AI生成に失敗しました: {e}'}), 502
     out = {'catch_copy': '', 'comment': ''}
@@ -11477,6 +11585,9 @@ def api_tenants_get():
             'owner_username': owner.username if owner else None,
             'owner_email': owner.email if owner else None,
             'created_at': t.created_at.strftime('%Y-%m-%d') if t.created_at else None,
+            'ai_monthly_limit': t.ai_monthly_limit,
+            'ai_default_limit': AI_DEFAULT_MONTHLY_LIMIT,
+            'ai_used_this_month': ai_monthly_used(t.id),
         })
     return jsonify(result)
 
@@ -11550,6 +11661,15 @@ def api_tenant_update(tid):
             tenant.contract_start_date = _dt.strptime(data['contract_start_date'], '%Y-%m-%d').date() if data['contract_start_date'] else None
         except Exception:
             pass
+    if 'ai_monthly_limit' in data:
+        v = data['ai_monthly_limit']
+        if v is None or v == '':
+            tenant.ai_monthly_limit = None   # 既定値に戻す
+        else:
+            try:
+                tenant.ai_monthly_limit = max(-1, int(v))
+            except Exception:
+                pass
     db.session.commit()
     return jsonify({'status': 'ok'})
 
@@ -13537,6 +13657,9 @@ def api_hq_ai_summary():
     """Claude APIで全店舗データのAIサマリーを生成"""
     if not is_premium_user():
         return jsonify({'error': 'premium required'}), 403
+    _lim = check_ai_limit()
+    if _lim:
+        return _lim
     year  = request.json.get('year',  date.today().year)
     month = request.json.get('month', date.today().month)
     store_ids = get_allowed_store_ids(ignore_active=True)
@@ -13572,6 +13695,7 @@ def api_hq_ai_summary():
             max_tokens=600,
             messages=[{"role": "user", "content": prompt}],
         )
+        count_ai_usage('hq_summary')
         return jsonify({'summary': msg.content[0].text})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
