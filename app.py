@@ -422,6 +422,20 @@ class PLRecord(db.Model):
     pl_insurance = db.Column(db.Float, default=0)      # 保険料
     pl_cloud = db.Column(db.Float, default=0)          # クラウド
 
+    @property
+    def net_profit(self):
+        """純利益。PLCustomValue優先で _pl_profit_for と整合する形で計算する。
+        （従来この属性は未定義で、PLデータがある場合にダッシュボードがクラッシュしていた）"""
+        try:
+            return _pl_profit_for([self], self.year, self.month)
+        except Exception:
+            ad = (self.ad_cost or 0) or sum(getattr(self, c, 0) or 0 for c in [
+                'suumo_cost', 'homes_cost', 'athome_cost', 'instagram_cost', 'tiktok_cost',
+                'google_ads_cost', 'line_cost', 'hp_cost', 'meo_cost', 'other_ad_cost'])
+            labor = (self.labor_cost or 0) or ((self.regular_salary or 0)
+                    + (self.parttime_salary or 0) + (self.commission_pay or 0))
+            return (self.revenue or 0) - ad - labor - (self.other_fixed or 0) - (self.other_variable or 0)
+
 
 class PLCustomItem(db.Model):
     """PLカスタム費用項目テンプレート（固定費・変動費・その他）"""
@@ -13561,6 +13575,364 @@ def api_hq_ai_summary():
         return jsonify({'summary': msg.content[0].text})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ══════════════════════════════════════════════════════════════
+#  デモアカウント用サンプルデータ生成（クライアント提示用）
+#  GET /admin/seed-demo?key=mieroom-demo-2026
+#  「株式会社デモ」テナントに 2026年1〜6月 のサンプルデータを投入する。
+#  冪等：再実行すると 2026 年のデモデータを作り直す。
+# ══════════════════════════════════════════════════════════════
+DEMO_SEED_KEY = "mieroom-demo-2026"
+DEMO_TENANT_USERNAME = "株式会社デモ"
+
+
+@app.route("/admin/seed-demo")
+def admin_seed_demo():
+    import random as _rnd
+    if request.args.get("key") != DEMO_SEED_KEY:
+        return jsonify({"error": "forbidden"}), 403
+
+    _rnd.seed(20260611)  # 決定的に生成
+    YEAR = 2026
+    MONTHS = list(range(1, 7))           # 1〜6月
+    PARTIAL_MONTH = 6                    # 6月は途中まで
+    PARTIAL_FACTOR = 0.45
+    TODAY = date(2026, 6, 11)
+
+    def yk(n):  # 1000円単位に丸め
+        return int(round(n / 1000.0)) * 1000
+
+    def mday(month, lo=1, hi=28):
+        hh = min(hi, TODAY.day) if month == PARTIAL_MONTH else hi
+        return date(YEAR, month, _rnd.randint(lo, max(lo, hh)))
+
+    # ── 1) デモテナント特定 ───────────────────────────────
+    demo_user = AppUser.query.filter_by(username=DEMO_TENANT_USERNAME).first()
+    if not demo_user or not demo_user.tenant_id:
+        return jsonify({"error": f"ユーザー '{DEMO_TENANT_USERNAME}' またはそのテナントが見つかりません"}), 404
+    tid = demo_user.tenant_id
+    tenant = Tenant.query.get(tid)
+    if tenant:
+        tenant.subscription_status = 'active'
+        tenant.is_active = True
+
+    # ── 2) 店舗（3店舗）find-or-create ────────────────────
+    STORE_DEFS = [
+        dict(name='渋谷店', rent=320000, parking_fee=28000, copier_fee=18000,
+             internet_fee=8000, consultant_fee=30000, insurance_fee=12000, cloud_fee=3980),
+        dict(name='新宿店', rent=380000, parking_fee=0, copier_fee=18000,
+             internet_fee=8000, consultant_fee=30000, insurance_fee=12000, cloud_fee=3980),
+        dict(name='横浜店', rent=250000, parking_fee=22000, copier_fee=15000,
+             internet_fee=7000, consultant_fee=20000, insurance_fee=10000, cloud_fee=3980),
+    ]
+    stores = []
+    for d in STORE_DEFS:
+        s = Store.query.filter_by(tenant_id=tid, name=d['name']).first()
+        if not s:
+            s = Store(tenant_id=tid, name=d['name'], is_active=True,
+                      contract_start_date=date(2026, 1, 1))
+            db.session.add(s)
+        for k, v in d.items():
+            setattr(s, k, v)
+        s.is_active = True
+        stores.append(s)
+    db.session.commit()
+    for s in stores:
+        init_default_media_types(s.id)
+
+    # ── 3) スタッフ find-or-create ───────────────────────
+    STAFF_DEFS = {
+        '渋谷店': [('田中 健太', '店長'), ('佐藤 美咲', '営業'), ('鈴木 大輔', '営業'), ('高橋 彩花', '営業')],
+        '新宿店': [('伊藤 翔太', '店長'), ('渡辺 由美', '営業'), ('山本 直樹', '営業')],
+        '横浜店': [('中村 拓也', '店長'), ('小林 麻衣', '営業'), ('加藤 さやか', '営業')],
+    }
+    store_staff = {}
+    for s in stores:
+        lst = []
+        for name, role in STAFF_DEFS[s.name]:
+            st = Staff.query.filter_by(store_id=s.id, name=name).first()
+            if not st:
+                st = Staff(store_id=s.id, name=name, role=role, is_active=True,
+                           hired_at=date(2025, 4, 1))
+                db.session.add(st)
+            st.is_active = True
+            st.role = role
+            lst.append(st)
+        store_staff[s.id] = lst
+    db.session.commit()
+
+    sids = [s.id for s in stores]
+    staff_ids = [st.id for lst in store_staff.values() for st in lst]
+
+    # ── 4) 既存2026デモデータを削除（冪等化） ──────────────
+    rep_ids = [r.id for r in DailyReport.query.filter(
+        DailyReport.store_id.in_(sids),
+        db.extract('year', DailyReport.report_date) == YEAR).all()]
+    if rep_ids:
+        DailyReportCustomer.query.filter(DailyReportCustomer.report_id.in_(rep_ids)).delete(synchronize_session=False)
+        DailyTaskCheck.query.filter(DailyTaskCheck.report_id.in_(rep_ids)).delete(synchronize_session=False)
+        DailyReport.query.filter(DailyReport.id.in_(rep_ids)).delete(synchronize_session=False)
+    SalesKPI.query.filter(SalesKPI.store_id.in_(sids), SalesKPI.year == YEAR).delete(synchronize_session=False)
+    PLRecord.query.filter(PLRecord.store_id.in_(sids), PLRecord.year == YEAR).delete(synchronize_session=False)
+    LeadMediaStat.query.filter(LeadMediaStat.store_id.in_(sids), LeadMediaStat.year == YEAR).delete(synchronize_session=False)
+    AdCost.query.filter(AdCost.store_id.in_(sids), AdCost.year == YEAR).delete(synchronize_session=False)
+    LeaveRecord.query.filter(LeaveRecord.store_id.in_(sids),
+                             db.extract('year', LeaveRecord.leave_date) == YEAR).delete(synchronize_session=False)
+    ApplicationRecord.query.filter(ApplicationRecord.store_id.in_(sids),
+                                   db.extract('year', ApplicationRecord.application_date) == YEAR).delete(synchronize_session=False)
+    Lead.query.filter(Lead.store_id.in_(sids)).delete(synchronize_session=False)
+    UncollectedPayment.query.filter(UncollectedPayment.store_id.in_(sids)).delete(synchronize_session=False)
+    db.session.commit()
+
+    # ── 5) マスタデータ ──────────────────────────────────
+    MEDIA = ['SUUMO', "HOME'S", 'at home', 'カナリー', 'スモッカ', 'SNS', 'HP', '紹介']
+    MEDIA_WEIGHT = {'SUUMO': 1.6, "HOME'S": 1.2, 'at home': 1.0,
+                    'カナリー': 0.7, 'スモッカ': 0.6, 'SNS': 0.9, 'HP': 0.5, '紹介': 0.4}
+    MEDIA_ADCOST = {'SUUMO': 180000, "HOME'S": 120000, 'at home': 90000,
+                    'カナリー': 45000, 'スモッカ': 30000, 'SNS': 50000, 'HP': 0, '紹介': 0}
+    PROP_PRE = ['グランドメゾン', 'パークサイド', 'リバーコート', 'サンハイツ', 'メゾン・ド・',
+                'ロイヤルパレス', 'シャトー', 'プレジール', 'アーバンライフ', 'セジュール']
+    TOWNS = ['桜丘', '神南', '本町', '緑が丘', '中央', '南口', '栄町', '若葉台', '元町', '伏見']
+    L_NAMES = ['佐藤', '鈴木', '高橋', '田中', '伊藤', '渡辺', '山本', '中村', '小林', '加藤',
+               '吉田', '山田', '佐々木', '松本', '井上', '木村', '林', '清水', '森', '池田']
+    G_NAMES = ['翔太', '美咲', '大輔', '彩', '健一', '由美', '拓也', '麻衣', '直樹', 'さやか',
+               '優子', '亮', '香織', '誠', '愛', '達也', '杏奈', '駿', '結衣', '陽介']
+    MGMT_CO = ['東京建物管理', '大東建託リーシング', 'レオパレス21', '積水ハウス不動産',
+               'ハウスメイト管理', '大和リビング', '三井不動産レジ']
+
+    def cust_name():
+        return f"{_rnd.choice(L_NAMES)} {_rnd.choice(G_NAMES)}"
+
+    def prop_name():
+        return f"{_rnd.choice(PROP_PRE)}{_rnd.choice(TOWNS)}"
+
+    counts = dict(kpi=0, app=0, pl=0, media=0, lead=0, report=0, leave=0, uncollected=0)
+
+    # ── 6) 月次データ生成 ────────────────────────────────
+    for s in stores:
+        staff_list = store_staff[s.id]
+        for month in MONTHS:
+            factor = PARTIAL_FACTOR if month == PARTIAL_MONTH else 1.0
+            store_revenue = 0
+            store_inq = 0
+            for st in staff_list:
+                is_mgr = st.role == '店長'
+                base_apps = _rnd.randint(4, 9) + (1 if is_mgr else 0)
+                apps = max(1, int(round(base_apps * factor)))
+                contracts = min(apps, max(0, int(round(_rnd.randint(3, 6) * factor))))
+                cancels = 1 if (_rnd.random() < 0.3 and apps > contracts) else 0
+                inquiries = int(round(_rnd.randint(38, 68) * factor))
+                visits = int(round(_rnd.randint(16, 30) * factor))
+                viewings = int(round(_rnd.randint(12, 24) * factor))
+                store_inq += inquiries
+
+                staff_sales = 0
+                life_c = move_c = fire_c = 0
+                made = 0
+                for i in range(apps):
+                    is_contract = i < contracts
+                    is_cancel = (not is_contract) and made == 0 and cancels and i == apps - 1
+                    rent = yk(_rnd.randint(68, 125) * 1000)
+                    brokerage = yk(rent * _rnd.uniform(0.85, 1.05))
+                    ad_amt = yk(_rnd.randint(40, 160) * 1000)
+                    has_opt = _rnd.random() < 0.4
+                    option_amt = yk(_rnd.choice([11000, 16500, 22000, 33000])) if has_opt else 0
+                    lifeline = _rnd.random() < 0.45
+                    moving = _rnd.random() < 0.35
+                    fire = _rnd.random() < 0.7
+                    app_d = mday(month, 1, 27)
+                    if is_cancel:
+                        status = 'キャンセル'
+                    elif is_contract:
+                        status = '契約'
+                    else:
+                        status = '申込'
+                    # 入金承認：過去月は承認済、6月は一部のみ
+                    if month < PARTIAL_MONTH:
+                        approved = (status != 'キャンセル')
+                    else:
+                        approved = (status == '契約' and _rnd.random() < 0.5)
+                    pay_d = app_d if approved else None
+                    rec = ApplicationRecord(
+                        store_id=s.id, staff_id=st.id, application_date=app_d,
+                        media=_rnd.choice(MEDIA), property_name=prop_name(),
+                        room_number=f"{_rnd.randint(1,9)}0{_rnd.randint(1,9)}",
+                        customer_name=cust_name(), rent=rent,
+                        contract_start_date=date(YEAR, month, min(28, app_d.day)),
+                        brokerage_fee=brokerage, option_amount=option_amt,
+                        ad_type='amount', ad_amount=ad_amt,
+                        lifeline=lifeline, moving=moving, fire_insurance=fire,
+                        status=status, review_status='ok' if status != 'キャンセル' else 'ng',
+                        ad_settled=approved, ad_approved=approved,
+                        brokerage_settled=approved, brokerage_approved=approved,
+                        option_settled=approved and has_opt, option_approved=approved and has_opt,
+                        ad_payment_date=pay_d, brokerage_payment_date=pay_d,
+                        option_payment_date=pay_d if has_opt else None,
+                        management_company=_rnd.choice(MGMT_CO),
+                    )
+                    db.session.add(rec)
+                    counts['app'] += 1
+                    if status != 'キャンセル':
+                        made += 1
+                    if is_contract:
+                        if lifeline: life_c += 1
+                        if moving: move_c += 1
+                        if fire: fire_c += 1
+                    if approved:
+                        amt = brokerage + ad_amt + (option_amt if has_opt else 0)
+                        staff_sales += amt
+                store_revenue += staff_sales
+
+                target = yk(max(staff_sales, (1200000 if is_mgr else 900000)) * _rnd.uniform(0.95, 1.15) * factor)
+                db.session.add(SalesKPI(
+                    staff_id=st.id, store_id=s.id, year=YEAR, month=month,
+                    inquiries=inquiries, store_visits=visits, viewings=viewings,
+                    applications=apps, contracts=contracts, cancellations=cancels,
+                    sales_amount=staff_sales, option_sales=yk(staff_sales * 0.05),
+                    estimated_sales=yk(staff_sales * _rnd.uniform(1.05, 1.25)),
+                    target_sales=target,
+                    fire_insurance_count=fire_c, lifeline_count=life_c, moving_count=move_c,
+                ))
+                counts['kpi'] += 1
+
+            # 媒体別月次統計
+            tot_w = sum(MEDIA_WEIGHT.values())
+            for media in MEDIA:
+                share = MEDIA_WEIGHT[media] / tot_w
+                m_inq = max(0, int(round(store_inq * share * _rnd.uniform(0.85, 1.15))))
+                m_visits = int(round(m_inq * _rnd.uniform(0.2, 0.35)))
+                m_apps = int(round(m_visits * _rnd.uniform(0.3, 0.5)))
+                m_contracts = int(round(m_apps * _rnd.uniform(0.5, 0.75)))
+                db.session.add(LeadMediaStat(
+                    store_id=s.id, year=YEAR, month=month, media=media,
+                    inquiries=m_inq, replies=int(round(m_inq * _rnd.uniform(0.6, 0.85))),
+                    line_added=int(round(m_inq * _rnd.uniform(0.3, 0.5))),
+                    visits=m_visits, applications=m_apps, contracts=m_contracts,
+                    cancellations=_rnd.randint(0, 1),
+                    estimated_sales=yk(m_contracts * _rnd.randint(180, 260) * 1000),
+                    actual_payment=yk(m_contracts * _rnd.randint(160, 230) * 1000),
+                    ad_cost=yk(MEDIA_ADCOST[media] * factor),
+                ))
+                counts['media'] += 1
+
+            # PL（損益）
+            ad_total = yk(sum(MEDIA_ADCOST.values()) * factor)
+            n_staff = len(staff_list)
+            regular = yk(n_staff * 285000)
+            parttime = yk(150000)
+            shahoken = yk((regular + parttime) * 0.15)
+            fixed_total = (s.rent + s.parking_fee + s.copier_fee + s.internet_fee
+                           + s.consultant_fee + s.insurance_fee + s.cloud_fee)
+            db.session.add(PLRecord(
+                store_id=s.id, year=YEAR, month=month,
+                revenue=store_revenue, gross_profit=store_revenue,
+                ad_cost=ad_total,
+                labor_cost=regular + parttime + shahoken,
+                regular_salary=regular, parttime_salary=parttime, commission_pay=shahoken,
+                other_fixed=0, other_variable=yk(store_revenue * 0.03),
+                brokerage_fee=yk(store_revenue * 0.55), ad_income=yk(store_revenue * 0.35),
+                lifeline_income=yk(store_revenue * 0.03), moving_income=yk(store_revenue * 0.02),
+                fire_insurance_income=yk(store_revenue * 0.05),
+                suumo_cost=yk(MEDIA_ADCOST['SUUMO'] * factor),
+                homes_cost=yk(MEDIA_ADCOST["HOME'S"] * factor),
+                athome_cost=yk(MEDIA_ADCOST['at home'] * factor),
+                instagram_cost=yk(MEDIA_ADCOST['SNS'] * factor),
+                hp_cost=yk(MEDIA_ADCOST['HP'] * factor),
+                other_ad_cost=yk((MEDIA_ADCOST['カナリー'] + MEDIA_ADCOST['スモッカ']) * factor),
+                pl_rent=s.rent, pl_parking=s.parking_fee, pl_copier=s.copier_fee,
+                pl_internet=s.internet_fee, pl_consultant=s.consultant_fee,
+                pl_insurance=s.insurance_fee, pl_cloud=s.cloud_fee,
+            ))
+            counts['pl'] += 1
+        db.session.commit()
+
+    # ── 7) 反響（ライブ・当月） ──────────────────────────
+    LEAD_STATUS = (['未対応'] * 4 + ['対応中'] * 4 + ['来店'] * 2 +
+                   ['内見'] * 2 + ['申込'] * 1 + ['不成立'] * 1)
+    for s in stores:
+        staff_list = store_staff[s.id]
+        for _ in range(_rnd.randint(11, 16)):
+            recv = datetime(YEAR, 6, _rnd.randint(1, 11),
+                            _rnd.randint(9, 20), _rnd.choice([0, 15, 30, 45]))
+            db.session.add(Lead(
+                source=_rnd.choice(MEDIA), received_at=recv,
+                status=_rnd.choice(LEAD_STATUS),
+                assigned_staff_id=_rnd.choice(staff_list).id, store_id=s.id,
+                customer_name=cust_name(), line_added=_rnd.random() < 0.5,
+                note=_rnd.choice(['1LDK希望・予算8万', '駅近希望', 'ペット可物件', '2月入居希望',
+                                  '社会人・初期費用抑えたい', '学生・保証人なし', '法人契約']),
+            ))
+            counts['lead'] += 1
+    db.session.commit()
+
+    # ── 8) 日報（直近の営業日） ──────────────────────────
+    for s in stores:
+        for st in store_staff[s.id]:
+            for dd in range(1, 12):
+                rday = date(YEAR, 6, dd)
+                if rday.weekday() == 2:  # 水曜定休
+                    continue
+                if rday > TODAY:
+                    break
+                ac = _rnd.randint(0, 2)
+                rep = DailyReport(
+                    staff_id=st.id, store_id=s.id, report_date=rday,
+                    prev_day_contact_done=_rnd.random() < 0.85,
+                    same_day_contact_done=_rnd.random() < 0.8,
+                    application_input_done=_rnd.random() < 0.9,
+                    application_count=ac,
+                    tomorrow_appointments=_rnd.choice(
+                        ['11時 山田様 内見3件', '14時 佐藤様 申込手続き', '終日 追客対応', '13時 鈴木様 来店予定']),
+                    memo=_rnd.choice(['好調。追客強化中。', '反響多め。来店促進。', '内見からの決定率改善したい。', '']),
+                )
+                db.session.add(rep)
+                db.session.flush()
+                for _ in range(_rnd.randint(1, 3)):
+                    applied = _rnd.random() < 0.4
+                    db.session.add(DailyReportCustomer(
+                        report_id=rep.id, customer_name=cust_name(), applied=applied,
+                        no_apply_reason='' if applied else _rnd.choice(
+                            ['他決', '予算オーバー', '検討中', '審査不可', '条件不一致']),
+                        improvement='' if applied else _rnd.choice(
+                            ['初期費用の提案を増やす', '内見数を増やす', '即日クロージング', '']),
+                    ))
+                counts['report'] += 1
+        db.session.commit()
+
+    # ── 9) 未入金・有給 ──────────────────────────────────
+    for s in stores:
+        staff_list = store_staff[s.id]
+        for _ in range(_rnd.randint(2, 4)):
+            amt = yk(_rnd.randint(60, 180) * 1000)
+            db.session.add(UncollectedPayment(
+                store_id=s.id, staff_id=_rnd.choice(staff_list).id,
+                property_name=prop_name(), room_number=f"{_rnd.randint(1,9)}0{_rnd.randint(1,9)}",
+                application_date=mday(5, 1, 28), management_company=_rnd.choice(MGMT_CO),
+                customer_name=cust_name(),
+                expected_payment_date=date(YEAR, 6, _rnd.randint(15, 28)),
+                amount=amt, is_paid=False, memo='AD入金待ち',
+            ))
+            counts['uncollected'] += 1
+        for _ in range(_rnd.randint(2, 4)):
+            st = _rnd.choice(staff_list)
+            db.session.add(LeaveRecord(
+                store_id=s.id, staff_id=st.id,
+                leave_date=date(YEAR, _rnd.randint(2, 5), _rnd.randint(1, 28)),
+                leave_type=_rnd.choice(['有給', '有給', '半休', '欠勤']),
+                days=_rnd.choice([1.0, 1.0, 0.5]), status='承認済', memo='',
+            ))
+            counts['leave'] += 1
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "tenant": tenant.name if tenant else None,
+        "stores": [s.name for s in stores],
+        "staff": len(staff_ids),
+        "period": "2026-01 〜 2026-06",
+        "created": counts,
+    })
 
 
 # 反響メール自動取込サービス（IMAP IDLE）を起動（複数ワーカーでも1つのみ）
