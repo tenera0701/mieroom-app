@@ -3220,9 +3220,48 @@ def _xlsx_fill(xlsx_bytes, values):
     return out.getvalue()
 
 
+_EMU_PER_PX = 9525  # 1px = 9525 EMU（画像位置・サイズの単位換算）
+
+
+def _xlsx_collect_images(ws):
+    """シート内の埋め込み画像（電子印鑑など）を抽出。
+    返り値: [{r,c(0始まり), coloff,rowoff(px), ext_w,ext_h(px|None), to(タプル|None), b64, mime}]"""
+    import base64 as _b64
+    out = []
+    for im in (getattr(ws, '_images', None) or []):
+        try:
+            data = im._data() if callable(getattr(im, '_data', None)) else getattr(im, 'ref', None)
+            if not data:
+                continue
+            b64 = _b64.b64encode(data).decode()
+            fmt = (getattr(im, 'format', None) or 'png').lower()
+            mime = 'image/' + ('jpeg' if fmt in ('jpg', 'jpeg') else fmt)
+            a = im.anchor
+            frm = getattr(a, '_from', None)
+            if frm is None:
+                continue
+            coloff = (getattr(frm, 'colOff', 0) or 0) / _EMU_PER_PX
+            rowoff = (getattr(frm, 'rowOff', 0) or 0) / _EMU_PER_PX
+            ext_w = ext_h = None
+            ext = getattr(a, 'ext', None)
+            if ext is not None:
+                ext_w = (getattr(ext, 'cx', 0) or 0) / _EMU_PER_PX
+                ext_h = (getattr(ext, 'cy', 0) or 0) / _EMU_PER_PX
+            to = None
+            tmk = getattr(a, '_to', None)
+            if tmk is not None:
+                to = (tmk.col, (getattr(tmk, 'colOff', 0) or 0) / _EMU_PER_PX,
+                      tmk.row, (getattr(tmk, 'rowOff', 0) or 0) / _EMU_PER_PX)
+            out.append({'r': frm.row, 'c': frm.col, 'coloff': coloff, 'rowoff': rowoff,
+                        'ext_w': ext_w, 'ext_h': ext_h, 'to': to, 'b64': b64, 'mime': mime})
+        except Exception:
+            continue
+    return out
+
+
 def _xlsx_to_print_html(xlsx_bytes, title):
     """穴埋め済みxlsxを、ブラウザでそのまま印刷できるHTMLに変換する。
-    結合セル・列幅・行高・罫線・配置・太字をできる限り再現する。"""
+    結合セル・列幅・行高・罫線・配置・太字・埋め込み画像（電子印鑑）をできる限り再現する。"""
     import io as _io
     from openpyxl import load_workbook
     from openpyxl.utils import get_column_letter
@@ -3247,14 +3286,19 @@ def _xlsx_to_print_html(xlsx_bytes, title):
                     if (rr, cc) != (rng.min_row, rng.min_col):
                         skip.add((rr, cc))
         cols = []
+        col_px = []
         for c in range(1, max_col + 1):
             cd = ws.column_dimensions.get(get_column_letter(c))
             w = cd.width if (cd and cd.width) else 8.43
-            cols.append(f'<col style="width:{int(w * 7 + 5)}px">')
+            px = int(w * 7 + 5)
+            col_px.append(px)
+            cols.append(f'<col style="width:{px}px">')
         rows = []
+        row_px = []
         for rr in range(1, max_row + 1):
             rd = ws.row_dimensions.get(rr)
             h = rd.height if (rd and rd.height) else 18
+            row_px.append(round(h * 1.33))
             tds = []
             for cc in range(1, max_col + 1):
                 if (rr, cc) in skip:
@@ -3295,7 +3339,32 @@ def _xlsx_to_print_html(xlsx_bytes, title):
                 v = cell.value
                 tds.append(f'<td{attrs} style="{";".join(st)}">{_esc(v) if v is not None else ""}</td>')
             rows.append(f'<tr style="height:{round(h * 1.33)}px">{"".join(tds)}</tr>')
-        sheets_html.append(f'<table class="sheet"><colgroup>{"".join(cols)}</colgroup>{"".join(rows)}</table>')
+
+        # 埋め込み画像（電子印鑑など）をテーブル上に絶対配置で重ねる
+        img_html = ''
+        for g in _xlsx_collect_images(ws):
+            if g['c'] >= max_col or g['r'] >= max_row:
+                continue
+            left = sum(col_px[0:g['c']]) + g['coloff']
+            top = sum(row_px[0:g['r']]) + g['rowoff']
+            if g['ext_w'] and g['ext_h']:
+                w_i, h_i = g['ext_w'], g['ext_h']
+            elif g['to']:
+                tc, tco, tr, tro = g['to']
+                w_i = sum(col_px[g['c']:min(tc, max_col)]) - g['coloff'] + tco
+                h_i = sum(row_px[g['r']:min(tr, max_row)]) - g['rowoff'] + tro
+            else:
+                continue
+            if w_i <= 0 or h_i <= 0:
+                continue
+            img_html += (f'<img src="data:{g["mime"]};base64,{g["b64"]}" '
+                         f'style="position:absolute;left:{left:.0f}px;top:{top:.0f}px;'
+                         f'width:{w_i:.0f}px;height:{h_i:.0f}px;object-fit:contain;pointer-events:none;">')
+        table_html = f'<table class="sheet"><colgroup>{"".join(cols)}</colgroup>{"".join(rows)}</table>'
+        if img_html:
+            sheets_html.append(f'<div style="position:relative;display:inline-block;">{table_html}{img_html}</div>')
+        else:
+            sheets_html.append(table_html)
 
     body = '<div class="pagebreak"></div>'.join(sheets_html) or '<p>シートがありません</p>'
     return ('<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">'
@@ -3306,7 +3375,8 @@ def _xlsx_to_print_html(xlsx_bytes, title):
             'td{font-size:12px;padding:1px 3px;overflow:hidden;word-break:break-all;white-space:pre-wrap;}'
             '.pagebreak{page-break-after:always;}'
             '.toolbar{position:fixed;top:8px;right:8px;z-index:10;}'
-            '@media print{.toolbar{display:none;}body{margin:0;}}'
+            '@page{size:auto;margin:0;}'  # 印刷時のブラウザ既定ヘッダー(データ名/URL/日付)を消す
+            '@media print{.toolbar{display:none;}body{margin:0;padding:6mm;}}'
             '</style></head><body>'
             '<div class="toolbar"><button onclick="window.print()" '
             'style="padding:9px 20px;font-size:14px;font-weight:bold;background:#0D9488;color:#fff;'
@@ -3314,6 +3384,172 @@ def _xlsx_to_print_html(xlsx_bytes, title):
             f'{body}'
             '<script>window.addEventListener("load",()=>setTimeout(()=>window.print(),500));</script>'
             '</body></html>')
+
+
+_PDF_FONT_READY = False
+
+
+def _ensure_pdf_font():
+    """日本語CIDフォント（reportlab同梱・ファイル不要）を一度だけ登録"""
+    global _PDF_FONT_READY
+    if not _PDF_FONT_READY:
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+        try:
+            pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
+        except Exception:
+            pass
+        _PDF_FONT_READY = True
+    return 'HeiseiKakuGo-W5'
+
+
+def _xlsx_to_pdf(xlsx_bytes, title):
+    """穴埋め済みxlsxをダウンロード用PDF(バイト列)に変換する。
+    結合セル・列幅・罫線・配置・背景色・埋め込み画像(電子印鑑)を再現。日本語対応。用紙幅に自動フィット。"""
+    import io as _io
+    import base64 as _b64
+    from openpyxl import load_workbook
+    from openpyxl.utils import get_column_letter
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Image as RLImage, PageBreak
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
+    from reportlab.lib import colors as _colors
+
+    FONT = _ensure_pdf_font()
+    PXPT = 0.75  # 1px(96dpi)=0.75pt
+
+    def _para(text, size, halign):
+        align = {'center': TA_CENTER, 'right': TA_RIGHT}.get(halign, TA_LEFT)
+        st = ParagraphStyle('c', fontName=FONT, fontSize=size, leading=size * 1.25,
+                            alignment=align, wordWrap='CJK')
+        safe = (str(text).replace('&', '&amp;').replace('<', '&lt;')
+                .replace('>', '&gt;').replace('\n', '<br/>'))
+        return Paragraph(safe, st)
+
+    from reportlab.lib.utils import ImageReader
+
+    wb = load_workbook(_io.BytesIO(xlsx_bytes), data_only=False)
+    page_w, page_h = A4
+    margin = 28  # ≒10mm
+    avail_w = page_w - 2 * margin
+
+    def _make_story(use_images):
+      story = []
+      first = True
+      for ws in wb.worksheets:
+        if ws.sheet_state != 'visible':
+            continue
+        max_row = min(ws.max_row or 1, 500)
+        max_col = min(ws.max_column or 1, 60)
+        merged, skip = {}, set()
+        for rng in ws.merged_cells.ranges:
+            merged[(rng.min_row, rng.min_col)] = (rng.max_row, rng.max_col)
+            for rr in range(rng.min_row, rng.max_row + 1):
+                for cc in range(rng.min_col, rng.max_col + 1):
+                    if (rr, cc) != (rng.min_row, rng.min_col):
+                        skip.add((rr, cc))
+        col_pt = []
+        for c in range(1, max_col + 1):
+            cd = ws.column_dimensions.get(get_column_letter(c))
+            w = cd.width if (cd and cd.width) else 8.43
+            col_pt.append((w * 7 + 5) * PXPT)
+        total_w = sum(col_pt) or 1
+        if total_w > avail_w:
+            f = avail_w / total_w
+            col_pt = [w * f for w in col_pt]
+
+        styles = [('FONTNAME', (0, 0), (-1, -1), FONT), ('FONTSIZE', (0, 0), (-1, -1), 9),
+                  ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                  ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+                  ('LEFTPADDING', (0, 0), (-1, -1), 2), ('RIGHTPADDING', (0, 0), (-1, -1), 2)]
+        data = []
+        for rr in range(1, max_row + 1):
+            rowdata = []
+            for cc in range(1, max_col + 1):
+                if (rr, cc) in skip:
+                    rowdata.append('')
+                    continue
+                cell = ws.cell(row=rr, column=cc)
+                ci, ri = cc - 1, rr - 1
+                fnt = cell.font
+                size = float(fnt.size) if (fnt and fnt.size) else 9.0
+                al = cell.alignment
+                halign = al.horizontal if (al and al.horizontal in ('center', 'right', 'left')) else 'left'
+                v = cell.value
+                rowdata.append(_para(v, size, halign) if (v is not None and str(v) != '') else '')
+                vmap = {'top': 'TOP', 'bottom': 'BOTTOM', 'center': 'MIDDLE'}
+                if al and al.vertical in vmap:
+                    styles.append(('VALIGN', (ci, ri), (ci, ri), vmap[al.vertical]))
+                b = cell.border
+                for side, cmd in (('top', 'LINEABOVE'), ('bottom', 'LINEBELOW'),
+                                  ('left', 'LINEBEFORE'), ('right', 'LINEAFTER')):
+                    sd = getattr(b, side, None)
+                    if sd and sd.style:
+                        lw = 1.2 if sd.style in ('medium', 'thick', 'double') else 0.5
+                        styles.append((cmd, (ci, ri), (ci, ri), lw, _colors.black))
+                try:
+                    fl = cell.fill
+                    if fl and fl.patternType == 'solid' and fl.fgColor and fl.fgColor.rgb:
+                        rgb = str(fl.fgColor.rgb)
+                        if len(rgb) == 8 and rgb.upper() not in ('00000000', 'FFFFFFFF'):
+                            styles.append(('BACKGROUND', (ci, ri), (ci, ri), _colors.HexColor('#' + rgb[2:])))
+                except Exception:
+                    pass
+            data.append(rowdata)
+
+        for (r0, c0), (r1, c1) in merged.items():
+            if r0 <= max_row and c0 <= max_col:
+                styles.append(('SPAN', (c0 - 1, r0 - 1),
+                               (min(c1, max_col) - 1, min(r1, max_row) - 1)))
+
+        for g in (_xlsx_collect_images(ws) if use_images else []):
+            r0, c0 = g['r'] + 1, g['c'] + 1
+            if r0 > max_row or c0 > max_col:
+                continue
+            if (r0, c0) in skip:
+                for (mr, mc), (mr1, mc1) in merged.items():
+                    if mr <= r0 <= mr1 and mc <= c0 <= mc1:
+                        r0, c0 = mr, mc
+                        break
+            try:
+                raw = _b64.b64decode(g['b64'])
+                ImageReader(_io.BytesIO(raw)).getRGBData()  # 壊れた/非対応画像はここで除外
+                if g['ext_w'] and g['ext_h'] and g['ext_w'] > 0:
+                    w_pt = min(g['ext_w'] * PXPT, 160)
+                    h_pt = w_pt * (g['ext_h'] / g['ext_w'])
+                else:
+                    w_pt = h_pt = 60
+                img = RLImage(_io.BytesIO(raw), width=w_pt, height=h_pt)
+                cur = data[r0 - 1][c0 - 1]
+                data[r0 - 1][c0 - 1] = img if (isinstance(cur, str) and cur == '') else [cur, img]
+            except Exception:
+                continue
+
+        if not data:
+            continue
+        t = Table(data, colWidths=col_pt)
+        t.setStyle(TableStyle(styles))
+        if not first:
+            story.append(PageBreak())
+        story.append(t)
+        first = False
+      if not story:
+        story = [Paragraph('（シートがありません）',
+                           ParagraphStyle('e', fontName=FONT, fontSize=12))]
+      return story
+
+    def _render(use_images):
+        buf = _io.BytesIO()
+        SimpleDocTemplate(buf, pagesize=A4, leftMargin=margin, rightMargin=margin,
+                          topMargin=margin, bottomMargin=margin,
+                          title=title).build(_make_story(use_images))
+        return buf.getvalue()
+
+    try:
+        return _render(True)          # 画像（電子印鑑）込みで生成
+    except Exception:
+        return _render(False)         # 画像で失敗しても本文は必ずPDF化
 
 
 # 設定＞会社情報（CompanyProfile）を、契約フォーマットの固定差し込みタグ名に対応づける
@@ -3745,6 +3981,46 @@ def api_doc_template_print_view(tpl_id):
         return jsonify({'error': f'印刷ビューの生成に失敗しました: {e}'}), 500
     resp = make_response(html)
     resp.headers['Content-Type'] = 'text/html; charset=utf-8'
+    return resp
+
+
+@app.route("/api/doc-templates/<int:tpl_id>/pdf", methods=["POST"])
+@login_required
+@block_super_admin
+def api_doc_template_pdf(tpl_id):
+    """会社情報＋入力値でテンプレートを穴埋めし、PDFをダウンロード返却"""
+    import base64 as _b64
+    from urllib.parse import quote as _urlquote
+    tid = _doc_tenant_id()
+    r = DocTemplate.query.filter_by(id=tpl_id, tenant_id=tid, is_active=True).first_or_404()
+    try:
+        mapping = json.loads(r.mapping) if r.mapping else {}
+    except Exception:
+        mapping = {}
+    payload = request.get_json() or {}
+    case_values = payload.get('values') or {}
+    company = _doc_company_data(tid)
+    values = {}
+    for tag, m in mapping.items():
+        m = m or {}
+        if m.get('scope') == 'company':
+            values[tag] = company.get(m.get('company_key') or tag, '')
+        else:
+            values[tag] = case_values.get(tag, '')
+    for k, v in case_values.items():
+        values.setdefault(k, v)
+    try:
+        raw = _b64.standard_b64decode(r.file_b64.encode())
+        filled = _xlsx_fill(raw, values)
+        pdf = _xlsx_to_pdf(filled, r.name or '契約書類')
+    except Exception as e:
+        return jsonify({'error': f'PDF出力に失敗しました: {e}'}), 500
+    fname = f"{r.name or 'document'}.pdf"
+    resp = make_response(pdf)
+    resp.headers['Content-Type'] = 'application/pdf'
+    resp.headers['Content-Disposition'] = (
+        "attachment; filename=\"document.pdf\"; filename*=UTF-8''" + _urlquote(fname)
+    )
     return resp
 
 

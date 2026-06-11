@@ -55,7 +55,7 @@
     </div>
     <div style="display:flex;gap:8px;">
       <button class="btn btn-light" onclick="location.href='/contract-customers'">← 一覧へ</button>
-      <button class="btn btn-light" onclick="saveAll()">💾 保存</button>
+      <button class="btn btn-save" onclick="saveAll()">💾 保存</button>
     </div>
   </div>
 
@@ -78,7 +78,7 @@
   <!-- 書類フィールド -->
   <div class="card">
     <h2 class="card-h">📝 書類フィールド（全書類共通）</h2>
-    <p style="font-size:12px;color:#6b7280;margin:0 0 12px;">ここで入力した値が、全ての帳票テンプレートに自動で差し込まれます。</p>
+    <p style="font-size:12px;color:#6b7280;margin:0 0 12px;">ここで入力した値が、全ての帳票テンプレートに自動で差し込まれます。<b>入力後は「💾 保存」を押すと内容が保存され、次に開いたときも復元されます。</b></p>
     <div id="case-fields" class="grid"><div class="empty">読み込み中…</div></div>
   </div>
 
@@ -192,6 +192,7 @@ function renderDownloadList(){
       <div class="tpl-dl-name">${esc(t.name)}</div>
       <div class="tpl-dl-tags">${badges||'<span style="font-size:11px;color:#9ca3af;">タグなし</span>'}</div>
       <button class="btn btn-light" onclick="printTpl(${t.id},'${esc(t.name)}')" title="ツール上でそのまま印刷（Excel不要）">🖨 印刷</button>
+      <button class="btn btn-light" onclick="downloadPdf(${t.id},'${esc(t.name)}')" title="PDFをダウンロード（Excel不要）">📄 PDF</button>
       <button class="btn btn-save btn-sm" onclick="downloadTpl(${t.id},'${esc(t.name)}')">⬇ Excel</button>
     </div>`;
   }).join('');
@@ -309,6 +310,23 @@ async function printTpl(tplId, tplName){
     if(!w) throw new Error('ポップアップがブロックされました。ブラウザの設定で許可してください。');
     w.document.open(); w.document.write(html); w.document.close();
     showAlert(`「${tplName}」の印刷ビューを開きました。印刷ダイアログが自動で出ます。`);
+  }catch(e){ showAlert(e.message,'error'); }
+}
+
+async function downloadPdf(tplId, tplName){
+  const values=collectValues();
+  showAlert('PDFを生成中…','info');
+  try{
+    const r=await fetch(`/api/doc-templates/${tplId}/pdf`,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values})
+    });
+    if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.error||'PDF出力失敗'); }
+    const blob=await r.blob();
+    let fname=tplName+'.pdf';
+    const cd=r.headers.get('Content-Disposition')||''; const m=/filename\*=UTF-8''([^;]+)/.exec(cd); if(m){ try{ fname=decodeURIComponent(m[1]); }catch(_){} }
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=fname;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    showAlert(`「${tplName}」のPDFをダウンロードしました。`);
   }catch(e){ showAlert(e.message,'error'); }
 }
 
