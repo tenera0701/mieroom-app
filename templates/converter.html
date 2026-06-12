@@ -294,6 +294,7 @@
           <div class="fld"><label>間取り内訳</label><input class="inp" id="f_layout_detail" placeholder="洋8/LDK10"></div>
           <div class="fld"><label>向き</label>{{ sel('direction') }}</div>
           <div class="fld"><label>専有/建物面積（㎡）</label><input class="inp" id="f_floor_area" type="number" step="0.01" min="0"></div>
+          <div class="fld"><label>面積基準</label>{{ sel('area_method') }}</div>
           <div class="fld"><label>バルコニー面積（㎡）</label><input class="inp" id="f_balcony_area" type="number" step="0.01" min="0"></div>
           <div class="fld"><label>所在階</label><input class="inp" id="f_floor" placeholder="3階"></div>
           <div class="fld"><label>地上階数</label><input class="inp" id="f_floors_total" placeholder="10階建"></div>
@@ -305,21 +306,36 @@
         <h3>建物・管理</h3>
         <div class="grid3">
           <div class="fld"><label>構造</label>{{ sel('structure') }}</div>
+          <div class="fld"><label>構造その他</label><input class="inp" id="f_structure_other" placeholder="自由記入"></div>
           <div class="fld"><label>現況</label>{{ sel('current_status') }}</div>
-          <div class="fld" id="sale-land-wrap" style="display:none;"><label>土地面積（㎡）</label><input class="inp" id="f_land_area2" type="number" step="0.01" min="0" disabled placeholder="売買タブで入力"></div>
           <div class="fld"><label>管理形態</label>{{ sel('mgmt_form') }}</div>
           <div class="fld"><label>管理人</label>{{ sel('mgmt_person') }}</div>
+          <div class="fld"><label>管理組合</label>{{ sel('mgmt_union') }}</div>
+          <div class="fld"><label>管理会社名</label><input class="inp" id="f_mgmt_company" placeholder="〇〇管理"></div>
         </div>
       </div>
       <div class="sec">
-        <h3>駐車場・バイク・駐輪</h3>
+        <h3>駐車場</h3>
         <div class="grid3">
           <div class="fld"><label>駐車場</label>{{ sel('parking') }}</div>
+          <div class="fld"><label>契約形態</label>{{ sel('parking_contract') }}</div>
           <div class="fld"><label>月額（円）</label><input class="inp" id="f_parking_fee" type="number" min="0"></div>
           <div class="fld"><label>距離</label><input class="inp" id="f_parking_distance" placeholder="敷地内 / 50m"></div>
           <div class="fld"><label>形式</label>{{ sel('parking_type') }}</div>
+          <div class="fld"><label>空き台数</label><input class="inp" id="f_parking_count" placeholder="2"></div>
+          <div class="fld"><label>敷金・礼金</label><input class="inp" id="f_parking_deposit" placeholder="敷1 等"></div>
+        </div>
+        <div class="fld" style="margin-top:10px;"><label>駐車場備考</label><input class="inp" id="f_parking_note" placeholder="屋根付・機械式2段 等"></div>
+      </div>
+      <div class="sec">
+        <h3>バイク置場・駐輪場</h3>
+        <div class="grid3">
           <div class="fld"><label>バイク置場</label>{{ sel('bike_park') }}</div>
+          <div class="fld"><label>バイク月額（円）</label><input class="inp" id="f_bike_fee" type="number" min="0"></div>
+          <div class="fld"><label>バイク置場備考</label><input class="inp" id="f_bike_note" placeholder="屋外 等"></div>
           <div class="fld"><label>駐輪場</label>{{ sel('bicycle_park') }}</div>
+          <div class="fld"><label>駐輪月額（円）</label><input class="inp" id="f_bicycle_fee" type="number" min="0"></div>
+          <div class="fld"><label>駐輪場備考</label><input class="inp" id="f_bicycle_note" placeholder="無料 等"></div>
         </div>
       </div>
     </div>
@@ -332,12 +348,15 @@
           <div class="fld"><label>水道</label>{{ sel('util_water') }}</div>
           <div class="fld"><label>排水</label>{{ sel('util_drainage') }}</div>
           <div class="fld"><label>ガス</label>{{ sel('util_gas') }}</div>
+          <div class="fld"><label>電気</label><input class="inp" id="f_electric" placeholder="30A 等"></div>
           <div class="fld"><label>バス</label>{{ sel('bath_type') }}</div>
           <div class="fld"><label>トイレ</label>{{ sel('toilet_type') }}</div>
           <div class="fld"><label>インターネット</label>{{ sel('internet') }}</div>
           <div class="fld"><label>洗濯機置場</label>{{ sel('washer_place') }}</div>
           <div class="fld"><label>コンロ種別</label>{{ sel('stove_type') }}</div>
+          <div class="fld"><label>コンロ口数</label>{{ sel('stove_count') }}</div>
         </div>
+        <div class="fld" style="margin-top:10px;"><label>設備フリースペース（自由記入）</label><textarea id="f_equip_free" rows="2" placeholder="その他の設備を自由に記入"></textarea></div>
       </div>
       <div class="sec">
         <h3>入居条件</h3>
@@ -351,6 +370,7 @@
           </div>
           {% endfor %}
         </div>
+        <div class="fld" style="margin-top:10px;"><label>条件フリースペース（自由記入）</label><textarea id="f_cond_free" rows="2" placeholder="その他の入居条件を自由に記入"></textarea></div>
       </div>
       <div class="sec">
         <h3>設備・特徴（チェック）</h3>
@@ -364,9 +384,12 @@
         <h3>取引情報</h3>
         <div class="grid3">
           <div class="fld"><label>取引態様</label>{{ sel('deal_form') }}</div>
-          <div class="fld"><label>元付業者</label><input class="inp" id="f_moto_company" placeholder="〇〇不動産"></div>
+          <div class="fld"><label>媒介契約日</label><input class="inp" id="f_mediation_date" placeholder="2026-06-01"></div>
           <div class="fld"><label>REINS番号</label><input class="inp" id="f_reins_no" placeholder="任意"></div>
+          <div class="fld"><label>元付業者</label><input class="inp" id="f_moto_company" placeholder="〇〇不動産"></div>
+          <div class="fld"><label>元付業者TEL</label><input class="inp" id="f_moto_tel" placeholder="052-000-0000"></div>
         </div>
+        <div class="fld" style="margin-top:10px;"><label>取引備考</label><textarea id="f_deal_note" rows="2" placeholder="取引に関する備考"></textarea></div>
       </div>
       <div class="sec">
         <h3>キャッチコピー・物件コメント
@@ -465,6 +488,22 @@
   // ── 入居条件 ──
   function setConditions(c){ c=c||{}; COND_KEYS.forEach(k=>{ const el=document.getElementById('cond_'+k); if(el) el.value=c[k]||''; }); }
   function getConditions(){ const o={}; COND_KEYS.forEach(k=>{ const el=document.getElementById('cond_'+k); if(el&&el.value) o[k]=el.value; }); return o; }
+
+  // ── 周辺環境（動的行） ──
+  const SR_TYPES = ['小学校','中学校','高校','大学','スーパー','コンビニ','ドラッグストア','病院','銀行','郵便局','役所','公園','幼稚園・保育園','飲食店','その他'];
+  function surrRowHtml(s){
+    s=s||{};
+    const opts = SR_TYPES.map(t=>`<option ${s.type===t?'selected':''}>${t}</option>`).join('');
+    return `<div class="st-row" style="grid-template-columns:1fr 1.3fr .8fr 32px;">
+      <div class="fld"><label>施設</label><select class="inp sr-type"><option value="">選択</option>${opts}</select></div>
+      <div class="fld"><label>名称</label><input class="inp sr-name" value="${esc(s.name||'')}" placeholder="〇〇小学校"></div>
+      <div class="fld"><label>距離(m)</label><input class="inp sr-dist" type="number" min="0" value="${esc(s.dist||'')}"></div>
+      <button class="mini-x" onclick="this.closest('.st-row').remove()" title="削除">✕</button>
+    </div>`;
+  }
+  function buildSurr(list){ const w=document.getElementById('sr-wrap'); w.innerHTML=''; (list||[]).slice(0,20).forEach(s=>w.insertAdjacentHTML('beforeend', surrRowHtml(s))); }
+  function addSurr(){ const w=document.getElementById('sr-wrap'); if(w.querySelectorAll('.st-row').length>=20){ showAlert('周辺施設は最大20件までです'); return; } w.insertAdjacentHTML('beforeend', surrRowHtml({})); }
+  function getSurr(){ return [...document.querySelectorAll('#sr-wrap .st-row')].map(r=>({ type:r.querySelector('.sr-type').value.trim(), name:r.querySelector('.sr-name').value.trim(), dist:r.querySelector('.sr-dist').value.trim() })).filter(s=>s.type||s.name); }
 
   // ── 一覧読み込み ──
   async function loadProps(){
@@ -616,15 +655,20 @@
   function closeDrawer(){ document.getElementById('ov').classList.remove('show'); document.getElementById('drawer').classList.remove('show'); }
   function showAlert(msg, ok){ const a=document.getElementById('d-alert'); a.textContent=msg; a.className='alert show '+(ok?'ok':'err'); setTimeout(()=>a.classList.remove('show'), ok?2500:5000); }
 
-  const STR_FIELDS = ['property_type','name','name_kana','room_no','status','postal_code','pref','city','address',
-    'line_name','station','deposit','key_money','deposit_amort','renewal_fee','ad_fee','contract_type','contract_period',
-    'guarantor_company','guarantor_fee','insurance','card_payment','layout','layout_detail','floor','floors_total',
-    'floors_below','build_ym','new_used','structure','direction','current_status','mgmt_form','mgmt_person',
-    'parking','parking_distance','parking_type','bike_park','bicycle_park','util_water','util_drainage','util_gas',
-    'bath_type','toilet_type','internet','washer_place','stove_type','deal_form','moto_company','reins_no',
-    'available_date','catch_copy'];
+  const STR_FIELDS = ['property_type','name','name_kana','name2','mgmt_code','recommend','room_no','status',
+    'postal_code','pref','city','address','lat','lng',
+    'line_name','station','deposit','deposit_addon','key_money','deposit_amort','amortization','renewal_fee',
+    'renewal_allowed','ad_fee','contract_type','contract_period','guarantor_company','guarantor_fee',
+    'insurance_required','insurance','card_payment','layout','layout_detail','area_method','floor','floors_total',
+    'floors_below','build_ym','new_used','structure','structure_other','direction','current_status','mgmt_form',
+    'mgmt_person','mgmt_union','mgmt_company','parking','parking_contract','parking_distance','parking_type',
+    'parking_count','parking_deposit','parking_note','bike_park','bike_note','bicycle_park','bicycle_note',
+    'util_water','util_drainage','util_gas','electric','bath_type','toilet_type','internet','washer_place',
+    'stove_type','stove_count','deal_form','mediation_date','moto_company','moto_tel','reins_no',
+    'available_date','move_out_date','occupancy_note','catch_copy'];
   const NUM_FIELDS = ['walk_min','bus_min','rent','admin_fee','guarantee_money','rights_money','renewal_admin_fee',
-    'price','floor_area','balcony_area','land_area','parking_fee'];
+    'transfer_money','misc_fee','price','floor_area','balcony_area','land_area','parking_fee','bike_fee','bicycle_fee'];
+  const TEXTAREA_FIELDS = ['other_init_fee','guarantor_detail','equip_free','cond_free','deal_note'];
 
   function openNew(){
     editingId = null; curImages = [];
@@ -634,10 +678,11 @@
     document.getElementById('f_deal_type').value = 'rent';
     STR_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) el.value=''; });
     NUM_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) el.value=''; });
+    TEXTAREA_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) el.value=''; });
     document.getElementById('f_property_type').value = 'マンション';
     document.getElementById('f_status').value = 'draft';
     document.getElementById('f_comment').value = '';
-    buildFeatureGrid([]); buildPortalNotes({}); buildStations([]); setConditions({});
+    buildFeatureGrid([]); buildPortalNotes({}); buildStations([]); setConditions({}); buildSurr([]);
     renderThumbs(); onDealChange(); switchTab('t-basic');
     openDrawer();
   }
@@ -653,9 +698,10 @@
     document.getElementById('f_deal_type').value = p.deal_type || 'rent';
     STR_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) el.value = (p[f]==null?'':p[f]); });
     NUM_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) el.value = (p[f]==null?'':p[f]); });
+    TEXTAREA_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) el.value = (p[f]==null?'':p[f]); });
     document.getElementById('f_comment').value = p.comment || '';
     buildFeatureGrid(p.features||[]); buildPortalNotes(p.portal_notes||{});
-    buildStations(p.stations||[]); setConditions(p.conditions||{});
+    buildStations(p.stations||[]); setConditions(p.conditions||{}); buildSurr(p.surroundings||[]);
     renderThumbs(); onDealChange(); switchTab('t-basic');
     openDrawer();
   }
@@ -664,11 +710,13 @@
     const o = { deal_type: document.getElementById('f_deal_type').value };
     STR_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) o[f]=el.value.trim(); });
     NUM_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) o[f]= el.value===''?null:el.value; });
+    TEXTAREA_FIELDS.forEach(f=>{ const el=document.getElementById('f_'+f); if(el) o[f]=el.value; });
     o.comment = document.getElementById('f_comment').value;
     o.features = getFeatures();
     o.portal_notes = getPortalNotes();
     o.stations = getStations();
     o.conditions = getConditions();
+    o.surroundings = getSurr();
     o.images = curImages;
     return o;
   }
