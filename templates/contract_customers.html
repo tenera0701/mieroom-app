@@ -36,6 +36,10 @@
   .info-grid .v { color:#111827; font-weight:600; }
   .btn-cancel { background:#fff; color:#374151; border:1px solid #d1d5db; border-radius:6px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; }
   .btn-submit { background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 20px; font-size:13px; font-weight:700; cursor:pointer; }
+  .edit-input { width:100%; min-width:0; max-width:100%; border:1px solid #0D9488; border-radius:4px;
+                padding:2px 5px; font-size:12px; box-sizing:border-box;
+                background:#fff; color:#111827; color-scheme: light; }
+  select.edit-input option { background:#fff; color:#111827; }
   .cc-tabs { display:flex; gap:6px; margin-bottom:14px; border-bottom:2px solid #e5e7eb; }
   .cc-tab { border:none; background:none; padding:9px 16px; font-size:14px; font-weight:700; color:#6b7280; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; }
   .cc-tab:hover { color:#0F766E; }
@@ -119,6 +123,24 @@
     </div>
   </div>
 </div>
+
+<!-- ── メモ編集モーダル（大きく表示）── -->
+<div class="modal-overlay" id="cc-memo-modal">
+  <div class="modal" style="max-width:560px;width:94%;">
+    <div class="modal-header">
+      <h3>メモ</h3>
+      <button class="modal-close" onclick="closeMemoEdit()">✕</button>
+    </div>
+    <div style="padding:16px 18px;">
+      <textarea id="cc-memo-text" rows="12" placeholder="進捗メモを入力…（例：鍵渡し日連絡待ち）"
+        style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:11px 13px;font-size:13px;line-height:1.6;box-sizing:border-box;font-family:inherit;resize:vertical;min-height:220px;"></textarea>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:8px;">
+      <button onclick="closeMemoEdit()" style="background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;padding:8px 16px;font-size:13px;cursor:pointer;">キャンセル</button>
+      <button onclick="saveMemoEdit()" style="background:#0D9488;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;">保存する</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -183,14 +205,14 @@ function render(data) {
              onclick="editPhone(${r.id}, this)">${r.management_phone ? '📞 ' + escc(r.management_phone) : '<span style="color:#9ca3af;">＋電話番号</span>'}</div>
       </td>
       <td style="white-space:nowrap;">${r.application_date || '―'}</td>
-      <td style="cursor:pointer;text-align:center;" title="クリックで切替" onclick="editCC(this,${r.id},'invoice_sent','bool')">
-        ${r.invoice_sent ? '<span style="color:#0D9488;font-weight:800;">●</span>' : '<span style="color:#ef4444;font-weight:800;">×</span>'}</td>
+      <td style="cursor:pointer;text-align:center;" title="クリックして選択" onclick="editCC(this,${r.id},'invoice_sent','select')">
+        ${r.invoice_sent ? '<span style="color:#0D9488;font-weight:800;">〇</span>' : '<span style="color:#ef4444;font-weight:800;">×</span>'}</td>
       <td style="cursor:pointer;white-space:nowrap;" title="クリックして選択" onclick="editCC(this,${r.id},'contract_method','select')">
         ${r.contract_method ? `<span style="background:${r.contract_method==='電子'?'#dbeafe':'#fef3c7'};border-radius:8px;padding:2px 9px;font-size:11px;font-weight:700;color:#374151;">${escc(r.contract_method)}</span>` : '<span style="color:#cbd5e1;">―</span>'}</td>
       <td style="cursor:pointer;" title="クリックして選択" onclick="editCC(this,${r.id},'guarantor','select')">
         ${r.guarantor === '有' ? '<span style="color:#0D9488;font-weight:800;">有</span>' : r.guarantor === '無' ? '<span style="color:#6b7280;font-weight:700;">無</span>' : '<span style="color:#cbd5e1;">―</span>'}</td>
-      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;text-align:left;cursor:pointer;" title="クリックで入力"
-          onclick="editCC(this,${r.id},'contract_note','text')">${escc(r.contract_note) || '<span style="color:#cbd5e1;">（クリックで入力）</span>'}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;text-align:left;cursor:pointer;" title="クリックで開く"
+          onclick="openMemoEdit(${r.id})">${escc(r.contract_note) || '<span style="color:#cbd5e1;">（クリックで入力）</span>'}</td>
       <td><button class="btn-doc" onclick="location.href='/contract-customers/'+${r.id}+'/edit'">契約書類を編集</button></td>
       <td><button onclick="markPast(${r.id})" style="padding:4px 10px;font-size:11px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;cursor:pointer;color:#374151;font-weight:600;">入居完了</button></td>
     </tr>`).join('');
@@ -209,12 +231,12 @@ async function ccPatch(id, field, value) {
     filterList();
   } catch(_) { showAlert('保存に失敗しました。', 'error'); }
 }
-/* ── 申込管理表と同じセル編集UI（クリック→その場でプルダウン/入力欄） ── */
+/* ── 接客管理表と同じセル編集UI（クリック→その場でプルダウン） ── */
 const CC_SELECT_OPTS = {
+  invoice_sent:    [['×', '×'], ['〇', '〇']],
   contract_method: [['', '―'], ['電子', '電子'], ['書面', '書面']],
   guarantor:       [['', '―'], ['有', '有'], ['無', '無']],
 };
-const CC_PLACEHOLDERS = { contract_note: '進捗メモ（例：鍵渡し日連絡待ち）' };
 
 function ccCellBox(td) {
   const cs = getComputedStyle(td);
@@ -237,16 +259,15 @@ function editCC(td, id, field, type) {
   const rec = ccData.find(r => r.id === id);
   if (!rec) return;
   if (td.querySelector('input,select')) return;
-  const curVal = rec[field];
-
-  if (type === 'bool') { ccPatch(id, field, !curVal); return; }
+  // 請求書は boolean を 〇/× 表記に変換して扱う
+  const curVal = field === 'invoice_sent' ? (rec[field] ? '〇' : '×') : rec[field];
 
   const prev = td.innerHTML;
   const box = ccCellBox(td);
 
   if (type === 'select') {
     const el = document.createElement('select');
-    el.style.cssText = 'border:1px solid #0D9488;border-radius:4px;padding:0 2px;font-size:12px;background:#fff;';
+    el.className = 'edit-input';
     (CC_SELECT_OPTS[field] || []).forEach(([v, l]) => {
       const o = new Option(l || v, v);
       if (String(v) === String(curVal || '')) o.selected = true;
@@ -255,15 +276,17 @@ function editCC(td, id, field, type) {
     td.innerHTML = ''; td.appendChild(ccEditorWrap(el, box)); el.focus({ preventScroll: true });
     // 描画後に開く（即時呼び出しだと開かず2クリック必要になるため）
     requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
-    let changed = false;
-    el.addEventListener('change', () => { changed = true; ccPatch(id, field, el.value); });
+    el.addEventListener('change', () => {
+      const val = field === 'invoice_sent' ? el.value === '〇' : el.value;
+      td.innerHTML = prev;   // すぐ元の表示に戻してから保存（編集欄が残らない）
+      ccPatch(id, field, val);
+    });
     // 値を変えずに別の場所を押したら元の表示に戻す
-    el.addEventListener('blur', () => { if (!changed && td.querySelector('select')) td.innerHTML = prev; });
+    el.addEventListener('blur', () => { if (td.querySelector('select')) td.innerHTML = prev; });
   } else {
     const el = document.createElement('input');
     el.type = 'text'; el.value = curVal || '';
-    el.placeholder = CC_PLACEHOLDERS[field] || '';
-    el.style.cssText = 'border:1px solid #0D9488;border-radius:4px;padding:0 5px;font-size:12px;background:#fff;';
+    el.className = 'edit-input';
     td.innerHTML = ''; td.appendChild(ccEditorWrap(el, box)); el.focus({ preventScroll: true });
     el.select();
     let saved = false;
@@ -275,6 +298,28 @@ function editCC(td, id, field, type) {
     });
     el.addEventListener('click', e => e.stopPropagation());
   }
+}
+
+/* ── メモを大きく開いて編集（接客管理表と同じモーダル） ── */
+let _memoId = null;
+function openMemoEdit(id) {
+  const r = ccData.find(x => x.id === id);
+  if (!r) return;
+  _memoId = id;
+  document.getElementById('cc-memo-text').value = r.contract_note || '';
+  document.getElementById('cc-memo-modal').classList.add('active');
+  setTimeout(() => document.getElementById('cc-memo-text').focus(), 50);
+}
+function closeMemoEdit() {
+  document.getElementById('cc-memo-modal').classList.remove('active');
+  _memoId = null;
+}
+async function saveMemoEdit() {
+  if (_memoId == null) return;
+  const v = document.getElementById('cc-memo-text').value;
+  await ccPatch(_memoId, 'contract_note', v);
+  closeMemoEdit();
+  showAlert('メモを保存しました');
 }
 function editPhone(id, el) {
   const rec = ccData.find(r => r.id === id); if (!rec) return;
