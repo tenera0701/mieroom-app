@@ -1050,10 +1050,18 @@ class FloorPlanSetting(db.Model):
     store_id = db.Column(db.Integer, index=True, unique=True)
     bg_color = db.Column(db.String(20), default='#ffffff')    # 既定の背景色
     grid_color = db.Column(db.String(20), default='#e5e7eb')  # 既定の格子（グリッド）色
+    hidden_items = db.Column(db.Text, default='')             # パレットで非表示にするアイテムのキー（JSON配列）
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def to_dict(self):
-        return {'bg_color': self.bg_color or '#ffffff', 'grid_color': self.grid_color or '#e5e7eb'}
+        try:
+            hidden = json.loads(self.hidden_items) if self.hidden_items else []
+            if not isinstance(hidden, list):
+                hidden = []
+        except Exception:
+            hidden = []
+        return {'bg_color': self.bg_color or '#ffffff', 'grid_color': self.grid_color or '#e5e7eb',
+                'hidden_items': hidden}
 
 
 class DocCompanyInfo(db.Model):
@@ -2261,6 +2269,16 @@ def migrate_db():
     except Exception as e:
         print(f"  Skip chat_channel columns: {e}")
 
+    # floor_plan_setting に hidden_items（パレット非表示アイテム）を追加
+    try:
+        cursor.execute("PRAGMA table_info(floor_plan_setting)")
+        fps_cols = {r[1] for r in cursor.fetchall()}
+        if fps_cols and 'hidden_items' not in fps_cols:
+            cursor.execute("ALTER TABLE floor_plan_setting ADD COLUMN hidden_items TEXT")
+            print("  Added column floor_plan_setting.hidden_items")
+    except Exception as e:
+        print(f"  Skip floor_plan_setting.hidden_items: {e}")
+
     # property（物件コンバータ）のいえらぶ相当の拡張カラムを追加
     try:
         cursor.execute("PRAGMA table_info(property)")
@@ -2413,6 +2431,7 @@ def migrate_postgres():
         ("app_user", "admin_can_lock_tenant",   "BOOLEAN DEFAULT FALSE"),
         ("floor_plan", "folder_id", "INTEGER"),
         ("floor_plan", "thumb", "TEXT"),
+        ("floor_plan_setting", "hidden_items", "TEXT"),
         ("visit_reservation", "staff_id", "INTEGER"),
         ("visit_reservation", "duration_min", "INTEGER DEFAULT 60"),
         ("visit_reservation", "viewed", "BOOLEAN DEFAULT FALSE"),
@@ -5065,7 +5084,7 @@ def api_floorplan_settings_get():
     allowed = get_allowed_store_ids()
     sid = allowed[0] if allowed else None
     s = FloorPlanSetting.query.filter_by(store_id=sid).first()
-    return jsonify(s.to_dict() if s else {'bg_color': '#ffffff', 'grid_color': '#e5e7eb'})
+    return jsonify(s.to_dict() if s else {'bg_color': '#ffffff', 'grid_color': '#e5e7eb', 'hidden_items': []})
 
 
 @app.route("/api/floorplan-settings", methods=["POST"])
@@ -5084,6 +5103,12 @@ def api_floorplan_settings_save():
         s.bg_color = (d.get('bg_color') or '#ffffff')[:20]
     if 'grid_color' in d:
         s.grid_color = (d.get('grid_color') or '#e5e7eb')[:20]
+    if 'hidden_items' in d:
+        hi = d.get('hidden_items') or []
+        if not isinstance(hi, list):
+            hi = []
+        hi = [str(x)[:80] for x in hi][:500]
+        s.hidden_items = json.dumps(hi, ensure_ascii=False)
     db.session.commit()
     return jsonify({'status': 'ok', **s.to_dict()})
 
