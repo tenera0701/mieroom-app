@@ -34,6 +34,9 @@
       <p style="font-size:13px;color:#6b7280;margin:4px 0 0;">契約が終了したお客様の管理ファイル</p>
     </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <select id="jump-ym" class="filter" onchange="jumpToYm(this.value)" title="指定の年月へ移動">
+        <option value="">📅 年月へ移動</option>
+      </select>
       <select id="filter-staff" class="filter" onchange="filterList()">
         <option value="">全スタッフ</option>
         {% for s in staff_list %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
@@ -131,13 +134,15 @@ function render(list) {
     return db_.localeCompare(da);
   });
   let html = '', curKey = null;
+  const ymList = [];  // ジャンプ用（年月キー・ラベル）
   for (const r of sorted) {
     const m = String(r.contract_start_date || '').match(/^(\d{4})-(\d{2})/);
     const key = m ? `${m[1]}-${m[2]}` : '__none__';
     if (key !== curKey) {
       curKey = key;
       const label = m ? `${m[1]}年${parseInt(m[2], 10)}月` : '契約開始日 未定';
-      html += `<tr><td colspan="9" style="text-align:left;background:#F0FDFA;color:#0F766E;font-weight:800;padding:8px 12px;border-top:2px solid #5EEAD4;">${label}</td></tr>`;
+      ymList.push({ key, label });
+      html += `<tr id="ym-${key}"><td colspan="9" style="text-align:left;background:#F0FDFA;color:#0F766E;font-weight:800;padding:8px 12px;border-top:2px solid #5EEAD4;">${label}</td></tr>`;
     }
     html += `
     <tr>
@@ -155,6 +160,20 @@ function render(list) {
     </tr>`;
   }
   tbody.innerHTML = html;
+  // ジャンプ用セレクトを更新（表示中の年月だけ）
+  const sel = document.getElementById('jump-ym');
+  if (sel) {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">📅 年月へ移動</option>' +
+      ymList.map(y => `<option value="${y.key}">${y.label}</option>`).join('');
+    if (ymList.some(y => y.key === cur)) sel.value = cur; else sel.value = '';
+  }
+}
+
+function jumpToYm(key) {
+  if (!key) return;
+  const el = document.getElementById('ym-' + key);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 async function restoreContract(id) {
