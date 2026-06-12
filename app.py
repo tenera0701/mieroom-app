@@ -4860,8 +4860,13 @@ def api_floorplan_settings_save():
 # ── 間取り AI取込（画像→部屋・設備に自動分解） ──
 FLOORPLAN_FIXTURE_TYPES = ['toilet','toiletTankless','bath','kitchen','sink','stove','ih','dishwasher',
     'hood','washbasin','washbasinWide','washer','fridge','stairs','door','sliding','window','heater',
-    'acIndoor','acOutdoor','shoebox','closet','bed','sofa','table','psmb']
-FLOORPLAN_ROOM_TYPES = ['洋室','和室','LDK','DK','K','浴室','洗面','トイレ','玄関','廊下','クローゼット','バルコニー']
+    'acIndoor','acOutdoor','shoebox','closet','bed','sofa','table','psmb',
+    'opening','doorDouble','doorParentChild','doorSide','fix','bayWindowSq',
+    'folding2','sliding3','sliding4','kataBiki',
+    'counterKitchen','islandKitchen','lKitchen','kitchenCounter','cupboard',
+    'washerPan','ubWithToilet','pillar','underfloorStorage']
+FLOORPLAN_ROOM_TYPES = ['洋室','和室','LDK','DK','K','LD','浴室','洗面','トイレ','玄関','廊下','クローゼット',
+                        'バルコニー','収納','土間','ポーチ','ガレージ','吹抜け','床の間','広縁']
 
 
 @app.route("/api/floorplans/ai-import", methods=["POST"])
@@ -4896,11 +4901,16 @@ def api_floorplans_ai_import():
         '}\n\n'
         "部屋種別(type)は次から選ぶ: " + "、".join(FLOORPLAN_ROOM_TYPES) + "（最も近いもの。既定は洋室）\n"
         "設備キー(type)は次の英語から選ぶ: " + ", ".join(FLOORPLAN_FIXTURE_TYPES) + "\n"
-        "（toilet=トイレ, toiletTankless=タンクレストイレ, bath=ユニットバス/浴室, kitchen=システムキッチン, "
-        "sink=シンク, stove=ガスコンロ, ih=IHコンロ, dishwasher=食洗機, hood=レンジフード, washbasin=洗面台, "
-        "washbasinWide=ワイド洗面台, washer=洗濯機置場, fridge=冷蔵庫置場, stairs=階段, door=ドア, sliding=引き戸, "
-        "window=窓, heater=給湯器, acIndoor=エアコン室内機, acOutdoor=エアコン室外機, shoebox=玄関収納/下足入, "
-        "closet=クローゼット/収納, bed=ベッド, sofa=ソファ, table=テーブル, psmb=PS/MB)\n\n"
+        "（toilet=トイレ, toiletTankless=タンクレストイレ, bath=ユニットバス/浴室, kitchen=I型キッチン, "
+        "counterKitchen=対面キッチン, islandKitchen=アイランドキッチン, lKitchen=L型キッチン, kitchenCounter=カウンター, "
+        "sink=シンク, stove=ガスコンロ, ih=IHコンロ, dishwasher=食洗機, hood=レンジフード, cupboard=食器棚, washbasin=洗面台, "
+        "washbasinWide=ワイド洗面台, washer=洗濯機置場, washerPan=洗濯パン, ubWithToilet=トイレ付ユニットバス, "
+        "fridge=冷蔵庫置場, stairs=階段, door=片開ドア, doorDouble=両開ドア, doorParentChild=親子ドア, doorSide=袖付片開, "
+        "sliding=引違2枚, sliding3=引違3枚, sliding4=引違4枚, kataBiki=片引戸, folding2=折戸, opening=壁の開口, "
+        "window=引違窓, fix=FIX窓, bayWindowSq=出窓, heater=給湯器, acIndoor=エアコン室内機, acOutdoor=エアコン室外機, "
+        "shoebox=玄関収納/下足入, closet=クローゼット/収納, underfloorStorage=床下収納, pillar=柱, "
+        "bed=ベッド, sofa=ソファ, table=テーブル, psmb=PS/MB)\n\n"
+        "建具（ドア・引き戸・窓・開口）は重要。全ての部屋の出入口と窓を漏れなく抽出すること。\n\n"
         "ルール:\n"
         "1. JSONオブジェクトを1つだけ返す。説明文やマークダウンは一切付けない。\n"
         "2. roomsのpointsは各部屋の外形を3点以上の多角形（長方形なら4点）で表す。\n"
