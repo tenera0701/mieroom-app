@@ -16,11 +16,24 @@
   .cfg-row input[type=time], .cfg-row select, .cfg-row input[type=number] { border:1px solid #d1d5db; border-radius:7px; padding:8px 10px; font-size:13px; }
   .wd { display:inline-flex; align-items:center; gap:3px; font-size:12px; border:1.5px solid #d1d5db; border-radius:8px; padding:6px 10px; cursor:pointer; user-select:none; }
   .wd.on { border-color:#ef4444; background:#fee2e2; color:#b91c1c; font-weight:700; }
-  #rv-qr { width:130px; height:130px; }
+  .qr-box { display:flex; gap:18px; align-items:center; flex-wrap:wrap; }
+  .qr-card { text-align:center; border:1px solid #e5e7eb; border-radius:12px; padding:16px 22px; }
+  .qr-card .logo { max-width:150px; max-height:54px; margin:0 auto 8px; display:block; }
+  .qr-card .sname { font-size:15px; font-weight:800; color:#0F766E; margin-bottom:10px; }
+  #rv-qr { width:160px; height:160px; margin:0 auto; display:flex; align-items:center; justify-content:center; }
+  .qr-card .qmsg { font-size:11px; color:#6b7280; margin-top:8px; }
+  .qr-info { flex:1; min-width:220px; }
+  .qr-url { font-size:12px; color:#0F766E; word-break:break-all; background:#F0FDFA; border:1px solid #99f6e4; border-radius:8px; padding:8px 10px; margin:6px 0; }
   .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; max-width:760px; }
   .alert.show { display:block; }
   .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
   .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
+  /* QRカードだけ印刷 */
+  @media print {
+    body * { visibility:hidden; }
+    #print-area, #print-area * { visibility:visible; }
+    #print-area { position:absolute; left:0; top:0; width:100%; }
+  }
 </style>
 {% endblock %}
 
@@ -55,15 +68,25 @@
 
 <div class="panel">
   <h2>📱 お客様用 予約ページ（{{ store_name }}）</h2>
-  <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
-    <div id="rv-qr"></div>
-    <div style="flex:1;min-width:220px;">
-      <div id="rv-url" style="font-size:12px;color:#0F766E;word-break:break-all;background:#F0FDFA;border:1px solid #99f6e4;border-radius:8px;padding:9px 11px;margin-bottom:8px;"></div>
-      <button class="btn" onclick="copyRvUrl()">🔗 URLをコピー</button>
-      <a class="btn" id="rv-open" href="#" target="_blank" rel="noopener">フォームを開く</a>
+  <div class="qr-box">
+    <div class="qr-card" id="print-area">
+      <img class="logo" src="/api/public/company-logo/{{ store_id }}" alt="" onerror="this.style.display='none'">
+      <div class="sname">{{ store_name }}</div>
+      <div id="rv-qr"></div>
+      <div class="qmsg">スマホのカメラで読み取って、<br>ご来店のご予約にお進みください</div>
+    </div>
+    <div class="qr-info">
+      <p style="font-size:13px;color:#374151;margin:0 0 4px;">このQRをお客様のスマホで読み取ってもらうと、予約フォームが開きます。</p>
+      <div class="qr-url" id="rv-url">―</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn" onclick="copyRvUrl()">🔗 URLをコピー</button>
+        <a class="btn" id="rv-open" href="#" target="_blank" rel="noopener">フォームを開く</a>
+        <button class="btn" onclick="downloadQR()">⬇ QRをダウンロード</button>
+        <button class="btn" onclick="window.print()">🖨 QRカードを印刷</button>
+      </div>
+      <p style="font-size:11px;color:#9ca3af;margin:10px 0 0;">ホームページやLINE・メール署名にURLを載せたり、店頭にQRを置いてご利用ください。</p>
     </div>
   </div>
-  <p style="font-size:11px;color:#9ca3af;margin:10px 0 0;">ホームページやLINE・メール署名にURLを載せたり、店頭にQRを置いてご利用ください。</p>
 </div>
 </div>
 {% endblock %}
@@ -103,9 +126,22 @@ async function load(){
   renderWd();
   document.getElementById('rv-url').textContent = RESERVE_URL || '（店舗が選択されていません）';
   document.getElementById('rv-open').href = RESERVE_URL || '#';
-  if(RESERVE_URL && window.QRCode) new QRCode(document.getElementById('rv-qr'),{text:RESERVE_URL,width:120,height:120});
+  const qbox=document.getElementById('rv-qr'); qbox.innerHTML='';
+  if(RESERVE_URL && window.QRCode) new QRCode(qbox,{text:RESERVE_URL,width:144,height:144,correctLevel:QRCode.CorrectLevel.M});
 }
-function copyRvUrl(){ if(RESERVE_URL) navigator.clipboard.writeText(RESERVE_URL).then(()=>showAlert('URLをコピーしました。')); }
+function copyRvUrl(){ if(RESERVE_URL) navigator.clipboard.writeText(RESERVE_URL).then(()=>showAlert('URLをコピーしました。')).catch(()=>showAlert('コピーに失敗しました。','error')); }
+function downloadQR(){
+  const box=document.getElementById('rv-qr');
+  if(!box) return;
+  const canvas=box.querySelector('canvas');
+  let url='';
+  if(canvas){ url=canvas.toDataURL('image/png'); }
+  else { const img=box.querySelector('img'); if(img) url=img.src; }
+  if(!url){ showAlert('QRの生成を待っています。少し待って再度お試しください。','error'); return; }
+  const a=document.createElement('a');
+  a.href=url; a.download='予約QR.png';
+  document.body.appendChild(a); a.click(); a.remove();
+}
 async function saveCfg(){
   try{
     const r=await fetch('/api/reservation-config',{method:'POST',headers:{'Content-Type':'application/json'},
