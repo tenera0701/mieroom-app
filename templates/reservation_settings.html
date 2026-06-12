@@ -6,7 +6,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   :root { --primary:#0D9488; --primary-dark:#0F766E; }
-  .panel { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:18px 20px; margin-bottom:16px; max-width:760px; }
+  .panel { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:18px 20px; margin-bottom:16px; }
   .panel h2 { font-size:14px; font-weight:800; color:#0F766E; margin:0 0 14px; }
   .btn { display:inline-flex; align-items:center; gap:5px; border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:8px; padding:8px 14px; font-size:13px; font-weight:700; cursor:pointer; }
   .btn:hover { background:#F0FDFA; border-color:#5EEAD4; }
@@ -24,7 +24,7 @@
   .qr-card .qmsg { font-size:11px; color:#6b7280; margin-top:8px; }
   .qr-info { flex:1; min-width:220px; }
   .qr-url { font-size:12px; color:#0F766E; word-break:break-all; background:#F0FDFA; border:1px solid #99f6e4; border-radius:8px; padding:8px 10px; margin:6px 0; }
-  .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; max-width:760px; }
+  .alert { padding:9px 14px; border-radius:8px; font-size:13px; margin-bottom:12px; display:none; }
   .alert.show { display:block; }
   .alert-success { background:#CCFBF1; color:#0F766E; border:1px solid #5EEAD4; }
   .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
@@ -38,7 +38,7 @@
 {% endblock %}
 
 {% block content %}
-<div style="max-width:760px;margin:0 auto;">
+<div style="max-width:1200px;margin:0 auto;">
 <div id="alert-msg" class="alert"></div>
 <div style="margin-bottom:14px;">
   <h1 style="font-size:20px;font-weight:800;color:#111827;margin:0;">予約システム設定</h1>
