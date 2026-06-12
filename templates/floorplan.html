@@ -152,7 +152,7 @@
   <div id="editor-view" style="display:none;">
     <div class="fp-head">
       <div style="display:flex;align-items:center;gap:10px;">
-        <button class="tb-btn" onclick="showLibrary()">← 一覧へ戻る</button>
+        <button class="tb-btn" onclick="leaveEditor()">← 一覧へ戻る</button>
         <div>
           <h1 class="fp-title" style="font-size:17px;">間取り編集 <span id="ed-folder-label" style="font-size:12px;color:#6b7280;font-weight:600;"></span></h1>
         </div>
@@ -395,6 +395,8 @@ let gridOn = true, zoom = 1, gridColor = '#e5e7eb';
 let roomLabelsOn = true;
 /* 履歴（戻る／進む） */
 let _history = [], _histIdx = -1, _histLock = false, _gridBusy = false;
+/* 未保存判定用：開く／新規／保存した瞬間の状態を「クリーンな基準」として保持 */
+let _savedSnapshot = null;
 /* テキストの書式テンプレ（一度決めたルールを次のテキストにも適用） */
 let lastTextStyle = { fontFamily:'sans-serif', fontSize:22, fontWeight:'normal', fontStyle:'normal', underline:false, fill:'#111827', textAlign:'left' };
 function captureTextStyle(o) {
@@ -914,7 +916,18 @@ function captureState() {
   drawGrid();
   return json;
 }
-function resetHistory() { _history = [captureState()]; _histIdx = 0; updateUndoBtn(); }
+function resetHistory() { _history = [captureState()]; _histIdx = 0; _savedSnapshot = _history[0]; updateUndoBtn(); }
+/* 直前の保存／読込時点から変更があるか（＝未保存の入力があるか） */
+function _isDirty() {
+  if (_savedSnapshot === null) return false;
+  try { return captureState() !== _savedSnapshot; } catch(_) { return false; }
+}
+/* 編集画面から一覧へ戻る（未保存なら確認） */
+function leaveEditor() {
+  if (_isDirty() && !confirm('編集中の内容はまだ保存されていません。\n保存せずに一覧へ戻ると、入力した内容は失われます。\n\nこのまま一覧へ戻りますか？')) return;
+  _savedSnapshot = null;
+  showLibrary();
+}
 function pushHistory() {
   if (_histLock || _gridBusy) return;
   const json = captureState();
@@ -2102,6 +2115,7 @@ async function saveFp() {
     if (!res.ok) throw new Error();
     const j = await res.json(); currentId = j.id;
     setFolderLabel();
+    _savedSnapshot = captureState();   // 保存できたので現状をクリーンな基準に更新
     showAlert('間取りを保存しました。');
   } catch(_) { showAlert('保存に失敗しました。', 'error'); }
 }
@@ -2146,6 +2160,12 @@ window.addEventListener('resize', () => {
 });
 
 document.addEventListener('DOMContentLoaded', () => { initCanvas(); buildPalette(); drawGrid(); showLibrary(); });
+
+/* タブを閉じる・リロード・他ページへ移動する時、編集中で未保存なら離脱確認を出す */
+window.addEventListener('beforeunload', e => {
+  const ev = document.getElementById('editor-view');
+  if (ev && ev.style.display !== 'none' && _isDirty()) { e.preventDefault(); e.returnValue = ''; }
+});
 </script>
 {% endblock %}
 

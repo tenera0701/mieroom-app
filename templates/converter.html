@@ -191,10 +191,13 @@
           <div class="fld"><label>物件名（建物名）</label><input class="inp" id="f_name" placeholder="例）ミエルームレジデンス"></div>
           <div class="fld"><label>物件名フリガナ</label><input class="inp" id="f_name_kana" placeholder="ミエルームレジデンス"></div>
         </div>
-        <div class="grid2" style="margin-top:10px;">
+        <div class="fld" style="margin-top:10px;"><label>物件名2（ポータル公開用・任意）</label><input class="inp" id="f_name2" placeholder="チラシ/ポータル用の別名"></div>
+        <div class="grid3" style="margin-top:10px;">
           <div class="fld"><label>部屋番号</label><input class="inp" id="f_room_no" placeholder="例）301"></div>
           <div class="fld"><label>新築・中古</label>{{ sel('new_used') }}</div>
+          <div class="fld"><label>管理コード</label><input class="inp" id="f_mgmt_code" placeholder="自社管理番号"></div>
         </div>
+        <div class="fld" style="margin-top:10px;max-width:160px;"><label>おすすめ度(%)</label><input class="inp" id="f_recommend" type="number" min="0" max="100"></div>
       </div>
     </div>
 
@@ -208,6 +211,10 @@
           <div class="fld"><label>市区町村</label><input class="inp" id="f_city" placeholder="川崎市麻生区"></div>
         </div>
         <div class="fld" style="margin-top:10px;"><label>番地・建物</label><input class="inp" id="f_address" placeholder="百合丘1-2-3"></div>
+        <div class="grid2" style="margin-top:10px;">
+          <div class="fld"><label>緯度（任意）</label><input class="inp" id="f_lat" placeholder="35.123456"></div>
+          <div class="fld"><label>経度（任意）</label><input class="inp" id="f_lng" placeholder="139.123456"></div>
+        </div>
       </div>
       <div class="sec">
         <h3>交通（最寄駅）</h3>
@@ -221,6 +228,11 @@
         <div id="st-wrap"></div>
         <span class="add-link" onclick="addStation()">＋ 駅を追加</span>
       </div>
+      <div class="sec">
+        <h3>周辺環境 <span style="font-size:11px;color:#9ca3af;font-weight:500;">（施設・名称・距離）</span></h3>
+        <div id="sr-wrap"></div>
+        <span class="add-link" onclick="addSurr()">＋ 周辺施設を追加</span>
+      </div>
     </div>
 
     <!-- 賃料・契約 -->
@@ -231,14 +243,20 @@
           <div class="fld"><label>賃料（円/月）</label><input class="inp" id="f_rent" type="number" min="0" placeholder="78000"></div>
           <div class="fld"><label>管理費・共益費（円/月）</label><input class="inp" id="f_admin_fee" type="number" min="0" placeholder="5000"></div>
           <div class="fld"><label>敷金</label><input class="inp" id="f_deposit" placeholder="1ヶ月 / なし"></div>
+          <div class="fld"><label>敷金積み増し</label><input class="inp" id="f_deposit_addon" placeholder="ペット飼育+1ヶ月 等"></div>
           <div class="fld"><label>礼金</label><input class="inp" id="f_key_money" placeholder="1ヶ月 / なし"></div>
           <div class="fld"><label>保証金（円）</label><input class="inp" id="f_guarantee_money" type="number" min="0"></div>
           <div class="fld"><label>敷引・償却</label><input class="inp" id="f_deposit_amort" placeholder="なし / 1ヶ月"></div>
+          <div class="fld"><label>償却金</label><input class="inp" id="f_amortization" placeholder="退去時1ヶ月 等"></div>
           <div class="fld"><label>権利金（円）</label><input class="inp" id="f_rights_money" type="number" min="0"></div>
+          <div class="fld"><label>造作譲渡金（円）</label><input class="inp" id="f_transfer_money" type="number" min="0"></div>
+          <div class="fld"><label>雑費（円）</label><input class="inp" id="f_misc_fee" type="number" min="0"></div>
           <div class="fld"><label>広告料（AD）</label><input class="inp" id="f_ad_fee" placeholder="家賃1ヶ月 / 1.5ヶ月"></div>
           <div class="fld"><label>更新料</label><input class="inp" id="f_renewal_fee" placeholder="新賃料1ヶ月"></div>
           <div class="fld"><label>更新事務手数料（円）</label><input class="inp" id="f_renewal_admin_fee" type="number" min="0"></div>
+          <div class="fld"><label>更新</label>{{ sel('renewal_allowed') }}</div>
         </div>
+        <div class="fld" style="margin-top:10px;"><label>その他初期費用（名称と金額・複数可）</label><textarea id="f_other_init_fee" rows="2" placeholder="鍵交換 16,500円&#10;室内消毒 11,000円"></textarea></div>
       </div>
       <div class="sec" id="sec-sale" style="display:none;">
         <h3>価格（売買）</h3>
@@ -254,10 +272,16 @@
           <div class="fld"><label>契約期間</label><input class="inp" id="f_contract_period" placeholder="2年"></div>
           <div class="fld"><label>保証会社</label><input class="inp" id="f_guarantor_company" placeholder="〇〇保証 / 任意"></div>
           <div class="fld"><label>保証会社利用料</label><input class="inp" id="f_guarantor_fee" placeholder="初回50%・月額1%"></div>
+          <div class="fld"><label>保険加入義務</label>{{ sel('insurance_required') }}</div>
           <div class="fld"><label>火災保険</label><input class="inp" id="f_insurance" placeholder="2年 15,000円"></div>
           <div class="fld"><label>カード決済</label>{{ sel('card_payment') }}</div>
         </div>
-        <div class="fld" style="margin-top:10px;"><label>入居/引渡時期</label><input class="inp" id="f_available_date" placeholder="即入居可 / 相談"></div>
+        <div class="fld" style="margin-top:10px;"><label>保証会社詳細（任意）</label><textarea id="f_guarantor_detail" rows="2" placeholder="保証会社の条件・内訳など"></textarea></div>
+        <div class="grid3" style="margin-top:10px;">
+          <div class="fld"><label>入居/引渡時期</label><input class="inp" id="f_available_date" placeholder="即入居可 / 相談"></div>
+          <div class="fld"><label>退去予定日</label><input class="inp" id="f_move_out_date" placeholder="2026-07-31"></div>
+          <div class="fld"><label>入居時期相談内容</label><input class="inp" id="f_occupancy_note" placeholder="相談可 等"></div>
+        </div>
       </div>
     </div>
 

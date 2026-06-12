@@ -5327,6 +5327,10 @@ def _property_to_dict(p, light=False):
         conds = json.loads(p.conditions or '{}')
     except Exception:
         conds = {}
+    try:
+        surr = json.loads(p.surroundings or '[]')
+    except Exception:
+        surr = []
     base = {
         'id': p.id, 'deal_type': p.deal_type, 'deal_label': _prop_deal_label(p.deal_type),
         'property_type': p.property_type, 'name': p.name, 'room_no': p.room_no,
@@ -5356,6 +5360,22 @@ def _property_to_dict(p, light=False):
         'bath_type': p.bath_type, 'toilet_type': p.toilet_type, 'internet': p.internet,
         'washer_place': p.washer_place, 'stove_type': p.stove_type,
         'ad_fee': p.ad_fee, 'moto_company': p.moto_company, 'reins_no': p.reins_no,
+        # いえらぶ完全版の追加項目
+        'name2': p.name2, 'mgmt_code': p.mgmt_code, 'recommend': p.recommend,
+        'lat': p.lat, 'lng': p.lng, 'move_out_date': p.move_out_date, 'occupancy_note': p.occupancy_note,
+        'deposit_addon': p.deposit_addon, 'amortization': p.amortization,
+        'transfer_money': p.transfer_money, 'misc_fee': p.misc_fee, 'renewal_allowed': p.renewal_allowed,
+        'other_init_fee': p.other_init_fee or '', 'guarantor_detail': p.guarantor_detail or '',
+        'insurance_required': p.insurance_required, 'structure_other': p.structure_other,
+        'area_method': p.area_method, 'mgmt_union': p.mgmt_union, 'mgmt_company': p.mgmt_company,
+        'parking_contract': p.parking_contract, 'parking_count': p.parking_count,
+        'parking_deposit': p.parking_deposit, 'parking_note': p.parking_note,
+        'bike_fee': p.bike_fee, 'bike_note': p.bike_note,
+        'bicycle_fee': p.bicycle_fee, 'bicycle_note': p.bicycle_note,
+        'electric': p.electric, 'stove_count': p.stove_count,
+        'equip_free': p.equip_free or '', 'cond_free': p.cond_free or '',
+        'mediation_date': p.mediation_date, 'moto_tel': p.moto_tel, 'deal_note': p.deal_note or '',
+        'surroundings': surr,
         'updated_at': p.updated_at.strftime('%Y-%m-%d %H:%M') if p.updated_at else '',
         'issues': _validate_property(p),
     }
@@ -5435,15 +5455,16 @@ _PROP_STR_FIELDS = ['deal_type', 'property_type', 'name', 'room_no', 'status', '
                     'internet', 'washer_place', 'stove_type', 'ad_fee', 'moto_company', 'reins_no',
                     # いえらぶ完全版
                     'name2', 'mgmt_code', 'recommend', 'lat', 'lng', 'move_out_date', 'occupancy_note',
-                    'deposit_addon', 'amortization', 'renewal_allowed', 'other_init_fee', 'guarantor_detail',
+                    'deposit_addon', 'amortization', 'renewal_allowed',
                     'insurance_required', 'structure_other', 'area_method', 'mgmt_union', 'mgmt_company',
                     'parking_contract', 'parking_count', 'parking_deposit', 'parking_note',
-                    'bike_note', 'bicycle_note', 'electric', 'stove_count', 'equip_free', 'cond_free',
-                    'mediation_date', 'moto_tel', 'deal_note']
+                    'bike_note', 'bicycle_note', 'electric', 'stove_count',
+                    'mediation_date', 'moto_tel']
 _PROP_INT_FIELDS = ['walk_min', 'bus_min', 'rent', 'admin_fee', 'price',
                     'guarantee_money', 'rights_money', 'renewal_admin_fee', 'parking_fee',
                     'transfer_money', 'misc_fee', 'bike_fee', 'bicycle_fee']
 _PROP_FLOAT_FIELDS = ['floor_area', 'land_area', 'balcony_area']
+_PROP_TEXT_FIELDS = ['other_init_fee', 'guarantor_detail', 'equip_free', 'cond_free', 'deal_note']
 
 
 def _apply_property_payload(p, data):
@@ -5466,6 +5487,9 @@ def _apply_property_payload(p, data):
                 setattr(p, f, None)
     if 'comment' in data:
         p.comment = (data.get('comment') or '')[:5000]
+    for f in _PROP_TEXT_FIELDS:
+        if f in data:
+            setattr(p, f, (str(data.get(f)) if data.get(f) is not None else '')[:5000])
     if 'features' in data:
         feats = data.get('features') or []
         if isinstance(feats, list):
@@ -5492,6 +5516,19 @@ def _apply_property_payload(p, data):
         if isinstance(cd, dict):
             clean = {k: str(v)[:20] for k, v in cd.items() if k in PROPERTY_CONDITION_KEYS}
             p.conditions = json.dumps(clean, ensure_ascii=False)
+    if 'surroundings' in data:
+        sr = data.get('surroundings') or []
+        if isinstance(sr, list):
+            clean = []
+            for s in sr[:20]:
+                if not isinstance(s, dict):
+                    continue
+                if not (s.get('type') or s.get('name')):
+                    continue
+                clean.append({'type': str(s.get('type', ''))[:30],
+                              'name': str(s.get('name', ''))[:80],
+                              'dist': str(s.get('dist', ''))[:20]})
+            p.surroundings = json.dumps(clean, ensure_ascii=False)
     if 'images' in data:
         imgs = data.get('images') or []
         if isinstance(imgs, list):
@@ -5634,16 +5671,30 @@ def _build_property_row(p):
     )
     cond_label = {k: l for k, l, _ in PROPERTY_CONDITIONS}
     cond_str = '／'.join(f"{cond_label.get(k, k)}:{v}" for k, v in conds.items() if v)
+    try:
+        surr = json.loads(p.surroundings or '[]')
+    except Exception:
+        surr = []
+    surr_str = '／'.join(
+        f"{s.get('type','')}:{s.get('name','')}({s.get('dist','')}m)".replace(':()m', '')
+        for s in surr if isinstance(s, dict) and (s.get('type') or s.get('name'))
+    )
+    oneline = lambda s: (s or '').replace('\r', ' ').replace('\n', ' ')
     return [
         ('取引区分', _prop_deal_label(p.deal_type)),
         ('物件種別', p.property_type or ''),
         ('物件名', p.name or ''),
         ('物件名フリガナ', p.name_kana or ''),
+        ('物件名2', p.name2 or ''),
         ('部屋番号', p.room_no or ''),
+        ('管理コード', p.mgmt_code or ''),
+        ('おすすめ度(%)', p.recommend or ''),
         ('郵便番号', p.postal_code or ''),
         ('都道府県', p.pref or ''),
         ('市区町村', p.city or ''),
         ('番地・建物', p.address or ''),
+        ('緯度', p.lat or ''),
+        ('経度', p.lng or ''),
         ('路線', p.line_name or ''),
         ('最寄駅', p.station or ''),
         ('駅徒歩(分)', num(p.walk_min)),
@@ -5652,23 +5703,32 @@ def _build_property_row(p):
         ('賃料(円)', yen(p.rent)),
         ('管理費・共益費(円)', yen(p.admin_fee)),
         ('敷金', p.deposit or ''),
+        ('敷金積み増し', p.deposit_addon or ''),
         ('礼金', p.key_money or ''),
         ('保証金(円)', yen(p.guarantee_money)),
         ('敷引・償却', p.deposit_amort or ''),
+        ('償却金', p.amortization or ''),
         ('権利金(円)', yen(p.rights_money)),
+        ('造作譲渡金(円)', yen(p.transfer_money)),
+        ('雑費(円)', yen(p.misc_fee)),
         ('更新料', p.renewal_fee or ''),
         ('更新事務手数料(円)', yen(p.renewal_admin_fee)),
+        ('更新', p.renewal_allowed or ''),
+        ('その他初期費用', oneline(p.other_init_fee)),
         ('販売価格(円)', yen(p.price)),
         ('広告料(AD)', p.ad_fee or ''),
         ('契約形態', p.contract_type or ''),
         ('契約期間', p.contract_period or ''),
         ('保証会社', p.guarantor_company or ''),
         ('保証会社利用料', p.guarantor_fee or ''),
+        ('保証会社詳細', oneline(p.guarantor_detail)),
+        ('保険加入義務', p.insurance_required or ''),
         ('火災保険', p.insurance or ''),
         ('カード決済', p.card_payment or ''),
         ('間取り', p.layout or ''),
         ('間取り内訳', p.layout_detail or ''),
         ('専有/建物面積(㎡)', num(p.floor_area)),
+        ('面積基準', p.area_method or ''),
         ('バルコニー面積(㎡)', num(p.balcony_area)),
         ('土地面積(㎡)', num(p.land_area)),
         ('所在階', p.floor or ''),
@@ -5677,32 +5737,53 @@ def _build_property_row(p):
         ('築年月', p.build_ym or ''),
         ('新築・中古', p.new_used or ''),
         ('構造', p.structure or ''),
+        ('構造その他', p.structure_other or ''),
         ('向き', p.direction or ''),
         ('管理形態', p.mgmt_form or ''),
         ('管理人', p.mgmt_person or ''),
+        ('管理組合', p.mgmt_union or ''),
+        ('管理会社名', p.mgmt_company or ''),
         ('駐車場', p.parking or ''),
+        ('駐車場契約形態', p.parking_contract or ''),
         ('駐車場月額(円)', yen(p.parking_fee)),
         ('駐車場距離', p.parking_distance or ''),
         ('駐車場形式', p.parking_type or ''),
+        ('駐車場空き台数', p.parking_count or ''),
+        ('駐車場敷金・礼金', p.parking_deposit or ''),
+        ('駐車場備考', p.parking_note or ''),
         ('バイク置場', p.bike_park or ''),
+        ('バイク置場月額(円)', yen(p.bike_fee)),
+        ('バイク置場備考', p.bike_note or ''),
         ('駐輪場', p.bicycle_park or ''),
+        ('駐輪場月額(円)', yen(p.bicycle_fee)),
+        ('駐輪場備考', p.bicycle_note or ''),
         ('水道', p.util_water or ''),
         ('排水', p.util_drainage or ''),
         ('ガス', p.util_gas or ''),
+        ('電気', p.electric or ''),
         ('バス', p.bath_type or ''),
         ('トイレ', p.toilet_type or ''),
         ('インターネット', p.internet or ''),
         ('洗濯機置場', p.washer_place or ''),
         ('コンロ種別', p.stove_type or ''),
+        ('コンロ口数', p.stove_count or ''),
+        ('設備フリースペース', oneline(p.equip_free)),
         ('取引態様', p.deal_form or ''),
+        ('媒介契約日', p.mediation_date or ''),
         ('元付業者', p.moto_company or ''),
+        ('元付業者TEL', p.moto_tel or ''),
         ('REINS番号', p.reins_no or ''),
+        ('取引備考', oneline(p.deal_note)),
         ('現況', p.current_status or ''),
+        ('退去予定日', p.move_out_date or ''),
         ('入居/引渡時期', p.available_date or ''),
+        ('入居時期相談内容', p.occupancy_note or ''),
         ('入居条件', cond_str),
+        ('条件フリースペース', oneline(p.cond_free)),
+        ('周辺環境', surr_str),
         ('設備・特徴', '／'.join(feats)),
         ('キャッチコピー', p.catch_copy or ''),
-        ('物件コメント', (p.comment or '').replace('\r', ' ').replace('\n', ' ')),
+        ('物件コメント', oneline(p.comment)),
         ('画像枚数', str(_property_to_dict(p, light=True)['image_count'])),
     ]
 
