@@ -524,7 +524,7 @@
         </script>
 
         {# ── 各種設定グループ（クリックで開閉） ── #}
-        {% if role != 'staff' %}
+        {% if role != 'staff' or user_perms.get('can_view_settings', false) %}
         {% set in_settings2 = request.path in ['/settings/mail-templates', '/settings/mail-import', '/settings/mail-automation', '/doc-templates', '/store-visits', '/settings/reservation'] %}
         <a href="#" id="settings2-toggle" class="nav-item" onclick="toggleSettings2(event)">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">

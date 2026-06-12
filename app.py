@@ -119,6 +119,7 @@ def inject_ui_context():
             'can_view_daily_report':getattr(u, 'can_view_daily_report', True),
             'can_view_leave':       getattr(u, 'can_view_leave', True),
             'can_view_accounting':  getattr(u, 'can_view_accounting', True),
+            'can_view_settings':    getattr(u, 'can_view_settings', False),
         }
 
     def _is_chat_pro():
@@ -587,6 +588,7 @@ class AppUser(db.Model):
     can_view_leads_page = db.Column(db.Boolean, default=True)     # 反響管理
     can_view_daily_report = db.Column(db.Boolean, default=True)   # 日報
     can_view_leave = db.Column(db.Boolean, default=True)          # 有給管理
+    can_view_settings = db.Column(db.Boolean, default=False)     # 各種設定（メール/契約フォーマット/来店管理/予約システム）staffはデフォルト非表示
     # クライアント管理画面の操作権限（sys_admin向け）
     admin_can_add_tenant    = db.Column(db.Boolean, default=False)  # 新規テナント追加
     admin_can_manage_stores = db.Column(db.Boolean, default=False)  # 店舗管理
@@ -1827,6 +1829,7 @@ def migrate_db():
         ('can_view_leads_page',    'INTEGER DEFAULT 1'),
         ('can_view_daily_report',  'INTEGER DEFAULT 1'),
         ('can_view_leave',         'INTEGER DEFAULT 1'),
+        ('can_view_settings',      'INTEGER DEFAULT 0'),
         ('admin_can_add_tenant',    'INTEGER DEFAULT 0'),
         ('admin_can_manage_stores', 'INTEGER DEFAULT 0'),
         ('admin_can_delete_tenant', 'INTEGER DEFAULT 0'),
@@ -2134,6 +2137,7 @@ def migrate_postgres():
         ("app_user",           "can_view_leads_page",     "BOOLEAN DEFAULT TRUE"),
         ("app_user",           "can_view_daily_report",   "BOOLEAN DEFAULT TRUE"),
         ("app_user",           "can_view_leave",          "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_settings",       "BOOLEAN DEFAULT FALSE"),
         ("application_record",        "option_amount", "FLOAT DEFAULT 0"),
         ("application_record", "brokerage_payment_date", "DATE"),
         ("application_record", "option_settled", "BOOLEAN DEFAULT FALSE"),
@@ -11831,6 +11835,7 @@ def api_user_create():
         can_view_leads_page=bool(data.get('can_view_leads_page', True)),
         can_view_daily_report=bool(data.get('can_view_daily_report', True)),
         can_view_leave=bool(data.get('can_view_leave', True)),
+        can_view_settings=bool(data.get('can_view_settings', False)),
     )
     db.session.add(u)
     db.session.commit()
@@ -11859,6 +11864,7 @@ def api_user_update(uid):
     if 'can_view_leads_page'    in data: u.can_view_leads_page    = bool(data['can_view_leads_page'])
     if 'can_view_daily_report'  in data: u.can_view_daily_report  = bool(data['can_view_daily_report'])
     if 'can_view_leave'         in data: u.can_view_leave         = bool(data['can_view_leave'])
+    if 'can_view_settings'      in data: u.can_view_settings      = bool(data['can_view_settings'])
     db.session.commit()
     return jsonify({'status': 'ok'})
 
