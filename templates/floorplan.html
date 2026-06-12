@@ -200,6 +200,16 @@
         <input type="file" accept="image/*" onchange="aiImport(event)" style="display:none;">
       </label>
       <span class="tb-sep"></span>
+      <label class="tb-btn" title="間取り画像を薄い下絵として取り込み、上からなぞって作図できます">🖼 下絵を取込
+        <input type="file" accept="image/*" onchange="addBg(event)" style="display:none;">
+      </label>
+      <span class="tb-btn" id="bg-opacity-wrap" style="gap:6px;cursor:default;display:none;" title="下絵の透け具合（薄さ）を調整">透過
+        <input type="range" id="bg-opacity" min="5" max="100" value="30" oninput="setBgOpacity(this.value)" style="width:88px;cursor:pointer;vertical-align:middle;">
+        <span id="bg-opacity-val" style="font-size:11px;color:#6b7280;min-width:32px;display:inline-block;">30%</span>
+      </span>
+      <button class="tb-btn" id="bg-lock-btn" onclick="toggleBgLock()" style="display:none;" title="下絵を固定すると、作図中に下絵を誤って動かさなくなります">🔒 下絵を固定</button>
+      <button class="tb-btn danger" id="bg-remove-btn" onclick="removeBgImg()" style="display:none;" title="下絵を削除">🗑 下絵</button>
+      <span class="tb-sep"></span>
       <button class="tb-btn" onclick="addLine()">＋ 線</button>
       <label class="tb-btn">＋ ロゴ
         <input type="file" accept="image/*" onchange="addLogo(event)" style="display:none;">
@@ -570,6 +580,7 @@ function openNew(){
   resetRoomLabelState();
   fillFolderSelect(); setFolderLabel();
   showEditor();
+  _syncBgControls();
   setTimeout(resetHistory, 50);
 }
 /* 既定の背景色・格子色をキャンバスとツールバーのスウォッチに反映 */
@@ -595,8 +606,8 @@ async function openPlan(id, folderId){
     document.getElementById('fp-name').value = f.name || '';
     canvas.clear(); zoom = 1; document.getElementById('zoom-label').textContent = '100%';
     resetRoomLabelState();
-    if (f.data) canvas.loadFromJSON(JSON.parse(f.data), () => { fitCanvas(); canvas.renderAll(); resetHistory(); });
-    else { fitCanvas(); canvas.renderAll(); resetHistory(); }
+    if (f.data) canvas.loadFromJSON(JSON.parse(f.data), () => { fitCanvas(); canvas.renderAll(); resetHistory(); _syncBgControls(); });
+    else { fitCanvas(); canvas.renderAll(); resetHistory(); _syncBgControls(); }
     fillFolderSelect(); setFolderLabel();
     showEditor();
   } catch(_) { showAlert('読み込みに失敗しました。', 'error'); }
@@ -1398,12 +1409,16 @@ function addBg(e) {
   const reader = new FileReader();
   reader.onload = ev => {
     fabric.Image.fromURL(ev.target.result, img => {
+      // 既存の下絵があれば置き換える
+      const old = _bgObj(); if (old) canvas.remove(old);
       const scale = Math.min(canvas.width / img.width, canvas.height / img.height, 1);
-      img.set({ left:(canvas.width - img.width*scale)/2, top:(canvas.height - img.height*scale)/2, scaleX:scale, scaleY:scale, opacity:0.85 });
+      img.set({ left:(canvas.width - img.width*scale)/2, top:(canvas.height - img.height*scale)/2, scaleX:scale, scaleY:scale, opacity:0.30 });
       img.set('isBg', true);
       canvas.add(img); canvas.sendToBack(img);
       canvas.getObjects().filter(o=>o.isGrid).forEach(o=>canvas.sendToBack(o));
-      canvas.discardActiveObject(); canvas.renderAll();
+      canvas.setActiveObject(img); canvas.renderAll();
+      _syncBgControls();
+      showAlert('下絵を取り込みました。位置・大きさを合わせたら「🔒 下絵を固定」でロックして、上からなぞって作図できます。');
     });
   };
   reader.readAsDataURL(file);
@@ -1418,6 +1433,38 @@ function toggleBgLock() {
   if (willLock) canvas.discardActiveObject();
   canvas.renderAll();
   document.getElementById('bg-lock-btn').textContent = willLock ? '🔓 下絵を解除' : '🔒 下絵を固定';
+}
+/* 下絵の透け具合（5〜100%）を調整 */
+function setBgOpacity(v) {
+  const bg = _bgObj(); if (!bg) return;
+  bg.set('opacity', Math.max(0.05, Math.min(1, (+v) / 100)));
+  const lbl = document.getElementById('bg-opacity-val'); if (lbl) lbl.textContent = v + '%';
+  canvas.renderAll();
+}
+/* 下絵を削除 */
+function removeBgImg() {
+  const bg = _bgObj(); if (!bg) { _syncBgControls(); return; }
+  canvas.remove(bg); canvas.discardActiveObject(); canvas.renderAll();
+  _syncBgControls();
+  showAlert('下絵を削除しました。');
+}
+/* 下絵の有無に応じてツールバーの透過スライダー・固定/削除ボタンを出し分け */
+function _syncBgControls() {
+  const bg = _bgObj();
+  const wrap = document.getElementById('bg-opacity-wrap');
+  const lockB = document.getElementById('bg-lock-btn');
+  const rmB = document.getElementById('bg-remove-btn');
+  if (!wrap || !lockB || !rmB) return;
+  const show = !!bg;
+  wrap.style.display = show ? '' : 'none';
+  lockB.style.display = show ? '' : 'none';
+  rmB.style.display = show ? '' : 'none';
+  if (bg) {
+    const pct = Math.round((bg.opacity != null ? bg.opacity : 0.3) * 100);
+    const sl = document.getElementById('bg-opacity'); if (sl) sl.value = pct;
+    const lbl = document.getElementById('bg-opacity-val'); if (lbl) lbl.textContent = pct + '%';
+    lockB.textContent = (bg.selectable === false) ? '🔓 下絵を解除' : '🔒 下絵を固定';
+  }
 }
 function addText() {
   // 直前に使ったテキスト書式を引き継ぐ（一度決めたルールでそろえられる）

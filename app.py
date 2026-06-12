@@ -941,6 +941,42 @@ class Property(db.Model):
     ad_fee = db.Column(db.String(40), default='')           # 広告料(AD)
     moto_company = db.Column(db.String(120), default='')    # 元付業者
     reins_no = db.Column(db.String(60), default='')         # REINS番号
+    # ── いえらぶ完全版の追加項目 ──
+    name2 = db.Column(db.String(200), default='')           # 物件名2（ポータル公開用）
+    mgmt_code = db.Column(db.String(60), default='')        # 管理コード
+    recommend = db.Column(db.String(10), default='')        # おすすめ度(%)
+    lat = db.Column(db.String(30), default='')              # 緯度
+    lng = db.Column(db.String(30), default='')              # 経度
+    move_out_date = db.Column(db.String(40), default='')    # 退去予定日
+    occupancy_note = db.Column(db.String(200), default='')  # 入居時期相談内容
+    deposit_addon = db.Column(db.String(200), default='')   # 敷金積み増し（ペット/喫煙者 等）
+    amortization = db.Column(db.String(80), default='')     # 償却金（毎年/更新時/退去時）
+    transfer_money = db.Column(db.Integer)                  # 造作譲渡金(円)
+    misc_fee = db.Column(db.Integer)                       # 雑費(円)
+    renewal_allowed = db.Column(db.String(20), default='')  # 更新（不可/条件付き可/可）
+    other_init_fee = db.Column(db.Text)                    # その他初期費用（名称と金額・複数）
+    guarantor_detail = db.Column(db.Text)                  # 保証会社詳細
+    insurance_required = db.Column(db.String(10), default='')   # 保険加入義務（有/無）
+    structure_other = db.Column(db.String(80), default='') # 建物構造その他
+    area_method = db.Column(db.String(10), default='')      # 壁芯/内法
+    mgmt_union = db.Column(db.String(10), default='')       # 管理組合（有/無）
+    mgmt_company = db.Column(db.String(120), default='')    # 管理会社名
+    parking_contract = db.Column(db.String(60), default='')    # 駐車場契約形態
+    parking_count = db.Column(db.String(20), default='')    # 駐車場空き台数
+    parking_deposit = db.Column(db.String(40), default='')  # 駐車場敷金・礼金
+    parking_note = db.Column(db.String(200), default='')    # 駐車場備考
+    bike_fee = db.Column(db.Integer)                       # バイク置場月額(円)
+    bike_note = db.Column(db.String(200), default='')       # バイク置場備考
+    bicycle_fee = db.Column(db.Integer)                    # 駐輪場月額(円)
+    bicycle_note = db.Column(db.String(200), default='')    # 駐輪場備考
+    electric = db.Column(db.String(30), default='')         # 電気（アンペア）
+    stove_count = db.Column(db.String(20), default='')      # コンロ口数
+    equip_free = db.Column(db.Text)                        # 設備フリースペース
+    cond_free = db.Column(db.Text)                         # 条件フリースペース
+    mediation_date = db.Column(db.String(40), default='')   # 媒介契約日
+    moto_tel = db.Column(db.String(40), default='')         # 元付業者TEL
+    deal_note = db.Column(db.Text)                         # 取引備考
+    surroundings = db.Column(db.Text)                      # 周辺環境（JSON配列 [{type,name,dist}]）
     # 詳細・公開用テキスト
     features = db.Column(db.Text)                           # 設備・特徴（JSON配列）
     catch_copy = db.Column(db.String(200), default='')      # キャッチコピー
@@ -2227,6 +2263,23 @@ def migrate_db():
                 ('stove_type', "VARCHAR(20) DEFAULT ''"), ('conditions', 'TEXT'),
                 ('ad_fee', "VARCHAR(40) DEFAULT ''"), ('moto_company', "VARCHAR(120) DEFAULT ''"),
                 ('reins_no', "VARCHAR(60) DEFAULT ''"),
+                ('name2', "VARCHAR(200) DEFAULT ''"), ('mgmt_code', "VARCHAR(60) DEFAULT ''"),
+                ('recommend', "VARCHAR(10) DEFAULT ''"), ('lat', "VARCHAR(30) DEFAULT ''"),
+                ('lng', "VARCHAR(30) DEFAULT ''"), ('move_out_date', "VARCHAR(40) DEFAULT ''"),
+                ('occupancy_note', "VARCHAR(200) DEFAULT ''"), ('deposit_addon', "VARCHAR(200) DEFAULT ''"),
+                ('amortization', "VARCHAR(80) DEFAULT ''"), ('transfer_money', 'INTEGER'),
+                ('misc_fee', 'INTEGER'), ('renewal_allowed', "VARCHAR(20) DEFAULT ''"),
+                ('other_init_fee', 'TEXT'), ('guarantor_detail', 'TEXT'),
+                ('insurance_required', "VARCHAR(10) DEFAULT ''"), ('structure_other', "VARCHAR(80) DEFAULT ''"),
+                ('area_method', "VARCHAR(10) DEFAULT ''"), ('mgmt_union', "VARCHAR(10) DEFAULT ''"),
+                ('mgmt_company', "VARCHAR(120) DEFAULT ''"), ('parking_contract', "VARCHAR(60) DEFAULT ''"),
+                ('parking_count', "VARCHAR(20) DEFAULT ''"), ('parking_deposit', "VARCHAR(40) DEFAULT ''"),
+                ('parking_note', "VARCHAR(200) DEFAULT ''"), ('bike_fee', 'INTEGER'),
+                ('bike_note', "VARCHAR(200) DEFAULT ''"), ('bicycle_fee', 'INTEGER'),
+                ('bicycle_note', "VARCHAR(200) DEFAULT ''"), ('electric', "VARCHAR(30) DEFAULT ''"),
+                ('stove_count', "VARCHAR(20) DEFAULT ''"), ('equip_free', 'TEXT'),
+                ('cond_free', 'TEXT'), ('mediation_date', "VARCHAR(40) DEFAULT ''"),
+                ('moto_tel', "VARCHAR(40) DEFAULT ''"), ('deal_note', 'TEXT'), ('surroundings', 'TEXT'),
             ]:
                 if col not in pcols:
                     cursor.execute(f"ALTER TABLE property ADD COLUMN {col} {typ}")
@@ -2375,6 +2428,41 @@ def migrate_postgres():
         ("property", "ad_fee",            "VARCHAR(40) DEFAULT ''"),
         ("property", "moto_company",      "VARCHAR(120) DEFAULT ''"),
         ("property", "reins_no",          "VARCHAR(60) DEFAULT ''"),
+        ("property", "name2",             "VARCHAR(200) DEFAULT ''"),
+        ("property", "mgmt_code",         "VARCHAR(60) DEFAULT ''"),
+        ("property", "recommend",         "VARCHAR(10) DEFAULT ''"),
+        ("property", "lat",               "VARCHAR(30) DEFAULT ''"),
+        ("property", "lng",               "VARCHAR(30) DEFAULT ''"),
+        ("property", "move_out_date",     "VARCHAR(40) DEFAULT ''"),
+        ("property", "occupancy_note",    "VARCHAR(200) DEFAULT ''"),
+        ("property", "deposit_addon",     "VARCHAR(200) DEFAULT ''"),
+        ("property", "amortization",      "VARCHAR(80) DEFAULT ''"),
+        ("property", "transfer_money",    "INTEGER"),
+        ("property", "misc_fee",          "INTEGER"),
+        ("property", "renewal_allowed",   "VARCHAR(20) DEFAULT ''"),
+        ("property", "other_init_fee",    "TEXT"),
+        ("property", "guarantor_detail",  "TEXT"),
+        ("property", "insurance_required","VARCHAR(10) DEFAULT ''"),
+        ("property", "structure_other",   "VARCHAR(80) DEFAULT ''"),
+        ("property", "area_method",       "VARCHAR(10) DEFAULT ''"),
+        ("property", "mgmt_union",        "VARCHAR(10) DEFAULT ''"),
+        ("property", "mgmt_company",      "VARCHAR(120) DEFAULT ''"),
+        ("property", "parking_contract",  "VARCHAR(60) DEFAULT ''"),
+        ("property", "parking_count",     "VARCHAR(20) DEFAULT ''"),
+        ("property", "parking_deposit",   "VARCHAR(40) DEFAULT ''"),
+        ("property", "parking_note",      "VARCHAR(200) DEFAULT ''"),
+        ("property", "bike_fee",          "INTEGER"),
+        ("property", "bike_note",         "VARCHAR(200) DEFAULT ''"),
+        ("property", "bicycle_fee",       "INTEGER"),
+        ("property", "bicycle_note",      "VARCHAR(200) DEFAULT ''"),
+        ("property", "electric",          "VARCHAR(30) DEFAULT ''"),
+        ("property", "stove_count",       "VARCHAR(20) DEFAULT ''"),
+        ("property", "equip_free",        "TEXT"),
+        ("property", "cond_free",         "TEXT"),
+        ("property", "mediation_date",    "VARCHAR(40) DEFAULT ''"),
+        ("property", "moto_tel",          "VARCHAR(40) DEFAULT ''"),
+        ("property", "deal_note",         "TEXT"),
+        ("property", "surroundings",      "TEXT"),
     ]
     # 各カラムを独立した接続で追加（1つの失敗が他に波及しない）
     for tbl, col, typedef in new_cols:
@@ -5101,16 +5189,34 @@ CONVERTER_PORTAL_KEYS = {p['key'] for p in CONVERTER_PORTALS}
 PROPERTY_TYPES = ['マンション', 'アパート', '戸建', '土地', '店舗・事務所', '倉庫・工場', '駐車場', 'その他']
 # 取引区分
 DEAL_TYPES = [('rent', '賃貸（居住用）'), ('sale', '売買（居住用）'), ('commercial', '事業用・その他')]
-# 設備・特徴の候補（チェックリスト）
+# 設備・特徴の候補（チェックリスト）— いえらぶ「設備・条件その他」相当の網羅版
 PROPERTY_FEATURE_OPTIONS = [
-    'バス・トイレ別', '独立洗面台', '追焚き機能', '温水洗浄便座', '室内洗濯機置場',
-    'エアコン', '都市ガス', 'システムキッチン', 'IHコンロ', 'ガスコンロ', '2口以上コンロ',
-    'オートロック', 'TVモニタ付インターホン', '宅配ボックス', '防犯カメラ',
-    'フローリング', '室内物干し', 'バルコニー', '南向き', '角部屋', '最上階',
-    'エレベーター', '駐車場あり', 'バイク置場', '駐輪場',
-    'ペット相談', '楽器相談', '2人入居可', 'ルームシェア可', '事務所利用可',
-    '敷金礼金なし', 'インターネット無料', 'BS・CS', '光ファイバー',
-    'リフォーム済', 'リノベーション', '新築', 'デザイナーズ', '高速インターネット',
+    # キッチン・水回り
+    'バス・トイレ別', 'セパレート', '独立洗面台', '洗面化粧台', '追焚き機能', '浴室乾燥機',
+    '温水洗浄便座', '温水便座', '室内洗濯機置場', '洗濯機置場屋外', 'システムキッチン',
+    'IHコンロ', 'ガスコンロ', '電気コンロ', '2口以上コンロ', '3口以上コンロ', 'カウンターキッチン',
+    'コンロ設置可', 'グリル付', '食器洗い乾燥機', '浄水器', 'ディスポーザー', '都市ガス', 'プロパンガス',
+    # 空調・室内
+    'エアコン', 'エアコン2台以上', '床暖房', '床下収納', 'フローリング', 'クッションフロア',
+    '室内物干し', '物干しスペース', 'バルコニー', 'ルーフバルコニー', 'ウォークインクローゼット',
+    'クローゼット', '全室収納', 'シューズボックス', '下足入れ', '間接照明', 'ロフト', 'メゾネット',
+    '吹き抜け', '出窓', '天井高', '二重サッシ', 'ペアガラス', '網戸', '雨戸',
+    # セキュリティ・共用
+    'オートロック', 'TVモニタ付インターホン', 'モニタ付インターホン', '宅配ボックス', '防犯カメラ',
+    'セキュリティ会社加入済', 'ディンプルキー', 'カードキー', '管理人常駐', '管理人日勤', 'エレベーター',
+    '24時間ゴミ出し可', '敷地内ゴミ置場', 'バリアフリー', '手すり', 'スロープ',
+    # 通信・その他設備
+    'インターネット無料', 'インターネット対応', '光ファイバー', '高速インターネット', 'CATV', 'BS', 'CS',
+    'BS・CS', '有線放送', '電話2回線可', '事務所利用可', 'SOHO可', '楽器相談', '防音室',
+    # 駐車・立地
+    '駐車場あり', '駐車場2台可', 'バイク置場', '駐輪場', '南向き', '東南向き', '角部屋', '最上階',
+    '2階以上', '低層階', '高層階', '陽当り良好', '眺望良好', '車庫', 'EV充電',
+    # 契約・付帯
+    'ペット相談', 'ペット可', '2人入居可', 'ルームシェア可', '女性限定', '学生可', '高齢者歓迎',
+    '保証人不要', '敷金礼金なし', '礼金なし', '敷金なし', 'フリーレント', '初期費用カード可',
+    # 築・状態
+    'リフォーム済', 'リノベーション', '新築', '未入居', 'デザイナーズ', '即入居可',
+    '家具付', '家電付', '即引渡', '分譲賃貸',
 ]
 
 # いえらぶ相当の選択肢セット（フロントのプルダウン/トグルで使用）
@@ -5138,15 +5244,22 @@ PROPERTY_OPTIONS = {
     'internet': ['有', '高速インターネット', '光ファイバー', '無'],
     'washer_place': ['室内', '有', '無'],
     'stove_type': ['ガス', '電気', 'IH'],
+    'stove_count': ['一口', '二口', '三口', '四口以上'],
     'card_payment': ['不可', '家賃', '初期費用', '家賃+初期費用'],
+    'renewal_allowed': ['可', '条件付き可', '不可'],
+    'area_method': ['壁芯', '内法'],
+    'mgmt_union': ['有', '無'],
+    'insurance_required': ['有', '無'],
+    'parking_contract': ['必須(賃料に含む)', '必須(駐車場料金別)', '任意'],
 }
-# 入居条件（キー: ラベル, 選択肢）
+# 入居条件（キー: ラベル, 選択肢）— いえらぶ「条件」相当
 PROPERTY_CONDITIONS = [
     ('pet',        'ペット',       ['対応', '可能', '相談', '不可']),
     ('instrument', '楽器相談',     ['可', '不可']),
     ('office',     '事務所利用',   ['可', '不可']),
     ('two_person', '2人入居',      ['可', '不可']),
     ('gender',     '性別限定',     ['男性限定', '女性限定']),
+    ('single',     '単身者',       ['限定', '希望', '不可']),
     ('corporate',  '法人',         ['限定', '希望', '可', '不可']),
     ('student',    '学生',         ['限定', '歓迎', '相談', '不可']),
     ('elderly',    '高齢者',       ['限定', '歓迎', '相談']),
@@ -5319,9 +5432,17 @@ _PROP_STR_FIELDS = ['deal_type', 'property_type', 'name', 'room_no', 'status', '
                     'layout_detail', 'floors_below', 'new_used', 'mgmt_form', 'mgmt_person',
                     'parking', 'parking_distance', 'parking_type', 'bike_park', 'bicycle_park',
                     'util_water', 'util_drainage', 'util_gas', 'bath_type', 'toilet_type',
-                    'internet', 'washer_place', 'stove_type', 'ad_fee', 'moto_company', 'reins_no']
+                    'internet', 'washer_place', 'stove_type', 'ad_fee', 'moto_company', 'reins_no',
+                    # いえらぶ完全版
+                    'name2', 'mgmt_code', 'recommend', 'lat', 'lng', 'move_out_date', 'occupancy_note',
+                    'deposit_addon', 'amortization', 'renewal_allowed', 'other_init_fee', 'guarantor_detail',
+                    'insurance_required', 'structure_other', 'area_method', 'mgmt_union', 'mgmt_company',
+                    'parking_contract', 'parking_count', 'parking_deposit', 'parking_note',
+                    'bike_note', 'bicycle_note', 'electric', 'stove_count', 'equip_free', 'cond_free',
+                    'mediation_date', 'moto_tel', 'deal_note']
 _PROP_INT_FIELDS = ['walk_min', 'bus_min', 'rent', 'admin_fee', 'price',
-                    'guarantee_money', 'rights_money', 'renewal_admin_fee', 'parking_fee']
+                    'guarantee_money', 'rights_money', 'renewal_admin_fee', 'parking_fee',
+                    'transfer_money', 'misc_fee', 'bike_fee', 'bicycle_fee']
 _PROP_FLOAT_FIELDS = ['floor_area', 'land_area', 'balcony_area']
 
 
