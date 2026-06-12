@@ -58,7 +58,7 @@
   <div style="display:flex; gap:0; margin-bottom:-1px; position:relative; z-index:1;">
     <button class="tab-btn active" id="tab-input-btn" onclick="switchReportTab('input')">入力</button>
     <button class="tab-btn" id="tab-list-btn" onclick="switchReportTab('list')">日報一覧</button>
-    <button class="tab-btn" id="tab-task-btn" onclick="switchReportTab('task')">タスク管理</button>
+    <button class="tab-btn" id="tab-task-btn" onclick="switchReportTab('task')">カスタム項目</button>
   </div>
 
   <!-- 入力タブ -->
@@ -90,15 +90,14 @@
           <div class="task-sub">※ システムへの申込データ入力完了</div>
         </div>
       </div>
-      <!-- カスタムタスク -->
-      <div id="custom-task-list">
-        {% for t in tasks if not t.is_default %}
-        <div class="task-row" data-task-id="{{ t.id }}">
-          <input type="checkbox" class="task-check custom-task-check" data-task-id="{{ t.id }}">
-          <div class="task-label">{{ t.task_name }}</div>
-        </div>
-        {% endfor %}
-      </div>
+      <!-- カスタム項目（チェック式） -->
+      <div id="custom-task-list"></div>
+    </div>
+
+    <!-- カスタム項目（入力式：テキスト・選択など） -->
+    <div class="section-card" id="custom-field-card" style="display:none;">
+      <div class="section-title">✏️ カスタム項目</div>
+      <div id="custom-field-list"></div>
     </div>
 
     <!-- 接客記録 -->
@@ -151,13 +150,34 @@
     </div>
   </div>
 
-  <!-- タスク管理タブ -->
+  <!-- カスタム項目タブ -->
   <div id="tab-task" style="display:none; border:1px solid #e5e7eb; border-radius:0 12px 12px 12px; padding:24px; background:#fff;">
-    <p style="font-size:13px; color:#6b7280; margin-bottom:16px;">デフォルトのタスク以外に、独自のタスクを追加できます。</p>
-    <div id="task-template-list" style="margin-bottom:16px;"></div>
-    <div style="display:flex; gap:8px;">
-      <input type="text" id="new-task-name" class="rp-input" placeholder="新しいタスク名" style="flex:1;">
-      <button onclick="addTaskTemplate()" style="background:#0D9488;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;">追加</button>
+    <p style="font-size:13px; color:#6b7280; margin-bottom:16px;">
+      日報の入力項目を自由に作れます。チェックだけでなく、テキスト入力・選択式なども追加できます。
+    </p>
+    <div id="task-template-list" style="margin-bottom:20px;"></div>
+
+    <div style="border:1px solid #d1fae5; background:#F0FDFA; border-radius:10px; padding:16px;">
+      <div style="font-size:14px; font-weight:700; color:#0F766E; margin-bottom:12px;">＋ 新しい項目を追加</div>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <input type="text" id="new-task-name" class="rp-input" placeholder="題名（例：今日の反省点）" style="flex:1; min-width:200px;">
+          <select id="new-task-type" class="rp-select" onchange="document.getElementById('new-task-options-row').style.display = this.value==='select' ? '' : 'none';">
+            <option value="check">チェック（できた/できてない）</option>
+            <option value="text">1行テキスト</option>
+            <option value="textarea">複数行テキスト</option>
+            <option value="select">選択式（プルダウン）</option>
+            <option value="number">数値</option>
+          </select>
+        </div>
+        <input type="text" id="new-task-ph" class="rp-input" placeholder="説明・何を入力するか（例：今日うまくいかなかったことと原因を書く）※任意">
+        <div id="new-task-options-row" style="display:none;">
+          <input type="text" id="new-task-options" class="rp-input" placeholder="選択肢を「、」区切りで入力（例：良い、普通、悪い）">
+        </div>
+        <div style="text-align:right;">
+          <button onclick="addTaskTemplate()" style="background:#0D9488;color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:14px;font-weight:600;cursor:pointer;">追加</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -168,6 +188,53 @@
 <script>
 const STORE_ID = {{ store_id or 0 }};  // テナント分離：バックエンドから注入
 let customerIndex = 0;
+let CUSTOM_ITEMS = [];  // カスタム項目テンプレート
+const TYPE_LABELS = { check:'チェック', text:'1行テキスト', textarea:'複数行テキスト', select:'選択式', number:'数値' };
+
+function escH(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function loadCustomItems() {
+  try { CUSTOM_ITEMS = await fetch('/api/daily-task-template').then(r => r.json()); }
+  catch(_) { CUSTOM_ITEMS = []; }
+  renderCustomInputs();
+}
+
+// 入力タブにカスタム項目を描画（チェック式はタスクチェック内、入力式は専用カード）
+function renderCustomInputs() {
+  const customs = CUSTOM_ITEMS.filter(t => !t.is_default);
+  const checks = customs.filter(t => (t.field_type || 'check') === 'check');
+  const fields = customs.filter(t => (t.field_type || 'check') !== 'check');
+
+  document.getElementById('custom-task-list').innerHTML = checks.map(t => `
+    <div class="task-row" data-task-id="${t.id}">
+      <input type="checkbox" class="task-check custom-task-check" data-task-id="${t.id}">
+      <div>
+        <div class="task-label">${escH(t.task_name)}</div>
+        ${t.placeholder ? `<div class="task-sub">※ ${escH(t.placeholder)}</div>` : ''}
+      </div>
+    </div>`).join('');
+
+  document.getElementById('custom-field-card').style.display = fields.length ? '' : 'none';
+  document.getElementById('custom-field-list').innerHTML = fields.map(t => {
+    const ph = escH(t.placeholder || '');
+    let input;
+    if (t.field_type === 'textarea') {
+      input = `<textarea class="rp-input custom-field-input" data-task-id="${t.id}" rows="3" placeholder="${ph}"></textarea>`;
+    } else if (t.field_type === 'select') {
+      const opts = (t.options || '').split('、').map(o => o.trim()).filter(Boolean);
+      input = `<select class="rp-select custom-field-input" data-task-id="${t.id}" style="width:100%;">
+        <option value="">選択してください</option>${opts.map(o => `<option>${escH(o)}</option>`).join('')}</select>`;
+    } else if (t.field_type === 'number') {
+      input = `<input type="number" class="rp-input custom-field-input" data-task-id="${t.id}" placeholder="${ph}" style="width:140px;">`;
+    } else {
+      input = `<input type="text" class="rp-input custom-field-input" data-task-id="${t.id}" placeholder="${ph}">`;
+    }
+    return `<div style="margin-bottom:14px;">
+      <label style="display:block; font-size:14px; color:#374151; font-weight:600; margin-bottom:6px;">${escH(t.task_name)}</label>
+      ${input}
+    </div>`;
+  }).join('');
+}
 
 function switchReportTab(tab) {
   ['input','list','task'].forEach(t => {
@@ -259,6 +326,7 @@ async function loadExistingReport() {
       document.getElementById('task-same-day').checked = false;
       document.getElementById('task-app-input').checked = false;
       document.querySelectorAll('.custom-task-check').forEach(c => c.checked = false);
+      document.querySelectorAll('.custom-field-input').forEach(el => el.value = '');
       document.getElementById('customer-list').innerHTML = '';
       customerIndex = 0;
       document.getElementById('application-count').value = 0;
@@ -270,8 +338,12 @@ async function loadExistingReport() {
     document.getElementById('task-prev-day').checked  = r.prev_day_contact_done;
     document.getElementById('task-same-day').checked  = r.same_day_contact_done;
     document.getElementById('task-app-input').checked = r.application_input_done;
+    const tv = r.task_values || {};
     document.querySelectorAll('.custom-task-check').forEach(c => {
-      c.checked = !!r.task_checks[c.dataset.taskId];
+      c.checked = !!(tv[c.dataset.taskId]?.checked ?? r.task_checks[c.dataset.taskId]);
+    });
+    document.querySelectorAll('.custom-field-input').forEach(el => {
+      el.value = tv[el.dataset.taskId]?.value || '';
     });
     document.getElementById('customer-list').innerHTML = '';
     customerIndex = 0;
@@ -287,9 +359,12 @@ async function saveReport() {
   const staffId  = document.getElementById('report-staff').value;
   if (!dateVal || !staffId) { showAlert('日付とスタッフを選択してください', 'error'); return; }
 
-  const taskChecks = {};
+  const taskValues = {};
   document.querySelectorAll('.custom-task-check').forEach(c => {
-    taskChecks[c.dataset.taskId] = c.checked;
+    taskValues[c.dataset.taskId] = { checked: c.checked, value: '' };
+  });
+  document.querySelectorAll('.custom-field-input').forEach(el => {
+    taskValues[el.dataset.taskId] = { checked: !!el.value.trim(), value: el.value };
   });
 
   const payload = {
@@ -303,7 +378,7 @@ async function saveReport() {
     tomorrow_appointments: document.getElementById('tomorrow-appointments').value,
     memo: document.getElementById('report-memo').value,
     customers: collectCustomers(),
-    task_checks: taskChecks,
+    task_values: taskValues,
   };
 
   try {
@@ -336,14 +411,20 @@ async function loadReportList() {
     body.innerHTML = list.map(r => {
       const applied = r.customers.filter(c => c.applied).length;
       const notApplied = r.customers.filter(c => !c.applied).length;
+      const customChecks = (r.custom_tasks || []).filter(t => t.type === 'check')
+        .map(t => t.checked ? `<span class="tag-ok">${escH(t.name)} ✓</span>` : `<span class="tag-no">${escH(t.name)} ✗</span>`).join('');
       const tasks = [
         r.prev_day_contact_done ? '<span class="tag-ok">前日連絡 ✓</span>' : '<span class="tag-no">前日連絡 ✗</span>',
         r.same_day_contact_done ? '<span class="tag-ok">当日連絡 ✓</span>' : '<span class="tag-no">当日連絡 ✗</span>',
         r.application_input_done ? '<span class="tag-ok">申込入力 ✓</span>' : '',
+        customChecks,
       ].join('');
+      const customValues = (r.custom_tasks || []).filter(t => t.type !== 'check' && t.value)
+        .map(t => `<div style="font-size:13px; color:#374151; margin-bottom:3px;"><span style="font-weight:600; color:#0F766E;">${escH(t.name)}：</span>${escH(t.value).replace(/\n/g,'<br>')}</div>`).join('');
       return `<div class="report-row">
         <div class="report-meta">${r.report_date} ／ ${r.staff_name}</div>
         <div style="margin-bottom:6px;">${tasks}</div>
+        ${customValues}
         <div style="font-size:13px; color:#374151; margin-bottom:4px;">
           接客: ${r.customers.length}名（申込 <strong>${r.application_count}</strong>件）
         </div>
@@ -372,63 +453,96 @@ async function loadTaskTemplates() {
   const res = await fetch('/api/daily-task-template');
   const tasks = await res.json();
   const el = document.getElementById('task-template-list');
-  el.innerHTML = tasks.map(t => `
-    <div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #f3f4f6;" id="task-item-${t.id}">
-      <span id="task-label-${t.id}" style="flex:1; font-size:14px; color:#374151;">${t.task_name}</span>
-      <input id="task-edit-${t.id}" type="text" value="${t.task_name}" style="flex:1;display:none;border:1px solid #0D9488;border-radius:6px;padding:4px 8px;font-size:13px;">
-      <button onclick="startEditTask(${t.id})" id="task-edit-btn-${t.id}" style="background:#F0FDFA;border:1px solid #5EEAD4;color:#0F766E;border-radius:4px;padding:2px 8px;font-size:12px;cursor:pointer;">編集</button>
-      <button onclick="saveTaskEdit(${t.id})" id="task-save-btn-${t.id}" style="display:none;background:#0D9488;border:none;color:#fff;border-radius:4px;padding:2px 8px;font-size:12px;cursor:pointer;">保存</button>
-      ${t.is_default
-        ? '<span style="font-size:11px; color:#9ca3af; background:#f3f4f6; padding:2px 6px; border-radius:4px;">デフォルト</span>'
-        : `<button onclick="deleteTaskTemplate(${t.id})" style="background:none;border:none;color:#ef4444;font-size:12px;cursor:pointer;">削除</button>`}
-    </div>
-  `).join('');
+  el.innerHTML = tasks.map(t => {
+    const type = t.field_type || 'check';
+    return `
+    <div style="border:1px solid #e5e7eb; border-radius:8px; padding:10px 12px; margin-bottom:8px;" id="task-item-${t.id}">
+      <div id="task-view-${t.id}" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="font-size:11px; font-weight:700; color:#0F766E; background:#CCFBF1; padding:2px 8px; border-radius:999px; white-space:nowrap;">${TYPE_LABELS[type] || type}</span>
+        <div style="flex:1; min-width:160px;">
+          <div style="font-size:14px; color:#374151; font-weight:600;">${escH(t.task_name)}</div>
+          ${t.placeholder ? `<div style="font-size:11px; color:#9ca3af;">${escH(t.placeholder)}</div>` : ''}
+          ${type === 'select' && t.options ? `<div style="font-size:11px; color:#9ca3af;">選択肢：${escH(t.options)}</div>` : ''}
+        </div>
+        <button onclick="startEditTask(${t.id})" style="background:#F0FDFA;border:1px solid #5EEAD4;color:#0F766E;border-radius:4px;padding:3px 10px;font-size:12px;cursor:pointer;">編集</button>
+        ${t.is_default
+          ? '<span style="font-size:11px; color:#9ca3af; background:#f3f4f6; padding:2px 6px; border-radius:4px;">デフォルト</span>'
+          : `<button onclick="deleteTaskTemplate(${t.id})" style="background:none;border:none;color:#ef4444;font-size:12px;cursor:pointer;">削除</button>`}
+      </div>
+      <div id="task-edit-${t.id}" style="display:none; flex-direction:column; gap:8px; margin-top:4px;">
+        <input id="task-edit-name-${t.id}" type="text" value="${escH(t.task_name)}" class="rp-input" placeholder="題名">
+        <input id="task-edit-ph-${t.id}" type="text" value="${escH(t.placeholder || '')}" class="rp-input" placeholder="説明・何を入力するか（任意）">
+        ${type === 'select' ? `<input id="task-edit-opts-${t.id}" type="text" value="${escH(t.options || '')}" class="rp-input" placeholder="選択肢を「、」区切りで入力">` : ''}
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+          <button onclick="loadTaskTemplates()" style="background:#fff;border:1px solid #d1d5db;color:#6b7280;border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer;">キャンセル</button>
+          <button onclick="saveTaskEdit(${t.id})" style="background:#0D9488;border:none;color:#fff;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:600;cursor:pointer;">保存</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function startEditTask(id) {
-  document.getElementById('task-label-' + id).style.display = 'none';
-  document.getElementById('task-edit-' + id).style.display = '';
-  document.getElementById('task-edit-btn-' + id).style.display = 'none';
-  document.getElementById('task-save-btn-' + id).style.display = '';
-  document.getElementById('task-edit-' + id).focus();
+  document.getElementById('task-view-' + id).style.display = 'none';
+  document.getElementById('task-edit-' + id).style.display = 'flex';
+  document.getElementById('task-edit-name-' + id).focus();
 }
 
 async function saveTaskEdit(id) {
-  const newName = document.getElementById('task-edit-' + id).value.trim();
-  if (!newName) { alert('タスク名を入力してください'); return; }
+  const newName = document.getElementById('task-edit-name-' + id).value.trim();
+  if (!newName) { alert('題名を入力してください'); return; }
+  const payload = {
+    task_name: newName,
+    placeholder: document.getElementById('task-edit-ph-' + id)?.value?.trim() || '',
+  };
+  const optsEl = document.getElementById('task-edit-opts-' + id);
+  if (optsEl) payload.options = optsEl.value.trim();
   const res = await fetch(`/api/daily-task-template/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ task_name: newName }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) { alert('保存に失敗しました'); return; }
   await loadTaskTemplates();
+  await loadCustomItems();  // 入力タブにも即反映
 }
 
 async function addTaskTemplate() {
   const name = document.getElementById('new-task-name').value.trim();
-  if (!name) return;
+  if (!name) { alert('題名を入力してください'); return; }
+  const type = document.getElementById('new-task-type').value;
+  const options = document.getElementById('new-task-options').value.trim();
+  if (type === 'select' && !options) { alert('選択式は選択肢を入力してください'); return; }
   await fetch('/api/daily-task-template', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ task_name: name, store_id: STORE_ID }),
+    body: JSON.stringify({
+      task_name: name, store_id: STORE_ID,
+      field_type: type,
+      placeholder: document.getElementById('new-task-ph').value.trim(),
+      options: options,
+    }),
   });
   document.getElementById('new-task-name').value = '';
+  document.getElementById('new-task-ph').value = '';
+  document.getElementById('new-task-options').value = '';
   loadTaskTemplates();
+  loadCustomItems();  // 入力タブにも即反映
 }
 
 async function deleteTaskTemplate(id) {
-  if (!confirm('このタスクを削除しますか？')) return;
+  if (!confirm('この項目を削除しますか？')) return;
   const res = await fetch(`/api/daily-task-template/${id}`, { method: 'DELETE' });
   if (!res.ok) { const d = await res.json(); alert(d.error || '削除できません'); return; }
   loadTaskTemplates();
+  loadCustomItems();  // 入力タブにも即反映
 }
 
 // 日付・スタッフ変更で既存日報をロード
 document.getElementById('report-date').addEventListener('change', loadExistingReport);
 document.getElementById('report-staff').addEventListener('change', loadExistingReport);
 
-// 初期ロード
-loadExistingReport();
+// 初期ロード（カスタム項目を描画してから既存日報を読み込む）
+loadCustomItems().then(loadExistingReport);
 </script>
 {% endblock %}

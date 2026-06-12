@@ -670,14 +670,17 @@ class LeaveBalance(db.Model):
 
 
 class DailyTaskTemplate(db.Model):
-    """日報タスクテンプレート（店舗ごとにカスタム可能）"""
+    """日報カスタム項目テンプレート（店舗ごとにカスタム可能）"""
     __tablename__ = 'daily_task_template'
     id = db.Column(db.Integer, primary_key=True)
     store_id = db.Column(db.Integer, db.ForeignKey('store.id'), default=1)
-    task_name = db.Column(db.String(200), nullable=False)
+    task_name = db.Column(db.String(200), nullable=False)   # 題名
     is_default = db.Column(db.Boolean, default=False)  # デフォルトタスク
     is_active = db.Column(db.Boolean, default=True)
     sort_order = db.Column(db.Integer, default=0)
+    field_type = db.Column(db.String(20), default='check')  # check/text/textarea/select/number
+    placeholder = db.Column(db.String(300))                 # 何を入力するかの説明
+    options = db.Column(db.Text)                            # select用選択肢（、区切り）
 
 
 class DailyReport(db.Model):
@@ -713,12 +716,13 @@ class DailyReportCustomer(db.Model):
 
 
 class DailyTaskCheck(db.Model):
-    """日報のカスタムタスクチェック"""
+    """日報のカスタム項目の回答（チェック or 入力値）"""
     __tablename__ = 'daily_task_check'
     id = db.Column(db.Integer, primary_key=True)
     report_id = db.Column(db.Integer, db.ForeignKey('daily_report.id'), nullable=False)
     task_id = db.Column(db.Integer, db.ForeignKey('daily_task_template.id'), nullable=False)
     checked = db.Column(db.Boolean, default=False)
+    value = db.Column(db.Text)  # テキスト/選択式などチェック以外の入力値
 
 
 class ContractRecord(db.Model):
@@ -2046,6 +2050,25 @@ def migrate_db():
         except Exception as e:
             print(f"  Skip daily_report.store_id: {e}")
 
+    # daily_task_template / daily_task_check のカスタム項目カラムを追加
+    cursor.execute("PRAGMA table_info(daily_task_template)")
+    dtt_cols = {r[1] for r in cursor.fetchall()}
+    for col, typ in [("field_type", "TEXT DEFAULT 'check'"), ("placeholder", "TEXT"), ("options", "TEXT")]:
+        if col not in dtt_cols:
+            try:
+                cursor.execute(f"ALTER TABLE daily_task_template ADD COLUMN {col} {typ}")
+                print(f"  Added column daily_task_template.{col}")
+            except Exception as e:
+                print(f"  Skip daily_task_template.{col}: {e}")
+    cursor.execute("PRAGMA table_info(daily_task_check)")
+    dtc_cols = {r[1] for r in cursor.fetchall()}
+    if 'value' not in dtc_cols:
+        try:
+            cursor.execute("ALTER TABLE daily_task_check ADD COLUMN value TEXT")
+            print("  Added column daily_task_check.value")
+        except Exception as e:
+            print(f"  Skip daily_task_check.value: {e}")
+
     # echo_record の external_id カラムを追加（反響メール重複取込防止）
     cursor.execute("PRAGMA table_info(echo_record)")
     er_cols = {r[1] for r in cursor.fetchall()}
@@ -2324,6 +2347,10 @@ def migrate_postgres():
         ("app_user",           "can_view_past_customers",      "BOOLEAN DEFAULT TRUE"),
         ("app_user",           "can_view_floorplan",           "BOOLEAN DEFAULT TRUE"),
         ("app_user",           "can_view_image_editor",        "BOOLEAN DEFAULT TRUE"),
+        ("daily_task_template", "field_type",  "VARCHAR(20) DEFAULT 'check'"),
+        ("daily_task_template", "placeholder", "VARCHAR(300)"),
+        ("daily_task_template", "options",     "TEXT"),
+        ("daily_task_check",    "value",       "TEXT"),
         ("application_record",        "option_amount", "FLOAT DEFAULT 0"),
         ("application_record", "brokerage_payment_date", "DATE"),
         ("application_record", "option_settled", "BOOLEAN DEFAULT FALSE"),
@@ -12077,6 +12104,10 @@ def api_daily_report_list():
         q = q.filter_by(staff_id=staff_id)
     reports = q.order_by(DailyReport.report_date.desc()).all()
 
+    # カスタム項目テンプレート（一覧表示で項目名・タイプを引くため）
+    tmpl_map = {t.id: t for t in DailyTaskTemplate.query.filter(
+        DailyTaskTemplate.store_id.in_(allowed_ids)).all()} if allowed_ids else {}
+
     result = []
     for r in reports:
         staff = Staff.query.get(r.staff_id)
@@ -12103,6 +12134,17 @@ def api_daily_report_list():
                 } for c in customers
             ],
             'task_checks': {tc.task_id: tc.checked for tc in task_checks},
+            'task_values': {tc.task_id: {'checked': tc.checked, 'value': getattr(tc, 'value', None) or ''} for tc in task_checks},
+            'custom_tasks': [
+                {
+                    'name': tmpl_map[tc.task_id].task_name,
+                    'type': getattr(tmpl_map[tc.task_id], 'field_type', None) or 'check',
+                    'checked': tc.checked,
+                    'value': getattr(tc, 'value', None) or '',
+                }
+                for tc in task_checks
+                if tc.task_id in tmpl_map and not tmpl_map[tc.task_id].is_default
+            ],
         })
     return jsonify(result)
 
@@ -12149,17 +12191,35 @@ def api_daily_report_save():
                 improvement=c.get('improvement', ''),
             ))
 
-    # カスタムタスクチェック
+    # カスタム項目（チェック＋入力値）
     DailyTaskCheck.query.filter_by(report_id=report.id).delete()
-    for task_id_str, checked in (data.get('task_checks') or {}).items():
-        try:
-            db.session.add(DailyTaskCheck(
-                report_id=report.id,
-                task_id=int(task_id_str),
-                checked=bool(checked),
-            ))
-        except Exception:
-            pass
+    task_values = data.get('task_values')
+    if task_values is not None:
+        for task_id_str, v in (task_values or {}).items():
+            try:
+                if isinstance(v, dict):
+                    checked, value = bool(v.get('checked')), str(v.get('value') or '')
+                elif isinstance(v, bool):
+                    checked, value = v, ''
+                else:
+                    checked, value = bool(str(v).strip()), str(v or '')
+                db.session.add(DailyTaskCheck(
+                    report_id=report.id, task_id=int(task_id_str),
+                    checked=checked, value=value,
+                ))
+            except Exception:
+                pass
+    else:
+        # 旧クライアント互換（チェックのみ）
+        for task_id_str, checked in (data.get('task_checks') or {}).items():
+            try:
+                db.session.add(DailyTaskCheck(
+                    report_id=report.id,
+                    task_id=int(task_id_str),
+                    checked=bool(checked),
+                ))
+            except Exception:
+                pass
 
     db.session.commit()
     return jsonify({'status': 'ok', 'id': report.id})
@@ -12188,7 +12248,12 @@ def api_task_template_list():
         DailyTaskTemplate.store_id.in_(allowed_ids),
         DailyTaskTemplate.is_active == True
     ).order_by(DailyTaskTemplate.sort_order).all()
-    return jsonify([{'id': t.id, 'task_name': t.task_name, 'is_default': t.is_default} for t in tasks])
+    return jsonify([{
+        'id': t.id, 'task_name': t.task_name, 'is_default': t.is_default,
+        'field_type': getattr(t, 'field_type', None) or 'check',
+        'placeholder': getattr(t, 'placeholder', '') or '',
+        'options': getattr(t, 'options', '') or '',
+    } for t in tasks])
 
 
 @app.route("/api/daily-task-template", methods=["POST"])
@@ -12204,7 +12269,13 @@ def api_task_template_add():
         return jsonify({'error': 'unauthorized'}), 403
     max_order = db.session.query(db.func.max(DailyTaskTemplate.sort_order)).filter_by(
         store_id=store_id).scalar() or 0
-    t = DailyTaskTemplate(store_id=store_id, task_name=task_name, sort_order=max_order + 1)
+    ftype = (data.get('field_type') or 'check').strip()
+    if ftype not in ('check', 'text', 'textarea', 'select', 'number'):
+        ftype = 'check'
+    t = DailyTaskTemplate(store_id=store_id, task_name=task_name, sort_order=max_order + 1,
+                          field_type=ftype,
+                          placeholder=(data.get('placeholder') or '').strip()[:300],
+                          options=(data.get('options') or '').strip())
     db.session.add(t)
     db.session.commit()
     return jsonify({'status': 'ok', 'id': t.id})
@@ -12220,6 +12291,14 @@ def api_task_template_update(tid):
     if not new_name:
         return jsonify({'error': 'task_name required'}), 400
     t.task_name = new_name
+    if 'field_type' in data and not t.is_default:
+        ftype = (data.get('field_type') or 'check').strip()
+        if ftype in ('check', 'text', 'textarea', 'select', 'number'):
+            t.field_type = ftype
+    if 'placeholder' in data:
+        t.placeholder = (data.get('placeholder') or '').strip()[:300]
+    if 'options' in data:
+        t.options = (data.get('options') or '').strip()
     db.session.commit()
     return jsonify({'status': 'ok'})
 
