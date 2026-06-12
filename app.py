@@ -14398,6 +14398,13 @@ def api_manual():
     return jsonify(MANUAL_SECTIONS)
 
 
+@app.route("/guide")
+@login_required
+def guide_page():
+    """スクリーンショット付きの詳しい使い方ガイド（フルページ）"""
+    return render_template("guide.html")
+
+
 @app.route("/api/admin/net-diagnose")
 @login_required
 def api_net_diagnose():

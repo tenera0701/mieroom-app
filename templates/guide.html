@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ミエルーム｜使い方ガイド（スクショ付き）</title>
+<link rel="icon" type="image/png" href="/static/logo_notext.png">
+<style>
+  :root{
+    --teal:#0F766E; --teal2:#0D9488; --mint:#5EEAD4; --mintbg:#F0FDFA; --mintbg2:#CCFBF1;
+    --ink:#111827; --gray:#374151; --muted:#6b7280; --line:#e5e7eb; --amber:#92400e; --amberbg:#FFFBEB;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;color:var(--ink);background:#f8fafc;line-height:1.8;}
+  a{color:var(--teal);}
+  /* ヘッダー */
+  header.gh{position:sticky;top:0;z-index:50;background:linear-gradient(135deg,#0D4A48,#115E59 45%,#0F766E);color:#fff;
+    display:flex;align-items:center;gap:14px;padding:12px 20px;box-shadow:0 4px 14px rgba(0,0,0,.18);}
+  header.gh img{height:34px;}
+  header.gh .ttl{font-size:18px;font-weight:800;white-space:nowrap;}
+  header.gh .sub{font-size:12px;color:#CCFBF1;margin-left:2px;}
+  header.gh .spacer{flex:1;}
+  header.gh input{border:none;border-radius:9px;padding:9px 14px;font-size:14px;width:280px;max-width:40vw;outline:none;}
+  header.gh .backbtn{background:#ffffff22;border:1px solid #ffffff55;color:#fff;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;white-space:nowrap;}
+  header.gh .backbtn:hover{background:#ffffff33;}
+  /* レイアウト */
+  .wrap{display:flex;max-width:1280px;margin:0 auto;gap:24px;padding:22px 20px 80px;}
+  nav.toc{position:sticky;top:74px;align-self:flex-start;width:248px;flex:none;max-height:calc(100vh - 92px);overflow-y:auto;
+    background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 8px;font-size:13px;}
+  nav.toc .grp{font-size:11px;font-weight:800;color:var(--teal);padding:10px 10px 4px;letter-spacing:.04em;}
+  nav.toc a{display:block;color:var(--gray);text-decoration:none;padding:6px 10px;border-radius:8px;margin:1px 0;}
+  nav.toc a:hover{background:var(--mintbg);color:var(--teal);}
+  main.body{flex:1;min-width:0;}
+  .intro{background:#fff;border:1px solid var(--line);border-radius:14px;padding:20px 24px;margin-bottom:22px;}
+  .intro h1{font-size:24px;margin:0 0 6px;color:var(--teal);}
+  .intro p{margin:6px 0;color:var(--gray);font-size:14px;}
+  /* セクション */
+  section.feat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 26px;margin-bottom:20px;scroll-margin-top:80px;}
+  section.feat .badge{display:inline-block;font-size:11px;font-weight:800;color:#fff;background:var(--teal2);border-radius:999px;padding:3px 11px;margin-bottom:8px;}
+  section.feat h2{font-size:21px;margin:2px 0 4px;color:var(--ink);}
+  section.feat .path{font-size:12px;color:var(--muted);margin:0 0 4px;}
+  section.feat .lead{font-size:14px;color:var(--gray);margin:6px 0 14px;}
+  .shot{display:block;width:100%;border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 22px rgba(15,118,110,.10);margin:10px 0 16px;cursor:zoom-in;}
+  .shot.narrow{max-width:760px;}
+  ol.steps{margin:6px 0 8px;padding-left:0;counter-reset:st;list-style:none;}
+  ol.steps>li{position:relative;padding:8px 8px 8px 40px;margin:6px 0;border-radius:9px;font-size:14px;color:var(--gray);}
+  ol.steps>li:hover{background:#f9fafb;}
+  ol.steps>li::before{counter-increment:st;content:counter(st);position:absolute;left:8px;top:8px;width:24px;height:24px;border-radius:50%;
+    background:var(--teal);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+  .steps b, .tip b{color:var(--teal);}
+  .chip{display:inline-block;background:var(--mintbg2);color:var(--teal);font-weight:700;border-radius:6px;padding:1px 7px;font-size:13px;}
+  .key{display:inline-block;background:#1f2937;color:#fff;border-radius:5px;padding:1px 7px;font-size:12px;font-weight:700;}
+  .tip{background:var(--mintbg);border-left:4px solid var(--teal2);border-radius:0 10px 10px 0;padding:10px 14px;margin:12px 0;font-size:13px;color:#0f5e57;}
+  .warn{background:var(--amberbg);border-left:4px solid #f59e0b;border-radius:0 10px 10px 0;padding:10px 14px;margin:12px 0;font-size:13px;color:#7c4a03;}
+  h3.sub{font-size:15px;color:var(--teal);margin:18px 0 4px;border-bottom:2px solid var(--mintbg2);padding-bottom:4px;}
+  .grpdiv{font-size:13px;font-weight:800;color:#fff;background:linear-gradient(90deg,var(--teal),var(--teal2));border-radius:10px;padding:9px 16px;margin:26px 0 12px;letter-spacing:.04em;}
+  .nohit{display:none;text-align:center;color:var(--muted);padding:40px;font-size:14px;}
+  /* 画像ズーム */
+  #zoom{display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:200;align-items:center;justify-content:center;padding:24px;cursor:zoom-out;}
+  #zoom img{max-width:96vw;max-height:94vh;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+  footer.gf{text-align:center;color:var(--muted);font-size:12px;padding:24px;}
+  @media(max-width:860px){ nav.toc{display:none;} .wrap{padding:14px;} header.gh input{width:150px;} }
+</style>
+</head>
+<body>
+<header class="gh">
+  <img src="/static/logo_text.png" alt="ミエルーム" onerror="this.style.display='none'">
+  <div><span class="ttl">使い方ガイド</span> <span class="sub">スクリーンショット付きマニュアル</span></div>
+  <div class="spacer"></div>
+  <input id="q" type="text" placeholder="🔍 機能名・キーワードで絞り込み" oninput="filter()">
+  <a class="backbtn" href="/executive">← 管理画面へ戻る</a>
+</header>
+
+<div class="wrap">
+  <!-- 目次 -->
+  <nav class="toc" id="toc">
+    <div class="grp">はじめに</div>
+    <a href="#start">0. ログインと画面の見方</a>
+    <div class="grp">分析・ダッシュボード</div>
+    <a href="#executive">1. 売上分析</a>
+    <a href="#headquarters">2. 本部ダッシュボード</a>
+    <a href="#sales">3. 営業分析</a>
+    <a href="#leads">4. 反響分析</a>
+    <div class="grp">日々の管理表</div>
+    <a href="#customer-management">5. 顧客管理表（入金・売上）</a>
+    <a href="#echo-management">6. 反響管理表</a>
+    <a href="#customer-service">7. 接客管理表</a>
+    <a href="#reservations">8. カレンダー</a>
+    <div class="grp">物件・ツール</div>
+    <a href="#converter">9. 物件コンバータ</a>
+    <a href="#floorplan">10. 間取り作成</a>
+    <a href="#image-editor">11. 画像編集</a>
+    <div class="grp">事務作業</div>
+    <a href="#contract-customers">12. 契約管理</a>
+    <a href="#past-customers">13. 顧客管理（入居後）</a>
+    <a href="#daily-report">14. 日報</a>
+    <a href="#leave-management">15. 有給管理</a>
+    <a href="#accounting">16. 経理・PL管理</a>
+    <div class="grp">コミュニケーション</div>
+    <a href="#chat">17. 社内チャット</a>
+    <div class="grp">メール設定</div>
+    <a href="#mail-templates">18. メールテンプレート</a>
+    <a href="#mail-import">19. メール自動取込</a>
+    <a href="#mail-automation">20. メール自動返信</a>
+    <div class="grp">その他の設定</div>
+    <a href="#doc-templates">21. 契約フォーマット</a>
+    <a href="#store-visits">22. 来店管理</a>
+    <a href="#reservation-settings">23. 予約システム</a>
+    <a href="#settings-staff">24. スタッフ管理</a>
+    <a href="#settings-accounts">25. ログイン管理</a>
+    <a href="#settings-company">26. 会社情報</a>
+    <a href="#settings-profile">27. ID・パス管理</a>
+  </nav>
+
+  <main class="body" id="content">
+    <div class="intro" data-k="はじめに ガイド 概要">
+      <h1>ミエルーム 使い方ガイド</h1>
+      <p>各機能を <b>「どこに何を入力して、どうすると、どうなるか」</b> という手順で、実際の画面とあわせて説明します。</p>
+      <p>左の目次から見たい機能へジャンプできます。上の検索ボックスにキーワード（例：<span class="chip">自動返信</span><span class="chip">入金</span><span class="chip">QR</span>）を入れると、関係する項目だけに絞り込めます。画面の画像はクリックすると拡大します。</p>
+    </div>
+
+    <!-- 0. はじめに -->
+    <div class="grpdiv">はじめに</div>
+    <section class="feat" id="start" data-k="ログイン 画面 サイドバー 店舗切替 月切替 ヘルプ 通知 ベル">
+      <span class="badge">基本</span>
+      <h2>0. ログインと画面の見方</h2>
+      <p class="lead">まずは全体の画面構成と、どの画面でも共通する操作を覚えましょう。</p>
+      <img class="shot" src="/static/manual/executive.png" alt="管理画面の全体" loading="lazy">
+      <h3 class="sub">ログインの手順</h3>
+      <ol class="steps">
+        <li>ログイン画面で <b>ユーザー名（またはメールアドレス）</b> と <b>パスワード</b> を入力します。</li>
+        <li><span class="chip">ログイン</span> ボタンを押すと管理画面（売上分析）が開きます。</li>
+      </ol>
+      <h3 class="sub">画面の各パーツ</h3>
+      <ol class="steps">
+        <li><b>左サイドバー</b>：各機能への入口です。クリックで画面が切り替わります。<span class="chip">事務作業</span><span class="chip">各種設定</span> など▼が付いた項目は、クリックすると下にメニューが開きます。</li>
+        <li><b>左上の店舗切替</b>（「店舗管理」の下のプルダウン）：複数店舗がある場合、表示する店舗をここで切り替えます。<b>多くの管理表・分析は「いま選んでいる店舗」のデータを表示</b>します。</li>
+        <li><b>各画面の上部にある月切替</b>（<span class="chip">‹前月</span> 2026年6月 <span class="chip">次月›</span> <span class="chip">今月</span>）：対象月を変更します。売上・反響・接客などは月単位で集計されます。</li>
+        <li><b>右上のベル🔔</b>：未承認の入金報告・未返信メール・新着お問い合わせなどのお知らせが一覧で出ます。各項目をクリックすると該当画面へ移動します。</li>
+        <li><b>右上の「ヘルプ」</b>：このガイドを開きます。<b>「改善提案」</b>からは、使いづらい点や要望を本部へ直接送れます。</li>
+      </ol>
+      <div class="tip">困ったときは、まず <b>店舗</b> と <b>対象月</b> が正しいかを確認してください。「データが出ない」原因の多くは、別の店舗・別の月を見ていることです。</div>
+    </section>
+
+    <!-- 分析グループ -->
+    <div class="grpdiv">分析・ダッシュボード</div>
+
+    <section class="feat" id="executive" data-k="売上分析 ダッシュボード 売上 利益 経費 契約数 ファネル KPI">
+      <span class="badge">分析</span>
+      <h2>1. 売上分析</h2>
+      <p class="path">サイドバー：売上分析</p>
+      <p class="lead">当月の売上・利益・契約数・経費を、ひと目で確認できるトップ画面です。</p>
+      <img class="shot" src="/static/manual/executive.png" alt="売上分析" loading="lazy">
+      <ol class="steps">
+        <li>上部4枚のカードで <b>今月の売上 / 利益 / 契約数 / 経費合計</b> を確認します。各カードには前月・前年同月との比較と、月別の推移グラフが付いています。</li>
+        <li><b>総売上は「顧客管理表」の入金額（入金月ベース）</b>を自動集計したものです。数字を増やすには、顧客管理表で入金報告→承認を行います（→<a href="#customer-management">5. 顧客管理表</a>）。</li>
+        <li>下部の <b>スタッフ別今月実績</b> で、担当者ごとの反響・来店・契約・売上を確認できます。<span class="chip">編集</span> から数字の手修正も可能です。</li>
+        <li>右下の <b>反響ファネル</b> で「反響→来店→内見→申込→契約」の絞り込み状況を確認します。</li>
+        <li>右上の <span class="chip">＋ 数字を入力する</span> から、KPI実績を直接入力することもできます。</li>
+      </ol>
+    </section>
+
+    <section class="feat" id="headquarters" data-k="本部ダッシュボード 全店舗 店舗ランキング 月次比較 アラート 経営">
+      <span class="badge">分析</span>
+      <h2>2. 本部ダッシュボード</h2>
+      <p class="path">サイドバー：本部ダッシュボード</p>
+      <p class="lead">複数店舗を <b>横断</b> して、全社の数字・店舗比較・アラートを見る経営者向けの画面です。</p>
+      <img class="shot" src="/static/manual/headquarters.png" alt="本部ダッシュボード" loading="lazy">
+      <ol class="steps">
+        <li>上部カードで <b>全店舗合計</b> の売上・利益・経費・反響数・申込数・契約数を確認します。右上の月で対象月を変えられます。</li>
+        <li><b>各店舗 今月の実績</b> の表で、店舗ごとの数字を並べて比較できます。</li>
+        <li><b>店舗ランキング</b>：<span class="chip">売上</span><span class="chip">利益</span><span class="chip">反響数</span> などのタブを切り替えると、その指標での順位が見られます。</li>
+        <li><b>店舗別月次比較</b>のグラフで、期間を指定して各店舗の推移を重ねて確認できます。</li>
+        <li>一番下の <b>アラート</b> で、目標未達の店舗や売上急落の店舗が自動で赤く表示されます。</li>
+      </ol>
+      <div class="tip">この画面は全店舗のデータをまとめて見るため、左上の店舗切替の影響を受けません。</div>
+    </section>
+
+    <section class="feat" id="sales" data-k="営業分析 スタッフKPI 成約率 目標 達成率 ライフライン 火災保険 引越し 月次売上推移">
+      <span class="badge">分析</span>
+      <h2>3. 営業分析</h2>
+      <p class="path">サイドバー：営業分析</p>
+      <p class="lead">店舗・スタッフ別の成約率や売上KPIを分析します。スタッフ評価や目標管理に使います。</p>
+      <img class="shot" src="/static/manual/sales.png" alt="営業分析" loading="lazy">
+      <ol class="steps">
+        <li>上部カードで <b>総売上・平均成約率・申込数・契約率</b> と、<b>ライフライン/火災保険/引越しの成約率</b> を確認します。</li>
+        <li><b>スタッフ別KPI</b> の表で、各スタッフの反響→接客→申込→契約の流れと、<b>売上・目標・達成率</b> を一覧できます。達成率はバーで色分け表示されます。</li>
+        <li><span class="chip">編集</span> ボタンから、各スタッフの目標額や実績を直接修正できます。</li>
+        <li>下部の <b>月次売上推移</b> グラフで、売上（棒）と申込件数（折れ線）の推移を確認します。</li>
+        <li>右上の <span class="chip">Excelインポート</span> から、外部データの取り込みも可能です。</li>
+      </ol>
+    </section>
+
+    <section class="feat" id="leads" data-k="反響分析 媒体 SUUMO HOMES athome 反響数 CV 媒体別 月次トレンド 広告 費用対効果">
+      <span class="badge">分析</span>
+      <h2>4. 反響分析</h2>
+      <p class="path">サイドバー：反響分析</p>
+      <p class="lead">どのポータル（媒体）からどれだけ反響・申込が出ているかを分析し、広告費の効果を見える化します。</p>
+      <img class="shot" src="/static/manual/leads.png" alt="反響分析" loading="lazy">
+      <ol class="steps">
+        <li>上部カードで <b>総反響・来店・申込・売上・AD（広告費）</b> の当月合計を確認します。</li>
+        <li><b>媒体別カード</b>（HP・紹介・SUUMO・HOME'S 等）で、媒体ごとの反響件数と前月比、CVR（成約率）を見ます。</li>
+        <li><b>媒体別詳細</b>の表で、反響・来店・申込・売上・広告費・CPA（1件あたり獲得単価）などを横並びで比較できます。</li>
+        <li>下部の <b>月次トレンド</b> グラフで、反響数・申込数・売上の推移を確認します。</li>
+        <li>数字は <span class="chip">＋ 新規入力</span> や、反響管理表・自動取込の実績から積み上がります。</li>
+      </ol>
+      <div class="tip">CPAが高い媒体は「費用のわりに決まっていない」サインです。媒体ごとの数字を見て広告予算の配分を見直しましょう。</div>
+    </section>
+
+    <!-- 管理表グループ -->
+    <div class="grpdiv">日々の管理表</div>
+
+    <section class="feat" id="customer-management" data-k="顧客管理表 入金 売上 申込 仲介手数料 AD 入金報告 承認 店長 新規入力 ステータス">
+      <span class="badge">管理表</span>
+      <h2>5. 顧客管理表（入金・売上）</h2>
+      <p class="path">サイドバー：営業分析 › 顧客管理表</p>
+      <p class="lead">申込ごとの金額（仲介手数料・AD・その他費用）と入金状況を管理します。ここで承認された入金額が <b>売上分析の総売上</b> になります。</p>
+      <img class="shot" src="/static/manual/customer-management.png" alt="顧客管理表" loading="lazy">
+      <h3 class="sub">新しい申込を登録する</h3>
+      <ol class="steps">
+        <li>右上の <span class="chip">＋ 新規入力</span> を押すと入力フォームが開きます。</li>
+        <li>下の各欄を入力します。<b>申込日</b>（必須）、担当スタッフ、媒体、物件名、号室、お客様名、各種金額（仲介手数料・AD金額・その他費用）など。</li>
+        <li><b>ステータス</b>（申込／契約／キャンセル／キャンセル振替）を選びます。</li>
+        <li>付帯サービス（<b>ライフライン・引越し・火災保険</b>）に該当すればチェックします。営業分析の成約率に反映されます。</li>
+        <li><span class="chip">保存</span> を押すと一覧に追加されます。</li>
+      </ol>
+      <img class="shot narrow" src="/static/manual/modal-cm-input.png" alt="新規入力フォーム" loading="lazy">
+      <h3 class="sub">入金を報告して売上に計上する</h3>
+      <ol class="steps">
+        <li>一覧の入金欄にある <span class="chip">報告</span> ボタンを押し、入金（予定）日を選んで報告します。</li>
+        <li>店長・オーナーが <b>承認</b> すると、その日付で入金が確定し、<b>入金月ベースで売上に集計</b>されます。</li>
+        <li>未承認の入金報告は、右上のベル🔔のお知らせにも表示されます。</li>
+      </ol>
+      <div class="tip">画面下部には <b>入金待ち一覧</b> と <b>売上一覧</b> があり、「まだ入っていないお金」と「入ったお金」を分けて管理できます。</div>
+    </section>
+
+    <section class="feat" id="echo-management" data-k="反響管理表 反響 セル編集 状況タグ 行の色 メール チャット 既読 未返信 媒体 担当 検索 自動取込">
+      <span class="badge">管理表</span>
+      <h2>6. 反響管理表</h2>
+      <p class="path">サイドバー：営業分析 › 反響管理表</p>
+      <p class="lead">ポータルから来た反響（お問い合わせ）を一覧で追客管理します。表のセルをクリックして直接編集できます。</p>
+      <img class="shot" src="/static/manual/echo-management.png" alt="反響管理表" loading="lazy">
+      <h3 class="sub">基本の使い方</h3>
+      <ol class="steps">
+        <li>右上の <span class="chip">＋ 新規追加</span> で行を追加するか、自動取込（→<a href="#mail-import">19</a>）で反響が自動で入ります。</li>
+        <li>担当者・反響日・状況・顧客名・媒体・手段・番号有無・初回対応日・追客日程・メモなどの <b>セルを直接クリックして編集</b>します。</li>
+        <li>上部の検索ボックスで、顧客名・媒体・担当で絞り込めます。上のサマリーカードで総反響数や電話番号あり件数を確認できます。</li>
+      </ol>
+      <h3 class="sub">状況タグと行の色</h3>
+      <ol class="steps">
+        <li><b>状況</b>列のセルでタグ（追客中・申込・内見予定・終了など）を選びます。<b>選んだタグの色で行の背景色が変わります。</b></li>
+        <li>状況見出しの <span class="chip">⚙</span> から、タグの追加・削除と、各タグの行の色を設定できます。</li>
+        <li>お客様から返信が来て未返信の行は、左端に <b>赤いライン</b> が付いて目立ちます。</li>
+      </ol>
+      <h3 class="sub">反響からメールでやり取りする</h3>
+      <ol class="steps">
+        <li>各行の <span class="chip">✉️メール</span> ボタンでチャット画面が開き、お客様とメールでやり取りできます。</li>
+        <li>テンプレ挿入（📋）・画像/PDF添付（📎）が使えます。送信は <span class="key">Shift+Enter</span>（<span class="key">Enter</span>は改行）または右下の➤ボタン。</li>
+        <li>お客様がメールを開くと「既読」が表示され、返信が来ると未返信としてアラート表示されます。</li>
+      </ol>
+    </section>
+
+    <section class="feat" id="customer-service" data-k="接客管理表 接客 来店 対応種別 来店数 申込率 カードNo">
+      <span class="badge">管理表</span>
+      <h2>7. 接客管理表</h2>
+      <p class="path">サイドバー：営業分析 › 接客管理表</p>
+      <p class="lead">来店・電話・メールなどの接客対応を1件ずつ記録し、申込率を見ます。</p>
+      <img class="shot" src="/static/manual/customer-service.png" alt="接客管理表" loading="lazy">
+      <ol class="steps">
+        <li>右上の <span class="chip">＋ 新規追加</span> で行を追加します。</li>
+        <li>日付・担当者・反響媒体・お客様名・対応種別（来店/電話/メール/再来）・来店数・状況・メモを、<b>セルをクリックして入力</b>します。</li>
+        <li>上部サマリーで <b>総接客数・申込数・申込率・他決・キャンセル</b> を確認できます。</li>
+        <li>上部の検索や、右上の月・スタッフ絞り込みで対象を切り替えられます。</li>
+      </ol>
+    </section>
+
+    <section class="feat" id="reservations" data-k="カレンダー 予約 来店予約 スタッフ 色分け 月 週 日 作成">
+      <span class="badge">管理表</span>
+      <h2>8. カレンダー</h2>
+      <p class="path">サイドバー：営業分析 › カレンダー</p>
+      <p class="lead">来店予約や予定をカレンダーで管理します。Web予約（→<a href="#reservation-settings">23</a>）で入った予約も自動でここに表示されます。</p>
+      <img class="shot" src="/static/manual/reservations.png" alt="カレンダー" loading="lazy">
+      <ol class="steps">
+        <li>左上の <span class="chip">＋ 作成</span> から予定を新規登録します。日時・お客様名・担当スタッフ・メモを入力します。</li>
+        <li>右上の <span class="chip">月</span><span class="chip">週</span><span class="chip">日</span> で表示を切り替えます。</li>
+        <li>左の <b>スタッフ（色分け）</b> でチェックを入れると、担当者ごとに色分けして表示されます。チェックを外すとそのスタッフの予定を隠せます。</li>
+        <li>カレンダー上の予定をクリックすると、内容の確認・編集ができます。</li>
+      </ol>
+    </section>
+
+    <!-- 物件・ツール -->
+    <div class="grpdiv">物件・ツール</div>
+
+    <section class="feat" id="converter" data-k="物件コンバータ SUUMO HOMES athome 一斉出力 AIコメント ポータル 新規物件 タブ">
+      <span class="badge">ツール（オプション）</span>
+      <h2>9. 物件コンバータ</h2>
+      <p class="path">サイドバー：物件コンバータ</p>
+      <p class="lead">物件を <b>一度入力するだけ</b> で、SUUMO／HOME'S／at home 等の規定フォーマットへ一斉出力できる機能です。AIによる物件コメント自動生成も搭載。</p>
+      <img class="shot" src="/static/manual/converter.png" alt="物件コンバータ" loading="lazy">
+      <h3 class="sub">物件を登録する</h3>
+      <ol class="steps">
+        <li>右上の <span class="chip">＋ 新規物件</span> を押すとフォームが開きます。</li>
+        <li>上部のタブ（<b>基本／所在地・交通／賃料・契約／建物・規模／設備・条件／取引・備考／画像</b>）を順に切り替えて入力します。</li>
+        <li>「基本」タブで取引区分・物件種別・物件名・部屋番号・ステータス（下書き/公開など）を設定します。</li>
+        <li>入力後 <span class="chip">保存</span> すると一覧に並びます。</li>
+      </ol>
+      <img class="shot narrow" src="/static/manual/modal-converter-new.png" alt="新規物件フォーム" loading="lazy">
+      <h3 class="sub">ポータル用に一斉出力する</h3>
+      <ol class="steps">
+        <li>一覧で出力したい物件のチェックを入れます。</li>
+        <li>右上の <span class="chip">📤 選択した物件を一斉出力</span> を押し、出力先ポータルの形式でデータを書き出します。</li>
+      </ol>
+      <div class="warn">物件コンバータ・間取り作成・画像編集は <b>オプション機能</b> です。サイドバーに表示されない場合は、ご契約プランをご確認ください。</div>
+    </section>
+
+    <section class="feat" id="floorplan" data-k="間取り作成 間取り図 下絵 なぞり フォルダ 印刷 保存">
+      <span class="badge">ツール（オプション）</span>
+      <h2>10. 間取り作成</h2>
+      <p class="path">サイドバー：事務作業 › 間取り作成</p>
+      <p class="lead">物件の間取り図をツール上で作成・保存・印刷できます。フォルダで物件・部屋タイプ別に整理できます。</p>
+      <img class="shot" src="/static/manual/floorplan.png" alt="間取り作成" loading="lazy">
+      <ol class="steps">
+        <li><span class="chip">＋ 新規作成</span> で作図画面を開きます。壁・ドア・窓・設備（コンロ・バス・トイレ等）を配置して間取りを描きます。</li>
+        <li>整理用に <span class="chip">＋ フォルダ作成</span> でフォルダを作り、間取りを分類できます。</li>
+        <li>手元の <b>間取り画像をなぞって描きたいときは「下絵」機能</b>を使います。画像を薄く透かして表示し、その上をなぞって作図できます。</li>
+        <li>作成した間取りは保存され、一覧から開き直し・印刷ができます。</li>
+      </ol>
+    </section>
+
+    <section class="feat" id="image-editor" data-k="画像編集 物件画像 ロゴ 帯 加工">
+      <span class="badge">ツール（オプション）</span>
+      <h2>11. 画像編集</h2>
+      <p class="path">サイドバー：事務作業 › 画像編集</p>
+      <p class="lead">物件画像に自社ロゴや帯を付けるなど、簡単な画像加工ができます（間取り作成と同じオプションに含まれます）。</p>
+      <img class="shot" src="/static/manual/image-editor.png" alt="画像編集" loading="lazy">
+      <ol class="steps">
+        <li>編集したい <b>物件画像をアップロード</b> します。</li>
+        <li>ロゴ・帯・文字などを重ねて配置し、見栄えを整えます。</li>
+        <li>加工後の画像を <b>ダウンロード</b> して、ポータル掲載や資料に使います。</li>
+      </ol>
+    </section>
+
+    <!-- 事務作業 -->
+    <div class="grpdiv">事務作業</div>
+
+    <section class="feat" id="contract-customers" data-k="契約管理 契約 契約書 書類 作成 顧客">
+      <span class="badge">事務</span>
+      <h2>12. 契約管理</h2>
+      <p class="path">サイドバー：事務作業 › 契約管理</p>
+      <p class="lead">契約手続き中のお客様を管理し、契約書類の作成につなげます。</p>
+      <img class="shot" src="/static/manual/contract-customers.png" alt="契約管理" loading="lazy">
+      <ol class="steps">
+        <li>申込済みのお客様が一覧に並びます。各行で契約日・物件・お客様情報などを管理します。</li>
+        <li>各行の操作ボタンから、お客様情報をもとに <b>契約書類を作成</b> できます（書式は <a href="#doc-templates">21. 契約フォーマット</a> で登録したものを使用）。</li>
+        <li>上部の検索で、お客様名・物件名から目的の行を素早く探せます。</li>
+      </ol>
+    </section>
+
+    <section class="feat" id="past-customers" data-k="顧客管理 入居完了 入居後 過去顧客 アフター 年月移動">
+      <span class="badge">事務</span>
+      <h2>13. 顧客管理（入居後）</h2>
+      <p class="path">サイドバー：事務作業 › 顧客管理</p>
+      <p class="lead">契約が終了し入居が完了したお客様の管理ファイルです。アフターフォローや過去履歴の参照に使います。</p>
+      <img class="shot" src="/static/manual/past-customers.png" alt="顧客管理（入居後）" loading="lazy">
+      <ol class="steps">
+        <li><b>入居完了顧客一覧</b> に、契約・入居が済んだお客様が蓄積されます。</li>
+        <li>上部の検索ボックスに、お客様名・物件名・号室を入れて該当のお客様を探します。</li>
+        <li>右上の <span class="chip">年月へ移動</span> で、過去の月のデータをさかのぼって確認できます。</li>
+      </ol>
+    </section>
+
+    <section class="feat" id="daily-report" data-k="日報 タスクチェック 接客記録 明日の接客予定 メモ 保存 営業日報">
+      <span class="badge">事務</span>
+      <h2>14. 日報</h2>
+      <p class="path">サイドバー：事務作業 › 日報</p>
+      <p class="lead">スタッフが毎日の営業活動を記録します。タスクの抜け漏れ防止と、日々の振り返りに使います。</p>
+      <img class="shot" src="/static/manual/daily-report.png" alt="日報" loading="lazy">
+      <ol class="steps">
+        <li>右上で <b>日付</b> と <b>記入するスタッフ</b> を選びます。</li>
+        <li><b>タスクチェック</b>：来店前日連絡・当日連絡・申込管理機能入力など、その日やることにチェックを入れます。</li>
+        <li><b>接客記録</b>：<span class="chip">＋ お客様追加</span> でその日対応したお客様を記録し、<b>今日の申込数</b> を入力します。</li>
+        <li><b>明日の接客予定</b> と <b>その他メモ</b> を記入します。</li>
+        <li>最後に <span class="chip">日報を保存する</span> を押します。上部の <b>日報一覧</b> タブから過去の日報を確認できます。</li>
+      </ol>
+    </section>
+
+    <section class="feat" id="leave-management" data-k="有給管理 有給 休暇 欠勤 半休 残日数 承認 休取入力">
+      <span class="badge">事務</span>
+      <h2>15. 有給管理</h2>
+      <p class="path">サイドバー：事務作業 › 有給管理</p>
+      <p class="lead">スタッフの有給・休暇を申請・記録し、残日数を管理します。</p>
+      <img class="shot" src="/static/manual/leave-management.png" alt="有給管理" loading="lazy">
+      <ol class="steps">
+        <li>右上の <span class="chip">休取入力</span> から休暇を登録します。スタッフ・日付・種別（有給/半休/欠勤）・日数・メモを入力します。</li>
+        <li>上部 <b>年次有給残日数</b> で各スタッフの残りを確認できます。</li>
+        <li><b>休暇記録一覧</b> に登録済みの休暇が並びます。ステータス（承認済など）を管理し、各行の操作ボタンで編集・削除ができます。</li>
+        <li>右上のプルダウンで、スタッフ別・種別で絞り込めます。</li>
+      </ol>
+    </section>
+
+    <section class="feat" id="accounting" data-k="経理 PL 損益 売上 経費 広告宣伝費 人件費 営業利益 月次利益推移 Excelレポート">
+      <span class="badge">事務</span>
+      <h2>16. 経理・PL管理</h2>
+      <p class="path">サイドバー：事務作業 › 経理・PL管理</p>
+      <p class="lead">月次内訳・費用内訳・利益率を管理する損益（PL）画面です。</p>
+      <img class="shot" src="/static/manual/accounting.png" alt="経理・PL管理" loading="lazy">
+      <ol class="steps">
+        <li>上部カードで <b>売上・粗利・営業利益・経費合計・営業利益（粗利）</b> を確認します。月切替で対象月を変えられます。</li>
+        <li><b>PL明細</b>の表で、収益（売上）と費用（広告宣伝費の媒体別内訳・人件費・その他）を当月／前月／前年同月で比較できます。</li>
+        <li>各項目の <span class="chip">編集</span> から金額を修正できます。広告費の内訳（SUUMO・HOME'S 等）も入力できます。</li>
+        <li>下部の <b>月次利益推移</b> グラフで、売上・経費・利益の推移を確認します。</li>
+        <li>右上の <span class="chip">Excelレポート</span> で帳票を書き出せます。</li>
+      </ol>
+    </section>
+
+    <!-- コミュニケーション -->
+    <div class="grpdiv">コミュニケーション</div>
+
+    <section class="feat" id="chat" data-k="社内チャット チャット チャンネル 全社 店舗別 グループ メンション 添付 Pro">
+      <span class="badge">チャット</span>
+      <h2>17. 社内チャット</h2>
+      <p class="path">サイドバー：チャット</p>
+      <p class="lead">社内メンバーとメッセージでやり取りします。全社・店舗別・グループのチャンネルがあります。</p>
+      <img class="shot" src="/static/manual/chat.png" alt="社内チャット" loading="lazy">
+      <ol class="steps">
+        <li>左の <b>チャンネル一覧</b> から話す相手を選びます。<b>全社</b>（全員）・<b>店舗別</b>（新宿店・横浜店・渋谷店など）があります。</li>
+        <li>下の入力欄にメッセージを書き、<span class="key">Shift+Enter</span> または ➤ で送信します。文中に <b>@</b> を入れるとメンション（名指し通知）できます。</li>
+        <li>オーナー・店長は <span class="chip">＋ グループ</span> から、特定メンバーだけのグループチャンネルを作成できます。</li>
+        <li>右上の <span class="chip">メモ</span><span class="chip">アルバム</span> で、共有メモや画像をまとめて見られます。<span class="chip">通知をONにする</span> で新着通知を受け取れます。</li>
+      </ol>
+      <div class="warn">画像・PDFの添付と <b>2年間の保存</b> は <b>チャットProプラン</b>（オプション）でご利用いただけます。通常はテキストのみ・60日保存です。</div>
+    </section>
+
+    <!-- メール設定 -->
+    <div class="grpdiv">メール設定</div>
+
+    <section class="feat" id="mail-templates" data-k="メールテンプレート テンプレ HTML 差し込み文字 会社情報 自動返信 エディタ 装飾">
+      <span class="badge">メール設定</span>
+      <h2>18. メールテンプレート</h2>
+      <p class="path">サイドバー：各種設定 › メールテンプレート</p>
+      <p class="lead">お客様へ送るメールのひな形（文面）を作っておく場所です。反響メールの返信や自動返信で使います。</p>
+      <img class="shot" src="/static/manual/mail-templates.png" alt="メールテンプレート設定" loading="lazy">
+      <h3 class="sub">テンプレートを作る</h3>
+      <ol class="steps">
+        <li><span class="chip">＋ 新しいテンプレートを作成</span> を押すとエディタが開きます。</li>
+        <li>件名と本文を入力します。HTML（<b>太字・色・リンク・リスト</b>）で装飾できます。</li>
+        <li>本文に <b>差し込み文字</b> を入れると、送信時に実データへ自動で置き換わります。例：<span class="chip">#name#</span>（お客様氏名）<span class="chip">#お問い合わせ物件名#</span><span class="chip">#会社名#</span><span class="chip">#会社電話番号#</span><span class="chip">#公式LINE#</span></li>
+        <li>保存すると一覧に追加され、<span class="chip">編集</span><span class="chip">削除</span> で後から修正できます。</li>
+      </ol>
+      <img class="shot narrow" src="/static/manual/modal-mail-template.png" alt="テンプレートエディタ" loading="lazy">
+      <div class="tip">差し込み文字の中身（会社名・電話など）は <a href="#settings-company">26. 会社情報</a> に登録した内容が使われます。先に会社情報を埋めておきましょう。</div>
+    </section>
+
+    <section class="feat" id="mail-import" data-k="メール自動取込 受信 IMAP Gmail アプリパスワード Google連携 接続テスト ポータル登録 振り分け">
+      <span class="badge">メール設定</span>
+      <h2>19. メール自動取込</h2>
+      <p class="path">サイドバー：各種設定 › メール自動取込</p>
+      <p class="lead">反響メールが届くGmailを連携し、<b>届いた反響を自動で反響管理表に取り込みます。</b></p>
+      <img class="shot" src="/static/manual/mail-import.png" alt="メール自動取込設定" loading="lazy">
+      <h3 class="sub">接続する（2つの方法）</h3>
+      <ol class="steps">
+        <li><b>かんたん：Googleで連携</b> … 上部の <span class="chip">Googleで連携する</span> を押し、画面の案内に従ってGoogleアカウントを許可します。</li>
+        <li><b>アプリパスワード方式</b> … メールアドレスと、Googleで発行した16桁の <b>アプリパスワード</b> を入力し、<span class="chip">接続テスト</span> で確認します。作り方は画面下部の <span class="chip">🔑アプリパスワードの作り方</span> を開くと手順が出ます（2段階認証ON→アプリパスワード発行→貼り付け）。</li>
+      </ol>
+      <h3 class="sub">自動取込をONにする</h3>
+      <ol class="steps">
+        <li><b>取込設定</b> の <span class="chip">自動取り込みを有効にする</span> をONにします。届いた反響がリアルタイムで反響管理表に入ります。</li>
+        <li><b>ポータル登録</b> で「差出人アドレス → 媒体名」を登録すると、確実に媒体ごとに振り分けられます（例：<span class="chip">@suumo.jp → SUUMO</span>）。<span class="chip">＋ 行を追加</span> で複数登録できます。</li>
+        <li>最後に <span class="chip">設定を保存</span>。動作を試したいときは <span class="chip">今すぐ取込</span> を押します。</li>
+      </ol>
+      <div class="warn">接続に失敗するときは、メールアドレスの打ち間違いか、通常のログインパスワードを入れている（必ず<b>16桁のアプリパスワード</b>を使う）ことが多いです。</div>
+    </section>
+
+    <section class="feat" id="mail-automation" data-k="メール自動返信 自動返信 新着反響 テンプレ 媒体別 ポータル登録">
+      <span class="badge">メール設定</span>
+      <h2>20. メール自動返信</h2>
+      <p class="path">サイドバー：各種設定 › メール自動返信</p>
+      <p class="lead">反響が届いた瞬間に、自動でお礼メール（テンプレ）を送る設定です。一次対応のスピードが上がります。</p>
+      <img class="shot" src="/static/manual/mail-automation.png" alt="メール自動返信設定" loading="lazy">
+      <ol class="steps">
+        <li><b>自動返信</b> の <span class="chip">新着反響に自動返信する</span> をONにします。お客様のメールアドレスがある反響に、選んだテンプレを自動送信します。</li>
+        <li><b>ポータル登録</b> で「媒体ごとに使うテンプレ」を選べます（例：SUUMO用・HOME'S用で文面を分ける）。<span class="chip">＋ 行を追加</span> で媒体を増やせます。</li>
+        <li>媒体を指定していない反響には、既定テンプレが使われます。</li>
+        <li>最後に <span class="chip">設定を保存</span> を押します。</li>
+      </ol>
+      <div class="tip">送る文面は <a href="#mail-templates">18. メールテンプレート</a> で作ったものから選びます。先にテンプレを用意しておきましょう。</div>
+    </section>
+
+    <!-- その他設定 -->
+    <div class="grpdiv">その他の設定</div>
+
+    <section class="feat" id="doc-templates" data-k="契約フォーマット 帳票 Excel様式 アップロード 差し込み 会社情報 印刷 契約書">
+      <span class="badge">設定</span>
+      <h2>21. 契約フォーマット</h2>
+      <p class="path">サイドバー：各種設定 › 契約フォーマット</p>
+      <p class="lead">自社の様式（Excel）を登録しておくと、契約書や帳票に <b>顧客情報・会社情報を自動で差し込んで</b>印刷用に出力できます。</p>
+      <img class="shot" src="/static/manual/doc-templates.png" alt="契約フォーマット設定" loading="lazy">
+      <ol class="steps">
+        <li>まず <a href="#settings-company">26. 会社情報</a> を登録します（差し込みに使われます）。Excel様式内に <span class="chip">&#123;&#123;会社名&#125;&#125;</span> のようなタグを書いておきます。</li>
+        <li><b>帳票テンプレート</b> の <span class="chip">📄 Excelをアップロード</span> から、自社のExcel様式（.xlsx）を登録します。差し込みたい箇所に <span class="chip">&#123;&#123;…&#125;&#125;</span> のタグを入れておきます。</li>
+        <li>登録後は、<a href="#contract-customers">12. 契約管理</a> でお客様を選び、契約書類を生成 → Excelダウンロード → A4/A3で印刷、という流れで使います。</li>
+      </ol>
+    </section>
+
+    <section class="feat" id="store-visits" data-k="来店管理 QRコード アンケート 来店アンケート 接客管理表 自動追加 印刷">
+      <span class="badge">設定</span>
+      <h2>22. 来店管理</h2>
+      <p class="path">サイドバー：各種設定 › 来店管理</p>
+      <p class="lead">来店したお客様にQRからアンケートを入力してもらい、<b>送信されると接客管理表へ自動で追加</b>されます。</p>
+      <img class="shot" src="/static/manual/store-visits.png" alt="来店管理" loading="lazy">
+      <ol class="steps">
+        <li>画面の <b>受付QRコード</b> を、<span class="chip">📄 QRカードを印刷</span> で印刷して受付に置く／<span class="chip">⬇ QRをダウンロード</span> で画像を保存します。</li>
+        <li>お客様がスマホでQRを読み取ると、アンケートフォームが開きます。<span class="chip">フォームを開く</span> で内容を事前確認できます。</li>
+        <li>聞きたい項目は <span class="chip">来店アンケートを編集</span> から変更できます。</li>
+        <li>お客様が送信すると、自動で <a href="#customer-service">7. 接客管理表</a> に追加されます。回答はメモに入ります。</li>
+      </ol>
+    </section>
+
+    <section class="feat" id="reservation-settings" data-k="予約システム Web予約 受付時間 枠 定休日 案内文 QR 予約フォーム カレンダー">
+      <span class="badge">設定</span>
+      <h2>23. 予約システム</h2>
+      <p class="path">サイドバー：各種設定 › 予約システム</p>
+      <p class="lead">お客様向けのWeb来店予約の受付ルールを設定します。入った予約は <a href="#reservations">8. カレンダー</a> に自動で入ります。</p>
+      <img class="shot" src="/static/manual/reservation-settings.png" alt="予約システム設定" loading="lazy">
+      <ol class="steps">
+        <li><b>受付設定</b> で <span class="chip">Web予約の受付</span> にチェックを入れ、受付時間・1枠の長さ・同時間帯の受付数・何日先まで受付・定休日を設定します。</li>
+        <li><b>予約ページの案内文</b> に、注意事項（例：駐車場のご案内）を書いておけます。</li>
+        <li><span class="chip">保存</span> を押します。</li>
+        <li><b>お客様用 予約ページ</b> のQRを印刷・ダウンロード、または <span class="chip">URLをコピー</span> してHP・メール・LINEに貼り付けて案内します。</li>
+      </ol>
+    </section>
+
+    <section class="feat" id="settings-staff" data-k="スタッフ管理 スタッフ追加 氏名 役職 担当店舗 入社日 編集 削除">
+      <span class="badge">設定</span>
+      <h2>24. スタッフ管理</h2>
+      <p class="path">サイドバー：設定・ユーザー管理 › スタッフ管理</p>
+      <p class="lead">店舗に所属するスタッフ（営業担当）を登録します。各管理表の「担当」候補になります。</p>
+      <img class="shot" src="/static/manual/settings-staff.png" alt="スタッフ管理" loading="lazy">
+      <ol class="steps">
+        <li>右上の <span class="chip">＋ スタッフ追加</span> を押します。</li>
+        <li><b>氏名・役職・担当店舗・入社日</b> を入力して保存します。</li>
+        <li>一覧の <span class="chip">編集</span> で内容変更、<span class="chip">削除</span> で退職者を外せます。</li>
+      </ol>
+      <div class="tip">スタッフは「人」の登録です。その人がログインして操作するための <b>ログインID</b> は、次の「25. ログイン管理」で別に作ります。</div>
+    </section>
+
+    <section class="feat" id="settings-accounts" data-k="ログイン管理 アカウント追加 権限 ロール オーナー 店長 スタッフ 閲覧権限 メニュー">
+      <span class="badge">設定</span>
+      <h2>25. ログイン管理</h2>
+      <p class="path">サイドバー：設定・ユーザー管理 › ログイン管理</p>
+      <p class="lead">システムにログインできるアカウントと、各アカウントが <b>見られる機能（権限）</b> を管理します。</p>
+      <img class="shot" src="/static/manual/settings-accounts.png" alt="ログイン管理" loading="lazy">
+      <ol class="steps">
+        <li>右上の <span class="chip">＋ アカウント追加</span> を押します。</li>
+        <li><b>ログイン名・パスワード・役割</b>（オーナー／店長／スタッフ）を設定します。スタッフの場合は対応する人や店舗を紐づけます。</li>
+        <li>各メニュー（チャット・売上分析・顧客管理表 など）の <b>権限チェック</b> をON/OFFして、そのアカウントに見せる機能を絞れます。</li>
+        <li>登録済みアカウントは <span class="chip">編集</span> から権限を変更できます。</li>
+      </ol>
+    </section>
+
+    <section class="feat" id="settings-company" data-k="会社情報 店舗ロゴ 会社名 電話 メール 代表者 宅建業免許番号 営業時間 定休日 インボイス 公式LINE 差し込み">
+      <span class="badge">設定</span>
+      <h2>26. 会社情報</h2>
+      <p class="path">サイドバー：設定・ユーザー管理 › 会社情報</p>
+      <p class="lead">会社・店舗の基本情報を登録します。ここの内容が <b>メールの差し込み文字や契約書類に自動で反映</b>されます。</p>
+      <img class="shot" src="/static/manual/settings-company.png" alt="会社情報" loading="lazy">
+      <ol class="steps">
+        <li><b>店舗ロゴ</b> は <span class="chip">画像を選択</span> からアップロードします。</li>
+        <li>会社名・店舗名・電話・FAX・メールアドレス・代表者氏名・<b>宅建業免許番号</b>・営業時間・定休日・<b>適格請求書（インボイス）登録番号</b>・<b>公式LINEのURL</b> を入力します。</li>
+        <li><span class="chip">会社情報を保存する</span> を押します。</li>
+      </ol>
+      <div class="tip">メールテンプレートの <span class="chip">#会社名#</span><span class="chip">#会社電話番号#</span><span class="chip">#公式LINE#</span> などは、ここに入れた値に置き換わります。</div>
+    </section>
+
+    <section class="feat" id="settings-profile" data-k="ID パス管理 表示名 ログイン名 変更 パスワード変更 現在のパスワード 新しいパスワード">
+      <span class="badge">設定</span>
+      <h2>27. ID・パス管理</h2>
+      <p class="path">サイドバー：設定・ユーザー管理 › ID・パス管理</p>
+      <p class="lead">自分のログイン名（表示名）とパスワードを変更します。</p>
+      <img class="shot" src="/static/manual/settings-profile.png" alt="ID・パス管理" loading="lazy">
+      <ol class="steps">
+        <li><b>表示名（ID）変更</b>：新しいログイン名を入力し <span class="chip">名前を変更する</span> を押します。</li>
+        <li><b>パスワード変更</b>：現在のパスワード → 新しいパスワード → 確認、の順に入力し <span class="chip">パスワードを変更する</span> を押します。</li>
+      </ol>
+      <div class="warn">パスワードは定期的に変更し、他人に教えないでください。ブラウザを閉じると再ログインが必要になります（セキュリティのため）。</div>
+    </section>
+
+    <div class="nohit" id="nohit">該当する項目がありません。別のキーワードでお試しください。</div>
+  </main>
+</div>
+
+<div id="zoom" onclick="this.style.display='none'"><img id="zoomimg" src="" alt=""></div>
+
+<footer class="gf">© 2026 ミエルーム ｜ 使い方ガイド</footer>
+
+<script>
+  // 画像クリックで拡大
+  document.querySelectorAll('.shot').forEach(function(img){
+    img.addEventListener('click', function(){
+      document.getElementById('zoomimg').src = this.src;
+      document.getElementById('zoom').style.display = 'flex';
+    });
+  });
+  // 検索フィルタ
+  function filter(){
+    var q = (document.getElementById('q').value||'').trim().toLowerCase();
+    var hit = 0;
+    document.querySelectorAll('section.feat').forEach(function(sec){
+      var t = (sec.textContent + ' ' + (sec.getAttribute('data-k')||'')).toLowerCase();
+      var show = !q || t.indexOf(q) >= 0;
+      sec.style.display = show ? '' : 'none';
+      if(show) hit++;
+    });
+    // 見出し（グループ）と目次は検索中は隠す/表示
+    document.querySelectorAll('.grpdiv').forEach(function(g){ g.style.display = q ? 'none' : ''; });
+    document.querySelector('.intro').style.display = q ? 'none' : '';
+    document.getElementById('nohit').style.display = (q && hit===0) ? 'block' : 'none';
+  }
+</script>
+</body>
+</html>
