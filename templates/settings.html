@@ -209,6 +209,23 @@
               （{% for s in staff_list %}{% if s.id == acc.staff_id %}{{ s.name }}{% endif %}{% endfor %}）
             </span>
             {% endif %}
+            {# 所属店舗：オーナーは全店舗、それ以外は店舗切替セレクト #}
+            {% set role_rank0 = {'staff': 1, 'store_manager': 2, 'owner': 3} %}
+            {% set my_rank0 = role_rank0.get(current_user.role, 0) if current_user else 0 %}
+            {% set can_edit0 = is_me or (my_rank0 > role_rank0.get(acc.role, 0)) %}
+            {% if acc.role == 'owner' %}
+            <span style="font-size:11px;background:#F0FDFA;color:#0D9488;border:1px solid #5EEAD4;padding:2px 8px;border-radius:999px;font-weight:600;">🏢 全店舗</span>
+            {% elif stores|length > 1 and can_edit0 and not is_me %}
+            <select onchange="changeUserStore({{ acc.id }}, this.value)"
+              title="所属店舗を切り替え"
+              style="font-size:11px;padding:2px 6px;border:1px solid #5EEAD4;border-radius:6px;background:#F0FDFA;color:#0D9488;font-weight:600;cursor:pointer;">
+              {% for s in stores %}
+              <option value="{{ s.id }}" {% if acc.store_id == s.id %}selected{% endif %}>🏢 {{ s.name }}</option>
+              {% endfor %}
+            </select>
+            {% elif acc.store_id %}
+            <span style="font-size:11px;background:#F0FDFA;color:#0D9488;border:1px solid #5EEAD4;padding:2px 8px;border-radius:999px;font-weight:600;">🏢 {{ store_name_map.get(acc.store_id, '—') }}</span>
+            {% endif %}
           </div>
           {% set role_rank = {'staff': 1, 'store_manager': 2, 'owner': 3} %}
           {% set my_rank  = role_rank.get(current_user.role, 0) if current_user else 0 %}
@@ -722,6 +739,20 @@ async function submitCreateUser() {
   } catch(e) {
     errEl.textContent = '通信エラーが発生しました';
     errEl.style.display = 'block';
+  }
+}
+
+async function changeUserStore(uid, storeId) {
+  try {
+    const res = await fetch(`/api/users/${uid}`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ store_id: parseInt(storeId) || null })
+    });
+    if (!res.ok) { showAlert('店舗の変更に失敗しました', 'error'); return; }
+    showAlert('所属店舗を変更しました。');
+  } catch(e) {
+    showAlert('通信エラーが発生しました', 'error');
   }
 }
 
