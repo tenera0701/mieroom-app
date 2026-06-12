@@ -11886,6 +11886,15 @@ def api_user_update(uid):
     if 'email'    in data: u.email    = (data['email'] or '').strip().lower() or None
     if 'role'     in data: u.role     = data['role']
     if 'staff_id' in data: u.staff_id = data['staff_id'] or None
+    if 'store_id' in data:
+        sid = data['store_id']
+        if sid:
+            # 同テナントの店舗のみ許可（不正な店舗IDは無視）
+            st = Store.query.get(int(sid))
+            if st and st.tenant_id == u.tenant_id:
+                u.store_id = int(sid)
+        else:
+            u.store_id = None
     if 'password' in data and data['password']:
         u.password_hash = generate_password_hash(data['password'])
     if 'can_view_accounting'    in data: u.can_view_accounting    = bool(data['can_view_accounting'])

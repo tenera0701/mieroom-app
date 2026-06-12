@@ -216,7 +216,7 @@
           {% set can_edit = is_me or (my_rank > tgt_rank) %}
           <div style="display:flex;gap:6px;">
             {% if can_edit %}
-            <button class="btn-sm" onclick="openEditUserModal({{ acc.id }}, '{{ acc.username }}', '{{ acc.email or '' }}', '{{ acc.role }}', {{ acc.staff_id or 'null' }}, {{ acc.can_view_accounting|lower }}, {{ acc.can_view_all_staff|lower }}, {{ acc.can_edit_kpi|lower }}, {{ acc.can_manage_uncollected|lower }}, {{ acc.can_view_executive|lower }}, {{ acc.can_view_leads_page|lower }}, {{ acc.can_view_daily_report|lower }}, {{ acc.can_view_leave|lower }})">編集</button>
+            <button class="btn-sm" onclick="openEditUserModal({{ acc.id }}, '{{ acc.username }}', '{{ acc.email or '' }}', '{{ acc.role }}', {{ acc.staff_id or 'null' }}, {{ acc.can_view_accounting|lower }}, {{ acc.can_view_all_staff|lower }}, {{ acc.can_edit_kpi|lower }}, {{ acc.can_manage_uncollected|lower }}, {{ acc.can_view_executive|lower }}, {{ acc.can_view_leads_page|lower }}, {{ acc.can_view_daily_report|lower }}, {{ acc.can_view_leave|lower }}, {{ acc.store_id or 'null' }})">編集</button>
             {% if not is_me %}
             <button class="btn-sm btn-danger" onclick="deleteUser({{ acc.id }})">削除</button>
             {% endif %}
@@ -506,6 +506,18 @@
           <option value="owner">オーナー</option>
         </select>
       </div>
+      {% if stores|length > 1 %}
+      <div class="form-group">
+        <label>所属店舗 <span style="color:#9ca3af;font-size:11px;">（この店舗のデータを閲覧）</span></label>
+        <select id="eu-store-id">
+          {% for s in stores %}
+          <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% else %}
+      <input type="hidden" id="eu-store-id" value="{{ stores[0].id if stores else '' }}">
+      {% endif %}
       <div class="form-group">
         <label>担当スタッフ</label>
         <select id="eu-staff-id">
@@ -739,13 +751,15 @@ async function toggleUserPerm(uid, field, currentVal) {
   }
 }
 
-function openEditUserModal(uid, username, email, role, staffId, accounting, allstaff, kpi, uncollected, executive, leadsPage, dailyReport, leave) {
+function openEditUserModal(uid, username, email, role, staffId, accounting, allstaff, kpi, uncollected, executive, leadsPage, dailyReport, leave, storeId) {
   document.getElementById('eu-id').value = uid;
   document.getElementById('eu-name-label').textContent = username;
   document.getElementById('eu-email').value = email;
   document.getElementById('eu-password').value = '';
   document.getElementById('eu-role').value = role;
   document.getElementById('eu-staff-id').value = staffId || '';
+  var euStore = document.getElementById('eu-store-id');
+  if (euStore && storeId) euStore.value = storeId;
   document.getElementById('eu-accounting').checked = accounting;
   document.getElementById('eu-allstaff').checked = allstaff;
   document.getElementById('eu-kpi').checked = kpi;
@@ -768,6 +782,7 @@ async function submitEditUser() {
     email: document.getElementById('eu-email').value.trim(),
     role: document.getElementById('eu-role').value,
     staff_id: document.getElementById('eu-staff-id').value || null,
+    store_id: (function(){ var e=document.getElementById('eu-store-id'); return e ? (parseInt(e.value)||null) : null; })(),
     can_view_accounting: document.getElementById('eu-accounting').checked,
     can_view_all_staff: document.getElementById('eu-allstaff').checked,
     can_edit_kpi: document.getElementById('eu-kpi').checked,
