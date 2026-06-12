@@ -4864,7 +4864,8 @@ FLOORPLAN_FIXTURE_TYPES = ['toilet','toiletTankless','bath','kitchen','sink','st
     'opening','doorDouble','doorParentChild','doorSide','fix','bayWindowSq',
     'folding2','sliding3','sliding4','kataBiki',
     'counterKitchen','islandKitchen','lKitchen','kitchenCounter','cupboard',
-    'washerPan','ubWithToilet','pillar','underfloorStorage']
+    'washerPan','ubWithToilet','pillar','underfloorStorage',
+    'stoveDiagonal','stoveVertical','stoveSingle']
 FLOORPLAN_ROOM_TYPES = ['洋室','和室','LDK','DK','K','LD','浴室','洗面','トイレ','玄関','廊下','クローゼット',
                         'バルコニー','収納','土間','ポーチ','ガレージ','吹抜け','床の間','広縁']
 
@@ -4903,7 +4904,8 @@ def api_floorplans_ai_import():
         "設備キー(type)は次の英語から選ぶ: " + ", ".join(FLOORPLAN_FIXTURE_TYPES) + "\n"
         "（toilet=トイレ, toiletTankless=タンクレストイレ, bath=ユニットバス/浴室, kitchen=I型キッチン, "
         "counterKitchen=対面キッチン, islandKitchen=アイランドキッチン, lKitchen=L型キッチン, kitchenCounter=カウンター, "
-        "sink=シンク, stove=ガスコンロ, ih=IHコンロ, dishwasher=食洗機, hood=レンジフード, cupboard=食器棚, washbasin=洗面台, "
+        "sink=シンク, stove=ガスコンロ(3口), stoveDiagonal=コンロ斜め2口, stoveVertical=コンロ縦2口, stoveSingle=コンロ1口, "
+        "ih=IHコンロ, dishwasher=食洗機, hood=レンジフード, cupboard=食器棚, washbasin=洗面台, "
         "washbasinWide=ワイド洗面台, washer=洗濯機置場, washerPan=洗濯パン, ubWithToilet=トイレ付ユニットバス, "
         "fridge=冷蔵庫置場, stairs=階段, door=片開ドア, doorDouble=両開ドア, doorParentChild=親子ドア, doorSide=袖付片開, "
         "sliding=引違2枚, sliding3=引違3枚, sliding4=引違4枚, kataBiki=片引戸, folding2=折戸, opening=壁の開口, "
