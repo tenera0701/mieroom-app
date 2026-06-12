@@ -2591,6 +2591,11 @@ def get_allowed_store_ids(ignore_active=False):
     else:
         if user.store_id:
             return [user.store_id]
+        # アカウントにstore_id未設定なら、紐づくスタッフ台帳の所属店舗を使う
+        if getattr(user, 'staff_id', None):
+            st = Staff.query.get(user.staff_id)
+            if st and st.store_id:
+                return [st.store_id]
         if user.tenant_id:
             ids = [s.id for s in Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).order_by(Store.id).all()]
             return ids[:1]
@@ -2624,6 +2629,12 @@ def get_allowed_stores(ignore_active=False):
         if user.store_id:
             s = Store.query.get(user.store_id)
             return [s] if s and s.is_active else []
+        # アカウントにstore_id未設定なら、紐づくスタッフ台帳の所属店舗を使う
+        if getattr(user, 'staff_id', None):
+            st = Staff.query.get(user.staff_id)
+            if st and st.store_id:
+                s = Store.query.get(st.store_id)
+                return [s] if s and s.is_active else []
         if user.tenant_id:
             return Store.query.filter_by(tenant_id=user.tenant_id, is_active=True).order_by(Store.id).limit(1).all()
         return []
