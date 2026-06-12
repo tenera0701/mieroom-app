@@ -2531,6 +2531,27 @@ def manager_or_above_required(f):
     return decorated
 
 
+def manager_or_perm_required(perm_field):
+    """store_manager / owner は常に可。staff は指定の権限フラグ(perm_field)がONなら可。
+    super_admin は常にブロック。売上分析・反響分析・経理・有給など、管理者向けだが
+    事務スタッフ等に個別許可したいページで使う。"""
+    def wrapper(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if 'app_user_id' not in session:
+                return redirect(url_for('app_login'))
+            user = AppUser.query.get(session['app_user_id'])
+            if not user:
+                return redirect(url_for('app_login'))
+            if user.role == 'super_admin':
+                return redirect(url_for('admin_tenants'))
+            if user.role == 'staff' and not getattr(user, perm_field, False):
+                return redirect(url_for('sales_management'))
+            return f(*args, **kwargs)
+        return decorated
+    return wrapper
+
+
 def block_super_admin(f):
     """ビジネス系ページから super_admin を弾く（テナント管理のみ許可）"""
     @wraps(f)
@@ -2739,7 +2760,7 @@ def app_logout():
 
 @app.route("/executive")
 @login_required
-@manager_or_above_required
+@manager_or_perm_required('can_view_executive')
 def executive_dashboard():
     """売上管理ダッシュボード"""
     stores = get_allowed_stores(ignore_active=True)  # サイドバー用
@@ -8765,7 +8786,7 @@ def api_cs_records_delete(rid):
 
 @app.route("/leads")
 @login_required
-@manager_or_above_required
+@manager_or_perm_required('can_view_leads_page')
 def leads_management():
     """反響管理ページ：リード一覧・追加"""
     stores = get_allowed_stores()
@@ -8835,7 +8856,7 @@ def leads_status_update(lead_id):
 
 @app.route("/accounting")
 @login_required
-@manager_or_above_required
+@manager_or_perm_required('can_view_accounting')
 def accounting():
     """会計・PL管理ページ"""
     stores = get_allowed_stores()
@@ -11273,7 +11294,7 @@ def api_uncollected_sync_from_applications():
 
 @app.route("/leave-management")
 @login_required
-@manager_or_above_required
+@manager_or_perm_required('can_view_leave')
 def leave_management():
     stores     = get_allowed_stores(ignore_active=True)   # サイドバー用
     active_ids = get_allowed_store_ids()                   # アクティブ店舗のみ
