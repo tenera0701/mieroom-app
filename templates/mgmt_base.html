@@ -349,6 +349,7 @@
         </a>
         {% endif %}
 
+        {% if user_perms.get('can_view_chat', true) %}
         <a href="/chat"
            class="nav-item {% if request.path == '/chat' %}active{% endif %}">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -358,7 +359,9 @@
           <span class="nav-label">チャット{% if is_chat_pro %} <span style="font-size:9px;background:#0D9488;color:#fff;border-radius:6px;padding:1px 5px;margin-left:2px;">Pro</span>{% endif %}</span>
           <span id="chat-nav-badge" style="display:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center;margin-left:auto;"></span>
         </a>
+        {% endif %}
 
+        {% if user_perms.get('can_view_sales', true) %}
         <a href="/sales"
            class="nav-item {% if request.path == '/sales' %}active{% endif %}">
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -367,6 +370,8 @@
           </svg>
           <span class="nav-label">営業分析</span>
         </a>
+        {% endif %}
+        {% if user_perms.get('can_view_customer_management', true) %}
         <a href="/customer-management"
            class="nav-item {% if request.path == '/customer-management' %}active{% endif %}"
            style="padding-left:36px; font-size:12px; opacity:0.9;">
@@ -375,6 +380,8 @@
           </svg>
           <span class="nav-label">└ 顧客管理表</span>
         </a>
+        {% endif %}
+        {% if user_perms.get('can_view_echo_management', true) %}
         <a href="/echo-management"
            class="nav-item {% if request.path == '/echo-management' %}active{% endif %}"
            style="padding-left:36px; font-size:12px; opacity:0.9;">
@@ -383,6 +390,8 @@
           </svg>
           <span class="nav-label">└ 反響管理表</span>
         </a>
+        {% endif %}
+        {% if user_perms.get('can_view_customer_service', true) %}
         <a href="/customer-service"
            class="nav-item {% if request.path == '/customer-service' %}active{% endif %}"
            style="padding-left:36px; font-size:12px; opacity:0.9;">
@@ -391,6 +400,8 @@
           </svg>
           <span class="nav-label">└ 接客管理表</span>
         </a>
+        {% endif %}
+        {% if user_perms.get('can_view_reservations', true) %}
         <a href="/reservations"
            class="nav-item {% if request.path == '/reservations' %}active{% endif %}"
            style="padding-left:36px; font-size:12px; opacity:0.9;">
@@ -399,6 +410,7 @@
           </svg>
           <span class="nav-label">└ カレンダー</span>
         </a>
+        {% endif %}
 
         {% if user_perms.get('can_view_leads_page', true) %}
         <a href="/leads"
@@ -436,6 +448,7 @@
           </svg>
         </a>
         <div id="clerical-group" style="{% if not in_clerical %}display:none;{% endif %}">
+          {% if user_perms.get('can_view_contract', true) %}
           <a href="/contract-customers"
              class="nav-item {% if request.path == '/contract-customers' %}active{% endif %}"
              style="padding-left:36px; font-size:12px; opacity:0.9;">
@@ -444,6 +457,8 @@
             </svg>
             <span class="nav-label">└ 契約管理</span>
           </a>
+          {% endif %}
+          {% if user_perms.get('can_view_past_customers', true) %}
           <a href="/past-customers"
              class="nav-item {% if request.path == '/past-customers' %}active{% endif %}"
              style="padding-left:36px; font-size:12px; opacity:0.9;">
@@ -452,6 +467,7 @@
             </svg>
             <span class="nav-label">└ 顧客管理</span>
           </a>
+          {% endif %}
           {% if user_perms.get('can_view_daily_report', true) %}
           <a href="/daily-report"
              class="nav-item {% if request.path == '/daily-report' %}active{% endif %}"
@@ -462,7 +478,7 @@
             <span class="nav-label">└ 日報</span>
           </a>
           {% endif %}
-          {% if has_floorplan %}
+          {% if has_floorplan and user_perms.get('can_view_floorplan', true) %}
           <a href="/floorplan"
              class="nav-item {% if request.path == '/floorplan' %}active{% endif %}"
              style="padding-left:36px; font-size:12px; opacity:0.9;">
@@ -471,6 +487,8 @@
             </svg>
             <span class="nav-label">└ 間取り作成</span>
           </a>
+          {% endif %}
+          {% if has_floorplan and user_perms.get('can_view_image_editor', true) %}
           <a href="/image-editor"
              class="nav-item {% if request.path == '/image-editor' %}active{% endif %}"
              style="padding-left:36px; font-size:12px; opacity:0.9;">

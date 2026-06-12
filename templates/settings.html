@@ -216,7 +216,7 @@
           {% set can_edit = is_me or (my_rank > tgt_rank) %}
           <div style="display:flex;gap:6px;">
             {% if can_edit %}
-            <button class="btn-sm" onclick="openEditUserModal({{ acc.id }}, '{{ acc.username }}', '{{ acc.email or '' }}', '{{ acc.role }}', {{ acc.staff_id or 'null' }}, {{ acc.can_view_accounting|lower }}, {{ acc.can_view_all_staff|lower }}, {{ acc.can_edit_kpi|lower }}, {{ acc.can_manage_uncollected|lower }}, {{ acc.can_view_executive|lower }}, {{ acc.can_view_leads_page|lower }}, {{ acc.can_view_daily_report|lower }}, {{ acc.can_view_leave|lower }}, {{ acc.store_id or 'null' }})">編集</button>
+            <button class="btn-sm" onclick="openEditUserModal({{ acc.id }}, '{{ acc.username }}', '{{ acc.email or '' }}', '{{ acc.role }}', {{ acc.staff_id or 'null' }}, {{ acc.store_id or 'null' }}, { can_view_all_staff: {{ acc.can_view_all_staff|lower }}, can_edit_kpi: {{ acc.can_edit_kpi|lower }}, can_manage_uncollected: {{ acc.can_manage_uncollected|lower }}{% for grp in nav_perm_groups %}{% for item in grp['items'] %}, {{ item.key }}: {{ acc[item.key]|lower }}{% endfor %}{% endfor %} })">編集</button>
             {% if not is_me %}
             <button class="btn-sm btn-danger" onclick="deleteUser({{ acc.id }})">削除</button>
             {% endif %}
@@ -243,15 +243,20 @@
           </span>
           {% endif %}
           {% endmacro %}
-          {{ ptoggle(acc.id, 'can_view_accounting',    acc.can_view_accounting,    '経理') }}
-          {{ ptoggle(acc.id, 'can_view_all_staff',     acc.can_view_all_staff,     '全スタッフ') }}
-          {{ ptoggle(acc.id, 'can_edit_kpi',           acc.can_edit_kpi,           'KPI編集') }}
-          {{ ptoggle(acc.id, 'can_manage_uncollected', acc.can_manage_uncollected, '未入金') }}
-          {{ ptoggle(acc.id, 'can_view_executive',     acc.can_view_executive,     '売上分析') }}
-          {{ ptoggle(acc.id, 'can_view_leads_page',    acc.can_view_leads_page,    '反響分析') }}
-          {{ ptoggle(acc.id, 'can_view_daily_report',  acc.can_view_daily_report,  '日報') }}
-          {{ ptoggle(acc.id, 'can_view_leave',         acc.can_view_leave,         '有給') }}
-          {{ ptoggle(acc.id, 'can_view_settings',      acc.can_view_settings,      '各種設定') }}
+          {% for grp in nav_perm_groups %}
+          <div style="width:100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:2px;">
+            <span style="font-size:10px;color:#9ca3af;font-weight:700;width:60px;flex-shrink:0;">{{ grp.group }}</span>
+            {% for item in grp['items'] %}
+            {{ ptoggle(acc.id, item.key, acc[item.key], item.label) }}
+            {% endfor %}
+          </div>
+          {% endfor %}
+          <div style="width:100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+            <span style="font-size:10px;color:#9ca3af;font-weight:700;width:60px;flex-shrink:0;">操作権限</span>
+            {{ ptoggle(acc.id, 'can_view_all_staff',     acc.can_view_all_staff,     '全スタッフ閲覧') }}
+            {{ ptoggle(acc.id, 'can_edit_kpi',           acc.can_edit_kpi,           'KPI編集') }}
+            {{ ptoggle(acc.id, 'can_manage_uncollected', acc.can_manage_uncollected, '未入金管理') }}
+          </div>
         </div>
       </div>
       {% else %}
@@ -436,11 +441,19 @@
         </select>
       </div>
       <div style="border-top:1px solid #e5e7eb;padding-top:14px;margin-top:4px;">
-        <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:10px;">権限設定</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:10px;">表示できる機能（チェックON=表示）</div>
+        {% for grp in nav_perm_groups %}
+        <div style="font-size:11px;color:#0D9488;font-weight:700;margin:8px 0 4px;">{{ grp.group }}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          {% for item in grp['items'] %}
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
-            <input type="checkbox" id="cu-accounting" checked style="width:15px;height:15px;accent-color:#0D9488;">経理・PL閲覧
+            <input type="checkbox" id="cu-perm-{{ item.key }}" {% if item.default %}checked{% endif %} style="width:15px;height:15px;accent-color:#0D9488;">{{ item.label }}
           </label>
+          {% endfor %}
+        </div>
+        {% endfor %}
+        <div style="font-size:11px;color:#0D9488;font-weight:700;margin:8px 0 4px;">操作権限</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
             <input type="checkbox" id="cu-allstaff" checked style="width:15px;height:15px;accent-color:#0D9488;">全スタッフ閲覧
           </label>
@@ -449,18 +462,6 @@
           </label>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
             <input type="checkbox" id="cu-uncollected" checked style="width:15px;height:15px;accent-color:#0D9488;">未入金管理
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
-            <input type="checkbox" id="cu-executive" checked style="width:15px;height:15px;accent-color:#0D9488;">売上分析
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
-            <input type="checkbox" id="cu-leads-page" checked style="width:15px;height:15px;accent-color:#0D9488;">反響分析
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
-            <input type="checkbox" id="cu-daily-report" checked style="width:15px;height:15px;accent-color:#0D9488;">日報
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
-            <input type="checkbox" id="cu-leave" checked style="width:15px;height:15px;accent-color:#0D9488;">有給管理
           </label>
         </div>
       </div>
@@ -528,11 +529,19 @@
         </select>
       </div>
       <div style="border-top:1px solid #e5e7eb;padding-top:14px;margin-top:4px;">
-        <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:10px;">権限設定</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:10px;">表示できる機能（チェックON=表示）</div>
+        {% for grp in nav_perm_groups %}
+        <div style="font-size:11px;color:#0D9488;font-weight:700;margin:8px 0 4px;">{{ grp.group }}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          {% for item in grp['items'] %}
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
-            <input type="checkbox" id="eu-accounting" style="width:15px;height:15px;accent-color:#0D9488;">経理・PL閲覧
+            <input type="checkbox" id="eu-perm-{{ item.key }}" style="width:15px;height:15px;accent-color:#0D9488;">{{ item.label }}
           </label>
+          {% endfor %}
+        </div>
+        {% endfor %}
+        <div style="font-size:11px;color:#0D9488;font-weight:700;margin:8px 0 4px;">操作権限</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
             <input type="checkbox" id="eu-allstaff" style="width:15px;height:15px;accent-color:#0D9488;">全スタッフ閲覧
           </label>
@@ -541,18 +550,6 @@
           </label>
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
             <input type="checkbox" id="eu-uncollected" style="width:15px;height:15px;accent-color:#0D9488;">未入金管理
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
-            <input type="checkbox" id="eu-executive" style="width:15px;height:15px;accent-color:#0D9488;">売上分析
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
-            <input type="checkbox" id="eu-leads-page" style="width:15px;height:15px;accent-color:#0D9488;">反響分析
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
-            <input type="checkbox" id="eu-daily-report" style="width:15px;height:15px;accent-color:#0D9488;">日報
-          </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
-            <input type="checkbox" id="eu-leave" style="width:15px;height:15px;accent-color:#0D9488;">有給管理
           </label>
         </div>
       </div>
@@ -672,20 +669,18 @@ async function deleteStaff(id) {
 }
 
 /* ===== ユーザー管理モーダル ===== */
+const NAV_PERM_DEFAULTS = { {% for g in nav_perm_groups %}{% for it in g['items'] %}'{{ it.key }}': {{ 'true' if it.default else 'false' }}, {% endfor %}{% endfor %} };
+const NAV_PERM_KEYS = Object.keys(NAV_PERM_DEFAULTS);
 function openCreateUserModal() {
   document.getElementById('cu-username').value = '';
   document.getElementById('cu-email').value = '';
   document.getElementById('cu-password').value = '';
   document.getElementById('cu-role').value = 'staff';
   document.getElementById('cu-staff-id').value = '';
-  document.getElementById('cu-accounting').checked = true;
+  NAV_PERM_KEYS.forEach(k => { const el = document.getElementById('cu-perm-' + k); if (el) el.checked = NAV_PERM_DEFAULTS[k]; });
   document.getElementById('cu-allstaff').checked = true;
   document.getElementById('cu-kpi').checked = true;
   document.getElementById('cu-uncollected').checked = true;
-  document.getElementById('cu-executive').checked = true;
-  document.getElementById('cu-leads-page').checked = true;
-  document.getElementById('cu-daily-report').checked = true;
-  document.getElementById('cu-leave').checked = true;
   document.getElementById('create-user-error').style.display = 'none';
   document.getElementById('create-user-modal').classList.add('active');
 }
@@ -703,15 +698,11 @@ async function submitCreateUser() {
     role: document.getElementById('cu-role').value,
     staff_id: document.getElementById('cu-staff-id').value || null,
     store_id: storeEl ? parseInt(storeEl.value) || null : null,
-    can_view_accounting: document.getElementById('cu-accounting').checked,
     can_view_all_staff: document.getElementById('cu-allstaff').checked,
     can_edit_kpi: document.getElementById('cu-kpi').checked,
     can_manage_uncollected: document.getElementById('cu-uncollected').checked,
-    can_view_executive: document.getElementById('cu-executive').checked,
-    can_view_leads_page: document.getElementById('cu-leads-page').checked,
-    can_view_daily_report: document.getElementById('cu-daily-report').checked,
-    can_view_leave: document.getElementById('cu-leave').checked,
   };
+  NAV_PERM_KEYS.forEach(k => { const el = document.getElementById('cu-perm-' + k); payload[k] = el ? el.checked : NAV_PERM_DEFAULTS[k]; });
   if (!payload.username || !payload.password) {
     errEl.textContent = 'ユーザー名とパスワードは必須です';
     errEl.style.display = 'block';
@@ -751,7 +742,8 @@ async function toggleUserPerm(uid, field, currentVal) {
   }
 }
 
-function openEditUserModal(uid, username, email, role, staffId, accounting, allstaff, kpi, uncollected, executive, leadsPage, dailyReport, leave, storeId) {
+function openEditUserModal(uid, username, email, role, staffId, storeId, perms) {
+  perms = perms || {};
   document.getElementById('eu-id').value = uid;
   document.getElementById('eu-name-label').textContent = username;
   document.getElementById('eu-email').value = email;
@@ -760,14 +752,10 @@ function openEditUserModal(uid, username, email, role, staffId, accounting, alls
   document.getElementById('eu-staff-id').value = staffId || '';
   var euStore = document.getElementById('eu-store-id');
   if (euStore && storeId) euStore.value = storeId;
-  document.getElementById('eu-accounting').checked = accounting;
-  document.getElementById('eu-allstaff').checked = allstaff;
-  document.getElementById('eu-kpi').checked = kpi;
-  document.getElementById('eu-uncollected').checked = uncollected;
-  document.getElementById('eu-executive').checked = executive !== false;
-  document.getElementById('eu-leads-page').checked = leadsPage !== false;
-  document.getElementById('eu-daily-report').checked = dailyReport !== false;
-  document.getElementById('eu-leave').checked = leave !== false;
+  document.getElementById('eu-allstaff').checked = perms.can_view_all_staff !== false;
+  document.getElementById('eu-kpi').checked = perms.can_edit_kpi !== false;
+  document.getElementById('eu-uncollected').checked = perms.can_manage_uncollected !== false;
+  NAV_PERM_KEYS.forEach(k => { const el = document.getElementById('eu-perm-' + k); if (el) el.checked = perms[k] !== false; });
   document.getElementById('edit-user-error').style.display = 'none';
   document.getElementById('edit-user-modal').classList.add('active');
 }
@@ -783,15 +771,11 @@ async function submitEditUser() {
     role: document.getElementById('eu-role').value,
     staff_id: document.getElementById('eu-staff-id').value || null,
     store_id: (function(){ var e=document.getElementById('eu-store-id'); return e ? (parseInt(e.value)||null) : null; })(),
-    can_view_accounting: document.getElementById('eu-accounting').checked,
     can_view_all_staff: document.getElementById('eu-allstaff').checked,
     can_edit_kpi: document.getElementById('eu-kpi').checked,
     can_manage_uncollected: document.getElementById('eu-uncollected').checked,
-    can_view_executive: document.getElementById('eu-executive').checked,
-    can_view_leads_page: document.getElementById('eu-leads-page').checked,
-    can_view_daily_report: document.getElementById('eu-daily-report').checked,
-    can_view_leave: document.getElementById('eu-leave').checked,
   };
+  NAV_PERM_KEYS.forEach(k => { const el = document.getElementById('eu-perm-' + k); if (el) payload[k] = el.checked; });
   const pw = document.getElementById('eu-password').value;
   if (pw) payload.password = pw;
   try {

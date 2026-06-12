@@ -76,6 +76,36 @@ def add_no_cache(response):
     return response
 
 
+# ── 機能（ナビ）権限カタログ：左サイドバーの各機能に対応 ──────────────
+# label は左バーの表示名と揃える。default はアカウント既定（True=表示）。
+NAV_PERM_GROUPS = [
+    {'group': 'メイン管理', 'items': [
+        {'key': 'can_view_chat',                'label': 'チャット',        'default': True},
+        {'key': 'can_view_sales',               'label': '営業分析',        'default': True},
+        {'key': 'can_view_customer_management', 'label': '└ 顧客管理表',    'default': True},
+        {'key': 'can_view_echo_management',     'label': '└ 反響管理表',    'default': True},
+        {'key': 'can_view_customer_service',    'label': '└ 接客管理表',    'default': True},
+        {'key': 'can_view_reservations',        'label': '└ カレンダー',    'default': True},
+        {'key': 'can_view_executive',           'label': '売上分析',        'default': True},
+        {'key': 'can_view_leads_page',          'label': '反響分析',        'default': True},
+    ]},
+    {'group': '事務作業', 'items': [
+        {'key': 'can_view_contract',            'label': '契約管理',        'default': True},
+        {'key': 'can_view_past_customers',      'label': '顧客管理',        'default': True},
+        {'key': 'can_view_daily_report',        'label': '日報',            'default': True},
+        {'key': 'can_view_floorplan',           'label': '間取り作成',      'default': True},
+        {'key': 'can_view_image_editor',        'label': '画像編集',        'default': True},
+        {'key': 'can_view_leave',               'label': '有給管理',        'default': True},
+        {'key': 'can_view_accounting',          'label': '経理・PL管理',    'default': True},
+    ]},
+    {'group': '各種設定', 'items': [
+        {'key': 'can_view_settings',            'label': '各種設定（メール/契約書式/来店管理/予約）', 'default': False},
+    ]},
+]
+NAV_PERM_KEYS = [it['key'] for g in NAV_PERM_GROUPS for it in g['items']]
+NAV_PERM_DEFAULT = {it['key']: it['default'] for g in NAV_PERM_GROUPS for it in g['items']}
+
+
 @app.context_processor
 def inject_ui_context():
     """全テンプレートに共通変数を注入（is_premium はリクエスト時に評価）"""
@@ -113,14 +143,7 @@ def inject_ui_context():
         u = AppUser.query.get(uid)
         if not u:
             return {}
-        return {
-            'can_view_executive':   getattr(u, 'can_view_executive', True),
-            'can_view_leads_page':  getattr(u, 'can_view_leads_page', True),
-            'can_view_daily_report':getattr(u, 'can_view_daily_report', True),
-            'can_view_leave':       getattr(u, 'can_view_leave', True),
-            'can_view_accounting':  getattr(u, 'can_view_accounting', True),
-            'can_view_settings':    getattr(u, 'can_view_settings', False),
-        }
+        return {k: bool(getattr(u, k, NAV_PERM_DEFAULT[k])) for k in NAV_PERM_KEYS}
 
     def _is_chat_pro():
         uid = session.get('app_user_id')
@@ -145,6 +168,7 @@ def inject_ui_context():
         'current_role': session.get('app_user_role', ''),
         'sidebar_stores': _sidebar_stores(),
         'user_perms': _current_user_perms(),
+        'nav_perm_groups': NAV_PERM_GROUPS,
     }
 
 
@@ -589,6 +613,17 @@ class AppUser(db.Model):
     can_view_daily_report = db.Column(db.Boolean, default=True)   # 日報
     can_view_leave = db.Column(db.Boolean, default=True)          # 有給管理
     can_view_settings = db.Column(db.Boolean, default=False)     # 各種設定（メール/契約フォーマット/来店管理/予約システム）staffはデフォルト非表示
+    # ナビ各機能の表示権限（左サイドバーに対応・既定True=表示）
+    can_view_chat = db.Column(db.Boolean, default=True)                # チャット
+    can_view_sales = db.Column(db.Boolean, default=True)              # 営業分析
+    can_view_customer_management = db.Column(db.Boolean, default=True) # 顧客管理表
+    can_view_echo_management = db.Column(db.Boolean, default=True)     # 反響管理表
+    can_view_customer_service = db.Column(db.Boolean, default=True)    # 接客管理表
+    can_view_reservations = db.Column(db.Boolean, default=True)        # カレンダー
+    can_view_contract = db.Column(db.Boolean, default=True)           # 契約管理
+    can_view_past_customers = db.Column(db.Boolean, default=True)      # 顧客管理（契約終了）
+    can_view_floorplan = db.Column(db.Boolean, default=True)          # 間取り作成
+    can_view_image_editor = db.Column(db.Boolean, default=True)       # 画像編集
     # クライアント管理画面の操作権限（sys_admin向け）
     admin_can_add_tenant    = db.Column(db.Boolean, default=False)  # 新規テナント追加
     admin_can_manage_stores = db.Column(db.Boolean, default=False)  # 店舗管理
@@ -1830,6 +1865,16 @@ def migrate_db():
         ('can_view_daily_report',  'INTEGER DEFAULT 1'),
         ('can_view_leave',         'INTEGER DEFAULT 1'),
         ('can_view_settings',      'INTEGER DEFAULT 0'),
+        ('can_view_chat',                'INTEGER DEFAULT 1'),
+        ('can_view_sales',               'INTEGER DEFAULT 1'),
+        ('can_view_customer_management', 'INTEGER DEFAULT 1'),
+        ('can_view_echo_management',     'INTEGER DEFAULT 1'),
+        ('can_view_customer_service',    'INTEGER DEFAULT 1'),
+        ('can_view_reservations',        'INTEGER DEFAULT 1'),
+        ('can_view_contract',            'INTEGER DEFAULT 1'),
+        ('can_view_past_customers',      'INTEGER DEFAULT 1'),
+        ('can_view_floorplan',           'INTEGER DEFAULT 1'),
+        ('can_view_image_editor',        'INTEGER DEFAULT 1'),
         ('admin_can_add_tenant',    'INTEGER DEFAULT 0'),
         ('admin_can_manage_stores', 'INTEGER DEFAULT 0'),
         ('admin_can_delete_tenant', 'INTEGER DEFAULT 0'),
@@ -2138,6 +2183,16 @@ def migrate_postgres():
         ("app_user",           "can_view_daily_report",   "BOOLEAN DEFAULT TRUE"),
         ("app_user",           "can_view_leave",          "BOOLEAN DEFAULT TRUE"),
         ("app_user",           "can_view_settings",       "BOOLEAN DEFAULT FALSE"),
+        ("app_user",           "can_view_chat",                "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_sales",               "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_customer_management", "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_echo_management",     "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_customer_service",    "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_reservations",        "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_contract",            "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_past_customers",      "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_floorplan",           "BOOLEAN DEFAULT TRUE"),
+        ("app_user",           "can_view_image_editor",        "BOOLEAN DEFAULT TRUE"),
         ("application_record",        "option_amount", "FLOAT DEFAULT 0"),
         ("application_record", "brokerage_payment_date", "DATE"),
         ("application_record", "option_settled", "BOOLEAN DEFAULT FALSE"),
@@ -2552,6 +2607,28 @@ def manager_or_perm_required(perm_field):
     return wrapper
 
 
+def nav_perm_required(perm_field):
+    """左サイドバーの各機能ページのアクセス制御。
+    super_admin は常にブロック。owner/store_manager/staff は、その機能の
+    表示権限フラグ(perm_field)がOFFのときアクセス不可（既定はON=許可）。
+    権限が無い場合は常にアクセス可能なID・パス管理へ誘導する。"""
+    def wrapper(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if 'app_user_id' not in session:
+                return redirect(url_for('app_login'))
+            if session.get('app_user_role') == 'super_admin':
+                return redirect(url_for('admin_tenants'))
+            user = AppUser.query.get(session['app_user_id'])
+            if not user:
+                return redirect(url_for('app_login'))
+            if not getattr(user, perm_field, True):
+                return redirect(url_for('settings_profile'))
+            return f(*args, **kwargs)
+        return decorated
+    return wrapper
+
+
 def block_super_admin(f):
     """ビジネス系ページから super_admin を弾く（テナント管理のみ許可）"""
     @wraps(f)
@@ -2760,7 +2837,7 @@ def app_logout():
 
 @app.route("/executive")
 @login_required
-@manager_or_perm_required('can_view_executive')
+@nav_perm_required('can_view_executive')
 def executive_dashboard():
     """売上管理ダッシュボード"""
     stores = get_allowed_stores(ignore_active=True)  # サイドバー用
@@ -2791,7 +2868,7 @@ def resolve_cur_staff_id(user):
 
 @app.route("/sales")
 @login_required
-@block_super_admin
+@nav_perm_required('can_view_sales')
 def sales_management():
     """営業管理ページ：KPI入力・閲覧"""
     stores = get_allowed_stores()
@@ -2813,7 +2890,7 @@ def sales_management():
 
 @app.route("/customer-management")
 @login_required
-@block_super_admin
+@nav_perm_required('can_view_customer_management')
 def customer_management():
     """顧客管理表ページ：申込・入金管理に特化"""
     stores = get_allowed_stores(ignore_active=True)   # サイドバー用（全店舗）
@@ -2835,7 +2912,7 @@ def customer_management():
 
 @app.route("/contract-customers")
 @login_required
-@block_super_admin
+@nav_perm_required('can_view_contract')
 def contract_customers():
     """契約中顧客管理ページ：審査〇で契約に進んだ顧客の契約書類を準備する"""
     stores = get_allowed_stores(ignore_active=True)
@@ -2872,7 +2949,7 @@ def api_contract_customers():
 
 @app.route("/past-customers")
 @login_required
-@block_super_admin
+@nav_perm_required('can_view_past_customers')
 def past_customers():
     """顧客管理（契約終了）ページ"""
     stores = get_allowed_stores(ignore_active=True)
@@ -4470,7 +4547,7 @@ def _api_doc_extract_combined_impl():
 # ── 間取り作成 ──────────────────────────────────────────
 @app.route("/floorplan")
 @login_required
-@block_super_admin
+@nav_perm_required('can_view_floorplan')
 def floorplan_page():
     """間取り作成ページ（オプション契約が必要）"""
     if not current_has_floorplan():
@@ -4480,7 +4557,7 @@ def floorplan_page():
 
 @app.route("/image-editor")
 @login_required
-@block_super_admin
+@nav_perm_required('can_view_image_editor')
 def image_editor_page():
     """画像編集ページ（物件画像にロゴを付ける）。間取り作成と同じオプション。"""
     if not current_has_floorplan():
@@ -7491,7 +7568,7 @@ def _chat_cleanup_channel(c):
 
 @app.route("/chat")
 @login_required
-@block_super_admin
+@nav_perm_required('can_view_chat')
 def chat_page():
     return render_template("chat.html")
 
@@ -7928,7 +8005,7 @@ def api_chat_attachment(aid):
 
 @app.route("/echo-management")
 @login_required
-@block_super_admin
+@nav_perm_required('can_view_echo_management')
 def echo_management():
     """反響管理表ページ"""
     stores = get_allowed_stores(ignore_active=True)  # サイドバー用
@@ -8098,7 +8175,7 @@ def api_echo_records_delete(rid):
 
 @app.route("/customer-service")
 @login_required
-@block_super_admin
+@nav_perm_required('can_view_customer_service')
 def customer_service():
     """接客管理表ページ"""
     stores = get_allowed_stores(ignore_active=True)  # サイドバー用
@@ -8417,7 +8494,7 @@ def _reservation_slots(cfg):
 
 @app.route("/reservations")
 @login_required
-@block_super_admin
+@nav_perm_required('can_view_reservations')
 def reservations_page():
     """カレンダー（社内・来店予約）"""
     stores = get_allowed_stores(ignore_active=True)
@@ -8786,7 +8863,7 @@ def api_cs_records_delete(rid):
 
 @app.route("/leads")
 @login_required
-@manager_or_perm_required('can_view_leads_page')
+@nav_perm_required('can_view_leads_page')
 def leads_management():
     """反響管理ページ：リード一覧・追加"""
     stores = get_allowed_stores()
@@ -8856,7 +8933,7 @@ def leads_status_update(lead_id):
 
 @app.route("/accounting")
 @login_required
-@manager_or_perm_required('can_view_accounting')
+@nav_perm_required('can_view_accounting')
 def accounting():
     """会計・PL管理ページ"""
     stores = get_allowed_stores()
@@ -10915,6 +10992,8 @@ def api_settings_account_add():
         can_edit_kpi=bool(data.get('can_edit_kpi', True)),
         can_manage_uncollected=bool(data.get('can_manage_uncollected', True)),
     )
+    for _k in NAV_PERM_KEYS:
+        setattr(user, _k, bool(data.get(_k, NAV_PERM_DEFAULT[_k])))
     db.session.add(user)
     db.session.commit()
     return jsonify({'status': 'ok', 'id': user.id})
@@ -11294,7 +11373,7 @@ def api_uncollected_sync_from_applications():
 
 @app.route("/leave-management")
 @login_required
-@manager_or_perm_required('can_view_leave')
+@nav_perm_required('can_view_leave')
 def leave_management():
     stores     = get_allowed_stores(ignore_active=True)   # サイドバー用
     active_ids = get_allowed_store_ids()                   # アクティブ店舗のみ
@@ -11447,7 +11526,7 @@ def api_leave_balance_update():
 
 @app.route("/daily-report")
 @login_required
-@block_super_admin
+@nav_perm_required('can_view_daily_report')
 def daily_report():
     """日報ページ"""
     allowed_stores = get_allowed_stores()
@@ -11867,8 +11946,9 @@ def api_user_create():
         can_view_leads_page=bool(data.get('can_view_leads_page', True)),
         can_view_daily_report=bool(data.get('can_view_daily_report', True)),
         can_view_leave=bool(data.get('can_view_leave', True)),
-        can_view_settings=bool(data.get('can_view_settings', False)),
     )
+    for _k in NAV_PERM_KEYS:
+        setattr(u, _k, bool(data.get(_k, NAV_PERM_DEFAULT[_k])))
     db.session.add(u)
     db.session.commit()
     return jsonify({'status': 'ok', 'id': u.id})
@@ -11904,8 +11984,9 @@ def api_user_update(uid):
     if 'can_view_executive'     in data: u.can_view_executive     = bool(data['can_view_executive'])
     if 'can_view_leads_page'    in data: u.can_view_leads_page    = bool(data['can_view_leads_page'])
     if 'can_view_daily_report'  in data: u.can_view_daily_report  = bool(data['can_view_daily_report'])
-    if 'can_view_leave'         in data: u.can_view_leave         = bool(data['can_view_leave'])
-    if 'can_view_settings'      in data: u.can_view_settings      = bool(data['can_view_settings'])
+    for _k in NAV_PERM_KEYS:
+        if _k in data:
+            setattr(u, _k, bool(data[_k]))
     db.session.commit()
     return jsonify({'status': 'ok'})
 
