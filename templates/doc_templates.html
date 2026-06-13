@@ -111,6 +111,23 @@
         <label class="kv-head">帳票名</label>
         <input id="map-name" style="border:1px solid #d1d5db;border-radius:6px;padding:7px 9px;font-size:13px;width:100%;margin-top:4px;">
       </div>
+      <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:130px;">
+          <label class="kv-head">用紙サイズ</label>
+          <select id="map-paper" style="border:1px solid #d1d5db;border-radius:6px;padding:7px 9px;font-size:13px;width:100%;margin-top:4px;">
+            <option value="A4">A4</option>
+            <option value="A3">A3</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:130px;">
+          <label class="kv-head">向き</label>
+          <select id="map-orient" style="border:1px solid #d1d5db;border-radius:6px;padding:7px 9px;font-size:13px;width:100%;margin-top:4px;">
+            <option value="portrait">縦</option>
+            <option value="landscape">横</option>
+          </select>
+        </div>
+      </div>
+      <p style="font-size:11px;color:#6b7280;margin:-4px 0 12px;">この書類を編集・印刷・PDFするときの用紙サイズと向きです（書類ごとに設定。初期値はExcelの設定を自動判定）。</p>
       <div class="map-row" style="font-size:11px;font-weight:700;color:#6b7280;border:none;">
         <div>タグ</div><div>区分</div><div>会社情報の項目</div>
       </div>
@@ -252,6 +269,8 @@ async function openMap(id){
     CUR_TPL = j;
     document.getElementById('map-title').textContent = `タグの割当：${j.name}`;
     document.getElementById('map-name').value = j.name || '';
+    document.getElementById('map-paper').value = (j.paper_size === 'A3') ? 'A3' : 'A4';
+    document.getElementById('map-orient').value = (j.orientation === 'landscape') ? 'landscape' : 'portrait';
     const ckeys = j.company_keys || [];
     const opts = ['<option value="">（自動：タグ名で一致）</option>'].concat(ckeys.map(k=>`<option value="${esc(k)}">${esc(k)}</option>`)).join('');
     const list = document.getElementById('map-list');
@@ -290,8 +309,10 @@ async function saveMap(){
     mapping[t] = {scope, company_key: scope==='company'?ck:'', label: t};
   });
   const name = document.getElementById('map-name').value.trim();
+  const paper_size = document.getElementById('map-paper').value;
+  const orientation = document.getElementById('map-orient').value;
   try{
-    const r = await fetch(`/api/doc-templates/${CUR_TPL.id}/mapping`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({mapping, name})});
+    const r = await fetch(`/api/doc-templates/${CUR_TPL.id}/mapping`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({mapping, name, paper_size, orientation})});
     if(!r.ok){ const j=await r.json(); throw new Error(j.error||'保存失敗'); }
     closeMap(); showAlert('タグ割当を保存しました。'); loadTemplates();
   }catch(e){ showAlert(e.message,'error'); }

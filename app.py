@@ -1083,6 +1083,8 @@ class DocTemplate(db.Model):
     file_b64 = db.Column(db.Text)               # xlsx本体（base64）
     tags = db.Column(db.Text)                   # JSON: 検出タグ名のリスト
     mapping = db.Column(db.Text)                # JSON: {tag: {"scope":"company|case","company_key":..,"label":..}}
+    paper_size = db.Column(db.String(8))        # 'A4' / 'A3'（NULL=Excelの設定を自動判定）
+    orientation = db.Column(db.String(12))      # 'portrait' / 'landscape'（NULL=自動判定）
     is_active = db.Column(db.Boolean, default=True)
     created_by = db.Column(db.Integer)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -1935,6 +1937,10 @@ def migrate_db():
             ('contract_start_date', 'DATE'),
             ('ai_monthly_limit', 'INTEGER'),
         ]),
+        ('doc_template', [
+            ('paper_size', 'VARCHAR(8)'),
+            ('orientation', 'VARCHAR(12)'),
+        ]),
     ]:
         cursor.execute(f"PRAGMA table_info({tbl})")
         existing = {r[1] for r in cursor.fetchall()}
@@ -2422,6 +2428,8 @@ def migrate_postgres():
         ("tenant", "subscription_status",  "VARCHAR(20) DEFAULT 'trial'"),
         ("tenant", "contract_start_date",     "DATE"),
         ("tenant", "ai_monthly_limit",        "INTEGER"),
+        ("doc_template", "paper_size",         "VARCHAR(8)"),
+        ("doc_template", "orientation",        "VARCHAR(12)"),
         ("store",  "created_at",             "TIMESTAMP"),
         ("store",  "is_locked",              "BOOLEAN DEFAULT FALSE"),
         ("store",  "contract_start_date",    "DATE"),
@@ -3310,9 +3318,11 @@ def contract_doc_cell_edit(rid, tpl_id):
     overrides = ov if isinstance(ov, dict) else {}
     try:
         raw = _b64.standard_b64decode(r.file_b64.encode())
+        psize, porient = _doc_effective_page(r, raw)
         filled = _xlsx_fill(raw, values)  # 上書きは編集画面側で表示時に重ねる
         html = _xlsx_to_print_html(filled, r.name or '契約書類', editable=True,
-                                   overrides=overrides, rid=rid, tpl_id=tpl_id)
+                                   overrides=overrides, rid=rid, tpl_id=tpl_id,
+                                   orig_bytes=raw, paper_size=psize, orientation=porient)
     except Exception as e:
         return f"編集画面の生成に失敗しました: {e}", 500
     resp = make_response(html)
@@ -3627,6 +3637,33 @@ def _xlsx_extract_tags(xlsx_bytes):
     return tags
 
 
+def _xlsx_detect_page(xlsx_bytes):
+    """xlsxの先頭シートの用紙設定から (paper_size, orientation) を推定する。"""
+    try:
+        import io
+        from openpyxl import load_workbook
+        ws = load_workbook(io.BytesIO(xlsx_bytes), data_only=True).worksheets[0]
+        ps = ws.page_setup
+        size = 'A3' if str(getattr(ps, 'paperSize', '') or '') == '8' else 'A4'
+        orient = 'landscape' if (getattr(ps, 'orientation', None) == 'landscape') else 'portrait'
+        return size, orient
+    except Exception:
+        return 'A4', 'portrait'
+
+
+def _doc_effective_page(tpl, xlsx_bytes):
+    """テンプレートの手動設定を優先し、未設定ならxlsxの用紙設定から (size, orientation) を決める。"""
+    size = (getattr(tpl, 'paper_size', None) or '').upper()
+    orient = (getattr(tpl, 'orientation', None) or '').lower()
+    if size not in ('A4', 'A3') or orient not in ('portrait', 'landscape'):
+        ds, do = _xlsx_detect_page(xlsx_bytes)
+        if size not in ('A4', 'A3'):
+            size = ds
+        if orient not in ('portrait', 'landscape'):
+            orient = do
+    return size, orient
+
+
 def _xlsx_fill(xlsx_bytes, values, overrides=None):
     """{{タグ}} を values[タグ] で置換した xlsx バイト列を返す。
     セル全体が単一タグかつ値が数値ならば数値として書き込む（合計式などのため）。
@@ -3713,11 +3750,15 @@ def _xlsx_collect_images(ws):
     return out
 
 
-def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=None, tpl_id=None):
+def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=None, tpl_id=None,
+                        orig_bytes=None, paper_size='A4', orientation='portrait'):
     """穴埋め済みxlsxを、ブラウザでそのまま印刷できるHTMLに変換する。
     結合セル・列幅・行高・罫線・配置・太字・埋め込み画像（電子印鑑）をできる限り再現する。
-    editable=True でセル直接編集モード（contenteditable + 保存/出力ツールバー）になる。"""
+    editable=True でセル直接編集モード（contenteditable + 保存/出力ツールバー）になる。
+    orig_bytes を渡すと、数式セル（=...）は元ファイルの計算済みキャッシュ値で表示する。
+    paper_size/orientation で印刷用紙（A4/A3・縦横）を指定する。"""
     import io as _io
+    import datetime as _dt
     from openpyxl import load_workbook
     from openpyxl.utils import get_column_letter
 
@@ -3729,8 +3770,36 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
         return (str(s).replace('&', '&amp;').replace('<', '&lt;')
                 .replace('>', '&gt;').replace('"', '&quot;'))
 
+    def _cellval(v):
+        """表示用にセル値を整形（日付→YYYY-MM-DD、整数float→整数）。"""
+        if isinstance(v, _dt.datetime):
+            return v.strftime('%Y-%m-%d') if (v.hour == 0 and v.minute == 0) else v.strftime('%Y-%m-%d %H:%M')
+        if isinstance(v, _dt.date):
+            return v.strftime('%Y-%m-%d')
+        if isinstance(v, float) and v.is_integer():
+            return str(int(v))
+        return v
+
     overrides = overrides or {}
     wb = load_workbook(_io.BytesIO(xlsx_bytes), data_only=False)
+    # 数式セルを計算済み値で表示するためのキャッシュ（元ファイルから）
+    cache_wb = None
+    if orig_bytes is not None:
+        try:
+            cache_wb = load_workbook(_io.BytesIO(orig_bytes), data_only=True)
+        except Exception:
+            cache_wb = None
+
+    def _resolve_value(si, rr, cc, v):
+        """数式(=...)なら計算済みキャッシュ値に差し替える。"""
+        if isinstance(v, str) and v.startswith('=') and cache_wb is not None:
+            try:
+                cv = cache_wb.worksheets[si].cell(row=rr, column=cc).value
+                if not (isinstance(cv, str) and cv.startswith('=')):
+                    return cv
+            except Exception:
+                pass
+        return v
     sheets_html = []
     for si, ws in enumerate(wb.worksheets):
         if ws.sheet_state != 'visible':
@@ -3804,7 +3873,7 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
                             st.append('background:#' + rgb[2:])
                 except Exception:
                     pass
-                v = cell.value
+                v = _cellval(_resolve_value(si, rr, cc, cell.value))
                 if editable:
                     k = f'{si}:{rr}:{cc}'
                     base = '' if v is None else str(v)
@@ -3842,17 +3911,23 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
         else:
             sheets_html.append(table_html)
 
-    body = '<div class="pagebreak"></div>'.join(sheets_html) or '<p>シートがありません</p>'
+    inner = '<div class="pagebreak"></div>'.join(sheets_html) or '<p>シートがありません</p>'
+    # #doc-root を画面幅に合わせて拡大縮小（印刷時は等倍）
+    body = f'<div id="doc-root-wrap"><div id="doc-root">{inner}</div></div>'
+    _psize = 'A3' if str(paper_size).upper() == 'A3' else 'A4'
+    _porient = 'landscape' if str(orientation).lower() == 'landscape' else 'portrait'
     css = ('<style>'
-           "body{font-family:'Yu Gothic','Meiryo',sans-serif;margin:8mm;}"
+           "body{font-family:'Yu Gothic','Meiryo',sans-serif;margin:8mm;color-scheme:light;}"
+           '#doc-root{transform-origin:top left;display:inline-block;}'
            'table.sheet{border-collapse:collapse;table-layout:fixed;margin-bottom:16px;}'
            'td{font-size:12px;padding:1px 3px;overflow:hidden;word-break:break-all;white-space:pre-wrap;}'
            '.pagebreak{page-break-after:always;}'
            '.toolbar{position:fixed;top:8px;right:8px;z-index:10;display:flex;gap:8px;align-items:center;}'
            '.tb-btn{padding:9px 16px;font-size:13px;font-weight:bold;border:none;border-radius:8px;'
            'cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);}'
-           '@page{size:auto;margin:0;}'  # 印刷時のブラウザ既定ヘッダー(データ名/URL/日付)を消す
+           f'@page{{size:{_psize} {_porient};margin:0;}}'  # 用紙サイズ・向き＋ブラウザ既定ヘッダーを消す
            '@media print{.toolbar,.edit-hint{display:none;}body{margin:0;padding:6mm;}'
+           '#doc-root{transform:none!important;}'
            'td[contenteditable]{outline:none!important;}}'
            + ('td[contenteditable]{cursor:text;}'
               'td[contenteditable]:hover{background:#F0FDFA;}'
@@ -3932,11 +4007,30 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
             '}\n'
             'window.addEventListener("beforeunload",ev=>{if(DIRTY){ev.preventDefault();ev.returnValue="";}});\n'
             '</script>')
+    # 画面幅に合わせて書類を拡大縮小（PCの横幅いっぱいに伸び縮み・印刷時は等倍）
+    scaler = (
+        '<script>(function(){'
+        'function fit(){var r=document.getElementById("doc-root");if(!r)return;'
+        'r.style.transform="none";'
+        'var w=r.scrollWidth||r.offsetWidth;if(!w||w<=0)return;'
+        'var cw=document.documentElement.clientWidth||window.innerWidth||document.body.clientWidth||0;'
+        'var avail=cw-20;if(avail<=40)return;'
+        'var s=avail/w;if(s>2)s=2;if(s<0.1)s=0.1;'
+        'r.style.transform="scale("+s+")";'
+        'var wrap=document.getElementById("doc-root-wrap");'
+        'if(wrap)wrap.style.height=(r.offsetHeight*s)+"px";}'
+        'window.addEventListener("resize",fit);'
+        'window.addEventListener("load",fit);'
+        'document.addEventListener("DOMContentLoaded",fit);'
+        'window.addEventListener("beforeprint",function(){var r=document.getElementById("doc-root");if(r)r.style.transform="none";});'
+        'window.addEventListener("afterprint",fit);'
+        '})();</script>')
     return ('<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">'
             f'<title>{_esc(title)}</title>'
             f'{css}</head><body>'
             f'{toolbar}'
             f'{body}'
+            f'{scaler}'
             f'{script}'
             '</body></html>')
 
@@ -3958,14 +4052,16 @@ def _ensure_pdf_font():
     return 'HeiseiKakuGo-W5'
 
 
-def _xlsx_to_pdf(xlsx_bytes, title):
+def _xlsx_to_pdf(xlsx_bytes, title, orig_bytes=None, paper_size='A4', orientation='portrait'):
     """穴埋め済みxlsxをダウンロード用PDF(バイト列)に変換する。
-    結合セル・列幅・罫線・配置・背景色・埋め込み画像(電子印鑑)を再現。日本語対応。用紙幅に自動フィット。"""
+    結合セル・列幅・罫線・配置・背景色・埋め込み画像(電子印鑑)を再現。日本語対応。用紙幅に自動フィット。
+    orig_bytes を渡すと数式セル(=...)を計算済みキャッシュ値で表示。paper_size/orientation で用紙指定。"""
     import io as _io
     import base64 as _b64
+    import datetime as _dt
     from openpyxl import load_workbook
     from openpyxl.utils import get_column_letter
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.pagesizes import A4, A3, landscape
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Image as RLImage, PageBreak
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
@@ -3973,6 +4069,32 @@ def _xlsx_to_pdf(xlsx_bytes, title):
 
     FONT = _ensure_pdf_font()
     PXPT = 0.75  # 1px(96dpi)=0.75pt
+    PAGESIZE = A3 if str(paper_size).upper() == 'A3' else A4
+    if str(orientation).lower() == 'landscape':
+        PAGESIZE = landscape(PAGESIZE)
+
+    cache_wb = None
+    if orig_bytes is not None:
+        try:
+            cache_wb = load_workbook(_io.BytesIO(orig_bytes), data_only=True)
+        except Exception:
+            cache_wb = None
+
+    def _cellval(si, rr, cc, v):
+        if isinstance(v, str) and v.startswith('=') and cache_wb is not None:
+            try:
+                cv = cache_wb.worksheets[si].cell(row=rr, column=cc).value
+                if not (isinstance(cv, str) and cv.startswith('=')):
+                    v = cv
+            except Exception:
+                pass
+        if isinstance(v, _dt.datetime):
+            return v.strftime('%Y-%m-%d') if (v.hour == 0 and v.minute == 0) else v.strftime('%Y-%m-%d %H:%M')
+        if isinstance(v, _dt.date):
+            return v.strftime('%Y-%m-%d')
+        if isinstance(v, float) and v.is_integer():
+            return str(int(v))
+        return v
 
     def _para(text, size, halign):
         align = {'center': TA_CENTER, 'right': TA_RIGHT}.get(halign, TA_LEFT)
@@ -3985,14 +4107,14 @@ def _xlsx_to_pdf(xlsx_bytes, title):
     from reportlab.lib.utils import ImageReader
 
     wb = load_workbook(_io.BytesIO(xlsx_bytes), data_only=False)
-    page_w, page_h = A4
+    page_w, page_h = PAGESIZE
     margin = 28  # ≒10mm
     avail_w = page_w - 2 * margin
 
     def _make_story(use_images):
       story = []
       first = True
-      for ws in wb.worksheets:
+      for si, ws in enumerate(wb.worksheets):
         if ws.sheet_state != 'visible':
             continue
         max_row = min(ws.max_row or 1, 500)
@@ -4039,7 +4161,7 @@ def _xlsx_to_pdf(xlsx_bytes, title):
                 size = float(fnt.size) if (fnt and fnt.size) else 9.0
                 al = cell.alignment
                 halign = al.horizontal if (al and al.horizontal in ('center', 'right', 'left')) else 'left'
-                v = cell.value
+                v = _cellval(si, rr, cc, cell.value)
                 rowdata.append(_para(v, size, halign) if (v is not None and str(v) != '') else '')
                 vmap = {'top': 'TOP', 'bottom': 'BOTTOM', 'center': 'MIDDLE'}
                 if al and al.vertical in vmap:
@@ -4104,7 +4226,7 @@ def _xlsx_to_pdf(xlsx_bytes, title):
 
     def _render(use_images):
         buf = _io.BytesIO()
-        SimpleDocTemplate(buf, pagesize=A4, leftMargin=margin, rightMargin=margin,
+        SimpleDocTemplate(buf, pagesize=PAGESIZE, leftMargin=margin, rightMargin=margin,
                           topMargin=margin, bottomMargin=margin,
                           title=title).build(_make_story(use_images))
         return buf.getvalue()
@@ -4358,10 +4480,18 @@ def api_doc_template_get(tpl_id):
         if t not in mapping:
             mapping[t] = ({'scope': 'company', 'company_key': t, 'label': t}
                           if t in company else {'scope': 'case', 'company_key': '', 'label': t})
+    # 用紙設定（未設定ならExcelから自動判定した値を返す）
+    try:
+        import base64 as _b64
+        psize, porient = _doc_effective_page(r, _b64.standard_b64decode((r.file_b64 or '').encode()))
+    except Exception:
+        psize, porient = (r.paper_size or 'A4'), (r.orientation or 'portrait')
     return jsonify({
         'id': r.id, 'name': r.name, 'filename': r.filename,
         'tags': tags, 'mapping': mapping,
         'company_keys': list(company.keys()), 'company': company,
+        'paper_size': psize, 'orientation': porient,
+        'paper_is_manual': bool(r.paper_size or r.orientation),
         'can_manage': _doc_can_manage(),
     })
 
@@ -4380,6 +4510,12 @@ def api_doc_template_mapping(tpl_id):
         return jsonify({'error': '不正なデータです'}), 400
     if 'name' in payload and str(payload['name']).strip():
         r.name = str(payload['name']).strip()
+    if 'paper_size' in payload:
+        ps = str(payload.get('paper_size') or '').upper()
+        r.paper_size = ps if ps in ('A4', 'A3') else None
+    if 'orientation' in payload:
+        po = str(payload.get('orientation') or '').lower()
+        r.orientation = po if po in ('portrait', 'landscape') else None
     r.mapping = json.dumps(mapping, ensure_ascii=False)
     db.session.commit()
     return jsonify({'status': 'ok'})
@@ -4570,8 +4706,10 @@ def api_doc_template_print_view(tpl_id):
     values = _doc_resolve_values(r, tid, case_values)
     try:
         raw = _b64.standard_b64decode(r.file_b64.encode())
+        psize, porient = _doc_effective_page(r, raw)
         filled = _xlsx_fill(raw, values, overrides)
-        html = _xlsx_to_print_html(filled, r.name or '契約書類')
+        html = _xlsx_to_print_html(filled, r.name or '契約書類',
+                                   orig_bytes=raw, paper_size=psize, orientation=porient)
     except Exception as e:
         return jsonify({'error': f'印刷ビューの生成に失敗しました: {e}'}), 500
     resp = make_response(html)
@@ -4593,8 +4731,10 @@ def api_doc_template_pdf(tpl_id):
     values = _doc_resolve_values(r, tid, case_values)
     try:
         raw = _b64.standard_b64decode(r.file_b64.encode())
+        psize, porient = _doc_effective_page(r, raw)
         filled = _xlsx_fill(raw, values, overrides)
-        pdf = _xlsx_to_pdf(filled, r.name or '契約書類')
+        pdf = _xlsx_to_pdf(filled, r.name or '契約書類',
+                           orig_bytes=raw, paper_size=psize, orientation=porient)
     except Exception as e:
         return jsonify({'error': f'PDF出力に失敗しました: {e}'}), 500
     fname = f"{r.name or 'document'}.pdf"
@@ -14410,6 +14550,9 @@ MANUAL_SECTIONS = [
     {'cat': '契約管理', 'title': '契約管理（請求書・契約方法・連帯保証・メモの記入）', 'body':
      '事務作業→契約管理で、審査〇で契約に進んだお客様を一覧管理します。一覧は契約開始日・担当・お客様名の順に並びます。'
      '請求書・契約方法・連帯保証・メモは接客管理表と同じくセルを直接クリックして記入します。請求書（〇/×）・契約方法（電子/書面）・連帯保証（有/無）はクリックでプルダウン選択、メモはクリックで大きな入力画面が開き「保存する」で保存されます。'},
+    {'cat': '契約フォーマット', 'title': '契約書類の用紙サイズ（A4/A3・縦横）と編集画面', 'body':
+     '各種設定→契約フォーマットでExcel様式をアップロードし、「タグ割当」を開くと書類ごとに用紙サイズ（A4/A3）と向き（縦/横）を選べます（初期値はExcelの設定を自動判定）。'
+     '選んだサイズで編集画面・印刷・PDFが表示され、書類によってA3横などが混在してもOKです。編集画面はPCの横幅に合わせて自動で拡大縮小します。Excelの数式（=TODAY()等）は計算済みの値で表示されます。'},
     {'cat': '顧客管理', 'title': '顧客管理（入居後）と年月ジャンプ', 'body':
      '事務作業→顧客管理で、契約が終了したお客様を管理します。契約開始日の月ごとにまとまって表示され、右上の「年月へ移動」で指定の月へすぐ移動できます。検索ボックスで名前・物件名・号室でも探せます。'},
     {'cat': '権限', 'title': 'ログイン管理（機能の表示権限・所属店舗）', 'body':
