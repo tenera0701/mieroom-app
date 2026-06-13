@@ -14,6 +14,7 @@ import socket
 import threading
 import time
 import hashlib
+import secrets
 import imaplib
 import smtplib
 import email as emaillib
@@ -73,6 +74,12 @@ def add_no_cache(response):
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
+    # 公開問い合わせAPIは外部LP/HPのブラウザJS(fetch)から叩けるよう CORS を許可
+    if request.path.startswith('/api/public/'):
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-API-Key'
+        response.headers['Access-Control-Max-Age'] = '86400'
     return response
 
 
@@ -1502,6 +1509,72 @@ class TrialApplication(db.Model):
     status     = db.Column(db.String(20),  default='new')   # new / contacted / contracted / rejected
     memo       = db.Column(db.Text,        nullable=True)   # 管理者メモ
     created_at = db.Column(db.DateTime,    default=datetime.utcnow)
+
+
+class InquiryApiKey(db.Model):
+    """LP/HPからの問い合わせ受信用に発行するAPIキー（管理画面でグローバル発行）"""
+    __tablename__ = 'inquiry_api_key'
+    id           = db.Column(db.Integer, primary_key=True)
+    label        = db.Column(db.String(120))            # 例: 「コーポレートサイトLP」
+    key          = db.Column(db.String(80), unique=True, index=True, nullable=False)
+    is_active    = db.Column(db.Boolean, default=True)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    last_used_at = db.Column(db.DateTime)
+    use_count    = db.Column(db.Integer, default=0)
+
+    def to_dict(self, reveal=False):
+        masked = self.key if reveal else (self.key[:8] + '••••••' + self.key[-4:] if self.key and len(self.key) > 14 else self.key)
+        return {
+            'id': self.id,
+            'label': self.label or '',
+            'key': self.key,
+            'key_masked': masked,
+            'is_active': bool(self.is_active),
+            'use_count': self.use_count or 0,
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+            'last_used_at': self.last_used_at.strftime('%Y-%m-%d %H:%M') if self.last_used_at else '',
+        }
+
+
+class SiteInquiry(db.Model):
+    """外部LP/HPからAPI経由で受信した問い合わせ"""
+    __tablename__ = 'site_inquiry'
+    id          = db.Column(db.Integer, primary_key=True)
+    api_key_id  = db.Column(db.Integer, db.ForeignKey('inquiry_api_key.id'), nullable=True)
+    name        = db.Column(db.String(120))
+    email       = db.Column(db.String(200))
+    phone       = db.Column(db.String(60))
+    message     = db.Column(db.Text)
+    source      = db.Column(db.String(120))   # 流入元（任意ラベル）
+    page_url    = db.Column(db.String(500))   # 送信元ページURL
+    extra_json  = db.Column(db.Text)          # 任意カスタム項目（JSON文字列）
+    status      = db.Column(db.String(20), default='新規')  # 新規/対応中/完了
+    admin_note  = db.Column(db.Text)
+    ip          = db.Column(db.String(60))
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        extra = {}
+        if self.extra_json:
+            try:
+                extra = json.loads(self.extra_json)
+            except Exception:
+                extra = {}
+        key = InquiryApiKey.query.get(self.api_key_id) if self.api_key_id else None
+        return {
+            'id': self.id,
+            'name': self.name or '',
+            'email': self.email or '',
+            'phone': self.phone or '',
+            'message': self.message or '',
+            'source': self.source or '',
+            'page_url': self.page_url or '',
+            'extra': extra,
+            'status': self.status or '新規',
+            'admin_note': self.admin_note or '',
+            'key_label': (key.label if key else '') or '',
+            'created_at': self.created_at.strftime('%Y-%m-%d %H:%M') if self.created_at else '',
+        }
 
 
 # ── Excel関連ヘルパー ─────────────────────────────────────
@@ -12914,6 +12987,143 @@ def api_admin_suggestion_update(sid):
 def api_admin_suggestion_delete(sid):
     s = ImprovementSuggestion.query.get_or_404(sid)
     db.session.delete(s)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+# ── サイト問い合わせ（外部LP/HP → API受信 / 管理画面集約） ──────────────
+_INQUIRY_KNOWN_FIELDS = {'name', 'email', 'phone', 'message', 'source', 'page_url',
+                         'api_key', 'apikey', 'api-key', '_hp'}
+
+
+@app.route("/api/public/inquiry", methods=["POST", "OPTIONS"])
+def api_public_inquiry():
+    """外部サイト(LP/HP)からの問い合わせ受信。APIキー認証・CORS対応・JSON/フォーム両対応。"""
+    if request.method == "OPTIONS":     # CORSプリフライト
+        return ('', 204)
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = request.form.to_dict() if request.form else {}
+    # APIキー（X-API-Key ヘッダ優先、なければ body）
+    api_key = (request.headers.get('X-API-Key')
+               or data.get('api_key') or data.get('apikey') or '').strip()
+    if not api_key:
+        return jsonify({'ok': False, 'error': 'api_key required'}), 401
+    key_rec = InquiryApiKey.query.filter_by(key=api_key, is_active=True).first()
+    if not key_rec:
+        return jsonify({'ok': False, 'error': 'invalid api_key'}), 401
+    # honeypot（ボットが埋めたら成功偽装して破棄）
+    if (data.get('_hp') or '').strip():
+        return jsonify({'ok': True}), 200
+    name    = (data.get('name') or '').strip()
+    email   = (data.get('email') or '').strip()
+    phone   = (data.get('phone') or '').strip()
+    message = (data.get('message') or '').strip()
+    if not (name or message) or not (email or phone):
+        return jsonify({'ok': False, 'error': '必須項目が不足しています（name/message と email/phone）'}), 400
+    extra = {k: v for k, v in data.items() if k not in _INQUIRY_KNOWN_FIELDS}
+    inq = SiteInquiry(
+        api_key_id=key_rec.id,
+        name=name[:120], email=email[:200], phone=phone[:60], message=message[:8000],
+        source=(data.get('source') or '').strip()[:120],
+        page_url=(data.get('page_url') or '').strip()[:500],
+        extra_json=(json.dumps(extra, ensure_ascii=False) if extra else None),
+        ip=(request.headers.get('X-Forwarded-For', request.remote_addr or '') or '').split(',')[0].strip()[:60],
+        status='新規')
+    db.session.add(inq)
+    key_rec.use_count = (key_rec.use_count or 0) + 1
+    key_rec.last_used_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'ok': True, 'id': inq.id})
+
+
+@app.route("/admin/inquiries")
+@super_admin_required
+def admin_inquiries():
+    """サイト問い合わせ集約ページ（super_adminのみ）"""
+    items = SiteInquiry.query.order_by(SiteInquiry.created_at.desc()).all()
+    keys  = InquiryApiKey.query.order_by(InquiryApiKey.created_at.desc()).all()
+    total    = len(items)
+    new_cnt  = sum(1 for s in items if (s.status or '新規') == '新規')
+    prog_cnt = sum(1 for s in items if s.status == '対応中')
+    done_cnt = sum(1 for s in items if s.status == '完了')
+    api_endpoint = request.host_url.rstrip('/') + '/api/public/inquiry'
+    return render_template("admin_inquiries.html",
+                           items=items, keys=keys, total=total,
+                           new_cnt=new_cnt, prog_cnt=prog_cnt, done_cnt=done_cnt,
+                           api_endpoint=api_endpoint)
+
+
+@app.route("/api/admin/inquiries", methods=["GET"])
+@super_admin_required
+def api_admin_inquiries_list():
+    items = SiteInquiry.query.order_by(SiteInquiry.created_at.desc()).all()
+    return jsonify([s.to_dict() for s in items])
+
+
+@app.route("/api/admin/inquiries/<int:iid>", methods=["PATCH"])
+@super_admin_required
+def api_admin_inquiry_update(iid):
+    s = SiteInquiry.query.get_or_404(iid)
+    d = request.get_json() or {}
+    if 'status' in d:
+        s.status = (d.get('status') or '新規')[:20]
+    if 'admin_note' in d:
+        s.admin_note = (d.get('admin_note') or '')[:4000]
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route("/api/admin/inquiries/<int:iid>", methods=["DELETE"])
+@super_admin_required
+def api_admin_inquiry_delete(iid):
+    s = SiteInquiry.query.get_or_404(iid)
+    db.session.delete(s)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route("/api/admin/inquiry-keys", methods=["GET"])
+@super_admin_required
+def api_admin_inquiry_keys_list():
+    keys = InquiryApiKey.query.order_by(InquiryApiKey.created_at.desc()).all()
+    return jsonify([k.to_dict(reveal=True) for k in keys])
+
+
+@app.route("/api/admin/inquiry-keys", methods=["POST"])
+@super_admin_required
+def api_admin_inquiry_key_create():
+    d = request.get_json() or {}
+    label = (d.get('label') or '').strip()[:120]
+    new_key = 'mk_' + secrets.token_urlsafe(24)
+    for _ in range(5):
+        if not InquiryApiKey.query.filter_by(key=new_key).first():
+            break
+        new_key = 'mk_' + secrets.token_urlsafe(24)
+    k = InquiryApiKey(label=label, key=new_key, is_active=True)
+    db.session.add(k)
+    db.session.commit()
+    return jsonify({'ok': True, 'key': k.to_dict(reveal=True)})
+
+
+@app.route("/api/admin/inquiry-keys/<int:kid>", methods=["PATCH"])
+@super_admin_required
+def api_admin_inquiry_key_update(kid):
+    k = InquiryApiKey.query.get_or_404(kid)
+    d = request.get_json() or {}
+    if 'is_active' in d:
+        k.is_active = bool(d.get('is_active'))
+    if 'label' in d:
+        k.label = (d.get('label') or '').strip()[:120]
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route("/api/admin/inquiry-keys/<int:kid>", methods=["DELETE"])
+@super_admin_required
+def api_admin_inquiry_key_delete(kid):
+    k = InquiryApiKey.query.get_or_404(kid)
+    db.session.delete(k)
     db.session.commit()
     return jsonify({'ok': True})
 

@@ -1,0 +1,370 @@
+{% extends "mgmt_base.html" %}
+{% block title %}サイト問い合わせ{% endblock %}
+{% block breadcrumb %}サイト問い合わせ{% endblock %}
+{% block content %}
+<div class="w-full">
+
+  <!-- ヘッダー -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-gray-800">サイト問い合わせ</h1>
+      <p class="text-sm text-gray-500 mt-1">LP・HP・外部サイトからAPI経由で届いた問い合わせを集約します</p>
+    </div>
+    <button onclick="openKeyPanel()"
+      class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+      ⚙ API設定・発行
+    </button>
+  </div>
+
+  <!-- 集計カード -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-center">
+      <p class="text-xs text-gray-500 mb-1">合計</p>
+      <p class="text-2xl font-bold text-gray-800">{{ total }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-blue-200 p-4 text-center">
+      <p class="text-xs text-blue-500 mb-1">新規</p>
+      <p class="text-2xl font-bold text-blue-600">{{ new_cnt }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-yellow-200 p-4 text-center">
+      <p class="text-xs text-yellow-600 mb-1">対応中</p>
+      <p class="text-2xl font-bold text-yellow-600">{{ prog_cnt }}</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-green-200 p-4 text-center">
+      <p class="text-xs text-green-600 mb-1">完了</p>
+      <p class="text-2xl font-bold text-green-600">{{ done_cnt }}</p>
+    </div>
+  </div>
+
+  <!-- 検索 -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4 flex gap-3">
+    <input type="text" id="searchInput" placeholder="名前・メール・本文・流入元で検索..."
+      class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-400"
+      oninput="filterTable()">
+    <select id="statusFilter" class="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-400" onchange="filterTable()">
+      <option value="">すべてのステータス</option>
+      <option value="新規">新規</option>
+      <option value="対応中">対応中</option>
+      <option value="完了">完了</option>
+    </select>
+  </div>
+
+  <!-- テーブル -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <table class="w-full text-sm" id="inqTable">
+      <thead>
+        <tr class="bg-gray-50 border-b border-gray-200">
+          <th class="px-4 py-3 text-left text-gray-600 font-medium">受信日時</th>
+          <th class="px-4 py-3 text-left text-gray-600 font-medium">名前</th>
+          <th class="px-4 py-3 text-left text-gray-600 font-medium">連絡先</th>
+          <th class="px-4 py-3 text-left text-gray-600 font-medium">本文</th>
+          <th class="px-4 py-3 text-left text-gray-600 font-medium">流入元</th>
+          <th class="px-4 py-3 text-center text-gray-600 font-medium">ステータス</th>
+          <th class="px-4 py-3 text-center text-gray-600 font-medium">操作</th>
+        </tr>
+      </thead>
+      <tbody id="inqTbody">
+        {% for s in items %}
+        {% set d = s.to_dict() %}
+        <tr class="border-b border-gray-100 hover:bg-gray-50 inq-row"
+            data-id="{{ s.id }}"
+            data-search="{{ (d.name ~ ' ' ~ d.email ~ ' ' ~ d.phone ~ ' ' ~ d.message ~ ' ' ~ d.source)|lower }}"
+            data-status="{{ d.status }}"
+            data-json='{{ d|tojson }}'>
+          <td class="px-4 py-3 text-gray-500 whitespace-nowrap">{{ d.created_at or '-' }}</td>
+          <td class="px-4 py-3 font-medium text-gray-800">{{ d.name or '（無名）' }}</td>
+          <td class="px-4 py-3 text-gray-700 whitespace-nowrap">
+            {% if d.email %}<a href="mailto:{{ d.email }}" class="text-teal-600 hover:underline">{{ d.email }}</a><br>{% endif %}
+            {% if d.phone %}<span class="text-xs text-gray-500">{{ d.phone }}</span>{% endif %}
+          </td>
+          <td class="px-4 py-3 text-gray-600 max-w-xs truncate">{{ d.message }}</td>
+          <td class="px-4 py-3 text-gray-500 text-xs">
+            {{ d.source or '-' }}
+            {% if d.key_label %}<br><span class="text-gray-400">{{ d.key_label }}</span>{% endif %}
+          </td>
+          <td class="px-4 py-3 text-center">
+            <select class="status-select text-xs px-2 py-1 rounded-full border font-medium cursor-pointer"
+                    data-id="{{ s.id }}" onchange="updateStatus(this)">
+              <option value="新規"   {% if d.status=='新規' %}selected{% endif %}>新規</option>
+              <option value="対応中" {% if d.status=='対応中' %}selected{% endif %}>対応中</option>
+              <option value="完了"   {% if d.status=='完了' %}selected{% endif %}>完了</option>
+            </select>
+          </td>
+          <td class="px-4 py-3 text-center whitespace-nowrap">
+            <button onclick="openDetail(this)" class="text-xs text-teal-600 hover:underline">詳細</button>
+            <button onclick="deleteInq({{ s.id }}, this)" class="text-xs text-red-400 hover:text-red-600 hover:underline ml-2">削除</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="px-4 py-8 text-center text-gray-400">まだ問い合わせがありません</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 詳細モーダル -->
+<div id="detailModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow-xl p-6 max-w-lg w-full mx-4 max-h-[85vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-gray-800">問い合わせ詳細</h3>
+      <button onclick="closeModal('detailModal')" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    </div>
+    <dl class="text-sm space-y-2">
+      <div class="flex"><dt class="w-24 text-gray-500 shrink-0">名前</dt><dd id="dt-name" class="text-gray-800 font-medium"></dd></div>
+      <div class="flex"><dt class="w-24 text-gray-500 shrink-0">メール</dt><dd id="dt-email" class="text-gray-800"></dd></div>
+      <div class="flex"><dt class="w-24 text-gray-500 shrink-0">電話</dt><dd id="dt-phone" class="text-gray-800"></dd></div>
+      <div class="flex"><dt class="w-24 text-gray-500 shrink-0">流入元</dt><dd id="dt-source" class="text-gray-800"></dd></div>
+      <div class="flex"><dt class="w-24 text-gray-500 shrink-0">ページURL</dt><dd id="dt-url" class="text-teal-600 break-all"></dd></div>
+      <div class="flex"><dt class="w-24 text-gray-500 shrink-0">受信日時</dt><dd id="dt-date" class="text-gray-800"></dd></div>
+    </dl>
+    <div class="mt-3">
+      <p class="text-gray-500 text-sm mb-1">本文</p>
+      <p id="dt-message" class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 rounded-lg p-3"></p>
+    </div>
+    <div id="dt-extra-wrap" class="mt-3 hidden">
+      <p class="text-gray-500 text-sm mb-1">その他の項目</p>
+      <table id="dt-extra" class="w-full text-xs bg-gray-50 rounded-lg overflow-hidden"></table>
+    </div>
+    <div class="mt-4">
+      <p class="text-gray-500 text-sm mb-1">対応メモ</p>
+      <textarea id="dt-note" rows="3" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-400" placeholder="社内メモ..."></textarea>
+    </div>
+    <div class="text-right mt-4 flex justify-end gap-2">
+      <button onclick="closeModal('detailModal')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm">閉じる</button>
+      <button onclick="saveNote()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium">メモを保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- APIキー管理パネル -->
+<div id="keyModal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow-xl p-6 max-w-2xl w-full mx-4 max-h-[88vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-bold text-gray-800">問い合わせ受信API 設定</h3>
+      <button onclick="closeModal('keyModal')" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+    </div>
+
+    <div class="bg-teal-50 border border-teal-100 rounded-lg p-3 mb-4 text-sm">
+      <p class="text-gray-600 mb-1">送信先エンドポイント（POST）</p>
+      <code id="apiEndpoint" class="text-teal-800 font-mono break-all">{{ api_endpoint }}</code>
+    </div>
+
+    <!-- 発行フォーム -->
+    <div class="flex gap-2 mb-4">
+      <input type="text" id="newKeyLabel" placeholder="用途ラベル（例: コーポレートLP）"
+        class="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-400">
+      <button onclick="createKey()" class="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap">＋ キー発行</button>
+    </div>
+
+    <!-- キー一覧 -->
+    <div class="border border-gray-200 rounded-lg overflow-hidden mb-5">
+      <table class="w-full text-sm">
+        <thead><tr class="bg-gray-50 border-b border-gray-200">
+          <th class="px-3 py-2 text-left text-gray-600 font-medium">ラベル</th>
+          <th class="px-3 py-2 text-left text-gray-600 font-medium">APIキー</th>
+          <th class="px-3 py-2 text-center text-gray-600 font-medium">利用回数</th>
+          <th class="px-3 py-2 text-center text-gray-600 font-medium">有効</th>
+          <th class="px-3 py-2 text-center text-gray-600 font-medium">操作</th>
+        </tr></thead>
+        <tbody id="keyTbody">
+          {% for k in keys %}
+          <tr class="border-b border-gray-100 key-row" data-id="{{ k.id }}" data-key="{{ k.key }}">
+            <td class="px-3 py-2 text-gray-800">{{ k.label or '（無題）' }}</td>
+            <td class="px-3 py-2 font-mono text-xs text-gray-600">
+              <span class="key-text">{{ k.key }}</span>
+              <button onclick="copyText('{{ k.key }}', this)" class="ml-1 text-teal-600 hover:underline">コピー</button>
+            </td>
+            <td class="px-3 py-2 text-center text-gray-500">{{ k.use_count or 0 }}</td>
+            <td class="px-3 py-2 text-center">
+              <input type="checkbox" {% if k.is_active %}checked{% endif %} onchange="toggleKey({{ k.id }}, this)">
+            </td>
+            <td class="px-3 py-2 text-center">
+              <button onclick="useSnippet('{{ k.key }}')" class="text-xs text-teal-600 hover:underline">コード</button>
+              <button onclick="deleteKey({{ k.id }}, this)" class="text-xs text-red-400 hover:text-red-600 hover:underline ml-2">削除</button>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="px-3 py-6 text-center text-gray-400">キーがまだありません。「＋ キー発行」で作成してください。</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- サンプルコード -->
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <h4 class="font-semibold text-gray-700 text-sm">設置サンプルコード</h4>
+        <select id="snippetKey" class="border border-gray-200 rounded px-2 py-1 text-xs" onchange="renderSnippets()">
+          {% for k in keys %}<option value="{{ k.key }}">{{ k.label or k.key }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <p class="text-xs text-gray-500 mb-1">① HTMLフォーム（そのまま貼り付け）</p>
+          <pre class="bg-gray-900 text-gray-100 rounded-lg p-3 text-xs overflow-x-auto"><code id="snipHtml"></code></pre>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1">② JavaScript（fetch・SPA向け）</p>
+          <pre class="bg-gray-900 text-gray-100 rounded-lg p-3 text-xs overflow-x-auto"><code id="snipJs"></code></pre>
+        </div>
+        <div>
+          <p class="text-xs text-gray-500 mb-1">③ curl（サーバー連携・動作確認）</p>
+          <pre class="bg-gray-900 text-gray-100 rounded-lg p-3 text-xs overflow-x-auto"><code id="snipCurl"></code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_ENDPOINT = {{ api_endpoint|tojson }};
+const STATUS_STYLE = {
+  '新規':   'bg-blue-50 text-blue-700 border-blue-200',
+  '対応中': 'bg-yellow-50 text-yellow-700 border-yellow-200',
+  '完了':   'bg-green-50 text-green-700 border-green-200',
+};
+let currentId = null;
+
+document.querySelectorAll('.status-select').forEach(applyStatusStyle);
+function applyStatusStyle(sel) {
+  sel.className = 'status-select text-xs px-2 py-1 rounded-full border font-medium cursor-pointer ' + (STATUS_STYLE[sel.value] || '');
+}
+function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+
+function updateStatus(sel) {
+  applyStatusStyle(sel);
+  sel.closest('tr').dataset.status = sel.value;
+  fetch(`/api/admin/inquiries/${sel.dataset.id}`, {
+    method: 'PATCH', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({status: sel.value})
+  });
+}
+
+function openDetail(btn) {
+  const row = btn.closest('tr');
+  const d = JSON.parse(row.dataset.json);
+  currentId = row.dataset.id;
+  document.getElementById('dt-name').textContent   = d.name || '（無名）';
+  document.getElementById('dt-email').innerHTML     = d.email ? `<a href="mailto:${d.email}" class="text-teal-600 hover:underline">${d.email}</a>` : '-';
+  document.getElementById('dt-phone').textContent   = d.phone || '-';
+  document.getElementById('dt-source').textContent  = d.source || '-';
+  const urlEl = document.getElementById('dt-url');
+  urlEl.innerHTML = d.page_url ? `<a href="${d.page_url}" target="_blank" rel="noopener" class="hover:underline">${d.page_url}</a>` : '-';
+  document.getElementById('dt-date').textContent    = d.created_at || '-';
+  document.getElementById('dt-message').textContent = d.message || '（本文なし）';
+  document.getElementById('dt-note').value          = d.admin_note || '';
+  const wrap = document.getElementById('dt-extra-wrap');
+  const tbl  = document.getElementById('dt-extra');
+  const keys = Object.keys(d.extra || {});
+  if (keys.length) {
+    tbl.innerHTML = keys.map(k =>
+      `<tr class="border-b border-gray-100"><td class="px-2 py-1 text-gray-500 align-top">${escapeHtml(k)}</td><td class="px-2 py-1 text-gray-800">${escapeHtml(String(d.extra[k]))}</td></tr>`).join('');
+    wrap.classList.remove('hidden');
+  } else { wrap.classList.add('hidden'); }
+  document.getElementById('detailModal').classList.remove('hidden');
+}
+
+function saveNote() {
+  fetch(`/api/admin/inquiries/${currentId}`, {
+    method: 'PATCH', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({admin_note: document.getElementById('dt-note').value})
+  }).then(r => r.json()).then(d => { if (d.ok) closeModal('detailModal'); });
+}
+
+function deleteInq(id, btn) {
+  if (!confirm('この問い合わせを削除しますか？')) return;
+  fetch(`/api/admin/inquiries/${id}`, {method: 'DELETE'})
+    .then(r => r.json()).then(d => { if (d.ok) btn.closest('tr').remove(); });
+}
+
+function filterTable() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const status = document.getElementById('statusFilter').value;
+  document.querySelectorAll('.inq-row').forEach(row => {
+    const matchQ = !q || (row.dataset.search || '').includes(q);
+    const matchS = !status || row.dataset.status === status;
+    row.style.display = (matchQ && matchS) ? '' : 'none';
+  });
+}
+
+/* ── APIキー管理 ── */
+function openKeyPanel(){ document.getElementById('keyModal').classList.remove('hidden'); renderSnippets(); }
+
+function createKey() {
+  const label = document.getElementById('newKeyLabel').value.trim();
+  fetch('/api/admin/inquiry-keys', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({label})
+  }).then(r => r.json()).then(d => { if (d.ok) location.reload(); });
+}
+function toggleKey(id, cb) {
+  fetch(`/api/admin/inquiry-keys/${id}`, {
+    method: 'PATCH', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({is_active: cb.checked})
+  });
+}
+function deleteKey(id, btn) {
+  if (!confirm('このAPIキーを削除しますか？このキーを使う送信は受け付けられなくなります。')) return;
+  fetch(`/api/admin/inquiry-keys/${id}`, {method: 'DELETE'})
+    .then(r => r.json()).then(d => { if (d.ok) location.reload(); });
+}
+function copyText(t, btn) {
+  navigator.clipboard.writeText(t).then(() => {
+    const o = btn.textContent; btn.textContent = '✓'; setTimeout(() => btn.textContent = o, 1200);
+  });
+}
+function useSnippet(key) {
+  document.getElementById('keyModal').classList.remove('hidden');
+  const sel = document.getElementById('snippetKey');
+  sel.value = key; renderSnippets();
+  sel.scrollIntoView({behavior: 'smooth'});
+}
+
+function renderSnippets() {
+  const sel = document.getElementById('snippetKey');
+  const key = sel && sel.value ? sel.value : 'ここにAPIキー';
+  document.getElementById('snipHtml').textContent =
+`<form id="inq" onsubmit="return sendInq(event)">
+  <input name="name" placeholder="お名前" required>
+  <input name="email" type="email" placeholder="メール">
+  <input name="phone" placeholder="電話番号">
+  <textarea name="message" placeholder="お問い合わせ内容"></textarea>
+  <input type="text" name="_hp" style="display:none" tabindex="-1" autocomplete="off">
+  <button type="submit">送信する</button>
+</form>
+<script>
+function sendInq(e){e.preventDefault();
+  const f=e.target, d=Object.fromEntries(new FormData(f));
+  d.source="サイト名"; d.page_url=location.href;
+  fetch("${API_ENDPOINT}",{method:"POST",
+    headers:{"Content-Type":"application/json","X-API-Key":"${key}"},
+    body:JSON.stringify(d)})
+   .then(r=>r.json()).then(()=>{f.reset();alert("送信しました");});
+  return false;}
+<\/script>`;
+
+  document.getElementById('snipJs').textContent =
+`fetch("${API_ENDPOINT}", {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "X-API-Key": "${key}" },
+  body: JSON.stringify({
+    name: "山田太郎",
+    email: "taro@example.com",
+    phone: "090-0000-0000",
+    message: "資料を希望します",
+    source: "コーポレートLP",
+    page_url: location.href
+  })
+}).then(r => r.json()).then(console.log);`;
+
+  document.getElementById('snipCurl').textContent =
+`curl -X POST "${API_ENDPOINT}" \\
+  -H "Content-Type: application/json" \\
+  -H "X-API-Key: ${key}" \\
+  -d '{"name":"山田太郎","email":"taro@example.com","message":"資料希望","source":"LP"}'`;
+}
+
+function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+</script>
+{% endblock %}
