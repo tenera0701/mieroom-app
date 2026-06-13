@@ -14549,7 +14549,8 @@ MANUAL_SECTIONS = [
      '選択式は選択肢を「、」区切りで設定。説明文を付けると入力欄の案内として表示されます。回答は日報一覧にも表示されます。'},
     {'cat': '契約管理', 'title': '契約管理（請求書・契約方法・連帯保証・メモの記入）', 'body':
      '事務作業→契約管理で、審査〇で契約に進んだお客様を一覧管理します。一覧は契約開始日・担当・お客様名の順に並びます。'
-     '請求書・契約方法・連帯保証・メモは接客管理表と同じくセルを直接クリックして記入します。請求書（〇/×）・契約方法（電子/書面）・連帯保証（有/無）はクリックでプルダウン選択、メモはクリックで大きな入力画面が開き「保存する」で保存されます。'},
+     '請求書・契約方法・連帯保証・メモは接客管理表と同じくセルを直接クリックして記入します。請求書（〇/×）・契約方法（電子/書面）・連帯保証（有/無）はクリックでプルダウン選択、メモはクリックで大きな入力画面が開き「保存する」で保存されます。'
+     '担当スタッフの絞り込みは初期状態が「全スタッフ」で店舗の契約をすべて表示し、特定の担当だけ見たいときはプルダウンから選びます（自分の担当に契約が無いスタッフでも空にならず全件見えます）。'},
     {'cat': '契約フォーマット', 'title': '契約書類の用紙サイズ（A4/A3・縦横）と編集画面', 'body':
      '各種設定→契約フォーマットでExcel様式をアップロードし、「タグ割当」を開くと書類ごとに用紙サイズ（A4/A3）と向き（縦/横）を選べます（初期値はExcelの設定を自動判定）。'
      '選んだサイズで編集画面・印刷・PDFが表示され、書類によってA3横などが混在してもOKです。編集画面はPCの横幅に合わせて自動で拡大縮小します。Excelの数式（=TODAY()等）は計算済みの値で表示されます。'},
@@ -15090,105 +15091,6 @@ def api_hq_ai_summary():
 # ══════════════════════════════════════════════════════════════
 DEMO_SEED_KEY = "mieroom-demo-2026"
 DEMO_TENANT_USERNAME = "株式会社デモ"
-
-
-@app.route("/admin/diag-user")
-def admin_diag_user():
-    """一時診断: 指定ユーザーの店舗割り当てと契約対象データの所在を調べる。
-    GET /admin/diag-user?key=mieroom-demo-2026&user=nishi
-    """
-    if request.args.get("key") != DEMO_SEED_KEY:
-        return jsonify({"error": "forbidden"}), 403
-    uname = (request.args.get("user") or "").strip()
-    users = AppUser.query.filter_by(username=uname).all()
-    if not users:
-        return jsonify({"error": f"user '{uname}' not found"}), 404
-
-    def store_label(sid):
-        s = Store.query.get(sid) if sid else None
-        return f"{sid}:{s.name}(active={s.is_active})" if s else f"{sid}:<none>"
-
-    out = []
-    for u in users:
-        # get_allowed_store_ids 相当（セッション非依存・ignore_active=True相当）を計算
-        if u.role == 'super_admin':
-            allowed = [s.id for s in Store.query.filter_by(is_active=True).all()]
-        elif u.role == 'owner':
-            allowed = [s.id for s in Store.query.filter_by(tenant_id=u.tenant_id, is_active=True).all()]
-        else:
-            if u.store_id:
-                allowed = [u.store_id]
-            elif getattr(u, 'staff_id', None) and Staff.query.get(u.staff_id) and Staff.query.get(u.staff_id).store_id:
-                allowed = [Staff.query.get(u.staff_id).store_id]
-            elif u.tenant_id:
-                allowed = [s.id for s in Store.query.filter_by(tenant_id=u.tenant_id, is_active=True).all()][:1]
-            else:
-                allowed = []
-
-        # この申込の契約対象条件
-        def contract_q(store_ids):
-            return ApplicationRecord.query.filter(
-                ApplicationRecord.store_id.in_(store_ids),
-                ApplicationRecord.review_status == 'ok',
-                ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
-                db.or_(ApplicationRecord.past_customer == False, ApplicationRecord.past_customer == None),
-            )
-
-        # nishi の店舗での内訳
-        store_breakdown = []
-        for sid in allowed:
-            recs = ApplicationRecord.query.filter_by(store_id=sid).all()
-            from collections import Counter
-            rs_counts = dict(Counter([(r.review_status or '—') for r in recs]))
-            store_breakdown.append({
-                "store": store_label(sid),
-                "total_records": len(recs),
-                "review_status_breakdown": rs_counts,
-                "contract_target_count": contract_q([sid]).count(),
-            })
-
-        # 同テナント全店舗で、契約対象がどこにあるか
-        tenant_stores = Store.query.filter_by(tenant_id=u.tenant_id).all() if u.tenant_id else []
-        tenant_contract = []
-        for s in tenant_stores:
-            c = contract_q([s.id]).count()
-            if c:
-                tenant_contract.append({"store": store_label(s.id), "contract_target_count": c})
-
-        # 契約対象を担当スタッフ別に集計（このユーザーの店舗）
-        from collections import Counter as _C
-        staff_breakdown = []
-        own_count = None
-        for sid in allowed:
-            crecs = contract_q([sid]).all()
-            by_staff = _C([r.staff_id for r in crecs])
-            for stid, cnt in sorted(by_staff.items(), key=lambda x: -x[1]):
-                st = Staff.query.get(stid) if stid else None
-                staff_breakdown.append({
-                    "staff_id": stid,
-                    "staff_name": (st.name if st else None),
-                    "contract_target_count": cnt,
-                })
-            own_count = by_staff.get(getattr(u, 'staff_id', None), 0)
-
-        out.append({
-            "username": u.username,
-            "id": u.id,
-            "role": u.role,
-            "own_staff_contract_count": own_count,
-            "contract_target_by_staff": staff_breakdown,
-            "is_active": u.is_active,
-            "store_id": u.store_id,
-            "store_id_label": store_label(u.store_id),
-            "staff_id": getattr(u, 'staff_id', None),
-            "tenant_id": u.tenant_id,
-            "can_view_contract": getattr(u, 'can_view_contract', None),
-            "allowed_store_ids": allowed,
-            "allowed_store_labels": [store_label(s) for s in allowed],
-            "nishi_store_breakdown": store_breakdown,
-            "tenant_stores_with_contract_data": tenant_contract,
-        })
-    return jsonify(out)
 
 
 @app.route("/admin/seed-demo")

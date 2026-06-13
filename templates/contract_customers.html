@@ -159,11 +159,10 @@ function showAlert(msg, type='success') {
 function yen(v) { return v ? Math.round(v).toLocaleString() + '円' : '―'; }
 
 async function loadList() {
-  const staffId = document.getElementById('filter-staff').value;
-  const params = new URLSearchParams();
-  if (staffId) params.set('staff_id', staffId);
+  // 店舗の全契約をまとめて取得し、スタッフ絞り込みはクライアント側(filterList)で行う。
+  // サーバー側でstaff_idを渡すと、後から「全スタッフ」に切り替えても取り直されず空のままになるため。
   try {
-    const res = await fetch('/api/contract-customers?' + params);
+    const res = await fetch('/api/contract-customers');
     ccData = res.ok ? await res.json() : [];
   } catch(_) { ccData = []; }
   filterList();
@@ -371,10 +370,8 @@ function openDocModal(id) {
 function closeDocModal() { document.getElementById('doc-modal').classList.remove('active'); }
 
 document.addEventListener('DOMContentLoaded', () => {
-  if (!IS_MANAGER && CUR_STAFF_ID) {
-    const sel = document.getElementById('filter-staff');
-    if (sel) sel.value = String(CUR_STAFF_ID);
-  }
+  // 契約管理は店舗の全契約を初期表示する（担当に契約が無いスタッフでも空にならないように）。
+  // 必要なら絞り込みドロップダウンで担当スタッフを選ぶ。
   loadList();
 });
 </script>
