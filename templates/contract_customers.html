@@ -40,6 +40,13 @@
                 padding:2px 5px; font-size:12px; box-sizing:border-box;
                 background:#fff; color:#111827; color-scheme: light; }
   select.edit-input option { background:#fff; color:#111827; }
+  /* 自前の選択メニュー（ネイティブselectを使わず黒フラッシュを回避） */
+  .cc-menu { position:absolute; z-index:2000; background:#fff; color:#111827;
+             border:1px solid #0D9488; border-radius:8px; overflow:hidden;
+             box-shadow:0 8px 24px rgba(0,0,0,.18); font-size:13px; }
+  .cc-menu-item { padding:8px 18px; cursor:pointer; white-space:nowrap; text-align:center; }
+  .cc-menu-item:hover { background:#F0FDFA; }
+  .cc-menu-item.sel { background:#CCFBF1; color:#0F766E; font-weight:700; }
   .cc-tabs { display:flex; gap:6px; margin-bottom:14px; border-bottom:2px solid #e5e7eb; }
   .cc-tab { border:none; background:none; padding:9px 16px; font-size:14px; font-weight:700; color:#6b7280; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; }
   .cc-tab:hover { color:#0F766E; }
@@ -48,7 +55,7 @@
 {% endblock %}
 
 {% block content %}
-<div style="max-width:1400px; margin:0 auto;">
+<div style="width:100%; margin:0;">
   <div id="alert-msg" class="alert"></div>
 
   <div class="page-header">
@@ -230,73 +237,52 @@ async function ccPatch(id, field, value) {
     filterList();
   } catch(_) { showAlert('保存に失敗しました。', 'error'); }
 }
-/* ── 接客管理表と同じセル編集UI（クリック→その場でプルダウン） ── */
+/* ── セル選択UI（自前メニュー：OSダークモードの黒フラッシュを避けるためネイティブselectは使わない） ── */
 const CC_SELECT_OPTS = {
   invoice_sent:    [['×', '×'], ['〇', '〇']],
   contract_method: [['', '―'], ['電子', '電子'], ['書面', '書面']],
   guarantor:       [['', '―'], ['有', '有'], ['無', '無']],
 };
 
-function ccCellBox(td) {
-  const cs = getComputedStyle(td);
-  const padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-  const rect = td.getBoundingClientRect();
-  return { w: Math.round(rect.width), h: Math.max(16, Math.round(rect.height - padV)) };
+let _ccMenu = null;
+function closeCCMenu() {
+  if (_ccMenu) { _ccMenu.remove(); _ccMenu = null; }
+  document.removeEventListener('mousedown', _ccMenuOutside, true);
+  window.removeEventListener('scroll', closeCCMenu, true);
+  window.removeEventListener('resize', closeCCMenu, true);
 }
-// 編集欄を「固定高さの枠＋絶対配置」で包む（セルの行高・列幅を変えない）
-function ccEditorWrap(el, box) {
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'position:relative;width:100%;height:' + box.h + 'px;overflow:hidden;';
-  el.style.position = 'absolute';
-  el.style.left = '0'; el.style.top = '0'; el.style.right = '0'; el.style.bottom = '0';
-  el.style.width = '100%'; el.style.height = '100%'; el.style.boxSizing = 'border-box';
-  wrap.appendChild(el);
-  return wrap;
-}
+function _ccMenuOutside(e) { if (_ccMenu && !_ccMenu.contains(e.target)) closeCCMenu(); }
 
 function editCC(td, id, field, type) {
   const rec = ccData.find(r => r.id === id);
   if (!rec) return;
-  if (td.querySelector('input,select')) return;
-  // 請求書は boolean を 〇/× 表記に変換して扱う
-  const curVal = field === 'invoice_sent' ? (rec[field] ? '〇' : '×') : rec[field];
-
-  const prev = td.innerHTML;
-  const box = ccCellBox(td);
-
-  if (type === 'select') {
-    const el = document.createElement('select');
-    el.className = 'edit-input';
-    (CC_SELECT_OPTS[field] || []).forEach(([v, l]) => {
-      const o = new Option(l || v, v);
-      if (String(v) === String(curVal || '')) o.selected = true;
-      el.appendChild(o);
-    });
-    td.innerHTML = ''; td.appendChild(ccEditorWrap(el, box)); el.focus({ preventScroll: true });
-    // 描画後に開く（即時呼び出しだと開かず2クリック必要になるため）
-    requestAnimationFrame(() => { try { el.showPicker(); } catch(_) {} });
-    el.addEventListener('change', () => {
-      const val = field === 'invoice_sent' ? el.value === '〇' : el.value;
-      td.innerHTML = prev;   // すぐ元の表示に戻してから保存（編集欄が残らない）
+  closeCCMenu();
+  const cur = field === 'invoice_sent' ? (rec[field] ? '〇' : '×') : (rec[field] || '');
+  const menu = document.createElement('div');
+  menu.className = 'cc-menu';
+  menu.innerHTML = (CC_SELECT_OPTS[field] || []).map(([v, l]) =>
+    `<div class="cc-menu-item${String(v) === String(cur) ? ' sel' : ''}" data-v="${escc(v)}">${escc(l || v)}</div>`
+  ).join('');
+  document.body.appendChild(menu);
+  const r = td.getBoundingClientRect();
+  menu.style.left = (r.left + window.scrollX) + 'px';
+  menu.style.top  = (r.bottom + window.scrollY) + 'px';
+  menu.style.minWidth = r.width + 'px';
+  _ccMenu = menu;
+  menu.querySelectorAll('.cc-menu-item').forEach(it => {
+    it.addEventListener('mousedown', e => {
+      e.preventDefault(); e.stopPropagation();
+      const v = it.dataset.v;
+      const val = field === 'invoice_sent' ? (v === '〇') : v;
+      closeCCMenu();
       ccPatch(id, field, val);
     });
-    // 値を変えずに別の場所を押したら元の表示に戻す
-    el.addEventListener('blur', () => { if (td.querySelector('select')) td.innerHTML = prev; });
-  } else {
-    const el = document.createElement('input');
-    el.type = 'text'; el.value = curVal || '';
-    el.className = 'edit-input';
-    td.innerHTML = ''; td.appendChild(ccEditorWrap(el, box)); el.focus({ preventScroll: true });
-    el.select();
-    let saved = false;
-    const save = () => { if (saved) return; saved = true; ccPatch(id, field, el.value.trim()); };
-    el.addEventListener('blur', save);
-    el.addEventListener('keydown', e => {
-      if (e.key === 'Enter') el.blur();
-      if (e.key === 'Escape') { saved = true; td.innerHTML = prev; }
-    });
-    el.addEventListener('click', e => e.stopPropagation());
-  }
+  });
+  setTimeout(() => {
+    document.addEventListener('mousedown', _ccMenuOutside, true);
+    window.addEventListener('scroll', closeCCMenu, true);
+    window.addEventListener('resize', closeCCMenu, true);
+  }, 0);
 }
 
 /* ── メモを大きく開いて編集（接客管理表と同じモーダル） ── */
