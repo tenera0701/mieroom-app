@@ -1402,10 +1402,7 @@ document.addEventListener('click', e=>{
 
 document.addEventListener('DOMContentLoaded', async () => {
   updateLabel();
-  if (!IS_MANAGER && CUR_STAFF_ID) {
-    const sel = document.getElementById('filter-staff');
-    if (sel) sel.value = String(CUR_STAFF_ID);
-  }
+  // 初期表示は「全スタッフ」。特定スタッフだけ見たいときは右上のプルダウンで選ぶ。
   // 状況の色を先に読み込んでから表を描画（並走すると色なしで描画されることがあるため）
   try { await loadDropdownOpts(); } catch(_) {}
   loadRecords();
