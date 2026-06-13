@@ -15092,6 +15092,87 @@ DEMO_SEED_KEY = "mieroom-demo-2026"
 DEMO_TENANT_USERNAME = "株式会社デモ"
 
 
+@app.route("/admin/diag-user")
+def admin_diag_user():
+    """一時診断: 指定ユーザーの店舗割り当てと契約対象データの所在を調べる。
+    GET /admin/diag-user?key=mieroom-demo-2026&user=nishi
+    """
+    if request.args.get("key") != DEMO_SEED_KEY:
+        return jsonify({"error": "forbidden"}), 403
+    uname = (request.args.get("user") or "").strip()
+    users = AppUser.query.filter_by(username=uname).all()
+    if not users:
+        return jsonify({"error": f"user '{uname}' not found"}), 404
+
+    def store_label(sid):
+        s = Store.query.get(sid) if sid else None
+        return f"{sid}:{s.name}(active={s.is_active})" if s else f"{sid}:<none>"
+
+    out = []
+    for u in users:
+        # get_allowed_store_ids 相当（セッション非依存・ignore_active=True相当）を計算
+        if u.role == 'super_admin':
+            allowed = [s.id for s in Store.query.filter_by(is_active=True).all()]
+        elif u.role == 'owner':
+            allowed = [s.id for s in Store.query.filter_by(tenant_id=u.tenant_id, is_active=True).all()]
+        else:
+            if u.store_id:
+                allowed = [u.store_id]
+            elif getattr(u, 'staff_id', None) and Staff.query.get(u.staff_id) and Staff.query.get(u.staff_id).store_id:
+                allowed = [Staff.query.get(u.staff_id).store_id]
+            elif u.tenant_id:
+                allowed = [s.id for s in Store.query.filter_by(tenant_id=u.tenant_id, is_active=True).all()][:1]
+            else:
+                allowed = []
+
+        # この申込の契約対象条件
+        def contract_q(store_ids):
+            return ApplicationRecord.query.filter(
+                ApplicationRecord.store_id.in_(store_ids),
+                ApplicationRecord.review_status == 'ok',
+                ~ApplicationRecord.status.in_(['キャンセル', 'キャンセル振替']),
+                db.or_(ApplicationRecord.past_customer == False, ApplicationRecord.past_customer == None),
+            )
+
+        # nishi の店舗での内訳
+        store_breakdown = []
+        for sid in allowed:
+            recs = ApplicationRecord.query.filter_by(store_id=sid).all()
+            from collections import Counter
+            rs_counts = dict(Counter([(r.review_status or '—') for r in recs]))
+            store_breakdown.append({
+                "store": store_label(sid),
+                "total_records": len(recs),
+                "review_status_breakdown": rs_counts,
+                "contract_target_count": contract_q([sid]).count(),
+            })
+
+        # 同テナント全店舗で、契約対象がどこにあるか
+        tenant_stores = Store.query.filter_by(tenant_id=u.tenant_id).all() if u.tenant_id else []
+        tenant_contract = []
+        for s in tenant_stores:
+            c = contract_q([s.id]).count()
+            if c:
+                tenant_contract.append({"store": store_label(s.id), "contract_target_count": c})
+
+        out.append({
+            "username": u.username,
+            "id": u.id,
+            "role": u.role,
+            "is_active": u.is_active,
+            "store_id": u.store_id,
+            "store_id_label": store_label(u.store_id),
+            "staff_id": getattr(u, 'staff_id', None),
+            "tenant_id": u.tenant_id,
+            "can_view_contract": getattr(u, 'can_view_contract', None),
+            "allowed_store_ids": allowed,
+            "allowed_store_labels": [store_label(s) for s in allowed],
+            "nishi_store_breakdown": store_breakdown,
+            "tenant_stores_with_contract_data": tenant_contract,
+        })
+    return jsonify(out)
+
+
 @app.route("/admin/seed-demo")
 def admin_seed_demo():
     import random as _rnd
