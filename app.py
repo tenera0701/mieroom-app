@@ -15155,10 +15155,28 @@ def admin_diag_user():
             if c:
                 tenant_contract.append({"store": store_label(s.id), "contract_target_count": c})
 
+        # 契約対象を担当スタッフ別に集計（このユーザーの店舗）
+        from collections import Counter as _C
+        staff_breakdown = []
+        own_count = None
+        for sid in allowed:
+            crecs = contract_q([sid]).all()
+            by_staff = _C([r.staff_id for r in crecs])
+            for stid, cnt in sorted(by_staff.items(), key=lambda x: -x[1]):
+                st = Staff.query.get(stid) if stid else None
+                staff_breakdown.append({
+                    "staff_id": stid,
+                    "staff_name": (st.name if st else None),
+                    "contract_target_count": cnt,
+                })
+            own_count = by_staff.get(getattr(u, 'staff_id', None), 0)
+
         out.append({
             "username": u.username,
             "id": u.id,
             "role": u.role,
+            "own_staff_contract_count": own_count,
+            "contract_target_by_staff": staff_breakdown,
             "is_active": u.is_active,
             "store_id": u.store_id,
             "store_id_label": store_label(u.store_id),
