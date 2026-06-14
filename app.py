@@ -4519,7 +4519,8 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
         'var w=rawWidth(r);if(!w||w<=0)return;'
         'var cw=document.documentElement.clientWidth||window.innerWidth||document.body.clientWidth||0;'
         'var avail=cw-20;if(avail<=40)return;'
-        'var s=avail/w;if(s>2)s=2;if(s<0.1)s=0.1;applyScale(s);}'
+        # 画面幅に合わせるが原寸(1.0)を超える拡大はしない（A4縦などが拡大されすぎてスクロール地獄になるのを防ぐ）
+        'var s=avail/w;if(s>1)s=1;if(s<0.1)s=0.1;applyScale(s);}'
         'function fitPrint(){var r=document.getElementById("doc-root");if(!r)return;'
         'var w=rawWidth(r);if(!w||w<=0)return;'
         'var s=PRINT_W/w;if(s>1)s=1;if(s<0.05)s=0.05;applyScale(s);}'
