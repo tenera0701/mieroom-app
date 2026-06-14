@@ -1090,7 +1090,19 @@ let _mailCount = -1;
 let _mailSig = '';
 let _pendingFiles = [];
 let _templates = [];
-let _mailBodyIsHtml = false;  // HTMLテンプレ挿入時にtrue → HTMLメールとして送信
+let _mailBodyIsHtml = false;   // HTMLテンプレ挿入時にtrue → HTMLメールとして送信
+let _pendingHtmlBody = '';     // 送信する元HTML（入力欄には読みやすいテキストを表示）
+let _pendingHtmlText = '';     // 入力欄に表示したテキスト版（編集検知用）
+
+// HTMLを入力欄表示用の読みやすいテキストに変換（タグを除去・改行に整形）
+function htmlToText(html){
+  let s = String(html || '')
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\/\s*(div|p|tr|li|h[1-6])\s*>/gi, '\n')
+    .replace(/<[^>]+>/g, '');
+  const ta = document.createElement('textarea'); ta.innerHTML = s; s = ta.value;
+  return s.replace(/\n{3,}/g, '\n\n').replace(/[ \t]+\n/g, '\n').trim();
+}
 
 function autoGrow(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
 
@@ -1107,7 +1119,7 @@ function openMail(id){
   }
   document.getElementById('mail-subject').value = '';
   const body = document.getElementById('mail-body'); body.value=''; body.style.height='auto';
-  _mailBodyIsHtml = false;
+  _mailBodyIsHtml = false; _pendingHtmlBody = ''; _pendingHtmlText = '';
   document.getElementById('chat-sub').textContent = '';
   document.getElementById('mail-thread').innerHTML = '<div class="chat-empty">読み込み中…</div>';
   document.getElementById('mail-modal').classList.add('active');
@@ -1216,10 +1228,24 @@ function applyTemplate(id){
   const t = _templates.find(x=>x.id===id);
   if(!t) return;
   const subjEl = document.getElementById('mail-subject');
-  if(t.subject && !subjEl.value.trim()) subjEl.value = t.subject;
+  if(t.subject) subjEl.value = t.subject;  // テンプレの件名を反映
   const bodyEl = document.getElementById('mail-body');
-  bodyEl.value = (bodyEl.value ? bodyEl.value + '\n' : '') + (t.body||'');
-  if(t.is_html) _mailBodyIsHtml = true;  // HTMLテンプレ→HTMLメールで送る
+  const hadText = !!bodyEl.value.trim();
+  if(t.is_html && !hadText){
+    // HTMLテンプレ：入力欄には読みやすいテキスト、送信時は元HTML
+    const txt = htmlToText(t.body || '');
+    bodyEl.value = txt;
+    _pendingHtmlBody = t.body || '';
+    _pendingHtmlText = txt;
+    _mailBodyIsHtml = true;
+  } else if(t.is_html){
+    // 既に入力済みのところにHTMLテンプレ→テキスト化して追記（プレーン送信）
+    bodyEl.value = bodyEl.value + '\n' + htmlToText(t.body || '');
+    _pendingHtmlBody = ''; _pendingHtmlText = ''; _mailBodyIsHtml = false;
+  } else {
+    bodyEl.value = (hadText ? bodyEl.value + '\n' : '') + (t.body || '');
+    _pendingHtmlBody = ''; _pendingHtmlText = ''; _mailBodyIsHtml = false;
+  }
   autoGrow(bodyEl);
   closeTemplatePicker();
   bodyEl.focus();
@@ -1376,20 +1402,26 @@ async function sendMail(){
   if(!_mailEchoId) return;
   const subject = document.getElementById('mail-subject').value.trim();
   const bodyEl = document.getElementById('mail-body');
-  const body = bodyEl.value.trim();
+  let body = bodyEl.value.trim();
   if(!body && !_pendingFiles.length){ showAlert('メッセージを入力してください','error'); return; }
+  // HTMLテンプレを未編集で送る場合は元HTMLを送信。編集された場合は入力テキストをプレーン送信。
+  let isHtml = false;
+  if(_mailBodyIsHtml && _pendingHtmlBody && body === _pendingHtmlText.trim()){
+    body = _pendingHtmlBody;
+    isHtml = true;
+  }
   const btn = document.getElementById('mail-send-btn');
   btn.disabled = true;
   try{
     const fd = new FormData();
     fd.append('subject', subject);
     fd.append('body', body);
-    fd.append('is_html', _mailBodyIsHtml ? '1' : '0');
+    fd.append('is_html', isHtml ? '1' : '0');
     _pendingFiles.forEach(f => fd.append('files', f));
     const r = await fetch(`/api/echo-records/${_mailEchoId}/send`,{method:'POST',body:fd});
     const d = await r.json();
     if(d.ok){
-      bodyEl.value=''; bodyEl.style.height='auto'; _mailBodyIsHtml = false;
+      bodyEl.value=''; bodyEl.style.height='auto'; _mailBodyIsHtml = false; _pendingHtmlBody=''; _pendingHtmlText='';
       _pendingFiles = []; renderAttachList();
       _mailCount = -1; _mailSig = ''; // 強制再描画
       loadMailThread(_mailEchoId, false);
