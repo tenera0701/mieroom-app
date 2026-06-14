@@ -67,11 +67,11 @@
         <thead>
           <tr>
             <th>申込日</th><th>契約開始日</th><th>担当</th><th>物件名</th><th>号室</th>
-            <th>お客様名</th><th>賃料</th><th>管理会社</th><th>操作</th>
+            <th>お客様名</th><th>賃料</th><th>管理会社</th><th>契約書</th><th>操作</th>
           </tr>
         </thead>
         <tbody id="pc-tbody">
-          <tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:24px;">読み込み中...</td></tr>
+          <tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:24px;">読み込み中...</td></tr>
         </tbody>
       </table>
     </div>
@@ -122,7 +122,7 @@ function render(list) {
   const tbody = document.getElementById('pc-tbody');
   document.getElementById('pc-count').textContent = list.length + '件';
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#9ca3af;padding:24px;">該当する顧客はいません</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#9ca3af;padding:24px;">該当する顧客はいません</td></tr>';
     return;
   }
   // 契約開始日で仕分け（新しい月→古い月の順。契約開始日が未定の行は最後）
@@ -142,7 +142,7 @@ function render(list) {
       curKey = key;
       const label = m ? `${m[1]}年${parseInt(m[2], 10)}月` : '契約開始日 未定';
       ymList.push({ key, label });
-      html += `<tr id="ym-${key}"><td colspan="9" style="text-align:left;background:#F0FDFA;color:#0F766E;font-weight:800;padding:8px 12px;border-top:2px solid #5EEAD4;">${label}</td></tr>`;
+      html += `<tr id="ym-${key}"><td colspan="10" style="text-align:left;background:#F0FDFA;color:#0F766E;font-weight:800;padding:8px 12px;border-top:2px solid #5EEAD4;">${label}</td></tr>`;
     }
     html += `
     <tr>
@@ -154,6 +154,9 @@ function render(list) {
       <td>${esc(r.customer_name) || '―'}</td>
       <td style="text-align:right;">${yen(r.rent)}</td>
       <td>${esc(r.management_company) || '―'}</td>
+      <td>
+        <a href="/contract-customers/${r.id}/edit" target="_blank" rel="noopener" style="display:inline-block;padding:4px 10px;font-size:11px;background:#EEF2FF;border:1px solid #c7d2fe;border-radius:6px;cursor:pointer;color:#4338ca;font-weight:600;text-decoration:none;">📄 契約書</a>
+      </td>
       <td>
         <button onclick="restoreContract(${r.id})" style="padding:4px 10px;font-size:11px;background:#CCFBF1;border:1px solid #5EEAD4;border-radius:6px;cursor:pointer;color:#0F766E;font-weight:600;">契約管理へ戻す</button>
       </td>

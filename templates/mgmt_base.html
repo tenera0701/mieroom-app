@@ -244,6 +244,13 @@
     .fp-foot button { padding: 5px 16px; font-size: 13px; font-weight: 600; border-radius: 6px; cursor: pointer; border: 1px solid #d1d5db; background: #fff; color: #374151; }
     .fp-foot .fp-today { background: #0D9488; border-color: #0D9488; color: #fff; }
     .fp-foot button:hover { filter: brightness(0.97); }
+    /* 携帯：横スクロール領域は横だけ動かし、縦はページ側に任せる（斜め・ブレ防止） */
+    @media (max-width:760px){
+      .table-wrapper, .table-wrap, .stat-table-wrap, .pl-table-wrap {
+        max-height: none !important;
+        overflow-y: visible !important;
+      }
+    }
   </style>
   {% block extra_head %}{% endblock %}
 </head>
@@ -819,6 +826,34 @@
       } else {
         getReg();   // 通知は未許可でもSWだけは登録しておく
       }
+    })();
+
+    // ===== 携帯：横スクロールは横だけ／縦は縦だけに固定（斜め移動を防止） =====
+    (function(){
+      if(!('ontouchstart' in window)) return;
+      const SEL = '.table-wrapper,.table-wrap,.stat-table-wrap,.stat-table-scroll,.pl-table-wrap,.overflow-x-auto';
+      let sx=0, sy=0, dir=null, sl=0, el=null;
+      document.addEventListener('touchstart', e=>{
+        el = e.target.closest ? e.target.closest(SEL) : null;
+        if(!el || e.touches.length!==1){ el=null; return; }
+        sx=e.touches[0].clientX; sy=e.touches[0].clientY; sl=el.scrollLeft; dir=null;
+      }, {passive:true});
+      document.addEventListener('touchmove', e=>{
+        if(!el || e.touches.length!==1) return;
+        const dx=e.touches[0].clientX-sx, dy=e.touches[0].clientY-sy;
+        if(dir===null){
+          if(Math.abs(dx)<6 && Math.abs(dy)<6) return;
+          dir = Math.abs(dx)>Math.abs(dy) ? 'x' : 'y';
+        }
+        if(dir==='x'){
+          e.preventDefault();          // 縦の地スクロールを止めて「横だけ」にする
+          el.scrollLeft = sl - dx;
+        }
+        // dir==='y' は何もしない → ページが「縦だけ」スクロールする
+      }, {passive:false});
+      function endTouch(){ el=null; dir=null; }
+      document.addEventListener('touchend', endTouch, {passive:true});
+      document.addEventListener('touchcancel', endTouch, {passive:true});
     })();
     </script>
     <div class="px-3 py-4" style="border-top:1px solid #115E59;">

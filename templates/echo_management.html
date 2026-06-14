@@ -60,7 +60,17 @@
   .modal-overlay.active { display:flex; }
 
   /* ── チャット風メールUI ── */
-  .chat-window { background:#fff; border-radius:16px; width:480px; max-width:96vw; height:80vh; max-height:680px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 70px rgba(0,0,0,0.28); position:relative; }
+  .chat-window { background:#fff; border-radius:16px; width:880px; max-width:96vw; height:82vh; max-height:720px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 24px 70px rgba(0,0,0,0.28); position:relative; }
+  /* PC・タブレット：左=メッセージ入力 / 右=やり取り の2カラム（横に広く） */
+  @media (min-width:761px){
+    .chat-window { display:grid; grid-template-columns:minmax(0,0.9fr) minmax(0,1.1fr);
+                   grid-template-rows:auto minmax(0,1fr); grid-template-areas:"head head" "compose body"; }
+    .chat-head { grid-area:head; }
+    .chat-compose { grid-area:compose; border-top:none; border-right:1px solid #e5e7eb; overflow-y:auto; display:flex; flex-direction:column; }
+    .chat-body { grid-area:body; }
+    .chat-compose .chat-input-bar { margin-top:auto; }   /* 入力欄は左カラムの下に寄せる */
+    .chat-input { min-height:120px; }
+  }
   .chat-window.dnd-over { outline:3px dashed #0D9488; outline-offset:-6px; }
   .chat-window.dnd-over::after { content:'📎 ここにドロップで添付'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(204,251,241,0.78); color:#0F766E; font-size:16px; font-weight:800; pointer-events:none; z-index:50; }
   .chat-head { display:flex; align-items:center; gap:10px; padding:12px 14px; background:linear-gradient(135deg,#0D9488,#0F766E); color:#fff; }
@@ -220,7 +230,7 @@
       <thead>
         <tr>
           <th>担当者</th>
-          <th>反響日</th>
+          <th onclick="toggleEchoSort()" title="クリックで古い順／新しい順を切り替え" style="cursor:pointer;white-space:nowrap;user-select:none;">反響日 <span id="echo-sort-arrow" style="font-size:10px;color:#0D9488;">▼</span></th>
           <th style="white-space:nowrap;">状況
             <button type="button" onclick="openStatusMgr()" title="状況タグと色を管理" style="font-size:10px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:4px;padding:0 5px;cursor:pointer;color:#374151;">⚙</button>
           </th>
@@ -853,13 +863,29 @@ async function toggleFlag(id, field, curVal) {
   renderTable();
 }
 
+let echoSortDir = 'desc';   // 反響日の並び：desc=新しい順（既定）, asc=古い順
+function toggleEchoSort(){
+  echoSortDir = (echoSortDir === 'desc') ? 'asc' : 'desc';
+  const arrow = document.getElementById('echo-sort-arrow');
+  if (arrow) arrow.textContent = (echoSortDir === 'desc') ? '▼' : '▲';
+  renderTable();
+}
+function sortedEchoRecords(){
+  return records.slice().sort((a, b) => {
+    const x = a.echo_date || '', y = b.echo_date || '';
+    if (x === y) return (b.id || 0) - (a.id || 0);   // 同日は新しい登録が上
+    if (!x) return 1;
+    if (!y) return -1;
+    return echoSortDir === 'desc' ? y.localeCompare(x) : x.localeCompare(y);
+  });
+}
 function renderTable() {
   const tbody = document.getElementById('echo-tbody');
   if (!records.length) {
     tbody.innerHTML = '<tr class="empty-row"><td colspan="24">データがありません</td></tr>';
     return;
   }
-  tbody.innerHTML = records.map(r => {
+  tbody.innerHTML = sortedEchoRecords().map(r => {
     const statusColor = r.status ? (STATUS_COLORS[r.status] || '') : '';
     // 行の色は「状況」タグのみ。未返信は赤い左ラインで可視化（背景色とは別）。
     const rowStyle = statusColor ? `background:${statusColor};` : '';
