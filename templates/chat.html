@@ -683,8 +683,10 @@ async function enableNotify(){
   if(Notification.permission==='granted'){
     if(notifyPref()){
       localStorage.setItem('mieroom-chat-notify','off');
+      if(window.miePush) window.miePush.unsubscribe();   // プッシュ購読も解除
     }else{
       localStorage.setItem('mieroom-chat-notify','on');
+      if(window.miePush) window.miePush.subscribe();      // プッシュ購読を登録
       new Notification('ミエルーム チャット', {body:'通知をオンにしました🔔'});
     }
     updateNotifBtn();
@@ -696,7 +698,11 @@ async function enableNotify(){
   }
   await Notification.requestPermission();
   updateNotifBtn();
-  if(Notification.permission==='granted') new Notification('ミエルーム チャット', {body:'通知をオンにしました🔔'});
+  if(Notification.permission==='granted'){
+    localStorage.setItem('mieroom-chat-notify','on');
+    if(window.miePush) window.miePush.subscribe();        // 許可直後にプッシュ購読
+    new Notification('ミエルーム チャット', {body:'通知をオンにしました🔔'});
+  }
 }
 
 // グループ作成

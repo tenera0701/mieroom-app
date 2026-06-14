@@ -1286,6 +1286,25 @@ class ChatChannelNote(db.Model):
     updated_at  = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class AppConfig(db.Model):
+    """アプリ全体の設定（キー・バリュー）。VAPID鍵など秘匿値の保管にも使う"""
+    __tablename__ = 'app_config'
+    key   = db.Column(db.String(80), primary_key=True)
+    value = db.Column(db.Text)
+
+
+class PushSubscription(db.Model):
+    """Web Push（ブラウザ通知）の購読情報。1端末ブラウザ＝1レコード"""
+    __tablename__ = 'push_subscription'
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, index=True)
+    tenant_id  = db.Column(db.Integer, index=True)
+    endpoint   = db.Column(db.Text, unique=True)   # 配信先URL（ブラウザごとに一意）
+    p256dh     = db.Column(db.String(200))          # 公開鍵
+    auth       = db.Column(db.String(100))          # 認証シークレット
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class MailSetting(db.Model):
     """店舗ごとの反響メール自動取込設定（IMAP）"""
     __tablename__ = 'mail_setting'
@@ -8933,6 +8952,195 @@ def _chat_cleanup_channel(c):
     db.session.commit()
 
 
+# ===== Web Push（ブラウザのプッシュ通知。アプリを閉じていても届く） =====
+def _get_vapid_keys():
+    """VAPID鍵ペアを取得（無ければ生成してDBへ保存）。
+    戻り値: (private_pem:str, public_key_b64url:str)。失敗時は (None, None)。"""
+    try:
+        cfg_priv = AppConfig.query.get('vapid_private_pem')
+        cfg_pub = AppConfig.query.get('vapid_public_key')
+        if cfg_priv and cfg_pub and cfg_priv.value and cfg_pub.value:
+            return cfg_priv.value, cfg_pub.value
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.hazmat.primitives import serialization
+        import base64
+        priv = ec.generate_private_key(ec.SECP256R1())
+        priv_pem = priv.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption()).decode()
+        raw_pub = priv.public_key().public_bytes(
+            serialization.Encoding.X962,
+            serialization.PublicFormat.UncompressedPoint)
+        pub_b64 = base64.urlsafe_b64encode(raw_pub).rstrip(b'=').decode()
+        db.session.merge(AppConfig(key='vapid_private_pem', value=priv_pem))
+        db.session.merge(AppConfig(key='vapid_public_key', value=pub_b64))
+        db.session.commit()
+        return priv_pem, pub_b64
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print(f"VAPID鍵の準備に失敗: {e}")
+        return None, None
+
+
+def _channel_recipient_uids(c, exclude_id=None):
+    """チャンネルの通知対象ユーザーID集合（送信者は除く）"""
+    uids = set()
+    try:
+        if c.kind == 'company':
+            uids = {u.id for u in AppUser.query.filter_by(tenant_id=c.tenant_id, is_active=True).all()}
+        elif c.kind == 'store':
+            for u in AppUser.query.filter_by(tenant_id=c.tenant_id, is_active=True).all():
+                if u.role == 'owner' or (u.store_id and u.store_id == c.store_id):
+                    uids.add(u.id)
+        elif c.kind == 'group':
+            uids = {m.user_id for m in ChatMember.query.filter_by(channel_id=c.id).all()}
+            if c.created_by:
+                uids.add(c.created_by)
+    except Exception:
+        pass
+    if exclude_id:
+        uids.discard(exclude_id)
+    return uids
+
+
+def _send_chat_push(channel_id, sender_id, sender_name, body_text):
+    """新着チャットを購読者へWeb Push配信（別スレッドで呼ぶ）。
+    端末・ブラウザを閉じていても届く。"""
+    with app.app_context():
+        try:
+            c = ChatChannel.query.get(channel_id)
+            if not c:
+                return
+            priv_pem, _pub = _get_vapid_keys()
+            if not priv_pem:
+                return
+            uids = _channel_recipient_uids(c, exclude_id=sender_id)
+            if not uids:
+                return
+            subs = PushSubscription.query.filter(PushSubscription.user_id.in_(uids)).all()
+            if not subs:
+                return
+            try:
+                from pywebpush import webpush, WebPushException
+                from py_vapid import Vapid01
+            except Exception as e:
+                print(f"pywebpush未導入のためPush送信スキップ: {e}")
+                return
+            vapid_obj = Vapid01.from_pem(priv_pem.encode())
+            preview = (body_text or '').strip().replace('\n', ' ')
+            if len(preview) > 60:
+                preview = preview[:60] + '…'
+            payload = json.dumps({
+                'title': f'{sender_name}（{c.name}）',
+                'body': preview or '画像が届きました',
+                'url': '/chat',
+                'tag': f'mieroom-chat-{c.id}',
+            })
+            claims = {"sub": "mailto:teneramente0701@gmail.com"}
+            dead = []
+            for s in subs:
+                try:
+                    webpush(
+                        subscription_info={'endpoint': s.endpoint,
+                                           'keys': {'p256dh': s.p256dh, 'auth': s.auth}},
+                        data=payload,
+                        vapid_private_key=vapid_obj,
+                        vapid_claims=dict(claims),
+                        timeout=10,
+                    )
+                except WebPushException as ex:
+                    code = getattr(getattr(ex, 'response', None), 'status_code', None)
+                    if code in (404, 410):   # 期限切れ・解除済みの購読は掃除
+                        dead.append(s.id)
+                except Exception as ex:
+                    print(f"Push送信エラー: {ex}")
+            if dead:
+                PushSubscription.query.filter(PushSubscription.id.in_(dead)).delete(synchronize_session=False)
+                db.session.commit()
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            print(f"_send_chat_push error: {e}")
+
+
+@app.route("/api/push/public-key")
+@login_required
+def api_push_public_key():
+    _priv, pub = _get_vapid_keys()
+    return jsonify({'key': pub or ''})
+
+
+@app.route("/api/push/subscribe", methods=["POST"])
+@login_required
+def api_push_subscribe():
+    u = _chat_user()
+    if not u:
+        return jsonify({'ok': False}), 403
+    data = request.get_json(silent=True) or {}
+    endpoint = data.get('endpoint')
+    keys = data.get('keys') or {}
+    p256dh = keys.get('p256dh')
+    auth = keys.get('auth')
+    if not endpoint or not p256dh or not auth:
+        return jsonify({'ok': False, 'error': 'invalid subscription'}), 400
+    sub = PushSubscription.query.filter_by(endpoint=endpoint).first()
+    if sub:
+        sub.user_id = u.id
+        sub.tenant_id = u.tenant_id
+        sub.p256dh = p256dh
+        sub.auth = auth
+    else:
+        db.session.add(PushSubscription(user_id=u.id, tenant_id=u.tenant_id,
+                                        endpoint=endpoint, p256dh=p256dh, auth=auth))
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route("/api/push/unsubscribe", methods=["POST"])
+@login_required
+def api_push_unsubscribe():
+    data = request.get_json(silent=True) or {}
+    endpoint = data.get('endpoint')
+    if endpoint:
+        PushSubscription.query.filter_by(endpoint=endpoint).delete(synchronize_session=False)
+        db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route("/sw.js")
+def service_worker():
+    """サービスワーカー（ルートscopeで配信）"""
+    resp = make_response(app.send_static_file('sw.js'))
+    resp.headers['Service-Worker-Allowed'] = '/'
+    resp.headers['Content-Type'] = 'application/javascript'
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
+
+@app.route("/manifest.webmanifest")
+def web_manifest():
+    """PWAマニフェスト（ホーム画面に追加・iPhoneの通知に必要）"""
+    data = {
+        "name": "ミエルーム", "short_name": "ミエルーム",
+        "start_url": "/chat", "scope": "/",
+        "display": "standalone", "background_color": "#ffffff",
+        "theme_color": "#0D9488",
+        "icons": [
+            {"src": "/static/logo_notext.png", "sizes": "966x966", "type": "image/png", "purpose": "any"},
+            {"src": "/static/logo_notext.png", "sizes": "966x966", "type": "image/png", "purpose": "maskable"},
+        ],
+    }
+    resp = make_response(jsonify(data))
+    resp.headers['Content-Type'] = 'application/manifest+json'
+    return resp
+
+
 @app.route("/chat")
 @login_required
 @nav_perm_required('can_view_chat')
@@ -9287,6 +9495,13 @@ def api_chat_send(cid):
                                       filename=fn[:300], content_type=(ct or 'application/octet-stream')[:120],
                                       size=len(raw), data=raw))
     db.session.commit()
+    # 購読者にWeb Push（アプリを閉じていても届く）。画面はブロックしないよう別スレッドで。
+    try:
+        threading.Thread(target=_send_chat_push,
+                         args=(cid, u.id, _chat_display_name(u), body),
+                         daemon=True).start()
+    except Exception:
+        pass
     return jsonify({'ok': True, 'id': m.id})
 
 
@@ -15422,9 +15637,11 @@ MANUAL_SECTIONS = [
      'チャット：会話画面を横にスワイプするとチャンネル一覧へ戻れます。受信画像がうまく表示されない端末では、画像が自動でタップして開けるファイルリンクに切り替わります。'
      'カレンダー：画面上部の「作成／スタッフ一覧／月カレンダー」タブで、必要なものだけを開いてカレンダー本体を広く使えます。予約ブロックはそのまま指で動かして移動でき、文字選択（コピー）は出ません。'
      '反響メールの返信：返信画面は全画面で開き、入力欄は打った文章が見やすいよう大きく広がります。'},
-    {'cat': '通知', 'title': 'チャットの新着通知（PC・スマホ）', 'body':
-     'チャット画面右上の「🔔 通知」を押してブラウザの通知を許可すると、ミエルームのいずれかの画面を開いている間、新着メッセージをデバイスに通知します（約10秒ごとに確認）。'
-     'スマホでは通知時に端末が短く振動します。ブラウザやタブを完全に閉じている間は届きません（その場合はアプリを開くとすぐ最新の未読を確認します）。'},
+    {'cat': '通知', 'title': 'チャットの新着通知（PC・スマホ／閉じていても届く）', 'body':
+     'チャット画面右上の「🔔 通知」を押してブラウザの通知を許可すると、新着メッセージが届いた瞬間にデバイスへプッシュ通知されます（Web Push）。'
+     'ミエルームを開いていなくても、ブラウザやアプリを閉じていても届きます。スマホでは通知時に端末が短く振動します。'
+     'iPhoneの場合は、Safariでミエルームをホーム画面に追加（共有→「ホーム画面に追加」）してから、その追加したアイコンで開いて「🔔 通知」をONにしてください（iPhoneはホーム画面アプリのみ通知に対応）。'
+     '通知を止めたいときは同じ「🔔 通知」ボタンでOFFにできます。'},
     {'cat': '通知', 'title': '通知ベルの見方', 'body':
      '上部のベルを押すと、未承認の入金報告・未返信メール・新着お問い合わせなどのお知らせが文章で一覧表示されます。各項目をクリックすると該当画面へ移動します。'},
     {'cat': '設定', 'title': '各種設定の場所', 'body':
