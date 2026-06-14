@@ -6928,14 +6928,14 @@ def parse_custom_keywords(text):
 
 
 def _detect_source(from_addr, subject='', body='', extra_map=None):
-    """媒体名を ①ドメイン → ②追加キーワード → ③標準キーワード の順で判定。不明なら None。"""
-    a = (from_addr or '').lower()
-    for key, name in PORTAL_DOMAIN_MAP:
-        if key in a:
-            return name
+    """媒体名を ①追加判定キーワード（最優先）→ ②ドメイン → ③標準キーワード の順で判定。不明なら None。"""
     hay = f"{from_addr}\n{subject}\n{body[:800]}".upper()
     for key, name in (extra_map or []):
         if key and key.upper() in hay:
+            return name
+    a = (from_addr or '').lower()
+    for key, name in PORTAL_DOMAIN_MAP:
+        if key in a:
             return name
     for key, name in PORTAL_KEYWORD_MAP:
         if key.upper() in hay:
@@ -7045,16 +7045,17 @@ def parse_reaction_email(msg, extra_map=None, portal_map=None):
     subj_is_inquiry = any(k in subj_norm for k in ('問合せ', '受付', '反響'))
     has_name = bool(name)
 
-    if portal_media is not None:
+    if extra_media is not None:
+        # 追加判定キーワードを最優先：ユーザーが明示した媒体に振り分ける（登録ポータル・ドメイン判定より優先）。
+        # 氏名・連絡先・物件のいずれかがあれば取り込む
+        if not (contact or prop):
+            return None
+        source = extra_media
+    elif portal_media is not None:
         # 登録ポータルからの受信は信頼扱い：氏名か物件があれば取り込む
         if not (has_name or prop):
             return None
         source = portal_media
-    elif extra_media is not None:
-        # 追加判定キーワード一致：ユーザー明示の反響。氏名・連絡先・物件のいずれかがあれば取り込む
-        if not (contact or prop):
-            return None
-        source = extra_media
     else:
         # 未登録の差出人は精度重視：お客様の氏名が必須（＋物件 or 件名が反響）
         if not (has_name and (prop or subj_is_inquiry)):
