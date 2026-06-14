@@ -1672,7 +1672,7 @@ function aiImport(e) {
       const scale = Math.min(sceneW / im.width, sceneH / im.height, 1);
       const rw = im.width * scale, rh = im.height * scale;
       const rx = (sceneW - rw) / 2, ry = (sceneH - rh) / 2;
-      showAlert('AIが間取りを解析中です…（30秒〜1分ほどかかります）');
+      showAlert('AIが間取りを解析中です…（精度向上のため2段階で確認します。45秒〜1分半ほどかかります）');
       let payload; try { payload = downscaleDataUrl(im, 1500); } catch(_) { payload = ev.target.result; }
       try {
         const res = await fetch('/api/floorplans/ai-import', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ image: payload, mime: 'image/jpeg' }) });

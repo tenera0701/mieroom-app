@@ -5782,67 +5782,41 @@ FLOORPLAN_FIXTURE_TYPES = ['toilet','toiletTankless','bath','kitchen','sink','st
 FLOORPLAN_ROOM_TYPES = ['洋室','和室','LDK','DK','K','LD','浴室','洗面','トイレ','玄関','廊下','クローゼット',
                         'バルコニー','収納','土間','ポーチ','ガレージ','吹抜け','床の間','広縁']
 
+# 設備・建具キーの説明（プロンプト共通）
+FP_FIXTURE_LEGEND = (
+    "（toilet=トイレ, toiletTankless=タンクレストイレ, bath=ユニットバス/浴室, kitchen=I型キッチン, "
+    "counterKitchen=対面キッチン, islandKitchen=アイランドキッチン, lKitchen=L型キッチン, kitchenCounter=カウンター, "
+    "sink=シンク, stove=ガスコンロ(3口), stoveDiagonal=コンロ斜め2口, stoveVertical=コンロ縦2口, stoveSingle=コンロ1口, "
+    "ih=IHコンロ, dishwasher=食洗機, hood=レンジフード, cupboard=食器棚, washbasin=洗面台, "
+    "washbasinWide=ワイド洗面台, washer=洗濯機置場, washerPan=洗濯パン, ubWithToilet=トイレ付ユニットバス, "
+    "fridge=冷蔵庫置場, stairs=階段, door=片開ドア, doorDouble=両開ドア, doorParentChild=親子ドア, doorSide=袖付片開, "
+    "sliding=引違2枚, sliding3=引違3枚, sliding4=引違4枚, kataBiki=片引戸, folding2=折戸, opening=壁の開口, "
+    "window=引違窓, fix=FIX窓, bayWindowSq=出窓, heater=給湯器, acIndoor=エアコン室内機, acOutdoor=エアコン室外機, "
+    "shoebox=玄関収納/下足入, closet=クローゼット/収納, underfloorStorage=床下収納, pillar=柱, "
+    "bed=ベッド, sofa=ソファ, table=テーブル, psmb=PS/MB)"
+)
 
-@app.route("/api/floorplans/ai-import", methods=["POST"])
-@login_required
-def api_floorplans_ai_import():
-    if not current_has_floorplan():
-        return jsonify({'error': '間取り作成はオプションプランです'}), 403
-    if not os.getenv("ANTHROPIC_API_KEY"):
-        return jsonify({'error': 'AI取込が未設定です（管理者にお問い合わせください）'}), 503
-    _lim = check_ai_limit()
-    if _lim:
-        return _lim
-    data = request.get_json(silent=True) or {}
-    img = (data.get('image') or '').strip()
-    mime = data.get('mime') or 'image/png'
-    if img.startswith('data:') and ',' in img:
-        head, img = img.split(',', 1)
-        m = re.match(r'data:([^;]+)', head)
-        if m:
-            mime = m.group(1)
-    if not img:
-        return jsonify({'error': '画像がありません'}), 400
+FP_JSON_STRUCT = (
+    '{\n'
+    '  "rooms": [ {"type":"<部屋種別>", "label":"<図中の表記 例:洋室7帖。無ければ省略>", "points":[[x,y],[x,y],[x,y],...]} ],\n'
+    '  "fixtures": [ {"type":"<設備キー>", "cx":<中心x>, "cy":<中心y>, "w":<幅0〜1>, "rot":<0/90/180/270>} ]\n'
+    '}'
+)
 
-    prompt = (
-        "あなたは不動産の間取り図を解析する専門アシスタントです。\n"
-        "添付の間取り図画像を解析し、部屋(rooms)と設備(fixtures)を抽出してJSONで返してください。\n"
-        "座標は画像全体を基準に、左上(0,0)・右下(1,1)の0〜1正規化値（xは右方向、yは下方向）。\n\n"
-        "返すJSON構造:\n"
-        '{\n'
-        '  "rooms": [ {"type":"<部屋種別>", "label":"<図中の表記 例:洋室6帖。無ければ省略>", "points":[[x,y],[x,y],[x,y],...]} ],\n'
-        '  "fixtures": [ {"type":"<設備キー>", "cx":<中心x>, "cy":<中心y>, "w":<幅0〜1>, "rot":<0/90/180/270>} ]\n'
-        '}\n\n'
-        "部屋種別(type)は次から選ぶ: " + "、".join(FLOORPLAN_ROOM_TYPES) + "（最も近いもの。既定は洋室）\n"
-        "設備キー(type)は次の英語から選ぶ: " + ", ".join(FLOORPLAN_FIXTURE_TYPES) + "\n"
-        "（toilet=トイレ, toiletTankless=タンクレストイレ, bath=ユニットバス/浴室, kitchen=I型キッチン, "
-        "counterKitchen=対面キッチン, islandKitchen=アイランドキッチン, lKitchen=L型キッチン, kitchenCounter=カウンター, "
-        "sink=シンク, stove=ガスコンロ(3口), stoveDiagonal=コンロ斜め2口, stoveVertical=コンロ縦2口, stoveSingle=コンロ1口, "
-        "ih=IHコンロ, dishwasher=食洗機, hood=レンジフード, cupboard=食器棚, washbasin=洗面台, "
-        "washbasinWide=ワイド洗面台, washer=洗濯機置場, washerPan=洗濯パン, ubWithToilet=トイレ付ユニットバス, "
-        "fridge=冷蔵庫置場, stairs=階段, door=片開ドア, doorDouble=両開ドア, doorParentChild=親子ドア, doorSide=袖付片開, "
-        "sliding=引違2枚, sliding3=引違3枚, sliding4=引違4枚, kataBiki=片引戸, folding2=折戸, opening=壁の開口, "
-        "window=引違窓, fix=FIX窓, bayWindowSq=出窓, heater=給湯器, acIndoor=エアコン室内機, acOutdoor=エアコン室外機, "
-        "shoebox=玄関収納/下足入, closet=クローゼット/収納, underfloorStorage=床下収納, pillar=柱, "
-        "bed=ベッド, sofa=ソファ, table=テーブル, psmb=PS/MB)\n\n"
-        "建具（ドア・引き戸・窓・開口）は重要。全ての部屋の出入口と窓を漏れなく抽出すること。\n\n"
-        "ルール:\n"
-        "1. JSONオブジェクトを1つだけ返す。説明文やマークダウンは一切付けない。\n"
-        "2. roomsのpointsは各部屋の外形を3点以上の多角形（長方形なら4点）で表す。\n"
-        "3. 確実に読み取れるものだけ返す。無理な推測はしない。\n"
-        "4. 図面に無い設備は入れない。\n"
+
+def _fp_ai_call(content_blocks):
+    """間取り解析用のAI呼び出し（extended thinking 有効で幾何精度を上げる）"""
+    msg = anthropic_client.messages.create(
+        model="claude-sonnet-4-6", max_tokens=8000,
+        thinking={"type": "enabled", "budget_tokens": 4000},
+        messages=[{"role": "user", "content": content_blocks}],
     )
-    doc_block = {"type": "image", "source": {"type": "base64", "media_type": mime, "data": img}}
-    try:
-        msg = anthropic_client.messages.create(
-            model="claude-sonnet-4-6", max_tokens=4000,
-            messages=[{"role": "user", "content": [doc_block, {"type": "text", "text": prompt}]}],
-        )
-        text = "".join(getattr(b, 'text', '') for b in msg.content).strip()
-        count_ai_usage('floorplan_import')
-    except Exception as e:
-        return jsonify({'error': f'AI解析に失敗しました: {e}'}), 502
+    # thinking ブロックは .text を持たないので自然に除外され、JSON本文だけ得られる
+    return "".join(getattr(b, 'text', '') for b in msg.content).strip()
 
+
+def _fp_parse_result(text):
+    """AI応答テキストから rooms / fixtures を取り出して正規化・クランプする"""
     out = {'rooms': [], 'fixtures': []}
     try:
         s, e = text.find('{'), text.rfind('}')
@@ -5874,7 +5848,84 @@ def api_floorplans_ai_import():
         out['fixtures'] = fixtures[:150]
     except Exception:
         pass
-    return jsonify(out)
+    return out
+
+
+@app.route("/api/floorplans/ai-import", methods=["POST"])
+@login_required
+def api_floorplans_ai_import():
+    if not current_has_floorplan():
+        return jsonify({'error': '間取り作成はオプションプランです'}), 403
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return jsonify({'error': 'AI取込が未設定です（管理者にお問い合わせください）'}), 503
+    _lim = check_ai_limit()
+    if _lim:
+        return _lim
+    data = request.get_json(silent=True) or {}
+    img = (data.get('image') or '').strip()
+    mime = data.get('mime') or 'image/png'
+    if img.startswith('data:') and ',' in img:
+        head, img = img.split(',', 1)
+        m = re.match(r'data:([^;]+)', head)
+        if m:
+            mime = m.group(1)
+    if not img:
+        return jsonify({'error': '画像がありません'}), 400
+
+    prompt = (
+        "あなたは不動産の間取り図を高精度に読み取る専門家です。\n"
+        "添付の間取り図画像を解析し、部屋(rooms)と設備・建具(fixtures)を抽出してJSONで返してください。\n"
+        "座標は画像全体を基準に、左上(0,0)・右下(1,1)の0〜1正規化値（x=右方向, y=下方向）。\n\n"
+        "返すJSON構造:\n" + FP_JSON_STRUCT + "\n\n"
+        "部屋種別(type)は次から選ぶ: " + "、".join(FLOORPLAN_ROOM_TYPES) + "（最も近いもの。既定は洋室）\n"
+        "設備キー(type)は次の英語から選ぶ: " + ", ".join(FLOORPLAN_FIXTURE_TYPES) + "\n"
+        + FP_FIXTURE_LEGEND + "\n\n"
+        "【精度を上げるための手順（必ず守る）】\n"
+        "1. まず建物全体の外形を捉え、各部屋がその内側を『すき間なく・重ならず』敷き詰めるように配置されていることを意識する。\n"
+        "2. 隣り合う部屋は壁を共有する。境界の座標をそろえ、部屋同士が離れたり重なったりしないようにする。\n"
+        "3. 寸法線(mm)や『◯帖』『◯帖大』などの表記があれば、それを使って各部屋の縦横比・広さの大小を正しく反映する。\n"
+        "4. すべての部屋に出入口(ドアまたは引き戸)がある。玄関・各居室・水回り・廊下の建具を漏れなく入れる。\n"
+        "5. 窓は外壁(建物の外周)側に置く。バルコニー/ベランダに面する大きな掃き出し窓も入れる。\n"
+        "6. 設備(キッチン・浴室・洗面・トイレ・洗濯機等)は必ず該当する部屋の内側に収め、向き(rot)も図に合わせる。\n\n"
+        "ルール:\n"
+        "1. roomsのpointsは各部屋の外形を多角形で表す(長方形=4点, L字=6点)。建物全体を部屋でほぼ埋める。\n"
+        "2. 建具(ドア/引き戸/窓/開口)は省略しない。各部屋の出入口を必ず入れる。\n"
+        "3. 図面に無い設備は入れない。確実に読み取れるものを優先する。\n"
+        "4. JSONオブジェクトを1つだけ返す。\n"
+    )
+    doc_block = {"type": "image", "source": {"type": "base64", "media_type": mime, "data": img}}
+
+    # ── 1パス目：解析 ──
+    try:
+        text = _fp_ai_call([doc_block, {"type": "text", "text": prompt}])
+        count_ai_usage('floorplan_import')
+    except Exception as e:
+        return jsonify({'error': f'AI解析に失敗しました: {e}'}), 502
+    draft = _fp_parse_result(text)
+
+    # ── 2パス目：自己修正（描いた結果を元画像と再照合して直す）──
+    final = draft
+    try:
+        refine_prompt = (
+            "次のJSONは、あなたが同じ間取り図から作成した読み取り結果(draft)です。\n"
+            "元画像ともう一度照合し、間違いを直して『最終版』を返してください。\n\n"
+            "重点チェック:\n"
+            "- 抜けている部屋・建具(ドア/引き戸/窓)・設備が無いか（特に各部屋の出入口）\n"
+            "- 部屋同士にすき間や重なりが無いか（隣接する部屋は壁を共有し、境界の座標が一致しているか）\n"
+            "- 各部屋の縦横比・大小が図(寸法線/帖数)と合っているか\n"
+            "- 設備が部屋からはみ出していないか、向き(rot)は合っているか\n\n"
+            "draft:\n" + json.dumps(draft, ensure_ascii=False) + "\n\n"
+            "修正後の最終JSONを1つだけ返す（構造・キーはdraftと同じ。説明文やマークダウンは付けない）。"
+        )
+        text2 = _fp_ai_call([doc_block, {"type": "text", "text": refine_prompt}])
+        cand = _fp_parse_result(text2)
+        # 修正版が部屋を大きく取りこぼしていない場合のみ採用（破壊を防ぐ）
+        if cand['rooms'] and len(cand['rooms']) >= max(1, int(len(draft['rooms']) * 0.6)):
+            final = cand
+    except Exception:
+        pass
+
+    return jsonify(final)
 
 
 # ══════════════════════════════════════════════════════════
