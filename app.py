@@ -6943,6 +6943,18 @@ def _detect_source(from_addr, subject='', body='', extra_map=None):
     return None
 
 
+def _match_extra_keyword(from_addr, subject, body, extra_map):
+    """ユーザー設定の「追加判定キーワード」に一致すれば、その媒体名を返す。
+    一致＝ユーザーが『これは取り込みたい反響』と明示したものとして扱う（通知系の除外より優先）。"""
+    if not extra_map:
+        return None
+    hay = f"{from_addr}\n{subject}\n{(body or '')[:800]}".upper()
+    for key, media in extra_map:
+        if key and key.upper() in hay:
+            return media
+    return None
+
+
 def _from_display_name(from_addr):
     """差出人名（または ドメイン名）を媒体名のフォールバックとして返す"""
     s = from_addr or ''
@@ -7019,8 +7031,13 @@ def parse_reaction_email(msg, extra_map=None, portal_map=None):
             portal_media = media
             break
 
-    # 通知系（内見予約・申込完了・キャンセル等）は反響ではない → 除外
-    if any(k in subject for k in NEG_SUBJECT_KEYWORDS):
+    # ユーザーが「追加判定キーワード」で明示した反響か（媒体名つき）
+    extra_media = _match_extra_keyword(from_addr, subject, body, extra_map)
+
+    # 通知系（内見予約・申込完了・キャンセル等）は反響ではない → 除外。
+    # ただし追加判定キーワードに一致＝ユーザーが「これは取り込む反響」と明示した場合は除外しない
+    # （例：「【いえらぶCLOUD】来店予約がありました。＝自社HP」のような設定）。
+    if extra_media is None and any(k in subject for k in NEG_SUBJECT_KEYWORDS):
         return None
 
     # 件名が「お問合せ受付」等の反響を示すか（表記ゆれを統一して判定）
@@ -7033,6 +7050,11 @@ def parse_reaction_email(msg, extra_map=None, portal_map=None):
         if not (has_name or prop):
             return None
         source = portal_media
+    elif extra_media is not None:
+        # 追加判定キーワード一致：ユーザー明示の反響。氏名・連絡先・物件のいずれかがあれば取り込む
+        if not (contact or prop):
+            return None
+        source = extra_media
     else:
         # 未登録の差出人は精度重視：お客様の氏名が必須（＋物件 or 件名が反響）
         if not (has_name and (prop or subj_is_inquiry)):
@@ -8316,16 +8338,19 @@ def _diagnose_one_email(msg, extra_map, portal_map, store_id, import_after):
         out['status'] = 'skip'
         out['reason'] = '本文テキストを取得できない（HTMLのみ等で項目が読めない）'
         return out
+    extra_media = _match_extra_keyword(from_addr, subject, body, extra_map)
     neg = next((k for k in NEG_SUBJECT_KEYWORDS if k in subject), None)
-    if neg:
+    if neg and extra_media is None:
         out['status'] = 'skip'
-        out['reason'] = f'件名の除外ワード「{neg}」に該当（通知系と判断）'
+        out['reason'] = f'件名の除外ワード「{neg}」に該当（通知系と判断）。取り込みたい場合は「追加判定キーワード」にこの件名を登録してください'
         return out
     parsed = parse_reaction_email(msg, extra_map, portal_map)
     if not parsed:
         fa = (from_addr or '').lower()
         matched = next((media for matcher, media in (portal_map or []) if matcher and matcher.lower() in fa), None)
-        if matched:
+        if extra_media is not None:
+            out['reason'] = f'追加判定キーワード「{extra_media}」一致だが、氏名・連絡先・物件のいずれも抽出できず（本文の項目表記が想定外）'
+        elif matched:
             out['reason'] = f'ポータル「{matched}」一致だが氏名・物件のどちらも抽出できず（本文の項目表記が想定外）'
         else:
             out['reason'] = '差出人が未登録ポータルで、かつ「氏名＋(物件 or 反響件名)」を満たさず'
@@ -15344,6 +15369,10 @@ MANUAL_SECTIONS = [
     {'cat': 'メール', 'title': '反響メールの自動取込（受信設定）', 'body':
      '「各種設定 → メール自動取込設定」で、反響メールが届くGmailを連携します。アプリパスワード方式またはGoogle連携で接続し、「自動取り込みを有効にする」をONにすると、'
      '届いた反響がリアルタイムで反響管理表に入ります。「ポータル登録」で差出人アドレス→媒体名を登録すると確実に振り分けられます。同じお客様の再反響は1件にまとまり、追加分はメモに記録されます。'},
+    {'cat': 'メール', 'title': '取り込まれない件名を取り込む（追加判定キーワード）', 'body':
+     '「来店予約がありました」「お申込み」など通常は通知として自動除外される件名や、同じ差出人から複数届く件名は、「各種設定 → メール自動取込設定」の「追加の判定キーワード」に件名を登録すると取り込めます。'
+     '書き方は1行に「件名＝媒体名」（例：【いえらぶCLOUD】来店予約がありました。＝自社HP）。登録した件名はユーザーが取り込みを明示したものとして、通知系の自動除外より優先して取り込みます（氏名・連絡先・物件のいずれかが本文にあること）。'
+     '取り込まれない原因は「メール取込診断」で1通ずつ理由を確認できます。'},
     {'cat': 'メール', 'title': '自動返信（媒体ごとに変える）', 'body':
      '「各種設定 → メール自動返信設定」で「新着反響に自動返信する」をONにすると、反響が届いた瞬間に自動でテンプレを送信します（お客様メールがある反響のみ）。'
      '「ポータル登録」で媒体ごとに使うテンプレを選べるので、SUUMO用・HOME\'S用など媒体別に文面を変えられます。媒体未指定のときは既定テンプレが使われます。'},
