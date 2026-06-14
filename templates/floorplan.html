@@ -1685,8 +1685,9 @@ function aiImport(e) {
   };
   reader.readAsDataURL(file);
 }
-/* AI出力の座標を整える：壁線をクラスタリングして揃え、グリッドに吸着し、
-   隣り合う部屋の境界を一致させる（ガタつき・すき間・重なりを機械的に解消）。
+/* AI出力の座標を整える：近い壁線だけをまとめて揃え、隣り合う部屋の境界を一致させる
+   （ガタつき・すき間・重なりを解消）。比率を壊さないため、グリッドへの量子化はしない。
+   許容幅は間取り全体のサイズ基準（相対値）にして、細い部屋を潰さない。
    rooms は正規化座標(0〜1)。戻り値は canvas ピクセル座標の {type,label,pts:[{x,y}]} 配列。 */
 function snapAiRooms(rooms, rx, ry, rw, rh) {
   const canvasRooms = (rooms || [])
@@ -1695,7 +1696,17 @@ function snapAiRooms(rooms, rx, ry, rw, rh) {
                  pts: r.points.map(p => ({ x: rx + p[0]*rw, y: ry + p[1]*rh })) }));
   if (!canvasRooms.length) return canvasRooms;
 
-  // 軸ごとに近い座標値をまとめ、代表値をグリッド線に吸着させる写像を作る
+  // 間取り全体の広がり（バウンディングボックス）を基準に許容幅を決める
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  canvasRooms.forEach(r => r.pts.forEach(p => {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+  }));
+  const bw = Math.max(1, maxX - minX), bh = Math.max(1, maxY - minY);
+  // 壁同士の最小間隔より十分小さく（≒AIの微小なブレだけを吸収。細い部屋は残す）
+  const tolX = bw * 0.02, tolY = bh * 0.02;
+
+  // 近い座標値だけをまとめ、代表値は「平均」にする（グリッド量子化はしない＝比率を保つ）
   const buildMap = (vals, tol) => {
     const sorted = [...new Set(vals)].sort((a, b) => a - b);
     const map = new Map();
@@ -1704,22 +1715,18 @@ function snapAiRooms(rooms, rx, ry, rw, rh) {
       const start = sorted[i]; const group = [start]; let j = i;
       while (j + 1 < sorted.length && sorted[j + 1] - start <= tol) { j++; group.push(sorted[j]); }
       const mean = group.reduce((a, b) => a + b, 0) / group.length;
-      const rep = Math.round(mean / SNAP_PX) * SNAP_PX;   // エディタのグリッドに吸着
-      group.forEach(v => map.set(v, rep));
+      group.forEach(v => map.set(v, mean));
       i = j + 1;
     }
     return map;
   };
   const allX = [], allY = [];
   canvasRooms.forEach(r => r.pts.forEach(p => { allX.push(p.x); allY.push(p.y); }));
-  // 許容幅：壁同士の最小間隔より小さく（広く取りすぎると細い部屋が潰れる）
-  const tolX = Math.max(SNAP_PX * 0.75, rw * 0.03);
-  const tolY = Math.max(SNAP_PX * 0.75, rh * 0.03);
   const mapX = buildMap(allX, tolX), mapY = buildMap(allY, tolY);
 
   canvasRooms.forEach(r => {
     r.pts.forEach(p => { p.x = mapX.get(p.x); p.y = mapY.get(p.y); });
-    // 吸着で重なった連続点・折り返しの重複を除去
+    // まとめた結果で重なった連続点・折り返しの重複を除去
     const out = [];
     r.pts.forEach(p => {
       const last = out[out.length - 1];
