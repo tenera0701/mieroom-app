@@ -37,10 +37,10 @@
   .media-bar-fill { height:8px; border-radius:4px; background:var(--primary); }
   .media-nums { width:120px; text-align:right; color:#6b7280; }
 
-  .table-wrap { overflow-x:auto; border-radius:10px; border:1px solid #e5e7eb; background:#fff; }
+  .table-wrap { overflow:auto; max-height:calc(100dvh - 210px); border-radius:10px; border:1px solid #e5e7eb; background:#fff; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
   thead th { background:#F0FDFA; padding:10px 12px; text-align:left; font-weight:700; color:#374151;
-             border-bottom:2px solid #d1fae5; white-space:nowrap; }
+             border-bottom:2px solid #d1fae5; white-space:nowrap; position:sticky; top:0; z-index:5; }
   thead th.center { text-align:center; }
   tbody tr { border-bottom:1px solid #f3f4f6; }
   tbody td { padding:8px 12px; color:#111827; white-space:nowrap; cursor:pointer; }
