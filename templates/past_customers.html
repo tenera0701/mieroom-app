@@ -155,7 +155,7 @@ function render(list) {
       <td style="text-align:right;">${yen(r.rent)}</td>
       <td>${esc(r.management_company) || '―'}</td>
       <td>
-        <a href="/contract-customers/${r.id}/edit" target="_blank" rel="noopener" style="display:inline-block;padding:4px 10px;font-size:11px;background:#EEF2FF;border:1px solid #c7d2fe;border-radius:6px;cursor:pointer;color:#4338ca;font-weight:600;text-decoration:none;">📄 契約書</a>
+        <a href="/contract-customers/${r.id}/edit" style="display:inline-block;padding:4px 10px;font-size:11px;background:#EEF2FF;border:1px solid #c7d2fe;border-radius:6px;cursor:pointer;color:#4338ca;font-weight:600;text-decoration:none;">📄 契約書</a>
       </td>
       <td>
         <button onclick="restoreContract(${r.id})" style="padding:4px 10px;font-size:11px;background:#CCFBF1;border:1px solid #5EEAD4;border-radius:6px;cursor:pointer;color:#0F766E;font-weight:600;">契約管理へ戻す</button>
