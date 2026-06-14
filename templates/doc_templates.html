@@ -204,11 +204,39 @@ async function loadTemplates(){
         </div>
         <div class="tpl-actions">
           <button class="btn btn-purple btn-sm" onclick="location.href='/doc-generate/${t.id}'">この様式で作成</button>
+          <button class="btn btn-light btn-sm" onclick="previewTpl(${t.id}, '${esc(t.name)}')" title="この様式のレイアウトをそのまま確認・印刷（用紙設定の確認に便利）">👁 確認・印刷</button>
+          <button class="btn btn-light btn-sm" onclick="pdfTpl(${t.id}, '${esc(t.name)}')" title="この様式をPDFで確認">📄 PDF</button>
           ${CAN_MANAGE ? `<button class="btn btn-light btn-sm" onclick="openMap(${t.id})">タグ割当</button>
           <button class="btn btn-danger btn-sm" onclick="delTpl(${t.id}, '${esc(t.name)}')">削除</button>` : ''}
         </div>
       </div>`).join('');
   }catch(_){}
+}
+// この様式のレイアウトを確認（印刷ビューを新しいタブで開く・案件不要）
+async function previewTpl(id, name){
+  showAlert('プレビューを生成中…','info');
+  try{
+    const r=await fetch(`/api/doc-templates/${id}/print-view`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:{}})});
+    if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.error||'生成に失敗しました'); }
+    const html=await r.text();
+    const w=window.open('','_blank');
+    if(!w) throw new Error('ポップアップがブロックされました。ブラウザ設定で許可してください。');
+    w.document.open(); w.document.write(html); w.document.close();
+    showAlert(`「${name}」の確認画面を開きました。`);
+  }catch(e){ showAlert(e.message,'error'); }
+}
+// この様式をPDFで確認・ダウンロード（案件不要）
+async function pdfTpl(id, name){
+  showAlert('PDFを生成中…','info');
+  try{
+    const r=await fetch(`/api/doc-templates/${id}/pdf`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({values:{}})});
+    if(!r.ok){ const j=await r.json().catch(()=>({})); throw new Error(j.error||'PDF出力に失敗しました'); }
+    const blob=await r.blob(); let fname=name+'.pdf';
+    const cd=r.headers.get('Content-Disposition')||''; const m=/filename\*=UTF-8''([^;]+)/.exec(cd); if(m){ try{ fname=decodeURIComponent(m[1]); }catch(_){} }
+    const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=fname;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    showAlert(`「${name}」のPDFをダウンロードしました。`);
+  }catch(e){ showAlert(e.message,'error'); }
 }
 async function uploadTpl(ev){
   const f = ev.target.files && ev.target.files[0];

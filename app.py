@@ -4415,10 +4415,13 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
     body = f'<div id="doc-root-wrap"><div id="doc-root">{inner}</div></div>'
     _psize = 'A3' if str(paper_size).upper() == 'A3' else 'A4'
     _porient = 'landscape' if str(orientation).lower() == 'landscape' else 'portrait'
-    # 印刷可能幅(px@96dpi)：用紙幅 − 左右余白(各6mm)。これに合わせて印刷時に縮小フィットさせる。
+    # 印刷可能幅/高さ(px@96dpi)：用紙寸法 − 余白(各6mm)。幅でフィットさせ、縦は中央寄せに使う。
     _page_w_mm = {('A4', 'portrait'): 210, ('A4', 'landscape'): 297,
                   ('A3', 'portrait'): 297, ('A3', 'landscape'): 420}[(_psize, _porient)]
+    _page_h_mm = {('A4', 'portrait'): 297, ('A4', 'landscape'): 210,
+                  ('A3', 'portrait'): 420, ('A3', 'landscape'): 297}[(_psize, _porient)]
     _print_w_px = round((_page_w_mm - 12) / 25.4 * 96)
+    _print_h_px = round((_page_h_mm - 12) / 25.4 * 96)
     css = ('<style>'
            "body{font-family:'Yu Gothic','Meiryo',sans-serif;margin:8mm;color-scheme:light;}"
            '#doc-root{transform-origin:top left;display:inline-block;}'
@@ -4513,24 +4516,27 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
     # 画面は横幅いっぱいに伸縮、印刷は用紙の印刷可能幅に収まるよう縮小（はみ出し防止）
     scaler = (
         '<script>(function(){'
-        f'var PRINT_W={_print_w_px};\n'
+        f'var PRINT_W={_print_w_px},PRINT_H={_print_h_px};\n'
         # transform:scale は見た目だけ縮小しレイアウト箱は原寸のまま→印刷で余白の2枚目が出る。
         # zoom はレイアウト箱ごと縮むので、1枚に収まり改ページも正しくなる。
-        'function rawWidth(r){var z=r.style.zoom,t=r.style.transform;r.style.zoom="";r.style.transform="none";'
-        'var w=r.scrollWidth||r.offsetWidth;r.style.zoom=z;r.style.transform=t;return w;}'
-        'function applyScale(s){var r=document.getElementById("doc-root");if(!r)return;'
+        'function rawSize(r){var z=r.style.zoom,t=r.style.transform;r.style.zoom="";r.style.transform="none";'
+        'var w=r.scrollWidth||r.offsetWidth,h=r.scrollHeight||r.offsetHeight;r.style.zoom=z;r.style.transform=t;return {w:w,h:h};}'
+        'function applyScale(s,topPad){var r=document.getElementById("doc-root");if(!r)return;'
         'r.style.transform="none";'
         'r.style.zoom=(s>=0.999&&s<=1.001)?"":s;'
-        'var wrap=document.getElementById("doc-root-wrap");if(wrap)wrap.style.height="";}'
+        'var wrap=document.getElementById("doc-root-wrap");if(wrap){wrap.style.height="";wrap.style.marginTop=(topPad||0)+"px";}}'
         'function fitScreen(){var r=document.getElementById("doc-root");if(!r)return;'
-        'var w=rawWidth(r);if(!w||w<=0)return;'
+        'var sz=rawSize(r);if(!sz.w||sz.w<=0)return;'
         'var cw=document.documentElement.clientWidth||window.innerWidth||document.body.clientWidth||0;'
         'var avail=cw-20;if(avail<=40)return;'
         # 画面幅に合わせるが原寸(1.0)を超える拡大はしない（A4縦などが拡大されすぎてスクロール地獄になるのを防ぐ）
-        'var s=avail/w;if(s>1)s=1;if(s<0.1)s=0.1;applyScale(s);}'
+        'var s=avail/sz.w;if(s>1)s=1;if(s<0.1)s=0.1;applyScale(s,0);}'
         'function fitPrint(){var r=document.getElementById("doc-root");if(!r)return;'
-        'var w=rawWidth(r);if(!w||w<=0)return;'
-        'var s=PRINT_W/w;if(s>1)s=1;if(s<0.05)s=0.05;applyScale(s);}'
+        'var sz=rawSize(r);if(!sz.w||sz.w<=0)return;'
+        'var s=PRINT_W/sz.w;if(s>1)s=1;if(s<0.05)s=0.05;'
+        # 1ページに収まる高さなら、用紙の縦中央に寄せて下の余白を分散（A3横で下だけ大きく空くのを緩和）
+        'var docH=sz.h*s;var pad=(docH<PRINT_H)?Math.floor((PRINT_H-docH)/2):0;'
+        'applyScale(s,pad);}'
         # Excelの「縮小して全体を表示」を再現：1行に収まらないセルはフォントを縮小（㊞や住所が折り返して位置がズレるのを防ぐ）
         'function shrinkFit(){var els=document.querySelectorAll("td.sf");'
         'for(var i=0;i<els.length;i++){var td=els[i];var sw=td.scrollWidth,cw=td.clientWidth;'
@@ -15269,9 +15275,11 @@ MANUAL_SECTIONS = [
      '事務作業→契約管理で、審査〇で契約に進んだお客様を一覧管理します。一覧は契約開始日・担当・お客様名の順に並びます。'
      '請求書・契約方法・連帯保証・メモは接客管理表と同じくセルを直接クリックして記入します。請求書（〇/×）・契約方法（電子/書面）・連帯保証（有/無）はクリックでプルダウン選択、メモはクリックで大きな入力画面が開き「保存する」で保存されます。'
      '担当スタッフの絞り込みは初期状態が「全スタッフ」で店舗の契約をすべて表示し、特定の担当だけ見たいときはプルダウンから選びます（自分の担当に契約が無いスタッフでも空にならず全件見えます）。'},
-    {'cat': '契約フォーマット', 'title': '契約書類の用紙サイズ（A4/A3・縦横）と編集画面', 'body':
+    {'cat': '契約フォーマット', 'title': '契約書類の用紙サイズ（A4/A3・縦横）と確認・印刷', 'body':
      '各種設定→契約フォーマットでExcel様式をアップロードし、「タグ割当」を開くと書類ごとに用紙サイズ（A4/A3）と向き（縦/横）を選べます（初期値はExcelの設定を自動判定）。'
-     '選んだサイズで編集画面・印刷・PDFが表示され、書類によってA3横などが混在してもOKです。編集画面はPCの横幅に合わせて自動で拡大縮小します。Excelの数式（=TODAY()等）は計算済みの値で表示されます。'},
+     '各様式の行の「👁 確認・印刷」「📄 PDF」ボタンで、お客様を選ばなくてもその場でレイアウトを確認・印刷できます（用紙設定の確認に便利）。'
+     '選んだサイズで確認・印刷・PDFが表示され、書類によってA3横などが混在してもOKです。表示はPCの横幅・用紙に合わせて自動で拡大縮小し、A3は用紙に1枚で収まるよう縦中央に配置されます。'
+     'Excelの数式（=開始日+期間、SUM等）は計算済みの値で表示され、「縮小して全体を表示」セルは1行に収まるよう自動でフォント調整されます。'},
     {'cat': '顧客管理', 'title': '顧客管理（入居後）と年月ジャンプ', 'body':
      '事務作業→顧客管理で、契約が終了したお客様を管理します。契約開始日の月ごとにまとまって表示され、右上の「年月へ移動」で指定の月へすぐ移動できます。検索ボックスで名前・物件名・号室でも探せます。'},
     {'cat': '管理表', 'title': '右上のスタッフ絞り込みの初期表示', 'body':
