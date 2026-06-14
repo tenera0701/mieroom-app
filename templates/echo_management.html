@@ -1090,6 +1090,7 @@ let _mailCount = -1;
 let _mailSig = '';
 let _pendingFiles = [];
 let _templates = [];
+let _mailBodyIsHtml = false;  // HTMLテンプレ挿入時にtrue → HTMLメールとして送信
 
 function autoGrow(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
 
@@ -1106,6 +1107,7 @@ function openMail(id){
   }
   document.getElementById('mail-subject').value = '';
   const body = document.getElementById('mail-body'); body.value=''; body.style.height='auto';
+  _mailBodyIsHtml = false;
   document.getElementById('chat-sub').textContent = '';
   document.getElementById('mail-thread').innerHTML = '<div class="chat-empty">読み込み中…</div>';
   document.getElementById('mail-modal').classList.add('active');
@@ -1217,6 +1219,7 @@ function applyTemplate(id){
   if(t.subject && !subjEl.value.trim()) subjEl.value = t.subject;
   const bodyEl = document.getElementById('mail-body');
   bodyEl.value = (bodyEl.value ? bodyEl.value + '\n' : '') + (t.body||'');
+  if(t.is_html) _mailBodyIsHtml = true;  // HTMLテンプレ→HTMLメールで送る
   autoGrow(bodyEl);
   closeTemplatePicker();
   bodyEl.focus();
@@ -1381,11 +1384,12 @@ async function sendMail(){
     const fd = new FormData();
     fd.append('subject', subject);
     fd.append('body', body);
+    fd.append('is_html', _mailBodyIsHtml ? '1' : '0');
     _pendingFiles.forEach(f => fd.append('files', f));
     const r = await fetch(`/api/echo-records/${_mailEchoId}/send`,{method:'POST',body:fd});
     const d = await r.json();
     if(d.ok){
-      bodyEl.value=''; bodyEl.style.height='auto';
+      bodyEl.value=''; bodyEl.style.height='auto'; _mailBodyIsHtml = false;
       _pendingFiles = []; renderAttachList();
       _mailCount = -1; _mailSig = ''; // 強制再描画
       loadMailThread(_mailEchoId, false);

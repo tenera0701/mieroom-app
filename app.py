@@ -8410,6 +8410,7 @@ def api_echo_send(rid):
     if request.content_type and 'multipart/form-data' in request.content_type:
         subject = (request.form.get('subject') or '').strip()
         body = (request.form.get('body') or '').strip()
+        is_html = str(request.form.get('is_html') or '').strip() in ('1', 'true', 'True')
         for f in request.files.getlist('files'):
             if not f or not f.filename:
                 continue
@@ -8423,12 +8424,13 @@ def api_echo_send(rid):
         data = request.get_json() or {}
         subject = (data.get('subject') or '').strip()
         body = (data.get('body') or '').strip()
+        is_html = bool(data.get('is_html'))
 
     if not body and not attachments:
         return jsonify({'ok': False, 'error': '本文を入力してください'})
     res = send_mail_for_store(rec.store_id, rid, subject, body,
                               attachments=attachments,
-                              base_url=request.url_root)
+                              base_url=request.url_root, is_html=is_html)
     return jsonify(res)
 
 
