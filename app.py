@@ -4077,7 +4077,11 @@ def _xlsx_recompute_formulas(wb):
                         continue
                     try:
                         visiting.clear()
-                        computed[key] = evaluate(v[1:], si)
+                        rv = evaluate(v[1:], si)
+                        # 入力が空(=0)の日付計算は1900年付近の無意味な日付になる→空表示にする
+                        if isinstance(rv, (_dt.date, _dt.datetime)) and rv.year < 1950:
+                            rv = None
+                        computed[key] = rv
                     except Exception:
                         pass
     return computed
@@ -4351,10 +4355,14 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
                     if al.horizontal in ('center', 'right', 'left'):
                         st.append(f'text-align:{al.horizontal}')
                     st.append('vertical-align:middle' if al.vertical in (None, 'center') else f'vertical-align:{al.vertical}')
-                    # Excelの「縮小して全体を表示」(shrinkToFit)：折り返さず1行、JSでフォントを縮めて収める
+                    # Excelの折り返し設定を再現：
+                    #  ・shrinkToFit → 1行のままJSでフォント縮小（class sf）
+                    #  ・折り返しON   → セル内で折り返す（class wrap）
+                    #  ・折り返しOFF  → 既定。1行で隣の空セルにはみ出す（Excelと同じ挙動。縦に1文字ずつ崩れない）
                     if al.shrinkToFit and not al.wrapText:
-                        st.append('white-space:pre')
                         sf_cls = ' class="sf"'
+                    elif al.wrapText:
+                        sf_cls = ' class="wrap"'
                 b = cell.border
                 for name, side in (('top', b.top), ('bottom', b.bottom), ('left', b.left), ('right', b.right)):
                     if side and side.style:
@@ -4426,7 +4434,10 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
            "body{font-family:'Yu Gothic','Meiryo',sans-serif;margin:8mm;color-scheme:light;}"
            '#doc-root{transform-origin:top left;display:inline-block;}'
            'table.sheet{border-collapse:collapse;table-layout:fixed;margin-bottom:16px;}'
-           'td{font-size:12px;padding:1px 3px;overflow:hidden;word-break:break-all;white-space:pre-wrap;}'
+           # 既定はExcelの「折り返さない」を再現：1行表示で、はみ出しは隣の空セルへ（縦に1文字ずつ崩れない）
+           'td{font-size:12px;padding:1px 3px;overflow:visible;white-space:pre;}'
+           'td.wrap{white-space:pre-wrap;overflow:hidden;word-break:break-word;overflow-wrap:anywhere;}'
+           'td.sf{white-space:pre;overflow:visible;}'
            '.pagebreak{page-break-after:always;}'
            '.toolbar{position:fixed;top:8px;right:8px;z-index:10;display:flex;gap:8px;align-items:center;}'
            '.tb-btn{padding:9px 16px;font-size:13px;font-weight:bold;border:none;border-radius:8px;'
