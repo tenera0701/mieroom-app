@@ -4509,12 +4509,14 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
     scaler = (
         '<script>(function(){'
         f'var PRINT_W={_print_w_px};\n'
-        'function rawWidth(r){var t=r.style.transform;r.style.transform="none";'
-        'var w=r.scrollWidth||r.offsetWidth;r.style.transform=t;return w;}'
+        # transform:scale は見た目だけ縮小しレイアウト箱は原寸のまま→印刷で余白の2枚目が出る。
+        # zoom はレイアウト箱ごと縮むので、1枚に収まり改ページも正しくなる。
+        'function rawWidth(r){var z=r.style.zoom,t=r.style.transform;r.style.zoom="";r.style.transform="none";'
+        'var w=r.scrollWidth||r.offsetWidth;r.style.zoom=z;r.style.transform=t;return w;}'
         'function applyScale(s){var r=document.getElementById("doc-root");if(!r)return;'
-        'r.style.transform=s>=0.999&&s<=1.001?"none":"scale("+s+")";'
-        'var wrap=document.getElementById("doc-root-wrap");'
-        'if(wrap)wrap.style.height=(r.offsetHeight*(s||1))+"px";}'
+        'r.style.transform="none";'
+        'r.style.zoom=(s>=0.999&&s<=1.001)?"":s;'
+        'var wrap=document.getElementById("doc-root-wrap");if(wrap)wrap.style.height="";}'
         'function fitScreen(){var r=document.getElementById("doc-root");if(!r)return;'
         'var w=rawWidth(r);if(!w||w<=0)return;'
         'var cw=document.documentElement.clientWidth||window.innerWidth||document.body.clientWidth||0;'
