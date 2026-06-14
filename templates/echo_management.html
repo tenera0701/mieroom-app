@@ -129,6 +129,22 @@
   .alert-success { background:var(--primary-light); color:var(--primary-dark); border:1px solid #5EEAD4; }
   .alert-error   { background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; }
   .empty-row td  { text-align:center; color:#9ca3af; padding:40px; }
+
+  /* ── 携帯：メール返信画面を見やすく（入力欄を大きく） ── */
+  @media (max-width:760px){
+    /* 会話ウィンドウを画面いっぱいに */
+    .chat-window { width:100vw; max-width:100vw; height:100dvh; max-height:none; border-radius:0; }
+    .chat-body { padding:12px 10px; }
+    .bubble { max-width:86%; font-size:14px; }
+    /* 入力欄：打った文字が見やすいよう大きく・広く */
+    .chat-input { font-size:16px;            /* iOSの自動ズーム防止 */
+      border-radius:12px; padding:11px 14px; min-height:88px; max-height:46vh; line-height:1.6; }
+    .chat-subj { font-size:15px; padding:9px 12px; }
+    .chat-input-bar { align-items:flex-end; gap:10px; }
+    .chat-send { width:46px; height:46px; font-size:20px; }
+    .chat-tool-btn { font-size:13px; padding:6px 14px; }
+    .chat-compose { padding:10px 12px; padding-bottom:max(10px, env(safe-area-inset-bottom)); }
+  }
 </style>
 {% endblock %}
 
@@ -1104,7 +1120,11 @@ function htmlToText(html){
   return s.replace(/\n{3,}/g, '\n\n').replace(/[ \t]+\n/g, '\n').trim();
 }
 
-function autoGrow(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
+function autoGrow(el){
+  // 携帯では入力中の文章が見やすいよう、伸びる上限を大きくする
+  const cap = window.matchMedia('(max-width:760px)').matches ? Math.round(window.innerHeight*0.46) : 120;
+  el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,cap)+'px';
+}
 
 function openMail(id){
   _mailEchoId = id; _mailCount = -1; _mailSig = '';

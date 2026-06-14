@@ -737,9 +737,13 @@
         if(!('Notification' in window) || Notification.permission !== 'granted') return;
         if(localStorage.getItem('mieroom-chat-notify') === 'off') return;
         try{
-          const n = new Notification('ミエルーム チャット', {body:`新着メッセージがあります（未読 ${total}件）`, tag:'mieroom-chat'});
+          const n = new Notification('ミエルーム チャット', {
+            body:`新着メッセージがあります（未読 ${total}件）`,
+            tag:'mieroom-chat', renotify:true });
           n.onclick = ()=>{ window.focus(); if(location.pathname !== '/chat') location.href = '/chat'; n.close(); };
         }catch(_){}
+        // スマホ（Android等）は端末を振動させて気づきやすくする
+        try{ if(navigator.vibrate) navigator.vibrate([120,60,120]); }catch(_){}
       }
       async function pollChatUnread(){
         try{
@@ -751,7 +755,10 @@
         }catch(_){}
       }
       pollChatUnread();
-      setInterval(pollChatUnread, 20000);
+      // 10秒ごとに確認（通知の遅れを短縮）
+      setInterval(pollChatUnread, 10000);
+      // 画面に戻ってきた直後にもすぐ確認（バックグラウンドでタイマーが止まる端末対策）
+      document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) pollChatUnread(); });
     })();
     </script>
     <div class="px-3 py-4" style="border-top:1px solid #115E59;">

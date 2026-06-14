@@ -80,7 +80,7 @@
   .cal td.today .dnum { background:var(--primary); color:#fff; border-radius:50%; }
   .dnum { font-size:12px; font-weight:700; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; }
   td.sun-col .dnum { color:#dc2626; } td.sat-col .dnum { color:#2563eb; }
-  .rv-chip { display:flex; align-items:center; gap:4px; font-size:10.5px; border-radius:5px; padding:1px 6px; margin-top:2px; overflow:hidden; white-space:nowrap; font-weight:700; cursor:pointer; border-left:3px solid; }
+  .rv-chip { display:flex; align-items:center; gap:4px; font-size:10.5px; border-radius:5px; padding:1px 6px; margin-top:2px; overflow:hidden; white-space:nowrap; font-weight:700; cursor:pointer; border-left:3px solid; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
   .rv-chip .ctxt { overflow:hidden; text-overflow:ellipsis; }
   .rv-chip:hover { filter:brightness(0.95); }
   .rv-chip.cancel { text-decoration:line-through; opacity:.7; }
@@ -98,7 +98,7 @@
   .tg-cell { border-left:1px solid #f1f5f9; border-top:1px solid #f1f5f9; position:relative; cursor:pointer; }
   .tg-cell:hover { background:#F8FFFE; }
   .tg-col { position:relative; }
-  .tg-ev { position:absolute; left:3px; right:3px; border-left:3px solid; border-radius:6px; padding:3px 6px; font-size:11px; font-weight:700; overflow:hidden; cursor:grab; box-shadow:0 1px 3px rgba(0,0,0,.08); z-index:2; touch-action:none; user-select:none; }
+  .tg-ev { position:absolute; left:3px; right:3px; border-left:3px solid; border-radius:6px; padding:3px 6px; font-size:11px; font-weight:700; overflow:hidden; cursor:grab; box-shadow:0 1px 3px rgba(0,0,0,.08); z-index:2; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
   .tg-ev:hover { filter:brightness(0.96); }
   .tg-ev.dragging { cursor:grabbing; opacity:.92; box-shadow:0 8px 22px rgba(0,0,0,.22); z-index:20; filter:none; }
   .tg-ev.cancel { text-decoration:line-through; opacity:.7; }
@@ -140,6 +140,26 @@
     .rv-main .panel { min-height:70vh; }
     #view-time { max-height:75vh; }
   }
+
+  /* 携帯：作成／スタッフ一覧／月カレンダー の切替タブ（PCでは非表示） */
+  .rv-mtabs { display:none; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+  .rv-mtab { flex:1; min-width:92px; display:inline-flex; align-items:center; justify-content:center; gap:5px;
+             border:1px solid #d1d5db; background:#fff; color:#374151; border-radius:10px;
+             padding:11px 8px; font-size:14px; font-weight:700; cursor:pointer; }
+  .rv-mtab.create { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .rv-mtab.create .plus { font-size:18px; line-height:1; }
+  .rv-mtab.on { background:#F0FDFA; border-color:#5EEAD4; color:#0F766E; }
+  @media (max-width:760px){
+    .rv-mtabs { display:flex; }
+    /* サイドバーは既定で隠し、タブを押した時だけ該当パネルを表示（カレンダー本体を広く使う） */
+    .rv-side { display:none; width:100%; margin-bottom:10px; }
+    .rv-side .create-btn { display:none; }            /* 作成はタブに集約 */
+    .rv-side[data-open="staff"] { display:block; }
+    .rv-side[data-open="staff"] .mini { display:none; }
+    .rv-side[data-open="mini"] { display:block; }
+    .rv-side[data-open="mini"] .side-sec { display:none; }
+    .rv-side .mini, .rv-side .side-sec { width:100%; min-width:0; margin-bottom:0; }
+  }
 </style>
 {% endblock %}
 
@@ -157,6 +177,13 @@
       <button id="vw-week" onclick="setView('week')">週</button>
       <button id="vw-day" onclick="setView('day')">日</button>
     </div>
+  </div>
+
+  <!-- 携帯用：作成／スタッフ一覧／月カレンダー の切替タブ（PCでは非表示） -->
+  <div class="rv-mtabs">
+    <button class="rv-mtab create" onclick="openAdd()"><span class="plus">＋</span> 作成</button>
+    <button class="rv-mtab" id="mtab-staff" onclick="toggleMPanel('staff')">スタッフ一覧</button>
+    <button class="rv-mtab" id="mtab-mini" onclick="toggleMPanel('mini')">月カレンダー</button>
   </div>
 
   <div class="rv-layout">
@@ -493,6 +520,16 @@ function renderMonth(){
   document.getElementById('cal-body').innerHTML=html;
 }
 function openDay(ds){ cur=new Date(ds+'T00:00:00'); setView('day'); }
+
+/* 携帯：スタッフ一覧 / 月カレンダー パネルの開閉（タップで表示・再タップで閉じる） */
+function toggleMPanel(which){
+  const side=document.querySelector('.rv-side');
+  const next = (side.getAttribute('data-open')===which) ? '' : which;
+  if(next) side.setAttribute('data-open', next); else side.removeAttribute('data-open');
+  const ms=document.getElementById('mtab-staff'), mm=document.getElementById('mtab-mini');
+  if(ms) ms.classList.toggle('on', next==='staff');
+  if(mm) mm.classList.toggle('on', next==='mini');
+}
 
 /* ── 週・日表示（時間グリッド） ── */
 function tParse(t){ const [h,mi]=(t||'0:0').split(':').map(Number); return h+mi/60; }

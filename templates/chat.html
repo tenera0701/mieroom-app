@@ -246,6 +246,15 @@ let _unread = {};        // {channel_id: 未読件数}
 let _unreadTimer = null;
 
 function escH(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// 画像が表示できない端末（例：iPhoneのHEIC写真を他端末で開いた場合など）では、
+// 壊れた画像の代わりにタップで開けるファイルリンクに差し替える
+function chatImgFallback(img, aid){
+  const fn = img.dataset.fn || '画像';
+  const a = document.createElement('a');
+  a.className = 'cm-file'; a.href = '/api/chat/attachments/'+aid;
+  a.target = '_blank'; a.rel = 'noopener'; a.textContent = '📄 ' + fn;
+  if(img.parentNode) img.parentNode.replaceChild(a, img);
+}
 function cgrow(el){ el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,140)+'px'; }
 const KIND_ICON = { company:'🏢', store:'🏬', group:'👥' };
 const KIND_LABEL = { company:'全社', store:'店舗別', group:'グループ' };
@@ -376,6 +385,23 @@ function selectChannel(cid, slide){
 function backToList(){
   document.querySelector('.chat-wrap').classList.remove('show-chat');
 }
+// 携帯：会話画面を横にスワイプしたらチャンネル一覧へ戻る
+function setupSwipeBack(){
+  const main = document.querySelector('.ch-main');
+  if(!main) return;
+  let sx=0, sy=0, tracking=false;
+  main.addEventListener('touchstart', e=>{
+    if(!isMobile() || e.touches.length!==1) { tracking=false; return; }
+    const t=e.touches[0]; sx=t.clientX; sy=t.clientY; tracking=true;
+  }, {passive:true});
+  main.addEventListener('touchend', e=>{
+    if(!tracking) return; tracking=false;
+    const t=e.changedTouches[0];
+    const dx=t.clientX-sx, dy=t.clientY-sy;
+    // 横方向に十分スワイプ（縦のブレは小さい）したら一覧へ戻る
+    if(Math.abs(dx)>60 && Math.abs(dx)>Math.abs(dy)*1.8) backToList();
+  }, {passive:true});
+}
 
 // 既読人数を更新（自分の投稿のみ・ポーリングで反映）
 async function refreshReadCounts(){
@@ -408,7 +434,7 @@ async function loadMessages(incremental){
       if(dl && dl!==lastDate){ body.insertAdjacentHTML('beforeend', `<div class="cm-date">${escH(dl)}</div>`); lastDate=dl; }
       const cls = m.mine ? 'mine' : 'other';
       const atts = (m.attachments||[]).map(a => a.is_image
-        ? `<img src="/api/chat/attachments/${a.id}" alt="${escH(a.filename)}" onclick="window.open('/api/chat/attachments/${a.id}','_blank')">`
+        ? `<img src="/api/chat/attachments/${a.id}" alt="${escH(a.filename)}" loading="lazy" data-fn="${escH(a.filename)}" onclick="window.open('/api/chat/attachments/${a.id}','_blank')" onerror="chatImgFallback(this,${a.id})">`
         : `<a class="cm-file" href="/api/chat/attachments/${a.id}" target="_blank" rel="noopener">📄 ${escH(a.filename)}</a>`).join('');
       const attHtml = atts ? `<div class="cm-att">${atts}</div>` : '';
       const nameHtml = m.mine ? '' : `<div class="cm-name">${escH(m.user_name)}</div>`;
@@ -701,9 +727,10 @@ async function createGroup(){
 document.addEventListener('DOMContentLoaded', ()=>{
   loadChannels(true).then(refreshUnread);
   if(_unreadTimer) clearInterval(_unreadTimer);
-  _unreadTimer = setInterval(refreshUnread, 15000);
+  _unreadTimer = setInterval(refreshUnread, 10000);
   setupChatDnD();
   setupPasteAttach();
+  setupSwipeBack();
   updateNotifBtn();
   fetch('/api/chat/members').then(r=>r.json()).then(l=>{ _allMembers = l||[]; }).catch(()=>{});
 });
