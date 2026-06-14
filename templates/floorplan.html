@@ -1685,12 +1685,61 @@ function aiImport(e) {
   };
   reader.readAsDataURL(file);
 }
+/* AI出力の座標を整える：壁線をクラスタリングして揃え、グリッドに吸着し、
+   隣り合う部屋の境界を一致させる（ガタつき・すき間・重なりを機械的に解消）。
+   rooms は正規化座標(0〜1)。戻り値は canvas ピクセル座標の {type,label,pts:[{x,y}]} 配列。 */
+function snapAiRooms(rooms, rx, ry, rw, rh) {
+  const canvasRooms = (rooms || [])
+    .filter(r => (r.points || []).length >= 3)
+    .map(r => ({ type: r.type, label: r.label,
+                 pts: r.points.map(p => ({ x: rx + p[0]*rw, y: ry + p[1]*rh })) }));
+  if (!canvasRooms.length) return canvasRooms;
+
+  // 軸ごとに近い座標値をまとめ、代表値をグリッド線に吸着させる写像を作る
+  const buildMap = (vals, tol) => {
+    const sorted = [...new Set(vals)].sort((a, b) => a - b);
+    const map = new Map();
+    let i = 0;
+    while (i < sorted.length) {
+      const start = sorted[i]; const group = [start]; let j = i;
+      while (j + 1 < sorted.length && sorted[j + 1] - start <= tol) { j++; group.push(sorted[j]); }
+      const mean = group.reduce((a, b) => a + b, 0) / group.length;
+      const rep = Math.round(mean / SNAP_PX) * SNAP_PX;   // エディタのグリッドに吸着
+      group.forEach(v => map.set(v, rep));
+      i = j + 1;
+    }
+    return map;
+  };
+  const allX = [], allY = [];
+  canvasRooms.forEach(r => r.pts.forEach(p => { allX.push(p.x); allY.push(p.y); }));
+  // 許容幅：壁同士の最小間隔より小さく（広く取りすぎると細い部屋が潰れる）
+  const tolX = Math.max(SNAP_PX * 0.75, rw * 0.03);
+  const tolY = Math.max(SNAP_PX * 0.75, rh * 0.03);
+  const mapX = buildMap(allX, tolX), mapY = buildMap(allY, tolY);
+
+  canvasRooms.forEach(r => {
+    r.pts.forEach(p => { p.x = mapX.get(p.x); p.y = mapY.get(p.y); });
+    // 吸着で重なった連続点・折り返しの重複を除去
+    const out = [];
+    r.pts.forEach(p => {
+      const last = out[out.length - 1];
+      if (!last || Math.abs(last.x - p.x) > 0.5 || Math.abs(last.y - p.y) > 0.5) out.push(p);
+    });
+    while (out.length > 1) {
+      const a = out[0], b = out[out.length - 1];
+      if (Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5) out.pop(); else break;
+    }
+    r.pts = out;
+  });
+  return canvasRooms.filter(r => r.pts.length >= 3);
+}
+
 function renderAiResult(d, rx, ry, rw, rh, im) {
   const bg = new fabric.Image(im, { left:rx, top:ry, scaleX:rw/im.width, scaleY:rh/im.height, opacity:0.18 });
   bg.set('isBg', true);
   canvas.add(bg); canvas.sendToBack(bg);
-  (d.rooms || []).forEach(r => {
-    const pts = r.points.map(p => ({ x: rx + p[0]*rw, y: ry + p[1]*rh }));
+  snapAiRooms(d.rooms, rx, ry, rw, rh).forEach(r => {
+    const pts = r.pts;
     if (pts.length < 3) return;
     const rt = ROOM_TYPES.find(x => x.t === r.type);
     const rid = newRoomId();
