@@ -4308,6 +4308,26 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
             if g['to']:
                 max_row = min(max(max_row, g['to'][2]), 500)
                 max_col = min(max(max_col, g['to'][0]), 60)
+        # 末尾の「値も罫線も無い空列・空行」を除外して実使用範囲だけを描く。
+        # これをしないと余分な空列が表の幅を占め、用紙に合わせた時に全体が小さく＝余白だらけになる。
+        used_r = used_c = 1
+        for row in ws.iter_rows(min_row=1, max_row=max_row, max_col=max_col):
+            for cell in row:
+                has = cell.value not in (None, '')
+                if not has:
+                    bd = cell.border
+                    has = any(getattr(bd, s) and getattr(bd, s).style
+                              for s in ('top', 'bottom', 'left', 'right'))
+                if has:
+                    if cell.row > used_r:
+                        used_r = cell.row
+                    if cell.column > used_c:
+                        used_c = cell.column
+        for g in imgs:  # 画像の占有範囲は必ず残す
+            used_c = max(used_c, g['c'] + 1, g['to'][0] if g['to'] else 0)
+            used_r = max(used_r, g['r'] + 1, g['to'][2] if g['to'] else 0)
+        max_row = max(1, min(max_row, used_r))
+        max_col = max(1, min(max_col, used_c))
         merged, skip = {}, set()
         for rng in ws.merged_cells.ranges:
             merged[(rng.min_row, rng.min_col)] = (rng.max_row - rng.min_row + 1,
@@ -4639,10 +4659,13 @@ def _xlsx_to_pdf(xlsx_bytes, title, orig_bytes=None, paper_size='A4', orientatio
             return str(int(v))
         return v
 
-    def _para(text, size, halign):
+    def _para(text, size, halign, wrap=False):
         align = {'center': TA_CENTER, 'right': TA_RIGHT}.get(halign, TA_LEFT)
+        # wrap=False（既定）: Excelの「折り返さない」を再現。CJKは空白が無いので1行のまま、
+        #   セル幅を超えても折り返さず隣の空セルへはみ出す（結合セルが縦1文字に崩れるのを防ぐ）。
+        # wrap=True: Excelの「折り返し」セル。CJKでも幅で折り返す。
         st = ParagraphStyle('c', fontName=FONT, fontSize=size, leading=size * 1.25,
-                            alignment=align, wordWrap='CJK')
+                            alignment=align, wordWrap=('CJK' if wrap else None))
         safe = (str(text).replace('&', '&amp;').replace('<', '&lt;')
                 .replace('>', '&gt;').replace('\n', '<br/>'))
         return Paragraph(safe, st)
@@ -4655,9 +4678,11 @@ def _xlsx_to_pdf(xlsx_bytes, title, orig_bytes=None, paper_size='A4', orientatio
         _PDF_COMPUTED = _xlsx_recompute_formulas(wb)
     except Exception:
         _PDF_COMPUTED = {}
+    from reportlab.pdfbase.pdfmetrics import stringWidth as _strw
     page_w, page_h = PAGESIZE
-    margin = 28  # ≒10mm
+    margin = 17  # ≒6mm（印刷ビューと同じ余白に合わせ、周囲の余白を詰める）
     avail_w = page_w - 2 * margin
+    avail_h = page_h - 2 * margin
 
     def _make_story(use_images):
       story = []
@@ -4675,6 +4700,26 @@ def _xlsx_to_pdf(xlsx_bytes, title, orig_bytes=None, paper_size='A4', orientatio
             if g['to']:
                 max_row = min(max(max_row, g['to'][2]), 500)
                 max_col = min(max(max_col, g['to'][0]), 60)
+        # 末尾の「値も罫線も無い空列・空行」を除外して実使用範囲だけを描く。
+        # これをしないと余分な空列が幅を食い、全体が小さく＝周囲が余白だらけになる。
+        used_r = used_c = 1
+        for row in ws.iter_rows(min_row=1, max_row=max_row, max_col=max_col):
+            for cell in row:
+                has = cell.value not in (None, '')
+                if not has:
+                    b = cell.border
+                    has = any(getattr(b, s) and getattr(b, s).style
+                              for s in ('top', 'bottom', 'left', 'right'))
+                if has:
+                    if cell.row > used_r:
+                        used_r = cell.row
+                    if cell.column > used_c:
+                        used_c = cell.column
+        for g in imgs:  # 画像の占有範囲は必ず残す
+            used_c = max(used_c, g['c'] + 1, g['to'][0] if g['to'] else 0)
+            used_r = max(used_r, g['r'] + 1, g['to'][2] if g['to'] else 0)
+        max_row = max(1, min(max_row, used_r))
+        max_col = max(1, min(max_col, used_c))
         merged, skip = {}, set()
         for rng in ws.merged_cells.ranges:
             merged[(rng.min_row, rng.min_col)] = (rng.max_row, rng.max_col)
@@ -4687,16 +4732,24 @@ def _xlsx_to_pdf(xlsx_bytes, title, orig_bytes=None, paper_size='A4', orientatio
             cd = ws.column_dimensions.get(get_column_letter(c))
             w = cd.width if (cd and cd.width) else 8.43
             col_pt.append((w * 7 + 5) * PXPT)
+        # 行高はExcelの値(pt)をそのまま使う（既定15pt）。空行も潰さずレイアウトを忠実に再現。
+        row_pt = []
+        for rr in range(1, max_row + 1):
+            rd = ws.row_dimensions.get(rr)
+            row_pt.append(float(rd.height) if (rd and rd.height) else 15.0)
+        # 用紙の印刷可能幅いっぱいに均等スケール（縦横比は保つ）。縮小だけでなく拡大も許可し、
+        # 右に大きな余白が出るのを防ぐ（印刷ビューと同じ「幅に合わせる」挙動）。
         total_w = sum(col_pt) or 1
-        if total_w > avail_w:
-            f = avail_w / total_w
-            col_pt = [w * f for w in col_pt]
+        sheet_scale = max(0.3, min(avail_w / total_w, 2.5))
+        col_pt = [w * sheet_scale for w in col_pt]
+        row_pt = [h * sheet_scale for h in row_pt]
 
         styles = [('FONTNAME', (0, 0), (-1, -1), FONT), ('FONTSIZE', (0, 0), (-1, -1), 9),
                   ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                  ('TOPPADDING', (0, 0), (-1, -1), 1), ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+                  ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
                   ('LEFTPADDING', (0, 0), (-1, -1), 2), ('RIGHTPADDING', (0, 0), (-1, -1), 2)]
         data = []
+        rowmaxh = [0.0] * max_row  # 各行の実コンテンツ高さ（行高がこれを下回ると文字が潰れるため後で底上げ）
         for rr in range(1, max_row + 1):
             rowdata = []
             for cc in range(1, max_col + 1):
@@ -4706,11 +4759,36 @@ def _xlsx_to_pdf(xlsx_bytes, title, orig_bytes=None, paper_size='A4', orientatio
                 cell = ws.cell(row=rr, column=cc)
                 ci, ri = cc - 1, rr - 1
                 fnt = cell.font
-                size = float(fnt.size) if (fnt and fnt.size) else 9.0
+                size = (float(fnt.size) if (fnt and fnt.size) else 9.0) * sheet_scale
                 al = cell.alignment
                 halign = al.horizontal if (al and al.horizontal in ('center', 'right', 'left')) else 'left'
+                do_wrap = bool(al and al.wrapText)
                 v = _cellval(si, rr, cc, cell.value)
-                rowdata.append(_para(v, size, halign) if (v is not None and str(v) != '') else '')
+                if v is not None and str(v) != '':
+                    txt = str(v)
+                    # セルの実効幅（pt）を求める：結合分＋（折り返さない場合）右隣の空セルへのはみ出し分。
+                    span = merged.get((rr, cc))
+                    c_last = min(span[1], max_col) if span else cc
+                    if not span and not do_wrap:
+                        k = c_last + 1
+                        while k <= max_col and (rr, k) not in skip:
+                            nv = _cellval(si, rr, k, ws.cell(row=rr, column=k).value)
+                            if nv is not None and str(nv) != '':
+                                break
+                            k += 1
+                        c_last = k - 1
+                    cell_w = sum(col_pt[cc - 1:c_last]) - 4
+                    lines = txt.split('\n')
+                    if cell_w > 4 and not do_wrap:
+                        mw = max((_strw(ln, FONT, size) for ln in lines), default=0)
+                        if mw > cell_w:  # 1行に収める＝Excelの「縮小して全体を表示」
+                            size = max(4.0, size * cell_w / mw)
+                    rowdata.append(_para(txt, size, halign, wrap=do_wrap))
+                    # 行高はExcel作者の設定（×スケール）をそのまま尊重する。フォントも同じ率で
+                    # 縮小しているため、Excelで収まっていた行はここでも収まる。文字ぶんの底上げは
+                    # しない＝画面の印刷ビューと同じ挙動（膨らませると重説などが2ページ目へあふれる）。
+                else:
+                    rowdata.append('')
                 vmap = {'top': 'TOP', 'bottom': 'BOTTOM', 'center': 'MIDDLE'}
                 if al and al.vertical in vmap:
                     styles.append(('VALIGN', (ci, ri), (ci, ri), vmap[al.vertical]))
@@ -4749,19 +4827,23 @@ def _xlsx_to_pdf(xlsx_bytes, title, orig_bytes=None, paper_size='A4', orientatio
                 raw = _b64.b64decode(g['b64'])
                 ImageReader(_io.BytesIO(raw)).getRGBData()  # 壊れた/非対応画像はここで除外
                 if g['ext_w'] and g['ext_h'] and g['ext_w'] > 0:
-                    w_pt = min(g['ext_w'] * PXPT, 160)
+                    w_pt = min(g['ext_w'] * PXPT, 160) * sheet_scale
                     h_pt = w_pt * (g['ext_h'] / g['ext_w'])
                 else:
-                    w_pt = h_pt = 60
+                    w_pt = h_pt = 60 * sheet_scale
                 img = RLImage(_io.BytesIO(raw), width=w_pt, height=h_pt)
                 cur = data[r0 - 1][c0 - 1]
                 data[r0 - 1][c0 - 1] = img if (isinstance(cur, str) and cur == '') else [cur, img]
+                if r0 - 1 < len(rowmaxh):  # 画像が行高を超えないよう底上げ
+                    rowmaxh[r0 - 1] = max(rowmaxh[r0 - 1], h_pt + 2)
             except Exception:
                 continue
 
         if not data:
             continue
-        t = Table(data, colWidths=col_pt)
+        # Excelの行高を尊重しつつ、コンテンツが入る行は潰れないよう底上げ
+        row_pt = [max(row_pt[i], rowmaxh[i]) for i in range(len(row_pt))]
+        t = Table(data, colWidths=col_pt, rowHeights=row_pt)
         t.setStyle(TableStyle(styles))
         if not first:
             story.append(PageBreak())
