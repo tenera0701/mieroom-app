@@ -9763,11 +9763,21 @@ def api_echo_records_update(rid):
 @login_required
 def api_echo_records_delete(rid):
     r = EchoRecord.query.get_or_404(rid)
-    # 自動取込分は「削除済み」として記録し、再取込での復活を防ぐ
-    if r.external_id and not ProcessedReaction.query.filter_by(store_id=r.store_id, external_id=r.external_id).first():
-        db.session.add(ProcessedReaction(store_id=r.store_id, external_id=r.external_id))
-    db.session.delete(r)
-    db.session.commit()
+    try:
+        # 自動取込分は「削除済み」として記録し、再取込での復活を防ぐ
+        if r.external_id and not ProcessedReaction.query.filter_by(store_id=r.store_id, external_id=r.external_id).first():
+            db.session.add(ProcessedReaction(store_id=r.store_id, external_id=r.external_id))
+        # 関連するメール会話・添付を先に削除（外部キー制約で削除に失敗するのを防ぐ）
+        msg_ids = [m.id for m in MailMessage.query.filter_by(echo_id=r.id).all()]
+        if msg_ids:
+            MailAttachment.query.filter(MailAttachment.message_id.in_(msg_ids)).delete(synchronize_session=False)
+            MailMessage.query.filter(MailMessage.echo_id == r.id).delete(synchronize_session=False)
+        db.session.delete(r)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"echo delete error rid={rid}: {e}")
+        return jsonify({'error': '削除に失敗しました'}), 500
     return jsonify({'status': 'ok'})
 
 
@@ -15642,6 +15652,8 @@ MANUAL_SECTIONS = [
     {'cat': '管理表', 'title': '右上のスタッフ絞り込みの初期表示', 'body':
      '反響管理表・接客管理表・契約管理・顧客管理（入居後）の右上スタッフ絞り込みは、初期状態が「全スタッフ」で店舗の全件を表示します。'
      '特定の担当だけ見たいときはプルダウンから選びます。申込管理表（顧客管理表）と日報だけは、ログインしている自分の担当が初期表示になります。'},
+    {'cat': '管理表', 'title': '日付で並べ替え（反響管理表・接客管理表）', 'body':
+     '反響管理表は「反響日」、接客管理表は「日付」の見出しをクリックすると、新しい順／古い順を切り替えられます（初期はどちらも新しい日付が上）。'},
     {'cat': '権限', 'title': 'ログイン管理（機能の表示権限・所属店舗）', 'body':
      '設定・ユーザー管理→ログイン管理で、アカウントごとに左メニューの全機能（チャット・営業分析・顧客管理表・契約管理・経理など）の表示をON/OFFできます。OFFにするとメニューから消え、ページも開けません。'
      '所属店舗もここで切り替えられます（スタッフ・店長は所属店舗のデータのみ表示）。「各種設定」はスタッフには標準で非表示のため、見せたい場合はトグルをONにします。'},

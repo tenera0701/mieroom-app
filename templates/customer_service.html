@@ -171,7 +171,7 @@
     <table>
       <thead>
         <tr>
-          <th>日付</th>
+          <th onclick="toggleCsSort()" title="クリックで古い順／新しい順を切り替え" style="cursor:pointer;white-space:nowrap;user-select:none;">日付 <span id="cs-sort-arrow" style="font-size:10px;color:#0D9488;">▼</span></th>
           <th>担当者</th>
           <th>反響媒体 <button type="button" onclick="openDropdownMgr('cs_media','f-echo-media')" title="反響媒体の選択肢を管理" style="font-size:10px;background:#fff;border:1px solid #d1d5db;border-radius:4px;padding:0 5px;cursor:pointer;color:#374151;">⚙</button></th>
           <th>お客様名</th>
@@ -634,13 +634,29 @@ function staffName(sid) {
   return s ? s[1] : '―';
 }
 
+let csSortDir = 'desc';   // 日付の並び：desc=新しい順（既定）, asc=古い順
+function toggleCsSort(){
+  csSortDir = (csSortDir === 'desc') ? 'asc' : 'desc';
+  const arrow = document.getElementById('cs-sort-arrow');
+  if (arrow) arrow.textContent = (csSortDir === 'desc') ? '▼' : '▲';
+  renderTable();
+}
+function sortedCsRecords(){
+  return records.slice().sort((a, b) => {
+    const x = a.service_date || '', y = b.service_date || '';
+    if (x === y) return (b.id || 0) - (a.id || 0);
+    if (!x) return 1;
+    if (!y) return -1;
+    return csSortDir === 'desc' ? y.localeCompare(x) : x.localeCompare(y);
+  });
+}
 function renderTable() {
   const tbody = document.getElementById('cs-tbody');
   if (!records.length) {
     tbody.innerHTML = '<tr class="empty-row"><td colspan="9">データがありません</td></tr>';
     return;
   }
-  tbody.innerHTML = records.map(r => {
+  tbody.innerHTML = sortedCsRecords().map(r => {
     const svcBadge = SERVICE_BADGE[r.service_type] || 'badge badge-other';
     const stsColor = CS_STATUS_COLORS[r.status] || '#ffffff';   // 状況タグ別の色（色設定で変更可）
     return `<tr style="background:${stsColor};">
