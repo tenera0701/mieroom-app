@@ -8,3 +8,5 @@ __pycache__/
 *.log
 .DS_Store
 ngrok.exe
+
+_test_contract_ai/

@@ -3680,6 +3680,408 @@ def api_contract_extract_document(rid):
 # ── Excelテンプレート帳票（クライアント様式の取込→穴埋め→出力） ──────────
 _DOC_TAG_RE = re.compile(r'\{\{\s*([^}]+?)\s*\}\}')
 
+# Excelの数式エラー表記（計算キャッシュにこれらが残っていると出力に出てしまうため空にする）
+_XLSX_ERROR_LITERALS = frozenset((
+    '#VALUE!', '#REF!', '#DIV/0!', '#N/A', '#NAME?', '#NULL!', '#NUM!',
+    '#SPILL!', '#CALC!', '#GETTING_DATA',
+))
+
+
+def _is_xlsx_error(v):
+    """セル値がExcelの数式エラー表記なら True。"""
+    if not isinstance(v, str):
+        return False
+    s = v.strip()
+    return s in _XLSX_ERROR_LITERALS or (len(s) >= 5 and set(s) == {'#'})
+
+
+_UNSET = object()
+_XLSX_FORMULA_DATE_RE = re.compile(r'^\s*(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})')
+_XLSX_TOKEN_RE = re.compile(
+    r"""\s+
+      |(?P<num>\d+\.?\d*(?:[eE][+-]?\d+)?)
+      |(?P<str>"(?:[^"]|"")*")
+      |(?P<sheet>'(?:[^']|'')*'!|[A-Za-z_぀-鿿][\w.぀-鿿]*!)
+      |(?P<cell>\$?[A-Za-z]{1,3}\$?\d+)
+      |(?P<name>[A-Za-z_][\w.]*)
+      |(?P<op><>|<=|>=|[-+*/^&=<>(),:%])
+    """, re.X)
+
+
+def _xlsx_recompute_formulas(wb):
+    """data_only=False で読んだワークブックの数式セルを可能な範囲で再計算し、
+    {(sheet_index, row, col): 計算値} を返す。サーバーにExcel計算エンジンが無いため、
+    契約書で多い式（日付±日数/月数, 四則演算, SUM/ROUND/IF/DATE/EDATE 等）だけを対象にする。
+    計算できない式は結果に含めない（呼び出し側で空表示にする）。"""
+    import datetime as _dt
+    import calendar as _cal
+    from openpyxl.utils import column_index_from_string
+
+    EPOCH = _dt.date(1899, 12, 30)
+    sheets = wb.worksheets
+    title_to_idx = {ws.title: i for i, ws in enumerate(sheets)}
+    computed = {}
+    visiting = set()
+
+    def parse_date_str(s):
+        m = _XLSX_FORMULA_DATE_RE.match(s)
+        if not m:
+            return None
+        try:
+            return _dt.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except Exception:
+            return None
+
+    def is_date(x):
+        return isinstance(x, (_dt.date, _dt.datetime))
+
+    def to_serial(x):
+        if isinstance(x, _dt.datetime):
+            d = x.date()
+            return (d - EPOCH).days + (x.hour * 3600 + x.minute * 60 + x.second) / 86400.0
+        if isinstance(x, _dt.date):
+            return (x - EPOCH).days
+        return float(x)
+
+    def from_serial(n):
+        n = float(n)
+        days = int(n)
+        frac = n - days
+        base = EPOCH + _dt.timedelta(days=days)
+        if abs(frac) < 1e-9:
+            return base
+        return _dt.datetime.combine(base, _dt.time()) + _dt.timedelta(seconds=round(frac * 86400))
+
+    def to_num(x):
+        if x is None or x == '':
+            return 0.0
+        if isinstance(x, bool):
+            return 1.0 if x else 0.0
+        if is_date(x):
+            return to_serial(x)
+        if isinstance(x, (int, float)):
+            return float(x)
+        s = str(x).strip().replace(',', '').replace('￥', '').replace('¥', '').replace(' ', '')
+        d = parse_date_str(s)
+        if d:
+            return to_serial(d)
+        return float(s)  # 失敗時は例外→そのセルは未計算
+
+    def to_str(x):
+        if x is None:
+            return ''
+        if isinstance(x, bool):
+            return 'TRUE' if x else 'FALSE'
+        if isinstance(x, _dt.datetime):
+            return x.strftime('%Y-%m-%d') if not (x.hour or x.minute) else x.strftime('%Y-%m-%d %H:%M')
+        if isinstance(x, _dt.date):
+            return x.strftime('%Y-%m-%d')
+        if isinstance(x, float) and x.is_integer():
+            return str(int(x))
+        return str(x)
+
+    def edate(d, months, eom=False):
+        if not is_date(d):
+            d = from_serial(to_num(d))
+        if isinstance(d, _dt.datetime):
+            d = d.date()
+        months = int(to_num(months))
+        total = (d.year * 12 + (d.month - 1)) + months
+        y, m = divmod(total, 12)
+        m += 1
+        last = _cal.monthrange(y, m)[1]
+        return _dt.date(y, m, last if eom else min(d.day, last))
+
+    def truthy(x):
+        if isinstance(x, bool):
+            return x
+        if x is None or x == '':
+            return False
+        try:
+            return to_num(x) != 0
+        except Exception:
+            return bool(x)
+
+    def call_func(name, args):
+        n = name.upper()
+        if n == 'SUM':
+            return sum(to_num(a) for a in _flat(args) if a not in (None, ''))
+        if n in ('AVERAGE', 'AVG'):
+            vals = [to_num(a) for a in _flat(args) if a not in (None, '')]
+            return sum(vals) / len(vals) if vals else 0.0
+        if n == 'MIN':
+            vals = [to_num(a) for a in _flat(args) if a not in (None, '')]
+            return min(vals) if vals else 0.0
+        if n == 'MAX':
+            vals = [to_num(a) for a in _flat(args) if a not in (None, '')]
+            return max(vals) if vals else 0.0
+        if n == 'COUNT':
+            c = 0
+            for a in _flat(args):
+                try:
+                    to_num(a) if a not in (None, '') else None
+                    if a not in (None, ''):
+                        float(str(a).replace(',', ''))
+                        c += 1
+                except Exception:
+                    pass
+            return float(c)
+        if n == 'COUNTA':
+            return float(sum(1 for a in _flat(args) if a not in (None, '')))
+        if n == 'ROUND':
+            return float(round(to_num(args[0]), int(to_num(args[1])) if len(args) > 1 else 0))
+        if n in ('ROUNDUP', 'ROUNDDOWN'):
+            import math as _m
+            digits = int(to_num(args[1])) if len(args) > 1 else 0
+            factor = 10 ** digits
+            v = to_num(args[0]) * factor
+            v = _m.ceil(v) if n == 'ROUNDUP' else _m.floor(v)
+            return v / factor
+        if n in ('INT', 'TRUNC'):
+            import math as _m
+            return float(_m.floor(to_num(args[0])))
+        if n == 'ABS':
+            return abs(to_num(args[0]))
+        if n == 'IF':
+            return args[1] if truthy(args[0]) else (args[2] if len(args) > 2 else False)
+        if n == 'IFERROR':
+            return args[0]  # ここに来た時点でエラーではない
+        if n == 'AND':
+            return all(truthy(a) for a in _flat(args))
+        if n == 'OR':
+            return any(truthy(a) for a in _flat(args))
+        if n == 'NOT':
+            return not truthy(args[0])
+        if n == 'DATE':
+            return _dt.date(int(to_num(args[0])), int(to_num(args[1])), int(to_num(args[2])))
+        if n == 'EDATE':
+            return edate(args[0], args[1])
+        if n == 'EOMONTH':
+            return edate(args[0], args[1], eom=True)
+        if n == 'YEAR':
+            d = args[0] if is_date(args[0]) else from_serial(to_num(args[0]))
+            return float(d.year)
+        if n == 'MONTH':
+            d = args[0] if is_date(args[0]) else from_serial(to_num(args[0]))
+            return float(d.month)
+        if n == 'DAY':
+            d = args[0] if is_date(args[0]) else from_serial(to_num(args[0]))
+            return float(d.day)
+        if n == 'TODAY':
+            return _dt.date.today()
+        if n == 'NOW':
+            return _dt.datetime.now()
+        if n in ('CONCATENATE', 'CONCAT'):
+            return ''.join(to_str(a) for a in _flat(args))
+        if n == 'TEXT':
+            return to_str(args[0])
+        raise ValueError('unsupported func: ' + n)
+
+    def _flat(args):
+        out = []
+        for a in args:
+            if isinstance(a, list):
+                out.extend(a)
+            else:
+                out.append(a)
+        return out
+
+    def resolve_cell(si, row, col):
+        key = (si, row, col)
+        if key in computed:
+            return computed[key]
+        cell = sheets[si].cell(row=row, column=col)
+        val = cell.value
+        if isinstance(val, str) and val.startswith('='):
+            if key in visiting:
+                raise ValueError('circular')
+            visiting.add(key)
+            try:
+                r = evaluate(val[1:], si)
+            finally:
+                visiting.discard(key)
+            computed[key] = r
+            return r
+        if isinstance(val, str):
+            d = parse_date_str(val)
+            if d:
+                return d
+        return val
+
+    # ── 簡易パーサ（再帰下降）。evaluate はトークン列を直接評価する ──
+    def evaluate(formula, si):
+        toks = []
+        for m in _XLSX_TOKEN_RE.finditer(formula):
+            if m.lastgroup is None:
+                continue
+            toks.append((m.lastgroup, m.group()))
+        pos = [0]
+
+        def peek():
+            return toks[pos[0]] if pos[0] < len(toks) else (None, None)
+
+        def nxt():
+            t = peek()
+            pos[0] += 1
+            return t
+
+        def cell_rc(tok, sheet_idx):
+            ref = tok.replace('$', '')
+            mm = re.match(r'^([A-Za-z]{1,3})(\d+)$', ref)
+            col = column_index_from_string(mm.group(1).upper())
+            return sheet_idx, int(mm.group(2)), col
+
+        def parse_primary():
+            typ, tok = peek()
+            if typ == 'op' and tok == '(':
+                nxt()
+                v = parse_expr()
+                if peek()[1] == ')':
+                    nxt()
+                return v
+            if typ == 'op' and tok in ('-', '+'):
+                nxt()
+                v = parse_unary()
+                return (-to_num(v)) if tok == '-' else to_num(v)
+            if typ == 'num':
+                nxt()
+                return float(tok)
+            if typ == 'str':
+                nxt()
+                return tok[1:-1].replace('""', '"')
+            sheet_idx = si
+            if typ == 'sheet':
+                nxt()
+                nm = tok[:-1].strip("'").replace("''", "'")
+                sheet_idx = title_to_idx.get(nm, si)
+                typ, tok = peek()
+            if typ == 'cell':
+                nxt()
+                s2, r1, c1 = cell_rc(tok, sheet_idx)
+                if peek()[1] == ':' and pos[0] + 1 < len(toks) and toks[pos[0] + 1][0] == 'cell':
+                    nxt()
+                    _, tok2 = nxt()
+                    _, r2, c2 = cell_rc(tok2, sheet_idx)
+                    vals = []
+                    for rr in range(min(r1, r2), max(r1, r2) + 1):
+                        for cc in range(min(c1, c2), max(c1, c2) + 1):
+                            vals.append(resolve_cell(s2, rr, cc))
+                    return vals
+                return resolve_cell(s2, r1, c1)
+            if typ == 'name':
+                nxt()
+                up = tok.upper()
+                if up in ('TRUE', 'FALSE'):
+                    return up == 'TRUE'
+                if peek()[1] == '(':
+                    nxt()
+                    args = []
+                    if peek()[1] != ')':
+                        args.append(parse_expr())
+                        while peek()[1] == ',':
+                            nxt()
+                            args.append(parse_expr())
+                    if peek()[1] == ')':
+                        nxt()
+                    return call_func(tok, args)
+                raise ValueError('unknown name: ' + tok)
+            raise ValueError('parse error near %r' % (tok,))
+
+        def parse_postfix():
+            v = parse_primary()
+            while peek()[1] == '%':
+                nxt()
+                v = to_num(v) / 100.0
+            return v
+
+        def parse_unary():
+            typ, tok = peek()
+            if typ == 'op' and tok in ('-', '+'):
+                nxt()
+                v = parse_unary()
+                return (-to_num(v)) if tok == '-' else to_num(v)
+            return parse_postfix()
+
+        def parse_pow():
+            v = parse_unary()
+            while peek()[1] == '^':
+                nxt()
+                v = to_num(v) ** to_num(parse_unary())
+            return v
+
+        def parse_mul():
+            v = parse_pow()
+            while peek()[1] in ('*', '/'):
+                op = nxt()[1]
+                r = parse_pow()
+                v = to_num(v) * to_num(r) if op == '*' else to_num(v) / to_num(r)
+            return v
+
+        def parse_add():
+            v = parse_mul()
+            while peek()[1] in ('+', '-'):
+                op = nxt()[1]
+                r = parse_mul()
+                if op == '+':
+                    if is_date(v) and is_date(r):
+                        v = to_serial(v) + to_serial(r)
+                    elif is_date(v):
+                        v = from_serial(to_serial(v) + to_num(r))
+                    elif is_date(r):
+                        v = from_serial(to_num(v) + to_serial(r))
+                    else:
+                        v = to_num(v) + to_num(r)
+                else:
+                    if is_date(v) and is_date(r):
+                        v = to_serial(v) - to_serial(r)
+                    elif is_date(v):
+                        v = from_serial(to_serial(v) - to_num(r))
+                    else:
+                        v = to_num(v) - to_num(r)
+            return v
+
+        def parse_concat():
+            v = parse_add()
+            while peek()[1] == '&':
+                nxt()
+                v = to_str(v) + to_str(parse_add())
+            return v
+
+        def parse_expr():
+            v = parse_concat()
+            while peek()[0] == 'op' and peek()[1] in ('=', '<>', '<', '>', '<=', '>='):
+                op = nxt()[1]
+                r = parse_concat()
+                a, b = v, r
+                if not (is_date(a) or is_date(b)) and not (isinstance(a, str) or isinstance(b, str)):
+                    a, b = to_num(a), to_num(b)
+                elif is_date(a) or is_date(b):
+                    a, b = to_serial(a), to_serial(b)
+                else:
+                    a, b = to_str(a), to_str(b)
+                v = {'=': a == b, '<>': a != b, '<': a < b, '>': a > b,
+                     '<=': a <= b, '>=': a >= b}[op]
+            return v
+
+        return parse_expr()
+
+    for si, ws in enumerate(sheets):
+        if ws.sheet_state != 'visible':
+            continue
+        for row in ws.iter_rows():
+            for cell in row:
+                v = cell.value
+                if isinstance(v, str) and v.startswith('='):
+                    key = (si, cell.row, cell.column)
+                    if key in computed:
+                        continue
+                    try:
+                        visiting.clear()
+                        computed[key] = evaluate(v[1:], si)
+                    except Exception:
+                        pass
+    return computed
+
 
 def _doc_tenant_id():
     u = AppUser.query.get(session.get('app_user_id'))
@@ -3855,7 +4257,12 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
 
     overrides = overrides or {}
     wb = load_workbook(_io.BytesIO(xlsx_bytes), data_only=False)
-    # 数式セルを計算済み値で表示するためのキャッシュ（元ファイルから）
+    # 穴埋め後の値で数式を可能な範囲で再計算（契約期間=開始日+N 等）
+    try:
+        computed = _xlsx_recompute_formulas(wb)
+    except Exception:
+        computed = {}
+    # 再計算できない数式は元ファイルの計算済みキャッシュで補完
     cache_wb = None
     if orig_bytes is not None:
         try:
@@ -3864,14 +4271,24 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
             cache_wb = None
 
     def _resolve_value(si, rr, cc, v):
-        """数式(=...)なら計算済みキャッシュ値に差し替える。"""
-        if isinstance(v, str) and v.startswith('=') and cache_wb is not None:
-            try:
-                cv = cache_wb.worksheets[si].cell(row=rr, column=cc).value
-                if not (isinstance(cv, str) and cv.startswith('=')):
+        """数式(=...)は ①穴埋め後の再計算値 → ②元ファイルの計算キャッシュ の順で解決。
+        どちらも不可、または値がエラー(#VALUE! 等)・生の式なら空表示にする
+        （壊れた関数結果や生の式をそのまま出さない）。"""
+        if isinstance(v, str) and v.startswith('='):
+            cv = computed.get((si, rr, cc), _UNSET)
+            if cv is not _UNSET:
+                return None if _is_xlsx_error(cv) else cv
+            if cache_wb is not None:
+                try:
+                    cv = cache_wb.worksheets[si].cell(row=rr, column=cc).value
+                    if isinstance(cv, str) and (cv.startswith('=') or _is_xlsx_error(cv)):
+                        return None
                     return cv
-            except Exception:
-                pass
+                except Exception:
+                    return None
+            return None
+        if _is_xlsx_error(v):
+            return None
         return v
     sheets_html = []
     for si, ws in enumerate(wb.worksheets):
@@ -3978,7 +4395,11 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
             img_html += (f'<img src="data:{g["mime"]};base64,{g["b64"]}" '
                          f'style="position:absolute;left:{left:.0f}px;top:{top:.0f}px;'
                          f'width:{w_i:.0f}px;height:{h_i:.0f}px;object-fit:contain;pointer-events:none;">')
-        table_html = f'<table class="sheet"><colgroup>{"".join(cols)}</colgroup>{"".join(rows)}</table>'
+        # table-layout:fixed は width 未指定だと列を容器幅に押し込めてしまう。
+        # 実際の列幅合計を明示し、原寸で組んでから #doc-root 側で画面/用紙に合わせて縮小する。
+        total_w = sum(col_px)
+        table_html = (f'<table class="sheet" style="width:{total_w}px">'
+                      f'<colgroup>{"".join(cols)}</colgroup>{"".join(rows)}</table>')
         if img_html:
             sheets_html.append(f'<div style="position:relative;display:inline-block;">{table_html}{img_html}</div>')
         else:
@@ -3989,6 +4410,10 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
     body = f'<div id="doc-root-wrap"><div id="doc-root">{inner}</div></div>'
     _psize = 'A3' if str(paper_size).upper() == 'A3' else 'A4'
     _porient = 'landscape' if str(orientation).lower() == 'landscape' else 'portrait'
+    # 印刷可能幅(px@96dpi)：用紙幅 − 左右余白(各6mm)。これに合わせて印刷時に縮小フィットさせる。
+    _page_w_mm = {('A4', 'portrait'): 210, ('A4', 'landscape'): 297,
+                  ('A3', 'portrait'): 297, ('A3', 'landscape'): 420}[(_psize, _porient)]
+    _print_w_px = round((_page_w_mm - 12) / 25.4 * 96)
     css = ('<style>'
            "body{font-family:'Yu Gothic','Meiryo',sans-serif;margin:8mm;color-scheme:light;}"
            '#doc-root{transform-origin:top left;display:inline-block;}'
@@ -4000,7 +4425,7 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
            'cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25);}'
            f'@page{{size:{_psize} {_porient};margin:0;}}'  # 用紙サイズ・向き＋ブラウザ既定ヘッダーを消す
            '@media print{.toolbar,.edit-hint{display:none;}body{margin:0;padding:6mm;}'
-           '#doc-root{transform:none!important;}'
+           # 印刷時は用紙幅に収まるよう doc-root を縮小（JSで scale を設定）。はみ出し・右切れを防ぐ
            'td[contenteditable]{outline:none!important;}}'
            + ('td[contenteditable]{cursor:text;}'
               'td[contenteditable]:hover{background:#F0FDFA;}'
@@ -4080,23 +4505,29 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
             '}\n'
             'window.addEventListener("beforeunload",ev=>{if(DIRTY){ev.preventDefault();ev.returnValue="";}});\n'
             '</script>')
-    # 画面幅に合わせて書類を拡大縮小（PCの横幅いっぱいに伸び縮み・印刷時は等倍）
+    # 画面は横幅いっぱいに伸縮、印刷は用紙の印刷可能幅に収まるよう縮小（はみ出し防止）
     scaler = (
         '<script>(function(){'
-        'function fit(){var r=document.getElementById("doc-root");if(!r)return;'
-        'r.style.transform="none";'
-        'var w=r.scrollWidth||r.offsetWidth;if(!w||w<=0)return;'
+        f'var PRINT_W={_print_w_px};\n'
+        'function rawWidth(r){var t=r.style.transform;r.style.transform="none";'
+        'var w=r.scrollWidth||r.offsetWidth;r.style.transform=t;return w;}'
+        'function applyScale(s){var r=document.getElementById("doc-root");if(!r)return;'
+        'r.style.transform=s>=0.999&&s<=1.001?"none":"scale("+s+")";'
+        'var wrap=document.getElementById("doc-root-wrap");'
+        'if(wrap)wrap.style.height=(r.offsetHeight*(s||1))+"px";}'
+        'function fitScreen(){var r=document.getElementById("doc-root");if(!r)return;'
+        'var w=rawWidth(r);if(!w||w<=0)return;'
         'var cw=document.documentElement.clientWidth||window.innerWidth||document.body.clientWidth||0;'
         'var avail=cw-20;if(avail<=40)return;'
-        'var s=avail/w;if(s>2)s=2;if(s<0.1)s=0.1;'
-        'r.style.transform="scale("+s+")";'
-        'var wrap=document.getElementById("doc-root-wrap");'
-        'if(wrap)wrap.style.height=(r.offsetHeight*s)+"px";}'
-        'window.addEventListener("resize",fit);'
-        'window.addEventListener("load",fit);'
-        'document.addEventListener("DOMContentLoaded",fit);'
-        'window.addEventListener("beforeprint",function(){var r=document.getElementById("doc-root");if(r)r.style.transform="none";});'
-        'window.addEventListener("afterprint",fit);'
+        'var s=avail/w;if(s>2)s=2;if(s<0.1)s=0.1;applyScale(s);}'
+        'function fitPrint(){var r=document.getElementById("doc-root");if(!r)return;'
+        'var w=rawWidth(r);if(!w||w<=0)return;'
+        'var s=PRINT_W/w;if(s>1)s=1;if(s<0.05)s=0.05;applyScale(s);}'
+        'window.addEventListener("resize",fitScreen);'
+        'window.addEventListener("load",fitScreen);'
+        'document.addEventListener("DOMContentLoaded",fitScreen);'
+        'window.addEventListener("beforeprint",fitPrint);'
+        'window.addEventListener("afterprint",fitScreen);'
         '})();</script>')
     return ('<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">'
             f'<title>{_esc(title)}</title>'
@@ -4154,13 +4585,21 @@ def _xlsx_to_pdf(xlsx_bytes, title, orig_bytes=None, paper_size='A4', orientatio
             cache_wb = None
 
     def _cellval(si, rr, cc, v):
-        if isinstance(v, str) and v.startswith('=') and cache_wb is not None:
-            try:
-                cv = cache_wb.worksheets[si].cell(row=rr, column=cc).value
-                if not (isinstance(cv, str) and cv.startswith('=')):
-                    v = cv
-            except Exception:
-                pass
+        if isinstance(v, str) and v.startswith('='):
+            cv = _PDF_COMPUTED.get((si, rr, cc), _UNSET)
+            if cv is not _UNSET:
+                v = None if _is_xlsx_error(cv) else cv
+            else:
+                v = None
+                if cache_wb is not None:
+                    try:
+                        c2 = cache_wb.worksheets[si].cell(row=rr, column=cc).value
+                        if not (isinstance(c2, str) and (c2.startswith('=') or _is_xlsx_error(c2))):
+                            v = c2
+                    except Exception:
+                        v = None
+        if _is_xlsx_error(v):
+            return None
         if isinstance(v, _dt.datetime):
             return v.strftime('%Y-%m-%d') if (v.hour == 0 and v.minute == 0) else v.strftime('%Y-%m-%d %H:%M')
         if isinstance(v, _dt.date):
@@ -4180,6 +4619,11 @@ def _xlsx_to_pdf(xlsx_bytes, title, orig_bytes=None, paper_size='A4', orientatio
     from reportlab.lib.utils import ImageReader
 
     wb = load_workbook(_io.BytesIO(xlsx_bytes), data_only=False)
+    # 穴埋め後の値で数式を再計算（_cellval が参照）
+    try:
+        _PDF_COMPUTED = _xlsx_recompute_formulas(wb)
+    except Exception:
+        _PDF_COMPUTED = {}
     page_w, page_h = PAGESIZE
     margin = 28  # ≒10mm
     avail_w = page_w - 2 * margin
