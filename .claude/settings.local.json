@@ -26,7 +26,11 @@
       "Bash(python -c \"import ast; ast.parse\\(open\\('app.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\('G:/マイドライブ/Claude開発アプリ/realestate-ai/app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
       "WebFetch(domain:soco-st.com)",
-      "Bash(echo \"=== A: 編集中フォルダ \\(WEBアプリ\\) ===\" && ls -la \"G:/マイドライブ/Claude開発アプリ/WEBアプリ/ミエルーム/templates/mail_settings.html\" 2>&1 *)"
+      "Bash(echo \"=== A: 編集中フォルダ \\(WEBアプリ\\) ===\" && ls -la \"G:/マイドライブ/Claude開発アプリ/WEBアプリ/ミエルーム/templates/mail_settings.html\" 2>&1 *)",
+      "Bash(grep -n \"with app.app_context\\\\|db.create_all\\\\|init_database\" /Users/katoseiya/Library/CloudStorage/GoogleDrive-teneramente0701@gmail.com/マイドライブ/Claude開発アプリ/WEBアプリ/WEBアプリ/ミエルーム/app.py | head -20)",
+      "Bash(cd \"g:/マイドライブ/Claude開発アプリ/WEBアプリ/ミエルーム\" && echo \"=== templates referenced in app.py ===\" && grep -oE \"render_template\\\\\\(['\\\\\"][^'\\\\\"]+['\\\\\"]\" app.py | grep -oE \"[a-z_]+\\\\.html\" | sort -u > /tmp/used.txt && cat /tmp/used.txt | tr '\\\\n' ' ' && echo \"\" && echo \"\" && echo \"=== template files on disk ===\" && ls templates/ | sort > /tmp/disk.txt && echo \"=== on disk but NOT referenced by render_template ===\" && comm -13 /tmp/used.txt /tmp/disk.txt)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:5000/app-login)"
     ]
   }
 }

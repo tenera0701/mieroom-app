@@ -5805,10 +5805,11 @@ FP_JSON_STRUCT = (
 
 
 def _fp_ai_call(content_blocks):
-    """間取り解析用のAI呼び出し（extended thinking 有効で幾何精度を上げる）"""
+    """間取り解析用のAI呼び出し（上位モデルOpus＋adaptive thinkingで幾何精度を上げる）。
+    Opus 4.8 は budget_tokens 指定不可・adaptive必須。effortは既定のhighで動く。"""
     msg = anthropic_client.messages.create(
-        model="claude-sonnet-4-6", max_tokens=8000,
-        thinking={"type": "enabled", "budget_tokens": 4000},
+        model="claude-opus-4-8", max_tokens=8000,
+        thinking={"type": "adaptive"},
         messages=[{"role": "user", "content": content_blocks}],
     )
     # thinking ブロックは .text を持たないので自然に除外され、JSON本文だけ得られる
@@ -5895,37 +5896,14 @@ def api_floorplans_ai_import():
     )
     doc_block = {"type": "image", "source": {"type": "base64", "media_type": mime, "data": img}}
 
-    # ── 1パス目：解析 ──
+    # 上位モデル(Opus)＋adaptive thinking の1パスで解析（自己修正パスは精度が安定しないため廃止）
     try:
         text = _fp_ai_call([doc_block, {"type": "text", "text": prompt}])
         count_ai_usage('floorplan_import')
     except Exception as e:
         return jsonify({'error': f'AI解析に失敗しました: {e}'}), 502
-    draft = _fp_parse_result(text)
 
-    # ── 2パス目：自己修正（描いた結果を元画像と再照合して直す）──
-    final = draft
-    try:
-        refine_prompt = (
-            "次のJSONは、あなたが同じ間取り図から作成した読み取り結果(draft)です。\n"
-            "元画像ともう一度照合し、間違いを直して『最終版』を返してください。\n\n"
-            "重点チェック:\n"
-            "- 抜けている部屋・建具(ドア/引き戸/窓)・設備が無いか（特に各部屋の出入口）\n"
-            "- 部屋同士にすき間や重なりが無いか（隣接する部屋は壁を共有し、境界の座標が一致しているか）\n"
-            "- 各部屋の縦横比・大小が図(寸法線/帖数)と合っているか\n"
-            "- 設備が部屋からはみ出していないか、向き(rot)は合っているか\n\n"
-            "draft:\n" + json.dumps(draft, ensure_ascii=False) + "\n\n"
-            "修正後の最終JSONを1つだけ返す（構造・キーはdraftと同じ。説明文やマークダウンは付けない）。"
-        )
-        text2 = _fp_ai_call([doc_block, {"type": "text", "text": refine_prompt}])
-        cand = _fp_parse_result(text2)
-        # 修正版が部屋を大きく取りこぼしていない場合のみ採用（破壊を防ぐ）
-        if cand['rooms'] and len(cand['rooms']) >= max(1, int(len(draft['rooms']) * 0.6)):
-            final = cand
-    except Exception:
-        pass
-
-    return jsonify(final)
+    return jsonify(_fp_parse_result(text))
 
 
 # ══════════════════════════════════════════════════════════
@@ -9341,6 +9319,12 @@ def api_echo_records_add():
     sid = int(data.get('store_id') or 0) or allowed[0]
     if sid not in allowed:
         sid = allowed[0]
+    email = (data.get('customer_email') or '').strip()
+    phone = (data.get('customer_phone') or '').strip()
+    memo = data.get('memo', '') or ''
+    # 電話番号は専用列が無いためメモに追記（手動追加の電話反響などの連絡先を残す）
+    if phone:
+        memo = (memo + ('\n' if memo else '') + f'📞 電話: {phone}').strip()
     r = EchoRecord(
         store_id=sid,
         staff_id=int(data.get('staff_id') or 0) or None,
@@ -9353,7 +9337,9 @@ def api_echo_records_add():
         has_reply=bool(data.get('has_reply')),
         has_phone=bool(data.get('has_phone')),
         has_line=bool(data.get('has_line')),
-        memo=data.get('memo', ''),
+        memo=memo,
+        customer_email=email or None,        # メール機能の送信先
+        has_phone_number=bool(phone),        # 電話番号あり→〇
     )
     db.session.add(r)
     db.session.commit()
@@ -9402,8 +9388,16 @@ def api_echo_records_update(rid):
         r.reply_dismissed = bool(data.get('reply_dismissed'))
     if 'status' in data:
         r.status = (data.get('status') or '') or None
+    if 'customer_email' in data:
+        r.customer_email = (data.get('customer_email') or '').strip() or None
     if 'memo' in data:
         r.memo = data.get('memo')
+    # 電話番号は専用列が無いためメモに追記（入力された場合のみ）
+    phone = (data.get('customer_phone') or '').strip()
+    if phone:
+        base = r.memo or ''
+        r.memo = (base + ('\n' if base else '') + f'📞 電話: {phone}').strip()
+        r.has_phone_number = True
     r.is_new = False   # 何かアクション（編集・メール開封など）したら「新着」バッジを消す
     db.session.commit()
     return jsonify({'status': 'ok'})
@@ -15223,6 +15217,9 @@ MANUAL_SECTIONS = [
     {'cat': '反響管理表', 'title': '反響管理表の基本', 'body':
      'ポータル（SUUMO・HOME\'S等）からの反響を一覧で管理します。担当者・反響日・状況・顧客名・媒体・手段・番号有無・初回対応日・追客日程・メモなどをセルクリックで直接編集できます。'
      '上部の検索で顧客名・媒体・担当で絞り込めます。サマリーカードで総反響数や電話番号あり件数などを確認できます。'},
+    {'cat': '反響管理表', 'title': '電話反響・手動追加でもメールを送る', 'body':
+     '電話反響や取込ミスを「＋新規追加」で手入力するとき、メールアドレス欄にアドレスを入れると、その案件でもツール上の「✉️メール」からお客様にメール送受信できます。'
+     '電話番号欄に入れた番号はメモに記録され、電話番号ありとして集計されます。'},
     {'cat': '反響管理表', 'title': '状況タグと行の色', 'body':
      '「状況」列でタグ（追客中・申込・終了など）を選べます。状況見出しの⚙からタグの追加・削除と、各タグの行の色を設定できます。'
      '行の背景色は状況タグの色で変わります。お客様から返信があって未返信の行は、左端に赤いラインが付いて目立ちます。'},

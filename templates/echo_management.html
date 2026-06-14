@@ -262,6 +262,14 @@
           <input type="text" id="f-list-name" placeholder="例：山田 太郎" autocomplete="off">
         </div>
         <div class="form-group">
+          <label>メールアドレス</label>
+          <input type="email" id="f-email" placeholder="例：yamada@example.com（入れるとツール上でメール送信可）" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label>電話番号</label>
+          <input type="tel" id="f-phone" placeholder="例：090-1234-5678（メモに記録されます）" autocomplete="off">
+        </div>
+        <div class="form-group">
           <label>反響日 <span style="color:#ef4444;">*</span></label>
           <input type="date" id="f-echo-date">
         </div>
@@ -971,6 +979,8 @@ function openEditModal(id) {
   document.getElementById('f-first-contact').value  = r.first_contact_date || '';
   document.getElementById('f-media').value          = r.media || '';
   document.getElementById('f-method').value         = r.method || '';
+  document.getElementById('f-email').value          = r.customer_email || '';
+  document.getElementById('f-phone').value          = '';  // 電話はメモに記録のため空で表示
   for (let i = 1; i <= 10; i++) {
     document.getElementById(`f-followup-${i}`).value = r[`followup_${i}`] || '';
   }
@@ -986,7 +996,7 @@ function closeModal() {
 }
 
 function clearForm() {
-  ['f-staff','f-list-name','f-echo-date','f-first-contact','f-media','f-method','f-memo'].forEach(id => {
+  ['f-staff','f-list-name','f-echo-date','f-first-contact','f-media','f-method','f-email','f-phone','f-memo'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -1009,6 +1019,8 @@ async function saveRecord() {
     media:     document.getElementById('f-media').value.trim(),
     method:    document.getElementById('f-method').value.trim(),
     first_contact_date: document.getElementById('f-first-contact').value || null,
+    customer_email: document.getElementById('f-email').value.trim(),
+    customer_phone: document.getElementById('f-phone').value.trim(),
     has_reply: document.getElementById('f-has-reply').checked,
     has_phone: document.getElementById('f-has-phone').checked,
     has_line:  document.getElementById('f-has-line').checked,
