@@ -779,11 +779,24 @@
     (function(){
       const badge = document.getElementById('reserve-nav-badge');
       if(!badge) return;   // カレンダーの表示権限が無い場合は何もしない
+      const SEEN_KEY = 'mieroom-reserve-seen';
+      const seen = ()=> localStorage.getItem(SEEN_KEY) || '';
       async function pollNewReserve(){
         try{
           const rows = await fetch('/api/reservations/new').then(r=>r.json());
-          const n = Array.isArray(rows) ? rows.length : 0;
-          if(n > 0){ badge.textContent = n > 99 ? '99+' : n; badge.style.display = ''; }
+          if(!Array.isArray(rows)) return;
+          // カレンダーを開いている間は「確認済み」にしてバッジを消す
+          if(location.pathname === '/reservations'){
+            let mx = seen();
+            rows.forEach(r=>{ if((r.created_at||'') > mx) mx = r.created_at; });
+            if(mx) localStorage.setItem(SEEN_KEY, mx);
+            badge.style.display = 'none';
+            return;
+          }
+          // それ以外の画面では「前回カレンダーを見た以降の新着」だけ数える
+          const s = seen();
+          const fresh = rows.filter(r => (r.created_at || '') > s).length;
+          if(fresh > 0){ badge.textContent = fresh > 99 ? '99+' : fresh; badge.style.display = ''; }
           else { badge.style.display = 'none'; }
         }catch(_){}
       }
