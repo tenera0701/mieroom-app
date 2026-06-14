@@ -301,6 +301,12 @@ function tint(hex, amt){
   const mix=(c)=>Math.round(c + (255-c)*amt);
   return `rgb(${mix(r)},${mix(g)},${mix(b)})`;
 }
+/* 背景色に対して読みやすい文字色（白 or 濃いグレー）を返す */
+function textOn(hex){
+  const m=/^#?([0-9a-f]{6})$/i.exec(hex||''); if(!m) return '#fff';
+  const n=parseInt(m[1],16), r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  return (0.299*r+0.587*g+0.114*b) > 150 ? '#1f2937' : '#fff';
+}
 function staffColor(sid){
   if(staffKey(sid)==='none') return UNASSIGNED;
   const s = STAFF.find(s=>String(s.id)===String(sid));
@@ -514,7 +520,7 @@ function renderMonth(){
         const cls=r.status==='キャンセル'?'cancel':'';
         const isWeb=r.source==='web';
         const isNew=isWeb && !r.viewed;
-        return `<span class="rv-chip ${cls}" style="background:${c.l};color:${c.s};border-left-color:${c.s};" onclick="event.stopPropagation();openDetail(${r.id})">${isNew?'<span class="chip-new">NEW</span>':''}<span class="ctxt">${esc(r.time_slot)} ${esc(r.customer_name)}</span>${isWeb?'<span class="chip-web">Web</span>':''}</span>`;
+        return `<span class="rv-chip ${cls}" style="background:${c.s};color:${textOn(c.s)};border-left-color:${c.s};" onclick="event.stopPropagation();openDetail(${r.id})">${isNew?'<span class="chip-new">NEW</span>':''}<span class="ctxt">${esc(r.time_slot)} ${esc(r.customer_name)}</span>${isWeb?'<span class="chip-web">Web</span>':''}</span>`;
       }).join('') + (items.length>3?`<span style="font-size:10px;color:#6b7280;">他${items.length-3}件</span>`:'');
       const colCls = dow===0?'sun-col':(dow===6?'sat-col':'');
       const todayCls = ds===todayS()?'today':'';
@@ -602,7 +608,7 @@ function renderTimeGrid(){
       const isWeb=r.source==='web';
       const isNew=isWeb && !r.viewed;   // Web予約でまだ詳細を開いていない＝新着
       const cls=`${r.status==='キャンセル'?'cancel':''} ${isWeb?'is-web':''} ${isNew?'is-new':''}`;
-      col+=`<div class="tg-ev ${cls}" data-id="${r.id}" style="top:${top}px;height:${h}px;background:${c.l};border-left-color:${c.s};color:${c.s};" onpointerdown="evDown(event, ${r.id})" title="ドラッグで移動・下端で時間変更">
+      col+=`<div class="tg-ev ${cls}" data-id="${r.id}" style="top:${top}px;height:${h}px;background:${c.s};border-left-color:${c.s};color:${textOn(c.s)};" onpointerdown="evDown(event, ${r.id})" title="ドラッグで移動・下端で時間変更">
         ${isNew?'<span class="ev-new">NEW</span>':''}${isWeb?'<span class="ev-web">WEB予約</span>':''}
         <div class="ev-nm">${esc(r.customer_name)}</div><div class="ev-t">${esc(r.time_slot)}〜</div>
         <div class="tg-ev-resize" onpointerdown="evResizeDown(event, ${r.id})"></div></div>`;

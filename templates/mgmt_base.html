@@ -434,6 +434,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
           </svg>
           <span class="nav-label">└ カレンダー</span>
+          <span id="reserve-nav-badge" style="display:none;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#ef4444;color:#fff;font-size:11px;font-weight:700;line-height:18px;text-align:center;margin-left:auto;"></span>
         </a>
         {% endif %}
 
@@ -772,6 +773,23 @@
       setInterval(pollChatUnread, 15000);
       // 画面に戻ってきた直後にもすぐ確認
       document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) pollChatUnread(); });
+    })();
+
+    // ===== カレンダー（予約）の新着Web予約バッジ =====
+    (function(){
+      const badge = document.getElementById('reserve-nav-badge');
+      if(!badge) return;   // カレンダーの表示権限が無い場合は何もしない
+      async function pollNewReserve(){
+        try{
+          const rows = await fetch('/api/reservations/new').then(r=>r.json());
+          const n = Array.isArray(rows) ? rows.length : 0;
+          if(n > 0){ badge.textContent = n > 99 ? '99+' : n; badge.style.display = ''; }
+          else { badge.style.display = 'none'; }
+        }catch(_){}
+      }
+      pollNewReserve();
+      setInterval(pollNewReserve, 30000);
+      document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) pollNewReserve(); });
     })();
 
     // ===== Web Push（アプリ・タブを閉じていても新着チャットが届く） =====
