@@ -4346,10 +4346,15 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
                     if f.size:
                         st.append(f'font-size:{round(float(f.size) * 1.33)}px')
                 al = cell.alignment
+                sf_cls = ''
                 if al:
                     if al.horizontal in ('center', 'right', 'left'):
                         st.append(f'text-align:{al.horizontal}')
                     st.append('vertical-align:middle' if al.vertical in (None, 'center') else f'vertical-align:{al.vertical}')
+                    # Excelの「縮小して全体を表示」(shrinkToFit)：折り返さず1行、JSでフォントを縮めて収める
+                    if al.shrinkToFit and not al.wrapText:
+                        st.append('white-space:pre')
+                        sf_cls = ' class="sf"'
                 b = cell.border
                 for name, side in (('top', b.top), ('bottom', b.bottom), ('left', b.left), ('right', b.right)):
                     if side and side.style:
@@ -4370,9 +4375,9 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
                     disp = overrides.get(k, base)
                     attrs += (f' contenteditable="true" data-k="{k}"'
                               f' data-orig="{_attr(base)}"')
-                    tds.append(f'<td{attrs} style="{";".join(st)}">{_esc(disp) if disp != "" else ""}</td>')
+                    tds.append(f'<td{attrs}{sf_cls} style="{";".join(st)}">{_esc(disp) if disp != "" else ""}</td>')
                 else:
-                    tds.append(f'<td{attrs} style="{";".join(st)}">{_esc(v) if v is not None else ""}</td>')
+                    tds.append(f'<td{attrs}{sf_cls} style="{";".join(st)}">{_esc(v) if v is not None else ""}</td>')
             rows.append(f'<tr style="height:{round(h * 1.33)}px">{"".join(tds)}</tr>')
 
         # 埋め込み画像（電子印鑑など）をテーブル上に絶対配置で重ねる
@@ -4526,9 +4531,15 @@ def _xlsx_to_print_html(xlsx_bytes, title, editable=False, overrides=None, rid=N
         'function fitPrint(){var r=document.getElementById("doc-root");if(!r)return;'
         'var w=rawWidth(r);if(!w||w<=0)return;'
         'var s=PRINT_W/w;if(s>1)s=1;if(s<0.05)s=0.05;applyScale(s);}'
+        # Excelの「縮小して全体を表示」を再現：1行に収まらないセルはフォントを縮小（㊞や住所が折り返して位置がズレるのを防ぐ）
+        'function shrinkFit(){var els=document.querySelectorAll("td.sf");'
+        'for(var i=0;i<els.length;i++){var td=els[i];var sw=td.scrollWidth,cw=td.clientWidth;'
+        'if(cw>0&&sw>cw+1){var fs=parseFloat(getComputedStyle(td).fontSize)||12;'
+        'var ns=fs*cw/sw*0.96;if(ns<4)ns=4;td.style.fontSize=ns+"px";}}}'
+        'function initFit(){shrinkFit();fitScreen();}'
         'window.addEventListener("resize",fitScreen);'
-        'window.addEventListener("load",fitScreen);'
-        'document.addEventListener("DOMContentLoaded",fitScreen);'
+        'window.addEventListener("load",initFit);'
+        'document.addEventListener("DOMContentLoaded",initFit);'
         'window.addEventListener("beforeprint",fitPrint);'
         'window.addEventListener("afterprint",fitScreen);'
         '})();</script>')
